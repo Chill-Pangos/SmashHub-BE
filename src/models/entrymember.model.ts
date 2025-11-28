@@ -1,57 +1,55 @@
 import { DataTypes, Model, Optional } from "sequelize";
-import { User } from "./user.model";
-import { Role } from "./role.model";
 import db from "../config/database";
 
-interface UserRoleAttributes {
+interface EntryMemberAttributes {
   id: number;
+  entryId: number;
   userId: number;
-  roleId: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface UserRoleCreationAttributes
-  extends Optional<UserRoleAttributes, "id" | "createdAt" | "updatedAt"> {}
+interface EntryMemberCreationAttributes
+  extends Optional<EntryMemberAttributes, "id" | "createdAt" | "updatedAt"> {}
 
-export class UserRole
-  extends Model<UserRoleAttributes, UserRoleCreationAttributes>
-  implements UserRoleAttributes
+export class EntryMember
+  extends Model<EntryMemberAttributes, EntryMemberCreationAttributes>
+  implements EntryMemberAttributes
 {
   public id!: number;
+  public entryId!: number;
   public userId!: number;
-  public roleId!: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
 
-UserRole.init(
+EntryMember.init(
   {
     id: {
       type: DataTypes.INTEGER.UNSIGNED,
       autoIncrement: true,
       primaryKey: true,
     },
+    entryId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      references: {
+        model: "entries",
+        key: "id",
+      },
+    },
     userId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: {
-        model: User,
-        key: "id",
-      },
-    },
-    roleId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: Role,
+        model: "users",
         key: "id",
       },
     },
   },
   {
     sequelize: db,
-    tableName: "user_roles",
+    tableName: "entry_members",
     timestamps: true,
   }
 );

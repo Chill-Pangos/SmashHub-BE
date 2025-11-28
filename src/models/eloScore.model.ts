@@ -1,31 +1,28 @@
 import { DataTypes, Model, Optional } from "sequelize";
-import { User } from "./user.model";
-import { Role } from "./role.model";
 import db from "../config/database";
 
-interface UserRoleAttributes {
+interface EloScoreAttributes {
   id: number;
   userId: number;
-  roleId: number;
+  score: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface UserRoleCreationAttributes
-  extends Optional<UserRoleAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class UserRole
-  extends Model<UserRoleAttributes, UserRoleCreationAttributes>
-  implements UserRoleAttributes
+interface EloScoreCreationAttributes
+  extends Optional<EloScoreAttributes, "id" | "createdAt" | "updatedAt"> {}
+export class EloScore
+  extends Model<EloScoreAttributes, EloScoreCreationAttributes>
+  implements EloScoreAttributes
 {
   public id!: number;
   public userId!: number;
-  public roleId!: number;
+  public score!: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
 
-UserRole.init(
+EloScore.init(
   {
     id: {
       type: DataTypes.INTEGER.UNSIGNED,
@@ -36,22 +33,19 @@ UserRole.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: {
-        model: User,
+        model: "users",
         key: "id",
       },
     },
-    roleId: {
-      type: DataTypes.INTEGER.UNSIGNED,
+    score: {
+      type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: Role,
-        key: "id",
-      },
+      defaultValue: 1000,
     },
   },
   {
     sequelize: db,
-    tableName: "user_roles",
+    tableName: "elo_scores",
     timestamps: true,
   }
 );

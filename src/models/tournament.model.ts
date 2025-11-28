@@ -9,11 +9,11 @@ interface TournamentAttributes {
   location: string;
   status: string;
   createdAt?: Date;
-  updateAt?: Date;
+  updatedAt?: Date;
 }
 
 interface TournamentCreationAttributes
-  extends Optional<TournamentAttributes, "id" | "createdAt" | "updateAt"> {}
+  extends Optional<TournamentAttributes, "id" | "createdAt" | "updatedAt"> {}
 
 export class Tournament
   extends Model<TournamentAttributes, TournamentCreationAttributes>
@@ -26,7 +26,7 @@ export class Tournament
   public location!: string;
   public status!: string;
   public readonly createdAt!: Date;
-  public readonly updateAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 Tournament.init(

@@ -7,11 +7,11 @@ interface UserAttributes {
   email: string;
   password: string;
   createdAt?: Date;
-  updateAt?: Date;
+  updatedAt?: Date;
 }
 
 interface UserCreationAttributes
-  extends Optional<UserAttributes, "id" | "createdAt" | "updateAt"> {}
+  extends Optional<UserAttributes, "id" | "createdAt" | "updatedAt"> {}
 
 export class User
   extends Model<UserAttributes, UserCreationAttributes>
@@ -22,7 +22,7 @@ export class User
   public email!: string;
   public password!: string;
   public readonly createdAt!: Date;
-  public readonly updateAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 User.init(

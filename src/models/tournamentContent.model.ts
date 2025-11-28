@@ -5,15 +5,15 @@ interface TournamentContentAttributes {
   id: number;
   tournamentId: number;
   name: string;
-  formatType: string;
+  formatTypeId: number;
   createdAt?: Date;
-  updateAt?: Date;
+  updatedAt?: Date;
 }
 
 interface TournamentContentCreationAttributes
   extends Optional<
     TournamentContentAttributes,
-    "id" | "createdAt" | "updateAt"
+    "id" | "createdAt" | "updatedAt"
   > {}
 
 export class TournamentContent
@@ -26,9 +26,9 @@ export class TournamentContent
   public id!: number;
   public tournamentId!: number;
   public name!: string;
-  public formatType!: string;
+  public formatTypeId!: number;
   public readonly createdAt!: Date;
-  public readonly updateAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 TournamentContent.init(
@@ -50,13 +50,13 @@ TournamentContent.init(
       type: DataTypes.STRING(100),
       allowNull: false,
     },
-    formatType: {
-      type: DataTypes.ENUM(
-        "single_elimination",
-        "double_elimination",
-        "round_robin"
-      ),
+    formatTypeId: {
+      type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
+      references: {
+        model: "format_types",
+        key: "id",
+      },
     },
   },
   {

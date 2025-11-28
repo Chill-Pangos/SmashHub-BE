@@ -5,11 +5,11 @@ interface RoleAttributes {
   id: number;
   name: string;
   createdAt?: Date;
-  updateAt?: Date;
+  updatedAt?: Date;
 }
 
 interface RoleCreationAttributes
-  extends Optional<RoleAttributes, "id" | "createdAt" | "updateAt"> {}
+  extends Optional<RoleAttributes, "id" | "createdAt" | "updatedAt"> {}
 
 export class Role
   extends Model<RoleAttributes, RoleCreationAttributes>
@@ -18,7 +18,7 @@ export class Role
   public id!: number;
   public name!: string;
   public readonly createdAt!: Date;
-  public readonly updateAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 Role.init(

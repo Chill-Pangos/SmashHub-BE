@@ -8,11 +8,14 @@ interface RolePermissionAttributes {
   roleId: number;
   permissionId: number;
   createdAt?: Date;
-  updateAt?: Date;
+  updatedAt?: Date;
 }
 
 interface RolePermissionCreationAttributes
-  extends Optional<RolePermissionAttributes, "id" | "createdAt" | "updateAt"> {}
+  extends Optional<
+    RolePermissionAttributes,
+    "id" | "createdAt" | "updatedAt"
+  > {}
 
 export class RolePermission
   extends Model<RolePermissionAttributes, RolePermissionCreationAttributes>
@@ -22,7 +25,7 @@ export class RolePermission
   public roleId!: number;
   public permissionId!: number;
   public readonly createdAt!: Date;
-  public readonly updateAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
 RolePermission.init(
