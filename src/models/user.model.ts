@@ -1,55 +1,34 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import { Table, Column, Model, DataType } from "sequelize-typescript";
 
-interface UserAttributes {
-  id: number;
-  username: string;
-  email: string;
-  password: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "users",
+  timestamps: true,
+})
+export default class User extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: false,
+    unique: true,
+  })
+  declare username: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+    unique: true,
+  })
+  declare email: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: false,
+  })
+  declare password: string;
 }
-
-interface UserCreationAttributes
-  extends Optional<UserAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class User
-  extends Model<UserAttributes, UserCreationAttributes>
-  implements UserAttributes
-{
-  public id!: number;
-  public username!: string;
-  public email!: string;
-  public password!: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-User.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    username: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      unique: true,
-    },
-    email: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-      unique: true,
-    },
-    password: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "users",
-    timestamps: true,
-  }
-);

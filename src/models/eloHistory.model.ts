@@ -1,65 +1,61 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import Match from "./match.model";
+import User from "./user.model";
 
-interface EloHistoryAttributes {
-  id: number;
-  matchId: number;
-  userId: number;
-  previousElo: number;
-  newElo: number;
-  changeReason: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "elo_histories",
+  timestamps: true,
+})
+export default class EloHistory extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @ForeignKey(() => Match)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare matchId: number;
+
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare userId: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+  })
+  declare previousElo: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+  })
+  declare newElo: number;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: false,
+  })
+  declare changeReason: string;
+
+  @BelongsTo(() => Match)
+  match?: Match;
+
+  @BelongsTo(() => User)
+  user?: User;
 }
-
-interface EloHistoryCreationAttributes
-  extends Optional<EloHistoryAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class EloHistory
-  extends Model<EloHistoryAttributes, EloHistoryCreationAttributes>
-  implements EloHistoryAttributes
-{
-  public id!: number;
-  public matchId!: number;
-  public userId!: number;
-  public previousElo!: number;
-  public newElo!: number;
-  public changeReason!: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-EloHistory.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    matchId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-    },
-    userId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-    },
-    previousElo: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
-    newElo: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
-    changeReason: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "elo_histories",
-    timestamps: true,
-  }
-);

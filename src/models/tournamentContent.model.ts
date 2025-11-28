@@ -1,67 +1,48 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import Tournament from "./tournament.model";
+import FormatType from "./formatType.model";
+@Table({
+  tableName: "tournament_contents",
+  timestamps: true,
+})
+export default class TournamentContent extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
 
-interface TournamentContentAttributes {
-  id: number;
-  tournamentId: number;
-  name: string;
-  formatTypeId: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+  @ForeignKey(() => Tournament)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare tournamentId: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare name: string;
+
+  @ForeignKey(() => FormatType)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare formatTypeId: number;
+
+  @BelongsTo(() => Tournament)
+  tournament?: Tournament;
+
+  @BelongsTo(() => FormatType)
+  formatType?: FormatType;
 }
-
-interface TournamentContentCreationAttributes
-  extends Optional<
-    TournamentContentAttributes,
-    "id" | "createdAt" | "updatedAt"
-  > {}
-
-export class TournamentContent
-  extends Model<
-    TournamentContentAttributes,
-    TournamentContentCreationAttributes
-  >
-  implements TournamentContentAttributes
-{
-  public id!: number;
-  public tournamentId!: number;
-  public name!: string;
-  public formatTypeId!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-TournamentContent.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    tournamentId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "tournaments",
-        key: "id",
-      },
-    },
-    name: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-    },
-    formatTypeId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "format_types",
-        key: "id",
-      },
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "tournament_contents",
-    timestamps: true,
-  }
-);

@@ -1,47 +1,26 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import { Table, Column, Model, DataType } from "sequelize-typescript";
 
-interface FormatTypeAttributes {
-  id: number;
-  typeName: string;
-  description?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "format_types",
+  timestamps: true,
+})
+export default class FormatType extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare typeName: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare description?: string;
 }
-
-interface FormatTypeCreationAttributes
-  extends Optional<FormatTypeAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class FormatType
-  extends Model<FormatTypeAttributes, FormatTypeCreationAttributes>
-  implements FormatTypeAttributes
-{
-  public id!: number;
-  public typeName!: string;
-  public description?: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-FormatType.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    typeName: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-    },
-    description: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "format_types",
-    timestamps: true,
-  }
-);

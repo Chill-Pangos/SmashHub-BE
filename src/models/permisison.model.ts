@@ -1,42 +1,21 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import { Table, Column, Model, DataType } from "sequelize-typescript";
 
-interface PermissionAttributes {
-  id: number;
-  name: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "permissions",
+  timestamps: true,
+})
+export default class Permission extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+    unique: true,
+  })
+  declare name: string;
 }
-
-interface PermissionCreationAttributes
-  extends Optional<PermissionAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class Permission
-  extends Model<PermissionAttributes, PermissionCreationAttributes>
-  implements PermissionAttributes
-{
-  public id!: number;
-  public name!: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-Permission.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    name: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-      unique: true,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "permissions",
-    timestamps: true,
-  }
-);

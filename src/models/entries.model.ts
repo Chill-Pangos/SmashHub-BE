@@ -1,51 +1,38 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import TournamentContent from "./tournamentContent.model";
 
-interface EntriesAttributes {
-  id: number;
-  contentId: number;
-  name: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "entries",
+  timestamps: true,
+})
+export default class Entries extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @ForeignKey(() => TournamentContent)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare contentId: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare name: string;
+
+  @BelongsTo(() => TournamentContent)
+  content?: TournamentContent;
 }
-
-interface EntriesCreationAttributes
-  extends Optional<EntriesAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class Entries
-  extends Model<EntriesAttributes, EntriesCreationAttributes>
-  implements EntriesAttributes
-{
-  public id!: number;
-  public contentId!: number;
-  public name!: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-Entries.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    contentId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "tournament_contents",
-        key: "id",
-      },
-    },
-    name: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "entries",
-    timestamps: true,
-  }
-);

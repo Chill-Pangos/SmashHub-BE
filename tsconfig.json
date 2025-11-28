@@ -22,6 +22,10 @@
     "verbatimModuleSyntax": false,
     "isolatedModules": true,
 
+    // Decorators
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
     // Type Checking
     "strict": true,
     "noUncheckedIndexedAccess": true,
