@@ -1,42 +1,21 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import { Table, Column, Model, DataType } from "sequelize-typescript";
 
-interface RoleAttributes {
-  id: number;
-  name: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "roles",
+  timestamps: true,
+})
+export default class Role extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: false,
+    unique: true,
+  })
+  declare name: string;
 }
-
-interface RoleCreationAttributes
-  extends Optional<RoleAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class Role
-  extends Model<RoleAttributes, RoleCreationAttributes>
-  implements RoleAttributes
-{
-  public id!: number;
-  public name!: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-Role.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    name: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      unique: true,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "roles",
-    timestamps: true,
-  }
-);

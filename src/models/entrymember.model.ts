@@ -1,55 +1,43 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import User from "./user.model";
+import Entries from "./entries.model";
 
-interface EntryMemberAttributes {
-  id: number;
-  entryId: number;
-  userId: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "entry_members",
+  timestamps: true,
+})
+export default class EntryMember extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @ForeignKey(() => Entries)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare entryId: number;
+
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare userId: number;
+
+  @BelongsTo(() => Entries)
+  entry?: Entries;
+
+  @BelongsTo(() => User)
+  user?: User;
 }
-
-interface EntryMemberCreationAttributes
-  extends Optional<EntryMemberAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class EntryMember
-  extends Model<EntryMemberAttributes, EntryMemberCreationAttributes>
-  implements EntryMemberAttributes
-{
-  public id!: number;
-  public entryId!: number;
-  public userId!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-EntryMember.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    entryId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "entries",
-        key: "id",
-      },
-    },
-    userId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "users",
-        key: "id",
-      },
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "entry_members",
-    timestamps: true,
-  }
-);

@@ -1,10 +1,11 @@
+import "reflect-metadata";
 import app from "./app";
 import config from "./config/config";
-import db from "./config/database";
+import sequelize from "./config/database";
 
 const checkConnection = async () => {
   try {
-    await db.authenticate();
+    await sequelize.authenticate();
     console.log("Database connected successfully");
   } catch (error) {
     console.error("Database connection failed:", error);

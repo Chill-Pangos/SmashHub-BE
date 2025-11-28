@@ -1,66 +1,50 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import TournamentContent from "./tournamentContent.model";
 
-interface ScheduleAttributes {
-  id: number;
-  contentId: number;
-  roundNumber?: number;
-  groupName?: string;
-  scheduledAt: Date;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "schedules",
+  timestamps: true,
+})
+export default class Schedule extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @ForeignKey(() => TournamentContent)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare contentId: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare roundNumber?: number;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
+  declare groupName?: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: false,
+  })
+  declare scheduledAt: Date;
+
+  @BelongsTo(() => TournamentContent)
+  content?: TournamentContent;
 }
-
-interface ScheduleCreationAttributes
-  extends Optional<
-    ScheduleAttributes,
-    "id" | "createdAt" | "updatedAt" | "roundNumber" | "groupName"
-  > {}
-
-export class Schedule
-  extends Model<ScheduleAttributes, ScheduleCreationAttributes>
-  implements ScheduleAttributes
-{
-  public id!: number;
-  public contentId!: number;
-  public roundNumber?: number;
-  public groupName?: string;
-  public scheduledAt!: Date;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-Schedule.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    contentId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: "tournament_contents",
-        key: "id",
-      },
-    },
-    roundNumber: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: true,
-    },
-    groupName: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    scheduledAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "schedules",
-    timestamps: true,
-  }
-);

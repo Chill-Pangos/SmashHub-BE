@@ -1,47 +1,26 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import db from "../config/database";
+import { Table, Column, Model, DataType } from "sequelize-typescript";
 
-interface MatchFormatAttributes {
-  id: number;
-  numberOfSingles: number;
-  numberOfDoubles: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "match_formats",
+  timestamps: true,
+})
+export default class MatchFormat extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare numberOfSingles: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare numberOfDoubles: number;
 }
-
-interface MatchFormatCreationAttributes
-  extends Optional<MatchFormatAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class MatchFormat
-  extends Model<MatchFormatAttributes, MatchFormatCreationAttributes>
-  implements MatchFormatAttributes
-{
-  public id!: number;
-  public numberOfSingles!: number;
-  public numberOfDoubles!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-MatchFormat.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    numberOfSingles: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-    },
-    numberOfDoubles: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "match_formats",
-    timestamps: true,
-  }
-);

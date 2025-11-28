@@ -1,57 +1,43 @@
-import { DataTypes, Model, Optional } from "sequelize";
-import { User } from "./user.model";
-import { Role } from "./role.model";
-import db from "../config/database";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+} from "sequelize-typescript";
+import User from "./user.model";
+import Role from "./role.model";
 
-interface UserRoleAttributes {
-  id: number;
-  userId: number;
-  roleId: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+@Table({
+  tableName: "user_roles",
+  timestamps: true,
+})
+export default class UserRole extends Model {
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  })
+  declare id: number;
+
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare userId: number;
+
+  @ForeignKey(() => Role)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare roleId: number;
+
+  @BelongsTo(() => User)
+  user?: User;
+
+  @BelongsTo(() => Role)
+  role?: Role;
 }
-
-interface UserRoleCreationAttributes
-  extends Optional<UserRoleAttributes, "id" | "createdAt" | "updatedAt"> {}
-
-export class UserRole
-  extends Model<UserRoleAttributes, UserRoleCreationAttributes>
-  implements UserRoleAttributes
-{
-  public id!: number;
-  public userId!: number;
-  public roleId!: number;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
-}
-
-UserRole.init(
-  {
-    id: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    userId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: User,
-        key: "id",
-      },
-    },
-    roleId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: {
-        model: Role,
-        key: "id",
-      },
-    },
-  },
-  {
-    sequelize: db,
-    tableName: "user_roles",
-    timestamps: true,
-  }
-);
