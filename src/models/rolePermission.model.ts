@@ -7,7 +7,7 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import Role from "./role.model";
-import Permission from "./permisison.model";
+import Permission from "./permission.model";
 
 @Table({
   tableName: "role_permissions",
