@@ -5,8 +5,10 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import TournamentContent from "./tournamentContent.model";
+import Match from "./match.model";
 
 @Table({
   tableName: "schedules",
@@ -47,4 +49,7 @@ export default class Schedule extends Model {
 
   @BelongsTo(() => TournamentContent)
   content?: TournamentContent;
+
+  @HasMany(() => Match)
+  matches?: Match[];
 }

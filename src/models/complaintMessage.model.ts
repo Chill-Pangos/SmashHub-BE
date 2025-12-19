@@ -4,6 +4,7 @@ import {
   ForeignKey,
   Model,
   Table,
+  BelongsTo,
 } from "sequelize-typescript";
 import Complaint from "./complaint.model";
 import User from "./user.model";
@@ -53,4 +54,13 @@ export default class ComplaintMessage extends Model {
     defaultValue: "comment",
   })
   declare messageType: "comment" | "request_info" | "response";
+
+  @BelongsTo(() => Complaint)
+  complaint?: Complaint;
+
+  @BelongsTo(() => User, "senderId")
+  sender?: User;
+
+  @BelongsTo(() => User, "receiverId")
+  receiver?: User;
 }

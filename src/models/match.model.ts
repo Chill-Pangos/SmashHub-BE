@@ -5,10 +5,14 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import Schedule from "./schedule.model";
 import Entries from "./entries.model";
 import User from "./user.model";
+import MatchSet from "./matchSet.model";
+import EloHistory from "./eloHistory.model";
+import Complaint from "./complaint.model";
 
 @Table({
   tableName: "matches",
@@ -113,4 +117,13 @@ export default class Match extends Model {
 
   @BelongsTo(() => User, "coachBId")
   coachB?: User;
+
+  @HasMany(() => MatchSet)
+  matchSets?: MatchSet[];
+
+  @HasMany(() => EloHistory)
+  eloHistories?: EloHistory[];
+
+  @HasMany(() => Complaint)
+  complaints?: Complaint[];
 }

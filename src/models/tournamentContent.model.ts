@@ -5,9 +5,15 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
+  HasOne,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
 import FormatType from "./formatType.model";
+import Entries from "./entries.model";
+import Schedule from "./schedule.model";
+import ContentRule from "./contentRule.model";
+
 @Table({
   tableName: "tournament_contents",
   timestamps: true,
@@ -45,4 +51,13 @@ export default class TournamentContent extends Model {
 
   @BelongsTo(() => FormatType)
   formatType?: FormatType;
+
+  @HasMany(() => Entries)
+  entries?: Entries[];
+
+  @HasMany(() => Schedule)
+  schedules?: Schedule[];
+
+  @HasOne(() => ContentRule)
+  contentRule?: ContentRule;
 }
