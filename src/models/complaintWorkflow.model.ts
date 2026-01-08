@@ -4,6 +4,7 @@ import {
   ForeignKey,
   Model,
   Table,
+  BelongsTo,
 } from "sequelize-typescript";
 import Complaint from "./complaint.model";
 import User from "./user.model";
@@ -70,4 +71,13 @@ export default class ComplaintWorkflow extends Model {
     allowNull: true,
   })
   declare note: string;
+
+  @BelongsTo(() => Complaint)
+  complaint?: Complaint;
+
+  @BelongsTo(() => User, "fromUserId")
+  fromUser?: User;
+
+  @BelongsTo(() => User, "toUserId")
+  toUser?: User;
 }

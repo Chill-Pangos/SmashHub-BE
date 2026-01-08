@@ -1,4 +1,14 @@
-import { Table, Column, Model, DataType } from "sequelize-typescript";
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  BelongsToMany,
+} from "sequelize-typescript";
+import User from "./user.model";
+import UserRole from "./userRole.model";
+import Permission from "./permission.model";
+import RolePermission from "./rolePermission.model";
 
 @Table({
   tableName: "roles",
@@ -18,4 +28,10 @@ export default class Role extends Model {
     unique: true,
   })
   declare name: string;
+
+  @BelongsToMany(() => User, () => UserRole)
+  users?: User[];
+
+  @BelongsToMany(() => Permission, () => RolePermission)
+  permissions?: Permission[];
 }

@@ -4,10 +4,14 @@ import {
   ForeignKey,
   Model,
   Table,
+  BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import User from "./user.model";
 import Tournament from "./tournament.model";
 import Match from "./match.model";
+import ComplaintMessage from "./complaintMessage.model";
+import ComplaintWorkflow from "./complaintWorkflow.model";
 
 @Table({
   tableName: "complaints",
@@ -78,4 +82,22 @@ export default class Complaint extends Model {
     allowNull: true,
   })
   declare currentHandlerId: number;
+
+  @BelongsTo(() => User, "createdBy")
+  creator?: User;
+
+  @BelongsTo(() => User, "currentHandlerId")
+  handler?: User;
+
+  @BelongsTo(() => Tournament)
+  tournament?: Tournament;
+
+  @BelongsTo(() => Match)
+  match?: Match;
+
+  @HasMany(() => ComplaintMessage)
+  messages?: ComplaintMessage[];
+
+  @HasMany(() => ComplaintWorkflow)
+  workflows?: ComplaintWorkflow[];
 }

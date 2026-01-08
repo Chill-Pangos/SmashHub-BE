@@ -1,4 +1,6 @@
-import { Table, Column, Model, DataType } from "sequelize-typescript";
+import { Table, Column, Model, DataType, HasMany } from "sequelize-typescript";
+import TournamentContent from "./tournamentContent.model";
+import Complaint from "./complaint.model";
 
 @Table({
   tableName: "tournaments",
@@ -43,4 +45,10 @@ export default class Tournament extends Model {
     allowNull: false,
   })
   declare location: string;
+
+  @HasMany(() => TournamentContent)
+  contents?: TournamentContent[];
+
+  @HasMany(() => Complaint)
+  complaints?: Complaint[];
 }

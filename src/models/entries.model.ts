@@ -5,8 +5,11 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import TournamentContent from "./tournamentContent.model";
+import EntryMember from "./entrymember.model";
+import Match from "./match.model";
 
 @Table({
   tableName: "entries",
@@ -35,4 +38,16 @@ export default class Entries extends Model {
 
   @BelongsTo(() => TournamentContent)
   content?: TournamentContent;
+
+  @HasMany(() => EntryMember)
+  members?: EntryMember[];
+
+  @HasMany(() => Match, "entryAId")
+  matchesAsA?: Match[];
+
+  @HasMany(() => Match, "entryBId")
+  matchesAsB?: Match[];
+
+  @HasMany(() => Match, "winnerEntryId")
+  wonMatches?: Match[];
 }

@@ -1,2 +1,0 @@
-# SmashHub_BE
-

@@ -1,4 +1,5 @@
-import { Table, Column, Model, DataType } from "sequelize-typescript";
+import { Table, Column, Model, DataType, HasMany } from "sequelize-typescript";
+import TournamentContent from "./tournamentContent.model";
 
 @Table({
   tableName: "format_types",
@@ -23,4 +24,7 @@ export default class FormatType extends Model {
     allowNull: true,
   })
   declare description?: string;
+
+  @HasMany(() => TournamentContent)
+  tournamentContents?: TournamentContent[];
 }
