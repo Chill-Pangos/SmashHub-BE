@@ -29,6 +29,12 @@ export default class Role extends Model {
   })
   declare name: string;
 
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare description?: string;
+
   @BelongsToMany(() => User, () => UserRole)
   users?: User[];
 

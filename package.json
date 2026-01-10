@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@types/sequelize": "^6.12.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "helmet": "^8.1.0",
     "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "mysql2": "^3.15.3",
     "pm2": "^6.0.13",
@@ -25,8 +27,10 @@
   "devDependencies": {
     "@commitlint/cli": "^20.3.1",
     "@commitlint/config-conventional": "^20.3.1",
+    "@types/bcryptjs": "^3.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.1",
     "@types/swagger-jsdoc": "^6.0.4",

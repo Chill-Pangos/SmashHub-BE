@@ -14,7 +14,7 @@ const swaggerDefinition = {
   },
   servers: [
     {
-      url: "http://localhost:3000/api",
+      url: "http://localhost:3000",
       description: "Development server",
     },
     {
@@ -52,6 +52,14 @@ const swaggerDefinition = {
     },
   ],
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        description: "Enter JWT token (without 'Bearer' prefix)",
+      },
+    },
     schemas: {
       Error: {
         type: "object",
@@ -85,6 +93,51 @@ const swaggerDefinition = {
           username: { type: "string", maxLength: 50 },
           email: { type: "string", maxLength: 100 },
           password: { type: "string", maxLength: 255 },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      AccessToken: {
+        type: "object",
+        required: ["userId", "token", "expiresAt"],
+        properties: {
+          id: { type: "integer", description: "Token ID" },
+          userId: { type: "integer", description: "User ID associated with this token" },
+          token: { type: "string", description: "JWT access token" },
+          expiresAt: { type: "string", format: "date-time", description: "Token expiration time" },
+          isBlacklisted: { type: "boolean", default: false, description: "Whether the token is blacklisted" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      RefreshToken: {
+        type: "object",
+        required: ["userId", "token", "expiresAt"],
+        properties: {
+          id: { type: "integer", description: "Token ID" },
+          userId: { type: "integer", description: "User ID associated with this token" },
+          token: { type: "string", description: "JWT refresh token" },
+          expiresAt: { type: "string", format: "date-time", description: "Token expiration time" },
+          isBlacklisted: { type: "boolean", default: false, description: "Whether the token is blacklisted" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      Otp: {
+        type: "object",
+        required: ["userId", "code", "type", "expiresAt"],
+        properties: {
+          id: { type: "integer", description: "OTP ID" },
+          userId: { type: "integer", description: "User ID associated with this OTP" },
+          code: { type: "string", maxLength: 6, description: "6-digit OTP code" },
+          type: { 
+            type: "string", 
+            enum: ["password_reset", "email_verification"],
+            description: "Type of OTP" 
+          },
+          expiresAt: { type: "string", format: "date-time", description: "OTP expiration time" },
+          isUsed: { type: "boolean", default: false, description: "Whether the OTP has been used" },
+          usedAt: { type: "string", format: "date-time", description: "When the OTP was used" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
