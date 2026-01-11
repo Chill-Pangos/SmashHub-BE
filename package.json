@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "scripts": {
     "prepare": "husky install",
-    "dev": "dotenvx run -f .env.development ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "dotenvx run -f .env.development -- ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
