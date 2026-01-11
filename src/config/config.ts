@@ -1,7 +1,5 @@
 import Joi from "joi";
 
-require("dotenv").config();
-
 const envSchema = Joi.object({
   NODE_ENV: Joi.string().valid("development", "production", "test").required(),
   PORT: Joi.number().default(3000),
