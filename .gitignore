@@ -60,8 +60,9 @@ out/
 
 # dotenv environment files
 .env
-.env.*
 !.env.example
+.env.keys
+
 
 # Debug/diagnostic
 .node_repl_history
