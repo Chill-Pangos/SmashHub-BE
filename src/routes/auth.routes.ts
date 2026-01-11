@@ -69,6 +69,9 @@ const router = Router();
  *                           items:
  *                             type: integer
  *                           example: [8]
+ *                         isEmailVerified:
+ *                           type: boolean
+ *                           example: false
  *                     accessToken:
  *                       type: string
  *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -150,6 +153,9 @@ router.post("/register", authController.register);
  *                         email:
  *                           type: string
  *                           example: user@test.com
+ *                         isEmailVerified:
+ *                           type: boolean
+ *                           example: false
  *       401:
  *         description: Invalid credentials
  *         content:
@@ -222,49 +228,6 @@ router.post("/login", authController.login);
  *                   example: Token refresh failed
  */
 router.post("/refresh", authController.refreshToken);
-
-// /**
-//  * @swagger
-//  * /api/auth/profile:
-//  *   get:
-//  *     tags: [Auth]
-//  *     summary: Get current user profile
-//  *     security:
-//  *       - bearerAuth: []
-//  *     responses:
-//  *       200:
-//  *         description: Profile retrieved successfully
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 id:
-//  *                   type: integer
-//  *                   example: 1
-//  *                 username:
-//  *                   type: string
-//  *                   example: test
-//  *                 email:
-//  *                   type: string
-//  *                   example: user@test.com
-//  *                 profile:
-//  *                   type: object
-//  *                   properties:
-//  *                     avatarUrl:
-//  *                       type: string
-//  *                       example: https://example.com/avatar.jpg
-//  *                     phoneNumber:
-//  *                       type: string
-//  *                       example: "+84123456789"
-//  *                     dob:
-//  *                       type: string
-//  *                       format: date
-//  *                       example: "1990-01-15"
-//  *       401:
-//  *         description: Unauthorized - Invalid or missing token
-//  */
-// //router.get("/profile", authenticate, authController.getProfile);
 
 /**
  * @swagger
@@ -540,5 +503,164 @@ router.post("/verify-otp", authController.verifyOtp);
  *                   example: Invalid OTP
  */
 router.post("/reset-password", authController.resetPassword);
+
+/**
+ * @swagger
+ * /api/auth/send-email-verification-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Send email verification OTP
+ *     description: Sends a 6-digit OTP to the user's email for email verification
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@test.com
+ *                 description: Email address to verify
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Mã OTP xác thực đã được gửi đến email của bạn
+ *       400:
+ *         description: Failed to send OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Không tìm thấy người dùng với email này
+ */
+router.post("/send-email-verification-otp", authController.sendEmailVerificationOtp);
+
+/**
+ * @swagger
+ * /api/auth/verify-email-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verify email with OTP
+ *     description: Verifies the user's email address using the OTP sent via email
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@test.com
+ *               otp:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *                 example: "123456"
+ *                 description: 6-digit OTP code received via email
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Email đã được xác thực thành công
+ *       400:
+ *         description: Email verification failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Mã OTP không hợp lệ hoặc đã hết hạn
+ */
+router.post("/verify-email-otp", authController.verifyEmailOtp);
+
+/**
+ * @swagger
+ * /api/auth/resend-email-verification-otp:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Resend email verification OTP
+ *     description: Resends a new 6-digit OTP to the user's email for email verification
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@test.com
+ *                 description: Email address to resend OTP to
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Mã OTP mới đã được gửi lại đến email của bạn
+ *       400:
+ *         description: Failed to resend OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Không thể gửi lại mã OTP
+ */
+router.post("/resend-email-verification-otp", authController.resendEmailVerificationOtp);
 
 export default router;

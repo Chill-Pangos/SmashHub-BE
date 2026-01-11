@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import authService from "../services/auth.service";
+import { AuthErrors } from "../utils/errors";
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -20,11 +21,7 @@ export const authenticate = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      res.status(401).json({
-        success: false,
-        message: "No token provided",
-      });
-      return;
+      throw AuthErrors.NoTokenProvided();
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
@@ -32,11 +29,7 @@ export const authenticate = async (
     // Check if token is blacklisted
     const isBlacklisted = await authService.isTokenBlacklisted(token);
     if (isBlacklisted) {
-      res.status(401).json({
-        success: false,
-        message: "Token has been revoked",
-      });
-      return;
+      throw AuthErrors.TokenRevoked();
     }
 
     // Verify token
@@ -46,11 +39,7 @@ export const authenticate = async (
     const user = await authService.getUserByToken(token);
 
     if (!user) {
-      res.status(401).json({
-        success: false,
-        message: "Invalid token or user not found",
-      });
-      return;
+      throw AuthErrors.UserNotFound();
     }
 
     // Attach user info and token to request
@@ -60,10 +49,7 @@ export const authenticate = async (
 
     next();
   } catch (error) {
-    res.status(401).json({
-      success: false,
-      message: "Invalid or expired token",
-    });
+    next(error);
   }
 };
 

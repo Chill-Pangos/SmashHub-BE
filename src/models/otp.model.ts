@@ -11,6 +11,7 @@ import User from "./user.model";
 @Table({
   tableName: "otps",
   timestamps: true,
+  underscored: false,
 })
 export default class Otp extends Model {
   @Column({

@@ -5,6 +5,8 @@ import RefreshToken from "../models/refreshToken.model";
 import AccessToken from "../models/accessToken.model";
 import Otp from "../models/otp.model";
 import config from "../config/config";
+import emailService from "./email.service";
+import { AuthErrors } from "../utils/errors";
 import {
   LoginDto,
   RegisterDto,
@@ -163,7 +165,7 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new Error("Email already exists");
+      throw AuthErrors.EmailAlreadyExists();
     }
 
     // Check if username already exists
@@ -174,7 +176,7 @@ export class AuthService {
     });
 
     if (existingUsername) {
-      throw new Error("Username already exists");
+      throw AuthErrors.UsernameAlreadyExists();
     }
 
     // Hash password
@@ -185,13 +187,14 @@ export class AuthService {
       username,
       email,
       password: hashedPassword,
+      isEmailVerified: false,
     } as any);
 
     const assignedRoleName = role || "spectator"; // Default to 'spectator' role if none provided
 
     const foundRole = await Role.findOne({ where: { name: assignedRoleName } });
     if (!foundRole) {
-      throw new Error("Role not found");
+      throw AuthErrors.RoleNotFound();
     }
 
     await UserRole.create({
@@ -213,6 +216,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         roles: [foundRole.id],
+        isEmailVerified: user.isEmailVerified,
       },
       accessToken,
       refreshToken,
@@ -233,14 +237,14 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      throw AuthErrors.InvalidCredentials();
     }
 
     // Compare password
     const isPasswordValid = await this.comparePassword(password, user.password);
 
     if (!isPasswordValid) {
-      throw new Error("Invalid email or password");
+      throw AuthErrors.InvalidCredentials();
     }
 
     // Generate tokens
@@ -262,6 +266,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         roles: userRoles.map((ur) => ur.roleId),
+        isEmailVerified: user.isEmailVerified,
       },
       accessToken,
       refreshToken,
@@ -281,7 +286,7 @@ export class AuthService {
       // Check if token is blacklisted
       const isBlacklisted = await this.isTokenBlacklisted(refreshToken);
       if (isBlacklisted) {
-        throw new Error("Token is blacklisted");
+        throw AuthErrors.TokenRevoked();
       }
 
       // Verify refresh token
@@ -293,7 +298,7 @@ export class AuthService {
       const user = await User.findByPk(decoded.userId);
 
       if (!user) {
-        throw new Error("User not found");
+        throw AuthErrors.UserNotFound();
       }
 
       // Blacklist old refresh token
@@ -320,7 +325,10 @@ export class AuthService {
         refreshToken: newRefreshToken,
       };
     } catch (error) {
-      throw new Error("Invalid refresh token");
+      if (error instanceof Error && 'statusCode' in error) {
+        throw error;
+      }
+      throw AuthErrors.InvalidToken();
     }
   }
 
@@ -332,7 +340,7 @@ export class AuthService {
       const decoded = jwt.verify(token, this.JWT_SECRET) as { userId: number };
       return decoded;
     } catch (error) {
-      throw new Error("Invalid token");
+      throw AuthErrors.InvalidToken();
     }
   }
 
@@ -362,7 +370,7 @@ export class AuthService {
     const user = await User.findByPk(userId);
 
     if (!user) {
-      throw new Error("User not found");
+      throw AuthErrors.UserNotFound();
     }
 
     // Verify old password
@@ -372,7 +380,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new Error("Invalid old password");
+      throw AuthErrors.InvalidOldPassword();
     }
 
     // Hash new password
@@ -423,21 +431,24 @@ export class AuthService {
   }
 
   /**
-   * Send OTP via email (placeholder - implement with actual email service)
+   * Send OTP via email
    */
-  private async sendOtpEmail(email: string, otp: string): Promise<void> {
-    // TODO: Implement actual email sending logic
-    // For now, just log it (remove in production)
-    console.log(`[OTP] Sending OTP to ${email}: ${otp}`);
-    
-    // Example with nodemailer:
-    // const transporter = nodemailer.createTransport({...});
-    // await transporter.sendMail({
-    //   from: 'noreply@smashhub.com',
-    //   to: email,
-    //   subject: 'Reset Password OTP',
-    //   html: `<p>Your OTP code is: <strong>${otp}</strong></p><p>This code will expire in 10 minutes.</p>`
-    // });
+  private async sendOtpEmail(
+    email: string,
+    otp: string,
+    type: "password_reset" | "email_verification",
+    userName: string
+  ): Promise<void> {
+    try {
+      if (type === "password_reset") {
+        await emailService.sendPasswordResetOTP(email, otp, userName);
+      } else if (type === "email_verification") {
+        await emailService.sendEmailVerificationOTP(email, otp, userName);
+      }
+    } catch (error) {
+      console.error("Error sending OTP email:", error);
+      throw AuthErrors.EmailSendError();
+    }
   }
 
   /**
@@ -449,7 +460,7 @@ export class AuthService {
     // Find user by email
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      throw new Error("User not found with this email");
+      throw AuthErrors.UserNotFound();
     }
 
     // Generate OTP
@@ -478,7 +489,7 @@ export class AuthService {
     });
 
     // Send OTP via email
-    await this.sendOtpEmail(email, otpCode);
+    await this.sendOtpEmail(email, otpCode, "password_reset", user.username);
   }
 
   /**
@@ -490,7 +501,7 @@ export class AuthService {
     // Find user
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      throw new Error("User not found");
+      throw AuthErrors.UserNotFound();
     }
 
     // Find valid OTP
@@ -504,12 +515,12 @@ export class AuthService {
     });
 
     if (!otpRecord) {
-      throw new Error("Invalid OTP");
+      throw AuthErrors.InvalidOTP();
     }
 
     // Check if expired
     if (new Date() > otpRecord.expiresAt) {
-      throw new Error("OTP has expired");
+      throw AuthErrors.ExpiredOTP();
     }
   }
 
@@ -522,7 +533,7 @@ export class AuthService {
     // Find user
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      throw new Error("User not found");
+      throw AuthErrors.UserNotFound();
     }
 
     // Find valid OTP
@@ -536,17 +547,17 @@ export class AuthService {
     });
 
     if (!otpRecord) {
-      throw new Error("Invalid OTP");
+      throw AuthErrors.InvalidOTP();
     }
 
     // Check if expired
     if (new Date() > otpRecord.expiresAt) {
-      throw new Error("OTP has expired");
+      throw AuthErrors.ExpiredOTP();
     }
     
     await this.comparePassword(newPassword, user.password).then(isSame => {
       if (isSame) {
-        throw new Error("New password must be different from the old password");
+        throw AuthErrors.SamePasswordError();
       }
     });
     
@@ -571,6 +582,99 @@ export class AuthService {
       { isBlacklisted: true, blacklistedAt: new Date() },
       { where: { userId: user.id, isBlacklisted: false } }
     );
+
+    // Send password changed notification
+    await emailService.sendPasswordChangedNotification(email, user.username);
+  }
+
+  /**
+   * Send email verification OTP
+   */
+  async sendEmailVerificationOtp(email: string): Promise<void> {
+    // Find user by email
+    const user = await User.findOne({ where: { email } });
+    
+    if (!user) {
+      throw AuthErrors.UserNotFound();
+    }
+    console.log(user.id);
+
+    // Generate OTP
+    const otpCode = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Invalidate any existing unused OTPs for this user
+    await Otp.update(
+      { isUsed: true },
+      {
+        where: {
+          userId: user.id,
+          type: "email_verification",
+          isUsed: false,
+        },
+      }
+    );
+
+    // Create new OTP
+    await Otp.create({
+      userId: user.id,
+      code: otpCode,
+      type: "email_verification",
+      expiresAt,
+      isUsed: false,
+    });
+
+    // Send OTP via email
+    await this.sendOtpEmail(email, otpCode, "email_verification", user.username);
+  }
+
+  /**
+   * Verify email with OTP
+   */
+  async verifyEmailOtp(verifyOtpDto: VerifyOtpDto): Promise<void> {
+    const { email, otp } = verifyOtpDto;
+
+    // Find user
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      throw AuthErrors.UserNotFound();
+    }
+
+    // Find valid OTP
+    const otpRecord = await Otp.findOne({
+      where: {
+        userId: user.id,
+        code: otp,
+        type: "email_verification",
+        isUsed: false,
+      },
+    });
+
+    if (!otpRecord) {
+      throw AuthErrors.InvalidOTP();
+    }
+
+    // Check if expired
+    if (new Date() > otpRecord.expiresAt) {
+      throw AuthErrors.ExpiredOTP();
+    }
+
+    // Mark OTP as used
+    await otpRecord.update({
+      isUsed: true,
+      usedAt: new Date(),
+    });
+
+    // Update user email verification status
+    await user.update({ isEmailVerified: true });
+  }
+
+  /**
+   * Resend email verification OTP
+   */
+  async resendEmailVerificationOtp(email: string): Promise<void> {
+    // Same as sendEmailVerificationOtp, but you might want different message
+    await this.sendEmailVerificationOtp(email);
   }
 }
 

@@ -20,6 +20,7 @@ export interface AuthResponseDto {
     username: string;
     email: string;
     roles: number[];
+    isEmailVerified: boolean;
   };
   accessToken: string;
   refreshToken: string;
@@ -47,4 +48,13 @@ export interface ResetPasswordDto {
   email: string;
   otp: string;
   newPassword: string;
+}
+
+export interface SendEmailVerificationDto {
+  email: string;
+}
+
+export interface VerifyEmailOtpDto {
+  email: string;
+  otp: string;
 }
