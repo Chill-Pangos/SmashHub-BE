@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from "nodemailer";
 import config from "../config/config";
+import { AuthErrors } from "../utils/errors";
 
 export class EmailService {
   private transporter: Transporter;
@@ -57,7 +58,7 @@ export class EmailService {
       console.log(`OTP email sent successfully to ${email}`);
     } catch (error) {
       console.error("Error sending OTP email:", error);
-      throw new Error("Không thể gửi email. Vui lòng thử lại sau.");
+      throw AuthErrors.EmailSendError();
     }
   }
 
@@ -102,7 +103,7 @@ export class EmailService {
       console.log(`Verification email sent successfully to ${email}`);
     } catch (error) {
       console.error("Error sending verification email:", error);
-      throw new Error("Không thể gửi email. Vui lòng thử lại sau.");
+      throw AuthErrors.EmailSendError();
     }
   }
 
