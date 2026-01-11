@@ -16,6 +16,7 @@ import EntryMember from "./entrymember.model";
 import Complaint from "./complaint.model";
 import ComplaintMessage from "./complaintMessage.model";
 import ComplaintWorkflow from "./complaintWorkflow.model";
+import { Col } from "sequelize/types/utils";
 
 @Table({
   tableName: "users",
@@ -48,6 +49,12 @@ export default class User extends Model {
     allowNull: false,
   })
   declare password: string;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isEmailVerified: boolean;
 
   @HasOne(() => Profile)
   profile?: Profile;

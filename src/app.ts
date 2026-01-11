@@ -6,6 +6,7 @@ import morgan from "morgan";
 import swaggerUi from "swagger-ui-express";
 import routes from "./routes";
 import swaggerSpec from "./config/swagger";
+import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.middleware";
 
 const app: Application = express();
 
@@ -36,14 +37,9 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api", routes);
 
 // 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({ message: "Route not found" });
-});
+app.use(notFoundHandler);
 
-// Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ message: "Internal server error" });
-});
+// Global error handler (must be last)
+app.use(errorHandler);
 
 export default app;
