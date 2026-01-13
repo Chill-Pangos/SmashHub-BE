@@ -30,4 +30,5 @@ const sequelize = new Sequelize({
   models: [__dirname + "/../models/*.model.ts"],
 });
 
+export { sequelize };
 export default sequelize;

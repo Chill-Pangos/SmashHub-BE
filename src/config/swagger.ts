@@ -14,7 +14,7 @@ const swaggerDefinition = {
   },
   servers: [
     {
-      url: "http://localhost:3000",
+      url: "http://localhost:3000/api",
       description: "Development server",
     },
     {
@@ -193,25 +193,23 @@ const swaggerDefinition = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
-      FormatType: {
-        type: "object",
-        required: ["typeName"],
-        properties: {
-          id: { type: "integer" },
-          typeName: { type: "string", maxLength: 100 },
-          description: { type: "string" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
       TournamentContent: {
         type: "object",
-        required: ["tournamentId", "name", "formatTypeId"],
+        required: ["tournamentId", "name", "type", "maxEntries", "maxSets", "racketCheck"],
         properties: {
           id: { type: "integer" },
           tournamentId: { type: "integer" },
           name: { type: "string", maxLength: 100 },
-          formatTypeId: { type: "integer" },
+          type: {
+            type: "string",
+            enum: ["single", "team", "double"],
+          },
+          maxEntries: { type: "integer" },
+          maxSets: { type: "integer" },
+          numberOfSingles: { type: "integer" },
+          numberOfDoubles: { type: "integer" },
+          racketCheck: { type: "boolean" },
+          isGroupStage: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -271,32 +269,6 @@ const swaggerDefinition = {
           setNumber: { type: "integer" },
           entryAScore: { type: "integer", default: 0 },
           entryBScore: { type: "integer", default: 0 },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
-      MatchFormat: {
-        type: "object",
-        required: ["numberOfSingles", "numberOfDoubles"],
-        properties: {
-          id: { type: "integer" },
-          numberOfSingles: { type: "integer" },
-          numberOfDoubles: { type: "integer" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
-      ContentRule: {
-        type: "object",
-        required: ["contentId", "maxEntries", "maxSets", "racketCheck"],
-        properties: {
-          id: { type: "integer" },
-          contentId: { type: "integer" },
-          matchFormatId: { type: "integer" },
-          maxEntries: { type: "integer" },
-          maxSets: { type: "integer" },
-          racketCheck: { type: "boolean" },
-          isGroupStage: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },

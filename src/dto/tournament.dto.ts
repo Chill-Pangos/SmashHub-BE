@@ -5,6 +5,19 @@ export interface CreateTournamentDto {
   endDate?: Date;
   location: string;
   status?: "upcoming" | "ongoing" | "completed";
+  createdBy: number;
+  contents?: CreateTournamentContentDto[];
+}
+
+export interface CreateTournamentContentDto {
+  name: string;
+  type: 'single' | 'team' | 'double';
+  maxEntries: number;
+  maxSets: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
+  racketCheck: boolean;
+  isGroupStage?: boolean;
 }
 
 export interface UpdateTournamentDto {
