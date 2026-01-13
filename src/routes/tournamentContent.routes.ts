@@ -18,7 +18,10 @@ const router = Router();
  *             required:
  *               - tournamentId
  *               - name
- *               - formatTypeId
+ *               - type
+ *               - maxEntries
+ *               - maxSets
+ *               - racketCheck
  *             properties:
  *               tournamentId:
  *                 type: integer
@@ -26,9 +29,28 @@ const router = Router();
  *               name:
  *                 type: string
  *                 example: "Men's Singles"
- *               formatTypeId:
+ *               type:
+ *                 type: string
+ *                 enum: [single, team, double]
+ *                 example: "single"
+ *               maxEntries:
  *                 type: integer
- *                 example: 1
+ *                 example: 32
+ *               maxSets:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfSingles:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfDoubles:
+ *                 type: integer
+ *                 example: 2
+ *               racketCheck:
+ *                 type: boolean
+ *                 example: true
+ *               isGroupStage:
+ *                 type: boolean
+ *                 example: false
  *     responses:
  *       201:
  *         description: Tournament content created successfully
@@ -81,9 +103,28 @@ router.get(
  *               name:
  *                 type: string
  *                 example: "Women's Singles"
- *               formatTypeId:
+ *               type:
+ *                 type: string
+ *                 enum: [single, team, double]
+ *                 example: "single"
+ *               maxEntries:
+ *                 type: integer
+ *                 example: 32
+ *               maxSets:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfSingles:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfDoubles:
  *                 type: integer
  *                 example: 2
+ *               racketCheck:
+ *                 type: boolean
+ *                 example: true
+ *               isGroupStage:
+ *                 type: boolean
+ *                 example: false
  *     responses:
  *       200:
  *         description: Tournament content updated
@@ -134,14 +175,6 @@ router.get(
   tournamentContentController.findByTournamentId.bind(
     tournamentContentController
   )
-);
-router.put(
-  "/:id",
-  tournamentContentController.update.bind(tournamentContentController)
-);
-router.delete(
-  "/:id",
-  tournamentContentController.delete.bind(tournamentContentController)
 );
 
 export default router;

@@ -1,7 +1,5 @@
 import Tournament from "../models/tournament.model";
 import TournamentContent from "../models/tournamentContent.model";
-import ContentRule from "../models/contentRule.model";
-import FormatType from "../models/formatType.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -26,33 +24,23 @@ export class TournamentService {
         { transaction }
       );
 
-      // Create tournament contents with content rules if provided
+      // Create tournament contents if provided
       if (data.contents && data.contents.length > 0) {
         for (const contentData of data.contents) {
-          const tournamentContent = await TournamentContent.create(
+          await TournamentContent.create(
             {
               tournamentId: tournament.id,
               name: contentData.name,
-              formatTypeId: contentData.formatTypeId,
+              type: contentData.type,
+              maxEntries: contentData.maxEntries,
+              maxSets: contentData.maxSets,
+              numberOfSingles: contentData.numberOfSingles ? contentData.numberOfSingles : null,
+              numberOfDoubles: contentData.numberOfDoubles ? contentData.numberOfDoubles : null,
+              racketCheck: contentData.racketCheck,
+              isGroupStage: contentData.isGroupStage,
             } as any,
             { transaction }
           );
-
-          // Create content rule
-          if (contentData.contentRule) {
-            await ContentRule.create(
-              {
-                contentId: tournamentContent.id,
-                maxEntries: contentData.contentRule.maxEntries,
-                maxSets: contentData.contentRule.maxSets,
-                racketCheck: contentData.contentRule.racketCheck,
-                isGroupStage: contentData.contentRule.isGroupStage,
-                numberOfSingles: contentData.contentRule.numberOfSingles,
-                numberOfDoubles: contentData.contentRule.numberOfDoubles,
-              } as any,
-              { transaction }
-            );
-          }
         }
       }
 
@@ -64,16 +52,6 @@ export class TournamentService {
           {
             model: TournamentContent,
             as: "contents",
-            include: [
-              {
-                model: ContentRule,
-                as: "contentRule",
-              },
-              {
-                model: FormatType,
-                as: "formatType",
-              },
-            ],
           },
         ],
       });

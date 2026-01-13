@@ -9,10 +9,8 @@ import {
   HasOne,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
-import FormatType from "./formatType.model";
 import Entries from "./entries.model";
 import Schedule from "./schedule.model";
-import ContentRule from "./contentRule.model";
 
 @Table({
   tableName: "tournament_contents",
@@ -39,18 +37,50 @@ export default class TournamentContent extends Model {
   })
   declare name: string;
 
-  @ForeignKey(() => FormatType)
+  @Column({
+    type: DataType.ENUM('single', 'team', 'double'),
+    allowNull: false,
+  })
+  declare type: 'single' | 'team' | 'double';
+
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare formatTypeId: number;
+  declare maxEntries: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare maxSets: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare numberOfSingles: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare numberOfDoubles: number;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+  })
+  declare racketCheck: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+  })
+  declare isGroupStage?: boolean;
 
   @BelongsTo(() => Tournament)
   tournament?: Tournament;
-
-  @BelongsTo(() => FormatType)
-  formatType?: FormatType;
 
   @HasMany(() => Entries)
   entries?: Entries[];
@@ -58,6 +88,4 @@ export default class TournamentContent extends Model {
   @HasMany(() => Schedule)
   schedules?: Schedule[];
 
-  @HasOne(() => ContentRule)
-  contentRule?: ContentRule;
 }

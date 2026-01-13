@@ -9,8 +9,8 @@ const router = Router();
  * /tournaments:
  *   post:
  *     tags: [Tournaments]
- *     summary: Create a new tournament with contents and rules
- *     description: Create a tournament along with its tournament contents and content rules in a single transaction. Creator ID is automatically taken from authenticated user.
+ *     summary: Create a new tournament with contents
+ *     description: Create a tournament along with its tournament contents in a single transaction. Creator ID is automatically taken from authenticated user.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -49,54 +49,49 @@ const router = Router();
  *                 example: "upcoming"
  *               contents:
  *                 type: array
- *                 description: Array of tournament contents with their rules
+ *                 description: Array of tournament contents
  *                 items:
  *                   type: object
  *                   required:
  *                     - name
- *                     - formatTypeId
- *                     - contentRule
+ *                     - type
+ *                     - maxEntries
+ *                     - maxSets
+ *                     - racketCheck
  *                   properties:
  *                     name:
  *                       type: string
  *                       description: Name of the tournament content (e.g., Men's Singles, Women's Doubles)
  *                       example: "Men's Singles"
- *                     formatTypeId:
+ *                     type:
+ *                       type: string
+ *                       enum: [single, team, double]
+ *                       description: Type of tournament content
+ *                       example: "single"
+ *                     maxEntries:
  *                       type: integer
- *                       description: ID of the format type
- *                       example: 1
- *                     contentRule:
- *                       type: object
- *                       description: Rules for this tournament content
- *                       required:
- *                         - maxEntries
- *                         - maxSets
- *                         - racketCheck
- *                       properties:
- *                         maxEntries:
- *                           type: integer
- *                           description: Maximum number of entries allowed
- *                           example: 32
- *                         maxSets:
- *                           type: integer
- *                           description: Maximum number of sets per match
- *                           example: 3
- *                         numberOfSingles:
- *                           type: integer
- *                           description: Number of singles matches
- *                           example: 3
- *                         numberOfDoubles:
- *                           type: integer
- *                           description: Number of doubles matches
- *                           example: 2
- *                         racketCheck:
- *                           type: boolean
- *                           description: Whether racket check is required
- *                           example: true
- *                         isGroupStage:
- *                           type: boolean
- *                           description: Whether this content has a group stage (optional)
- *                           example: false
+ *                       description: Maximum number of entries allowed
+ *                       example: 32
+ *                     maxSets:
+ *                       type: integer
+ *                       description: Maximum number of sets per match
+ *                       example: 3
+ *                     numberOfSingles:
+ *                       type: integer
+ *                       description: Number of singles matches
+ *                       example: 3
+ *                     numberOfDoubles:
+ *                       type: integer
+ *                       description: Number of doubles matches
+ *                       example: 2
+ *                     racketCheck:
+ *                       type: boolean
+ *                       description: Whether racket check is required
+ *                       example: true
+ *                     isGroupStage:
+ *                       type: boolean
+ *                       description: Whether this content has a group stage (optional)
+ *                       example: false
  *           examples:
  *             full:
  *               summary: Full tournament with multiple contents
@@ -108,19 +103,17 @@ const router = Router();
  *                 status: "upcoming"
  *                 contents:
  *                   - name: "Men's Singles"
- *                     formatTypeId: 1
- *                     contentRule:
- *                       maxEntries: 32
- *                       maxSets: 3
- *                       racketCheck: true
- *                       isGroupStage: false
+ *                     type: "single"
+ *                     maxEntries: 32
+ *                     maxSets: 3
+ *                     racketCheck: true
+ *                     isGroupStage: false
  *                   - name: "Women's Singles"
- *                     formatTypeId: 1
- *                     contentRule:
- *                       maxEntries: 32
- *                       maxSets: 3
- *                       racketCheck: true
- *                       isGroupStage: false
+ *                     type: "single"
+ *                     maxEntries: 32
+ *                     maxSets: 3
+ *                     racketCheck: true
+ *                     isGroupStage: false
  *             minimal:
  *               summary: Minimal tournament without contents
  *               value:
@@ -129,7 +122,7 @@ const router = Router();
  *                 location: "Community Center"
  *     responses:
  *       201:
- *         description: Tournament created successfully with all related contents and rules
+ *         description: Tournament created successfully with all related contents
  *         content:
  *           application/json:
  *             schema:
@@ -176,37 +169,21 @@ const router = Router();
  *                         type: integer
  *                       name:
  *                         type: string
- *                       formatTypeId:
+ *                       type:
+ *                         type: string
+ *                         enum: [single, team, double]
+ *                       maxEntries:
  *                         type: integer
- *                       formatType:
- *                         type: object
- *                         description: Format type details
- *                         properties:
- *                           id:
- *                             type: integer
- *                           typeName:
- *                             type: string
- *                           description:
- *                             type: string
- *                       contentRule:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                           contentId:
- *                             type: integer
- *                           maxEntries:
- *                             type: integer
- *                           maxSets:
- *                             type: integer
- *                           numberOfSingles:
- *                             type: integer
- *                           numberOfDoubles:
- *                             type: integer
- *                           racketCheck:
- *                             type: boolean
- *                           isGroupStage:
- *                             type: boolean
+ *                       maxSets:
+ *                         type: integer
+ *                       numberOfSingles:
+ *                         type: integer
+ *                       numberOfDoubles:
+ *                         type: integer
+ *                       racketCheck:
+ *                         type: boolean
+ *                       isGroupStage:
+ *                         type: boolean
  *       400:
  *         description: Bad request - Invalid input data
  *         content:

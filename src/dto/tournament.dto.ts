@@ -6,20 +6,18 @@ export interface CreateTournamentDto {
   location: string;
   status?: "upcoming" | "ongoing" | "completed";
   createdBy: number;
-  contents?: CreateTournamentContentWithRuleDto[];
+  contents?: CreateTournamentContentDto[];
 }
 
-export interface CreateTournamentContentWithRuleDto {
+export interface CreateTournamentContentDto {
   name: string;
-  formatTypeId: number;
-  contentRule: {
-    maxEntries: number;
-    maxSets: number;
-    numberOfSingles?: number;
-    numberOfDoubles?: number;
-    racketCheck: boolean;
-    isGroupStage?: boolean;
-  };
+  type: 'single' | 'team' | 'double';
+  maxEntries: number;
+  maxSets: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
+  racketCheck: boolean;
+  isGroupStage?: boolean;
 }
 
 export interface UpdateTournamentDto {
