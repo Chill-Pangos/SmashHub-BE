@@ -1,17 +1,19 @@
 // ContentRule DTOs
 export interface CreateContentRuleDto {
   contentId: number;
-  matchFormatId?: number;
   maxEntries: number;
   maxSets: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
   racketCheck: boolean;
   isGroupStage?: boolean;
 }
 
 export interface UpdateContentRuleDto {
-  matchFormatId?: number;
   maxEntries?: number;
   maxSets?: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
   racketCheck?: boolean;
   isGroupStage?: boolean;
 }
@@ -19,9 +21,10 @@ export interface UpdateContentRuleDto {
 export interface ContentRuleResponseDto {
   id: number;
   contentId: number;
-  matchFormatId?: number;
   maxEntries: number;
   maxSets: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
   racketCheck: boolean;
   isGroupStage?: boolean;
   createdAt: Date;

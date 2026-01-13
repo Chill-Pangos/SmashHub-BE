@@ -13,9 +13,10 @@ export interface CreateTournamentContentWithRuleDto {
   name: string;
   formatTypeId: number;
   contentRule: {
-    matchFormatId?: number;
     maxEntries: number;
     maxSets: number;
+    numberOfSingles?: number;
+    numberOfDoubles?: number;
     racketCheck: boolean;
     isGroupStage?: boolean;
   };

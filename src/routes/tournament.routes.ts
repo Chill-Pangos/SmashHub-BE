@@ -73,10 +73,6 @@ const router = Router();
  *                         - maxSets
  *                         - racketCheck
  *                       properties:
- *                         matchFormatId:
- *                           type: integer
- *                           description: ID of the match format (optional)
- *                           example: 1
  *                         maxEntries:
  *                           type: integer
  *                           description: Maximum number of entries allowed
@@ -85,6 +81,14 @@ const router = Router();
  *                           type: integer
  *                           description: Maximum number of sets per match
  *                           example: 3
+ *                         numberOfSingles:
+ *                           type: integer
+ *                           description: Number of singles matches
+ *                           example: 3
+ *                         numberOfDoubles:
+ *                           type: integer
+ *                           description: Number of doubles matches
+ *                           example: 2
  *                         racketCheck:
  *                           type: boolean
  *                           description: Whether racket check is required
@@ -106,7 +110,6 @@ const router = Router();
  *                   - name: "Men's Singles"
  *                     formatTypeId: 1
  *                     contentRule:
- *                       matchFormatId: 1
  *                       maxEntries: 32
  *                       maxSets: 3
  *                       racketCheck: true
@@ -192,11 +195,13 @@ const router = Router();
  *                             type: integer
  *                           contentId:
  *                             type: integer
- *                           matchFormatId:
- *                             type: integer
  *                           maxEntries:
  *                             type: integer
  *                           maxSets:
+ *                             type: integer
+ *                           numberOfSingles:
+ *                             type: integer
+ *                           numberOfDoubles:
  *                             type: integer
  *                           racketCheck:
  *                             type: boolean

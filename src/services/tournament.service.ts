@@ -43,11 +43,12 @@ export class TournamentService {
             await ContentRule.create(
               {
                 contentId: tournamentContent.id,
-                matchFormatId: contentData.contentRule.matchFormatId? contentData.contentRule.matchFormatId : null,
                 maxEntries: contentData.contentRule.maxEntries,
                 maxSets: contentData.contentRule.maxSets,
                 racketCheck: contentData.contentRule.racketCheck,
                 isGroupStage: contentData.contentRule.isGroupStage,
+                numberOfSingles: contentData.contentRule.numberOfSingles,
+                numberOfDoubles: contentData.contentRule.numberOfDoubles,
               } as any,
               { transaction }
             );

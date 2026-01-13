@@ -275,26 +275,16 @@ const swaggerDefinition = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
-      MatchFormat: {
-        type: "object",
-        required: ["numberOfSingles", "numberOfDoubles"],
-        properties: {
-          id: { type: "integer" },
-          numberOfSingles: { type: "integer" },
-          numberOfDoubles: { type: "integer" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
       ContentRule: {
         type: "object",
         required: ["contentId", "maxEntries", "maxSets", "racketCheck"],
         properties: {
           id: { type: "integer" },
           contentId: { type: "integer" },
-          matchFormatId: { type: "integer" },
           maxEntries: { type: "integer" },
           maxSets: { type: "integer" },
+          numberOfSingles: { type: "integer" },
+          numberOfDoubles: { type: "integer" },
           racketCheck: { type: "boolean" },
           isGroupStage: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },

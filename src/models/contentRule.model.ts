@@ -29,12 +29,6 @@ export default class ContentRule extends Model {
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare matchFormatId?: number;
-
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare maxEntries: number;
@@ -44,6 +38,18 @@ export default class ContentRule extends Model {
     allowNull: false,
   })
   declare maxSets: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare numberOfSingles: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare numberOfDoubles: number;
 
   @Column({
     type: DataType.BOOLEAN,
