@@ -15,6 +15,20 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - numberOfSingles
+ *               - numberOfDoubles
+ *               - description
+ *             properties:
+ *               numberOfSingles:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfDoubles:
+ *                 type: integer
+ *                 example: 2
+ *               description:
+ *                 type: string
+ *                 example: "Best of 5 format with 3 singles and 2 doubles"
  *     responses:
  *       201:
  *         description: Match format created successfully
@@ -51,6 +65,22 @@ router.get("/", matchFormatController.findAll.bind(matchFormatController));
  *     summary: Update match format
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               numberOfSingles:
+ *                 type: integer
+ *                 example: 3
+ *               numberOfDoubles:
+ *                 type: integer
+ *                 example: 2
+ *               description:
+ *                 type: string
+ *                 example: "Best of 5 format with 3 singles and 2 doubles"
  *     responses:
  *       200:
  *         description: Match format updated

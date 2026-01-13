@@ -1,12 +1,87 @@
 import Tournament from "../models/tournament.model";
+import TournamentContent from "../models/tournamentContent.model";
+import ContentRule from "../models/contentRule.model";
+import FormatType from "../models/formatType.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
 } from "../dto/tournament.dto";
+import { sequelize } from "../config/database";
 
 export class TournamentService {
   async create(data: CreateTournamentDto): Promise<Tournament> {
-    return await Tournament.create(data as any);
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Create tournament
+      const tournament = await Tournament.create(
+        {
+          name: data.name,
+          startDate: data.startDate,
+          endDate: data.endDate ? data.endDate : null,
+          location: data.location,
+          status: data.status || "upcoming",
+          createdBy: data.createdBy,
+        } as any,
+        { transaction }
+      );
+
+      // Create tournament contents with content rules if provided
+      if (data.contents && data.contents.length > 0) {
+        for (const contentData of data.contents) {
+          const tournamentContent = await TournamentContent.create(
+            {
+              tournamentId: tournament.id,
+              name: contentData.name,
+              formatTypeId: contentData.formatTypeId,
+            } as any,
+            { transaction }
+          );
+
+          // Create content rule
+          if (contentData.contentRule) {
+            await ContentRule.create(
+              {
+                contentId: tournamentContent.id,
+                matchFormatId: contentData.contentRule.matchFormatId? contentData.contentRule.matchFormatId : null,
+                maxEntries: contentData.contentRule.maxEntries,
+                maxSets: contentData.contentRule.maxSets,
+                racketCheck: contentData.contentRule.racketCheck,
+                isGroupStage: contentData.contentRule.isGroupStage,
+              } as any,
+              { transaction }
+            );
+          }
+        }
+      }
+
+      await transaction.commit();
+
+      // Fetch the created tournament with all related data
+      const createdTournament = await Tournament.findByPk(tournament.id, {
+        include: [
+          {
+            model: TournamentContent,
+            as: "contents",
+            include: [
+              {
+                model: ContentRule,
+                as: "contentRule",
+              },
+              {
+                model: FormatType,
+                as: "formatType",
+              },
+            ],
+          },
+        ],
+      });
+
+      return createdTournament!;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   }
 
   async findAll(skip = 0, limit = 10): Promise<Tournament[]> {

@@ -15,6 +15,20 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - tournamentId
+ *               - name
+ *               - formatTypeId
+ *             properties:
+ *               tournamentId:
+ *                 type: integer
+ *                 example: 1
+ *               name:
+ *                 type: string
+ *                 example: "Men's Singles"
+ *               formatTypeId:
+ *                 type: integer
+ *                 example: 1
  *     responses:
  *       201:
  *         description: Tournament content created successfully
@@ -57,6 +71,19 @@ router.get(
  *     summary: Update tournament content
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Women's Singles"
+ *               formatTypeId:
+ *                 type: integer
+ *                 example: 2
  *     responses:
  *       200:
  *         description: Tournament content updated

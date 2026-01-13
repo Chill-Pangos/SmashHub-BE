@@ -6,7 +6,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/auth/register:
+ * /auth/register:
  *   post:
  *     tags: [Auth]
  *     summary: Register new user
@@ -96,7 +96,7 @@ router.post("/register", authController.register);
 
 /**
  * @swagger
- * /api/auth/login:
+ * /auth/login:
  *   post:
  *     tags: [Auth]
  *     summary: Login user
@@ -174,7 +174,7 @@ router.post("/login", authController.login);
 
 /**
  * @swagger
- * /api/auth/refresh:
+ * /auth/refresh:
  *   post:
  *     tags: [Auth]
  *     summary: Refresh access token
@@ -231,7 +231,7 @@ router.post("/refresh", authController.refreshToken);
 
 /**
  * @swagger
- * /api/auth/change-password:
+ * /auth/change-password:
  *   post:
  *     tags: [Auth]
  *     summary: Change password
@@ -300,7 +300,7 @@ router.post("/change-password", authenticate, authController.changePassword);
 
 /**
  * @swagger
- * /api/auth/logout:
+ * /auth/logout:
  *   post:
  *     tags: [Auth]
  *     summary: Logout user - blacklist all tokens
@@ -338,7 +338,7 @@ router.post("/logout", authenticate, authController.logout);
 
 /**
  * @swagger
- * /api/auth/forgot-password:
+ * /auth/forgot-password:
  *   post:
  *     tags: [Auth]
  *     summary: Request password reset - Send OTP to email
@@ -388,7 +388,7 @@ router.post("/forgot-password", authController.forgotPassword);
 
 /**
  * @swagger
- * /api/auth/verify-otp:
+ * /auth/verify-otp:
  *   post:
  *     tags: [Auth]
  *     summary: Verify OTP code
@@ -444,7 +444,7 @@ router.post("/verify-otp", authController.verifyOtp);
 
 /**
  * @swagger
- * /api/auth/reset-password:
+ * /auth/reset-password:
  *   post:
  *     tags: [Auth]
  *     summary: Reset password with verified OTP
@@ -506,7 +506,7 @@ router.post("/reset-password", authController.resetPassword);
 
 /**
  * @swagger
- * /api/auth/send-email-verification-otp:
+ * /auth/send-email-verification-otp:
  *   post:
  *     tags: [Auth]
  *     summary: Send email verification OTP
@@ -557,7 +557,7 @@ router.post("/send-email-verification-otp", authController.sendEmailVerification
 
 /**
  * @swagger
- * /api/auth/verify-email-otp:
+ * /auth/verify-email-otp:
  *   post:
  *     tags: [Auth]
  *     summary: Verify email with OTP
@@ -614,7 +614,7 @@ router.post("/verify-email-otp", authController.verifyEmailOtp);
 
 /**
  * @swagger
- * /api/auth/resend-email-verification-otp:
+ * /auth/resend-email-verification-otp:
  *   post:
  *     tags: [Auth]
  *     summary: Resend email verification OTP

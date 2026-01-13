@@ -1,6 +1,7 @@
-import { Table, Column, Model, DataType, HasMany } from "sequelize-typescript";
+import { Table, Column, Model, DataType, HasMany, ForeignKey, BelongsTo } from "sequelize-typescript";
 import TournamentContent from "./tournamentContent.model";
 import Complaint from "./complaint.model";
+import User from "./user.model";
 
 @Table({
   tableName: "tournaments",
@@ -15,7 +16,7 @@ export default class Tournament extends Model {
   declare id: number;
 
   @Column({
-    type: DataType.STRING(100),
+    type: DataType.STRING(255),
     allowNull: false,
     unique: true,
   })
@@ -45,6 +46,13 @@ export default class Tournament extends Model {
     allowNull: false,
   })
   declare location: string;
+
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare createdBy: number;
 
   @HasMany(() => TournamentContent)
   contents?: TournamentContent[];

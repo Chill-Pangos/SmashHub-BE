@@ -23,4 +23,10 @@ export default class MatchFormat extends Model {
     allowNull: false,
   })
   declare numberOfDoubles: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare description: string;
 }

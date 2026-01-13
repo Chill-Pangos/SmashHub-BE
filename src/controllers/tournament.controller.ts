@@ -4,7 +4,19 @@ import tournamentService from "../services/tournament.service";
 export class TournamentController {
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.create(req.body);
+      // Get user ID from authenticated request
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        res.status(401).json({ message: "Unauthorized - User not authenticated" });
+        return;
+      }
+      
+      const tournamentData = {
+        ...req.body,
+        createdBy: userId,
+      };
+      
+      const tournament = await tournamentService.create(tournamentData);
       res.status(201).json(tournament);
     } catch (error) {
       res.status(400).json({ message: "Error creating tournament", error });
