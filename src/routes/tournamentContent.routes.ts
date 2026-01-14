@@ -48,6 +48,10 @@ const router = Router();
  *               racketCheck:
  *                 type: boolean
  *                 example: true
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, mixed]
+ *                 example: "male"
  *               isGroupStage:
  *                 type: boolean
  *                 example: false
@@ -122,6 +126,10 @@ router.get(
  *               racketCheck:
  *                 type: boolean
  *                 example: true
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, mixed]
+ *                 example: "female"
  *               isGroupStage:
  *                 type: boolean
  *                 example: false

@@ -21,6 +21,7 @@ export interface CreateTournamentContentDto {
   minElo?: number;
   maxElo?: number;
   racketCheck: boolean;
+  gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
 
@@ -30,6 +31,23 @@ export interface UpdateTournamentDto {
   endDate?: Date;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
+  contents?: UpdateTournamentContentDto[];
+}
+
+export interface UpdateTournamentContentDto {
+  name: string;
+  type: 'single' | 'team' | 'double';
+  maxEntries: number;
+  maxSets: number;
+  numberOfSingles?: number;
+  numberOfDoubles?: number;
+  minAge?: number;
+  maxAge?: number;
+  minElo?: number;
+  maxElo?: number;
+  racketCheck: boolean;
+  gender?: 'male' | 'female' | 'mixed';
+  isGroupStage?: boolean;
 }
 
 export interface TournamentResponseDto {

@@ -244,27 +244,167 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]
- *     summary: Get tournament by ID
+ *     summary: Get tournament by ID with contents
+ *     description: Retrieve a tournament by ID including all tournament contents
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Tournament details
+ *         description: Tournament details with contents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                   example: 1
+ *                 name:
+ *                   type: string
+ *                   example: "Spring Championship 2026"
+ *                 status:
+ *                   type: string
+ *                   enum: [upcoming, ongoing, completed]
+ *                   example: "upcoming"
+ *                 startDate:
+ *                   type: string
+ *                   format: date-time
+ *                 endDate:
+ *                   type: string
+ *                   format: date-time
+ *                 location:
+ *                   type: string
+ *                   example: "National Stadium"
+ *                 createdBy:
+ *                   type: integer
+ *                   example: 1
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *                 contents:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       tournamentId:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                         enum: [single, team, double]
+ *                       maxEntries:
+ *                         type: integer
+ *                       maxSets:
+ *                         type: integer
+ *                       numberOfSingles:
+ *                         type: integer
+ *                       numberOfDoubles:
+ *                         type: integer
+ *                       racketCheck:
+ *                         type: boolean
+ *                       gender:
+ *                         type: string
+ *                         enum: [male, female, mixed]
+ *                       isGroupStage:
+ *                         type: boolean
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
  *     tags: [Tournaments]
- *     summary: Update tournament
+ *     summary: Update tournament with contents
+ *     description: Update a tournament and optionally its contents. If contents are provided, all existing contents will be replaced.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Spring Championship 2026 - Updated"
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-03-15T09:00:00Z"
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-03-20T18:00:00Z"
+ *               location:
+ *                 type: string
+ *                 example: "National Stadium"
+ *               status:
+ *                 type: string
+ *                 enum: [upcoming, ongoing, completed]
+ *                 example: "ongoing"
+ *               contents:
+ *                 type: array
+ *                 description: Array of tournament contents (optional). If provided, replaces all existing contents.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - name
+ *                     - type
+ *                     - maxEntries
+ *                     - maxSets
+ *                     - racketCheck
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       example: "Men's Singles"
+ *                     type:
+ *                       type: string
+ *                       enum: [single, team, double]
+ *                       example: "single"
+ *                     maxEntries:
+ *                       type: integer
+ *                       example: 32
+ *                     maxSets:
+ *                       type: integer
+ *                       example: 3
+ *                     numberOfSingles:
+ *                       type: integer
+ *                       example: 3
+ *                     numberOfDoubles:
+ *                       type: integer
+ *                       example: 2
+ *                     racketCheck:
+ *                       type: boolean
+ *                       example: true
+ *                     gender:
+ *                       type: string
+ *                       enum: [male, female, mixed]
+ *                       example: "male"
+ *                     isGroupStage:
+ *                       type: boolean
+ *                       example: false
  *     responses:
  *       200:
- *         description: Tournament updated
+ *         description: Tournament updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Tournament'
  *       404:
  *         $ref: '#/components/responses/NotFound'
+ *       400:
+ *         description: Bad request
  *   delete:
  *     tags: [Tournaments]
  *     summary: Delete tournament
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -272,8 +412,8 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", tournamentController.findById.bind(tournamentController));
-router.put("/:id", tournamentController.update.bind(tournamentController));
-router.delete("/:id", tournamentController.delete.bind(tournamentController));
+router.put("/:id", authenticate, tournamentController.updateWithContents.bind(tournamentController));
+router.delete("/:id", authenticate, tournamentController.delete.bind(tournamentController));
 
 /**
  * @swagger
