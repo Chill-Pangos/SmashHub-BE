@@ -44,7 +44,6 @@ export class TournamentService {
             maxAge: contentData.maxAge ?? null,
             minElo: contentData.minElo ?? null,
             maxElo: contentData.maxElo ?? null,
-            racketCheck: contentData.racketCheck,
             gender: contentData.gender ?? null,
             isGroupStage: contentData.isGroupStage,
           })),
@@ -81,8 +80,18 @@ export class TournamentService {
 
   async findAllWithContentsFiltered(
     filters: TournamentFilterDto
-  ): Promise<{ tournaments: Tournament[]; total: number }> {
-    const { skip = 0, limit = 10, userId, createdBy, ...contentFilters } = filters;
+  ): Promise<{
+    tournaments: Tournament[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }> {
+    const { skip = 0, limit, userId, createdBy, ...contentFilters } = filters;
 
     // Build where clause for TournamentContent
     const contentWhere: WhereOptions<any> = {};
@@ -101,20 +110,20 @@ export class TournamentService {
     if (contentFilters.gender !== undefined) {
       contentWhere.gender = contentFilters.gender;
     }
-    if (contentFilters.racketCheck !== undefined) {
-      contentWhere.racketCheck = contentFilters.racketCheck;
-    }
     if (contentFilters.isGroupStage !== undefined) {
       contentWhere.isGroupStage = contentFilters.isGroupStage;
     }
 
+    // Determine if we should filter by content or just include all
+    const hasContentFilters = Object.keys(contentWhere).length > 0;
+    
     // Build include for filtering by userId if provided
     const includeOptions: any[] = [
       {
         model: TournamentContent,
         as: "contents",
-        where: Object.keys(contentWhere).length > 0 ? contentWhere : undefined,
-        required: Object.keys(contentWhere).length > 0,
+        where: hasContentFilters ? contentWhere : undefined,
+        required: false, // Always optional to allow getting all tournaments
       },
     ];
 
@@ -158,11 +167,31 @@ export class TournamentService {
           tournamentWhere.id = { [Op.in]: finalTournamentIds };
         } else {
           // User has no entries matching filters
-          return { tournaments: [], total: 0 };
+          return {
+            tournaments: [],
+            pagination: {
+              total: 0,
+              page: 1,
+              limit: limit && limit > 0 ? limit : 0,
+              totalPages: 0,
+              hasNextPage: false,
+              hasPrevPage: false,
+            },
+          };
         }
       } else {
         // User has no entries
-        return { tournaments: [], total: 0 };
+        return {
+          tournaments: [],
+          pagination: {
+            total: 0,
+            page: 1,
+            limit: limit && limit > 0 ? limit : 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
       }
     }
 
@@ -170,12 +199,27 @@ export class TournamentService {
       ...(Object.keys(tournamentWhere).length > 0 && { where: tournamentWhere }),
       include: includeOptions,
       offset: skip,
-      limit,
+      ...(limit && limit > 0 && { limit }),
       order: [["startDate", "DESC"]],
       distinct: true,
     });
 
-    return { tournaments: rows, total: count };
+    // Calculate pagination info
+    const currentLimit = limit && limit > 0 ? limit : count;
+    const currentPage = currentLimit > 0 ? Math.floor(skip / currentLimit) + 1 : 1;
+    const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
+
+    return {
+      tournaments: rows,
+      pagination: {
+        total: count,
+        page: currentPage,
+        limit: currentLimit,
+        totalPages,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1,
+      },
+    };
   }
 
   async findById(id: number): Promise<Tournament | null> {
@@ -262,7 +306,6 @@ export class TournamentService {
               maxAge: c.maxAge ?? null,
               minElo: c.minElo ?? null,
               maxElo: c.maxElo ?? null,
-              racketCheck: c.racketCheck,
               gender: c.gender ?? null,
               isGroupStage: c.isGroupStage,
             })),

@@ -186,7 +186,6 @@
  *         - type
  *         - maxEntries
  *         - maxSets
- *         - racketCheck
  *       properties:
  *         id:
  *           type: integer
@@ -214,9 +213,6 @@
  *         numberOfDoubles:
  *           type: integer
  *           description: Number of doubles matches (for team type)
- *         racketCheck:
- *           type: boolean
- *           description: Whether racket check is required
  *         gender:
  *           type: string
  *           enum: [male, female, mixed]
