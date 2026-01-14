@@ -7,7 +7,6 @@ export interface CreateTournamentContentDto {
   maxSets: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
-  racketCheck: boolean;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -19,7 +18,6 @@ export interface UpdateTournamentContentDto {
   maxSets?: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
-  racketCheck?: boolean;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -34,7 +32,6 @@ export interface TournamentContentResponseDto {
   numberOfSingles?: number;
   numberOfDoubles?: number;
   gender?: 'male' | 'female' | 'mixed';
-  racketCheck: boolean;
   isGroupStage?: boolean;
   createdAt: Date;
   updatedAt: Date;

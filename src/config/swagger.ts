@@ -192,7 +192,7 @@ const swaggerDefinition = {
       },
       TournamentContent: {
         type: "object",
-        required: ["tournamentId", "name", "type", "maxEntries", "maxSets", "racketCheck"],
+        required: ["tournamentId", "name", "type", "maxEntries", "maxSets"],
         properties: {
           id: { type: "integer" },
           tournamentId: { type: "integer" },
@@ -205,7 +205,6 @@ const swaggerDefinition = {
           maxSets: { type: "integer" },
           numberOfSingles: { type: "integer" },
           numberOfDoubles: { type: "integer" },
-          racketCheck: { type: "boolean" },
           isGroupStage: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
