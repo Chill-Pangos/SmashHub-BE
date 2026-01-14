@@ -68,6 +68,30 @@ export default class TournamentContent extends Model {
   declare numberOfDoubles: number;
 
   @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare minAge: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare maxAge: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare minElo: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare maxElo: number;
+
+  @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
   })
@@ -87,5 +111,4 @@ export default class TournamentContent extends Model {
 
   @HasMany(() => Schedule)
   schedules?: Schedule[];
-
 }

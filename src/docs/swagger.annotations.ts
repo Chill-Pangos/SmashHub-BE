@@ -11,15 +11,23 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: User ID
  *         username:
  *           type: string
  *           maxLength: 50
+ *           description: Username for the account
  *         email:
  *           type: string
  *           maxLength: 100
+ *           description: User email address
  *         password:
  *           type: string
  *           maxLength: 255
+ *           description: Hashed password
+ *         isEmailVerified:
+ *           type: boolean
+ *           default: false
+ *           description: Whether the email is verified
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -34,17 +42,22 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: Profile ID
  *         userId:
  *           type: integer
+ *           description: ID of the user this profile belongs to
  *         avatarUrl:
  *           type: string
  *           maxLength: 255
+ *           description: URL to user avatar image
  *         dob:
  *           type: string
  *           format: date
+ *           description: Date of birth
  *         phoneNumber:
  *           type: string
  *           maxLength: 20
+ *           description: User phone number
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -133,22 +146,31 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: Tournament ID
  *         name:
  *           type: string
  *           maxLength: 100
+ *           description: Tournament name
  *         status:
  *           type: string
  *           enum: [upcoming, ongoing, completed]
  *           default: upcoming
+ *           description: Current status of the tournament
  *         startDate:
  *           type: string
  *           format: date-time
+ *           description: Tournament start date and time
  *         endDate:
  *           type: string
  *           format: date-time
+ *           description: Tournament end date and time (optional)
  *         location:
  *           type: string
  *           maxLength: 100
+ *           description: Tournament venue location
+ *         createdBy:
+ *           type: integer
+ *           description: ID of the user who created this tournament
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -168,26 +190,36 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: Content ID
  *         tournamentId:
  *           type: integer
+ *           description: ID of the tournament this content belongs to
  *         name:
  *           type: string
  *           maxLength: 100
+ *           description: Name of the tournament content (e.g., Men's Singles, Women's Doubles)
  *         type:
  *           type: string
  *           enum: [single, team, double]
+ *           description: Type of tournament content
  *         maxEntries:
  *           type: integer
+ *           description: Maximum number of entries allowed
  *         maxSets:
  *           type: integer
+ *           description: Maximum number of sets per match
  *         numberOfSingles:
  *           type: integer
+ *           description: Number of singles matches (for team type)
  *         numberOfDoubles:
  *           type: integer
+ *           description: Number of doubles matches (for team type)
  *         racketCheck:
  *           type: boolean
+ *           description: Whether racket check is required
  *         isGroupStage:
  *           type: boolean
+ *           description: Whether this content has a group stage
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -203,11 +235,14 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: Entry ID
  *         contentId:
  *           type: integer
+ *           description: ID of the tournament content this entry belongs to
  *         name:
  *           type: string
  *           maxLength: 100
+ *           description: Name of the entry/team
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -269,27 +304,38 @@
  *       properties:
  *         id:
  *           type: integer
+ *           description: Match ID
  *         scheduleId:
  *           type: integer
+ *           description: ID of the schedule this match belongs to
  *         entryAId:
  *           type: integer
+ *           description: ID of entry A (first competitor)
  *         entryBId:
  *           type: integer
+ *           description: ID of entry B (second competitor)
  *         status:
  *           type: string
  *           enum: [scheduled, in_progress, completed, cancelled]
+ *           description: Current status of the match
  *         winnerEntryId:
  *           type: integer
+ *           description: ID of the winning entry
  *         umpire:
  *           type: integer
+ *           description: ID of the umpire
  *         assistantUmpire:
  *           type: integer
+ *           description: ID of the assistant umpire
  *         coachAId:
  *           type: integer
+ *           description: ID of coach for entry A
  *         coachBId:
  *           type: integer
+ *           description: ID of coach for entry B
  *         isConfirmedByWinner:
  *           type: boolean
+ *           description: Whether the result is confirmed by winner
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -478,255 +524,3 @@
  *     description: Complaint system
  */
 
-/**
- * @swagger
- * /users:
- *   post:
- *     tags: [Users]
- *     summary: Create a new user
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/User'
- *     responses:
- *       201:
- *         description: User created successfully
- *       400:
- *         description: Bad request
- *   get:
- *     tags: [Users]
- *     summary: Get all users
- *     responses:
- *       200:
- *         description: List of users
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/User'
- *
- * /users/{id}:
- *   get:
- *     tags: [Users]
- *     summary: Get user by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: User details
- *       404:
- *         description: User not found
- *   put:
- *     tags: [Users]
- *     summary: Update user
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/User'
- *     responses:
- *       200:
- *         description: User updated
- *       404:
- *         description: User not found
- *   delete:
- *     tags: [Users]
- *     summary: Delete user
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       204:
- *         description: User deleted
- *       404:
- *         description: User not found
- *
- * /tournaments:
- *   post:
- *     tags: [Tournaments]
- *     summary: Create a new tournament
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Tournament'
- *     responses:
- *       201:
- *         description: Tournament created
- *   get:
- *     tags: [Tournaments]
- *     summary: Get all tournaments
- *     parameters:
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *           default: 0
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *     responses:
- *       200:
- *         description: List of tournaments
- *
- * /tournaments/{id}:
- *   get:
- *     tags: [Tournaments]
- *     summary: Get tournament by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Tournament details
- *       404:
- *         description: Not found
- *   put:
- *     tags: [Tournaments]
- *     summary: Update tournament
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Tournament updated
- *   delete:
- *     tags: [Tournaments]
- *     summary: Delete tournament
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       204:
- *         description: Tournament deleted
- *
- * /tournaments/status/{status}:
- *   get:
- *     tags: [Tournaments]
- *     summary: Get tournaments by status
- *     parameters:
- *       - in: path
- *         name: status
- *         required: true
- *         schema:
- *           type: string
- *           enum: [upcoming, ongoing, completed]
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Tournaments by status
- *
- * /elo-scores/leaderboard:
- *   get:
- *     tags: [ELO Scores]
- *     summary: Get ELO leaderboard
- *     parameters:
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *           default: 0
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *     responses:
- *       200:
- *         description: ELO leaderboard
- *
- * /complaints:
- *   post:
- *     tags: [Complaints]
- *     summary: Create a new complaint
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Complaint'
- *     responses:
- *       201:
- *         description: Complaint created
- *   get:
- *     tags: [Complaints]
- *     summary: Get all complaints
- *     parameters:
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: List of complaints
- *
- * /complaints/user/{userId}:
- *   get:
- *     tags: [Complaints]
- *     summary: Get complaints by user
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: User complaints
- *
- * /complaint-messages/{id}/read:
- *   patch:
- *     tags: [Complaint Messages]
- *     summary: Mark complaint message as read
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Message marked as read
- *       404:
- *         description: Message not found
- */

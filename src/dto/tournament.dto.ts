@@ -16,6 +16,10 @@ export interface CreateTournamentContentDto {
   maxSets: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
+  minAge?: number;
+  maxAge?: number;
+  minElo?: number;
+  maxElo?: number;
   racketCheck: boolean;
   isGroupStage?: boolean;
 }
