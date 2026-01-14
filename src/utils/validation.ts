@@ -46,7 +46,11 @@ export const validatePasswordStrength = (
     };
   }
 
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  // Check for special characters (simplified to avoid ReDoS)
+  const specialChars = "!@#$%^&*()_+-=[]{}';:\"|,.<>/?\\";
+  const hasSpecialChar = password.split('').some(char => specialChars.includes(char));
+  
+  if (!hasSpecialChar) {
     return {
       isValid: false,
       message: "Password must contain at least one special character",
