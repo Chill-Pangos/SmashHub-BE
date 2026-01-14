@@ -68,10 +68,20 @@ export class ComplaintController {
   async findByStatus(req: Request, res: Response): Promise<void> {
     try {
       const status = req.params.status;
-      if (!status) {
+      if (!status || typeof status !== 'string') {
         res.status(400).json({ message: "Status is required" });
         return;
       }
+      
+      // Validate status value
+      const validStatuses = ['submitted', 'under_review', 'escalated', 'resolved', 'rejected'];
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({ 
+          message: "Invalid status. Must be one of: submitted, under_review, escalated, resolved, rejected" 
+        });
+        return;
+      }
+      
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const complaints = await complaintService.findByStatus(

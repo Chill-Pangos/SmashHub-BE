@@ -52,10 +52,20 @@ export class TournamentController {
   async findByStatus(req: Request, res: Response): Promise<void> {
     try {
       const status = req.params.status;
-      if (!status) {
+      if (!status || typeof status !== 'string') {
         res.status(400).json({ message: "Status is required" });
         return;
       }
+      
+      // Validate status value
+      const validStatuses = ['upcoming', 'ongoing', 'completed'];
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({ 
+          message: "Invalid status. Must be one of: upcoming, ongoing, completed" 
+        });
+        return;
+      }
+      
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const tournaments = await tournamentService.findByStatus(
