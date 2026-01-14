@@ -34,6 +34,40 @@ export class TournamentController {
     }
   }
 
+  async findAllWithContentsFiltered(req: Request, res: Response): Promise<void> {
+    try {
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const userId = req.query.userId ? Number(req.query.userId) : undefined;
+      const createdBy = req.query.createdBy ? Number(req.query.createdBy) : undefined;
+      const minAge = req.query.minAge ? Number(req.query.minAge) : undefined;
+      const maxAge = req.query.maxAge ? Number(req.query.maxAge) : undefined;
+      const minElo = req.query.minElo ? Number(req.query.minElo) : undefined;
+      const maxElo = req.query.maxElo ? Number(req.query.maxElo) : undefined;
+      const gender = req.query.gender as 'male' | 'female' | 'mixed' | undefined;
+      const racketCheck = req.query.racketCheck === 'true' ? true : req.query.racketCheck === 'false' ? false : undefined;
+      const isGroupStage = req.query.isGroupStage === 'true' ? true : req.query.isGroupStage === 'false' ? false : undefined;
+
+      const result = await tournamentService.findAllWithContentsFiltered({
+        skip,
+        limit,
+        userId,
+        createdBy,
+        minAge,
+        maxAge,
+        minElo,
+        maxElo,
+        gender,
+        racketCheck,
+        isGroupStage,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching tournaments with filters", error });
+    }
+  }
+
   async findById(req: Request, res: Response): Promise<void> {
     try {
       const tournament = await tournamentService.findById(

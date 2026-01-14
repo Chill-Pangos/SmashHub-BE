@@ -1,10 +1,15 @@
 import Tournament from "../models/tournament.model";
 import TournamentContent from "../models/tournamentContent.model";
+import Entries from "../models/entries.model";
+import EntryMember from "../models/entrymember.model";
+import Profile from "../models/profile.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
+  TournamentFilterDto,
 } from "../dto/tournament.dto";
 import { sequelize } from "../config/database";
+import { Op, WhereOptions } from "sequelize";
 
 export class TournamentService {
   async create(data: CreateTournamentDto): Promise<Tournament> {
@@ -72,6 +77,105 @@ export class TournamentService {
       limit,
       order: [["startDate", "DESC"]],
     });
+  }
+
+  async findAllWithContentsFiltered(
+    filters: TournamentFilterDto
+  ): Promise<{ tournaments: Tournament[]; total: number }> {
+    const { skip = 0, limit = 10, userId, createdBy, ...contentFilters } = filters;
+
+    // Build where clause for TournamentContent
+    const contentWhere: WhereOptions<any> = {};
+    if (contentFilters.minAge !== undefined) {
+      contentWhere.minAge = { [Op.lte]: contentFilters.minAge };
+    }
+    if (contentFilters.maxAge !== undefined) {
+      contentWhere.maxAge = { [Op.gte]: contentFilters.maxAge };
+    }
+    if (contentFilters.minElo !== undefined) {
+      contentWhere.minElo = { [Op.lte]: contentFilters.minElo };
+    }
+    if (contentFilters.maxElo !== undefined) {
+      contentWhere.maxElo = { [Op.gte]: contentFilters.maxElo };
+    }
+    if (contentFilters.gender !== undefined) {
+      contentWhere.gender = contentFilters.gender;
+    }
+    if (contentFilters.racketCheck !== undefined) {
+      contentWhere.racketCheck = contentFilters.racketCheck;
+    }
+    if (contentFilters.isGroupStage !== undefined) {
+      contentWhere.isGroupStage = contentFilters.isGroupStage;
+    }
+
+    // Build include for filtering by userId if provided
+    const includeOptions: any[] = [
+      {
+        model: TournamentContent,
+        as: "contents",
+        where: Object.keys(contentWhere).length > 0 ? contentWhere : undefined,
+        required: Object.keys(contentWhere).length > 0,
+      },
+    ];
+
+    // If userId is provided, filter tournaments where user has entries
+    const tournamentWhere: WhereOptions<any> = {};
+    
+    // Add createdBy filter if provided
+    if (createdBy !== undefined) {
+      tournamentWhere.createdBy = createdBy;
+    }
+    
+    if (userId !== undefined) {
+      // Find tournaments where user has entries
+      const userEntries = await Entries.findAll({
+        include: [
+          {
+            model: EntryMember,
+            as: "members",
+            where: { userId },
+            required: true,
+          },
+        ],
+      });
+
+      const tournamentIds = [
+        ...new Set(userEntries.map((entry) => entry.contentId)),
+      ];
+
+      if (tournamentIds.length > 0) {
+        // Get tournament IDs from content IDs
+        const contents = await TournamentContent.findAll({
+          where: { id: { [Op.in]: tournamentIds } },
+          attributes: ["tournamentId"],
+        });
+
+        const finalTournamentIds = [
+          ...new Set(contents.map((c) => c.tournamentId)),
+        ];
+
+        if (finalTournamentIds.length > 0) {
+          tournamentWhere.id = { [Op.in]: finalTournamentIds };
+        } else {
+          // User has no entries matching filters
+          return { tournaments: [], total: 0 };
+        }
+      } else {
+        // User has no entries
+        return { tournaments: [], total: 0 };
+      }
+    }
+
+    const { count, rows } = await Tournament.findAndCountAll({
+      ...(Object.keys(tournamentWhere).length > 0 && { where: tournamentWhere }),
+      include: includeOptions,
+      offset: skip,
+      limit,
+      order: [["startDate", "DESC"]],
+      distinct: true,
+    });
+
+    return { tournaments: rows, total: count };
   }
 
   async findById(id: number): Promise<Tournament | null> {

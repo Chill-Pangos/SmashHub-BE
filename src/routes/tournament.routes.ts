@@ -241,6 +241,143 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
 
 /**
  * @swagger
+ * /tournaments/search:
+ *   get:
+ *     tags: [Tournaments]
+ *     summary: Search tournaments with content filters and pagination
+ *     description: Get all tournaments with their contents filtered by various criteria including user participation, age, ELO, gender, and other content properties
+ *     parameters:
+ *       - in: query
+ *         name: skip
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of records to skip for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records to return
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: integer
+ *         description: Filter tournaments where this user has entries
+ *         example: 1
+ *       - in: query
+ *         name: createdBy
+ *         schema:
+ *           type: integer
+ *         description: Filter tournaments created by this user
+ *         example: 1
+ *       - in: query
+ *         name: minAge
+ *         schema:
+ *           type: integer
+ *         description: Filter by minimum age requirement (content.minAge <= this value)
+ *         example: 18
+ *       - in: query
+ *         name: maxAge
+ *         schema:
+ *           type: integer
+ *         description: Filter by maximum age requirement (content.maxAge >= this value)
+ *         example: 35
+ *       - in: query
+ *         name: minElo
+ *         schema:
+ *           type: integer
+ *         description: Filter by minimum ELO requirement (content.minElo <= this value)
+ *         example: 1000
+ *       - in: query
+ *         name: maxElo
+ *         schema:
+ *           type: integer
+ *         description: Filter by maximum ELO requirement (content.maxElo >= this value)
+ *         example: 2000
+ *       - in: query
+ *         name: gender
+ *         schema:
+ *           type: string
+ *           enum: [male, female, mixed]
+ *         description: Filter by gender category
+ *         example: "male"
+ *       - in: query
+ *         name: racketCheck
+ *         schema:
+ *           type: boolean
+ *         description: Filter by racket check requirement
+ *         example: true
+ *       - in: query
+ *         name: isGroupStage
+ *         schema:
+ *           type: boolean
+ *         description: Filter by group stage format
+ *         example: false
+ *     responses:
+ *       200:
+ *         description: Filtered list of tournaments with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tournaments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [upcoming, ongoing, completed]
+ *                       startDate:
+ *                         type: string
+ *                         format: date-time
+ *                       endDate:
+ *                         type: string
+ *                         format: date-time
+ *                       location:
+ *                         type: string
+ *                       createdBy:
+ *                         type: integer
+ *                       contents:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: integer
+ *                             name:
+ *                               type: string
+ *                             type:
+ *                               type: string
+ *                               enum: [single, team, double]
+ *                             maxEntries:
+ *                               type: integer
+ *                             maxSets:
+ *                               type: integer
+ *                             gender:
+ *                               type: string
+ *                               enum: [male, female, mixed]
+ *                             racketCheck:
+ *                               type: boolean
+ *                             isGroupStage:
+ *                               type: boolean
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of tournaments matching the filters
+ *                   example: 42
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tournamentController));
+
+/**
+ * @swagger
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]

@@ -60,3 +60,17 @@ export interface TournamentResponseDto {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface TournamentFilterDto {
+  userId?: number | undefined;
+  createdBy?: number | undefined;
+  minAge?: number | undefined;
+  maxAge?: number | undefined;
+  minElo?: number | undefined;
+  maxElo?: number | undefined;
+  gender?: 'male' | 'female' | 'mixed' | undefined;
+  racketCheck?: boolean | undefined;
+  isGroupStage?: boolean | undefined;
+  skip?: number;
+  limit?: number;
+}
