@@ -217,6 +217,10 @@
  *         racketCheck:
  *           type: boolean
  *           description: Whether racket check is required
+ *         gender:
+ *           type: string
+ *           enum: [male, female, mixed]
+ *           description: Gender requirement (male, female, or mixed)
  *         isGroupStage:
  *           type: boolean
  *           description: Whether this content has a group stage

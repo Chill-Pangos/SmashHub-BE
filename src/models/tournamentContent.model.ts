@@ -91,11 +91,18 @@ export default class TournamentContent extends Model {
   })
   declare maxElo: number;
 
+
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
   })
   declare racketCheck: boolean;
+
+  @Column({
+    type: DataType.ENUM('male', 'female', 'mixed'),
+    allowNull: true,
+  })
+  declare gender?: 'male' | 'female' | 'mixed';
 
   @Column({
     type: DataType.BOOLEAN,
