@@ -38,7 +38,7 @@ export class RoleController {
   async findByName(req: Request, res: Response): Promise<void> {
     try {
       const name = req.params.name;
-      if (!name) {
+      if (!name || typeof name !== 'string') {
         res.status(400).json({ message: "Role name is required" });
         return;
       }

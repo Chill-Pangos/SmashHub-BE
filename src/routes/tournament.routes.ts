@@ -88,6 +88,11 @@ const router = Router();
  *                       type: boolean
  *                       description: Whether racket check is required
  *                       example: true
+ *                     gender:
+ *                       type: string
+ *                       enum: [male, female, mixed]
+ *                       description: Gender requirement for the tournament content
+ *                       example: "male"
  *                     isGroupStage:
  *                       type: boolean
  *                       description: Whether this content has a group stage (optional)
@@ -107,12 +112,14 @@ const router = Router();
  *                     maxEntries: 32
  *                     maxSets: 3
  *                     racketCheck: true
+ *                     gender: "male"
  *                     isGroupStage: false
  *                   - name: "Women's Singles"
  *                     type: "single"
  *                     maxEntries: 32
  *                     maxSets: 3
  *                     racketCheck: true
+ *                     gender: "female"
  *                     isGroupStage: false
  *             minimal:
  *               summary: Minimal tournament without contents
@@ -182,6 +189,9 @@ const router = Router();
  *                         type: integer
  *                       racketCheck:
  *                         type: boolean
+ *                       gender:
+ *                         type: string
+ *                         enum: [male, female, mixed]
  *                       isGroupStage:
  *                         type: boolean
  *       400:

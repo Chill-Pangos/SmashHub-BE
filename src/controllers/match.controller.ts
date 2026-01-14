@@ -53,10 +53,20 @@ export class MatchController {
   async findByStatus(req: Request, res: Response): Promise<void> {
     try {
       const status = req.params.status;
-      if (!status) {
+      if (!status || typeof status !== 'string') {
         res.status(400).json({ message: "Status is required" });
         return;
       }
+      
+      // Validate status value
+      const validStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({ 
+          message: "Invalid status. Must be one of: scheduled, in_progress, completed, cancelled" 
+        });
+        return;
+      }
+      
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const matches = await matchService.findByStatus(status, skip, limit);

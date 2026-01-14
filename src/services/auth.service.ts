@@ -7,6 +7,7 @@ import Otp from "../models/otp.model";
 import config from "../config/config";
 import emailService from "./email.service";
 import { AuthErrors } from "../utils/errors";
+import { validateEmail, validatePassword } from "../utils/validation";
 import {
   LoginDto,
   RegisterDto,
@@ -157,6 +158,12 @@ export class AuthService {
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const { username, email, password, role } = registerDto;
 
+    // Validate email format
+    validateEmail(email);
+
+    // Validate password strength
+    validatePassword(password);
+
     // Check if user already exists
     const existingUser = await User.findOne({
       where: {
@@ -229,6 +236,9 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
+    // Validate email format
+    validateEmail(email);
+
     // Find user by email
     const user = await User.findOne({
       where: {
@@ -246,6 +256,18 @@ export class AuthService {
     if (!isPasswordValid) {
       throw AuthErrors.InvalidCredentials();
     }
+
+    await AccessToken.update({
+      isBlacklisted: true, blacklistedAt: new Date(),
+    }, {
+      where: { userId: user.id, isBlacklisted: false },
+    });
+
+    await RefreshToken.update({
+      isBlacklisted: true, blacklistedAt: new Date(),
+    }, {
+      where: { userId: user.id, isBlacklisted: false },
+    });
 
     // Generate tokens
     const accessToken = this.generateAccessToken(user.id);
@@ -366,6 +388,9 @@ export class AuthService {
   ): Promise<void> {
     const { oldPassword, newPassword } = changePasswordDto;
 
+    // Validate new password strength
+    validatePassword(newPassword);
+
     // Find user
     const user = await User.findByPk(userId);
 
@@ -457,6 +482,9 @@ export class AuthService {
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<void> {
     const { email } = forgotPasswordDto;
 
+    // Validate email format
+    validateEmail(email);
+
     // Find user by email
     const user = await User.findOne({ where: { email } });
     if (!user) {
@@ -465,7 +493,7 @@ export class AuthService {
 
     // Generate OTP
     const otpCode = this.generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Invalidate any existing unused OTPs for this user
     await Otp.update(
@@ -498,6 +526,9 @@ export class AuthService {
   async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<void> {
     const { email, otp } = verifyOtpDto;
 
+    // Validate email format
+    validateEmail(email);
+
     // Find user
     const user = await User.findOne({ where: { email } });
     if (!user) {
@@ -529,6 +560,12 @@ export class AuthService {
    */
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
     const { email, otp, newPassword } = resetPasswordDto;
+
+    // Validate email format
+    validateEmail(email);
+
+    // Validate new password strength
+    validatePassword(newPassword);
 
     // Find user
     const user = await User.findOne({ where: { email } });
@@ -591,6 +628,9 @@ export class AuthService {
    * Send email verification OTP
    */
   async sendEmailVerificationOtp(email: string): Promise<void> {
+    // Validate email format
+    validateEmail(email);
+
     // Find user by email
     const user = await User.findOne({ where: { email } });
     
@@ -633,6 +673,9 @@ export class AuthService {
    */
   async verifyEmailOtp(verifyOtpDto: VerifyOtpDto): Promise<void> {
     const { email, otp } = verifyOtpDto;
+
+    // Validate email format
+    validateEmail(email);
 
     // Find user
     const user = await User.findOne({ where: { email } });

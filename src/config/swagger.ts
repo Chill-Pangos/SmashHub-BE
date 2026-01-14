@@ -28,7 +28,6 @@ const swaggerDefinition = {
     { name: "Roles", description: "Role management endpoints" },
     { name: "Permissions", description: "Permission management endpoints" },
     { name: "Tournaments", description: "Tournament management endpoints" },
-    { name: "Format Types", description: "Format type management endpoints" },
     {
       name: "Tournament Contents",
       description: "Tournament content endpoints",
@@ -37,8 +36,6 @@ const swaggerDefinition = {
     { name: "Schedules", description: "Schedule management endpoints" },
     { name: "Matches", description: "Match management endpoints" },
     { name: "Match Sets", description: "Match set endpoints" },
-    { name: "Match Formats", description: "Match format endpoints" },
-    { name: "Content Rules", description: "Content rule endpoints" },
     { name: "ELO Scores", description: "ELO scoring system endpoints" },
     { name: "ELO Histories", description: "ELO history tracking endpoints" },
     { name: "Complaints", description: "Complaint management endpoints" },

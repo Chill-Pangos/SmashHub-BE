@@ -10,6 +10,7 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Register new user
+ *     description: Create a new user account. Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.
  *     requestBody:
  *       required: true
  *       content:
@@ -24,17 +25,22 @@ const router = Router();
  *               username:
  *                 type: string
  *                 example: test
+ *                 description: Username for the account
  *               email:
  *                 type: string
  *                 format: email
  *                 example: user@test.com
+ *                 description: Valid email address
  *               password:
  *                 type: string
  *                 format: password
- *                 example: password123
+ *                 example: Password123!
+ *                 minLength: 8
+ *                 description: Password (min 8 chars, 1 uppercase, 1 number, 1 special character)
  *               role:
  *                 type: string
  *                 example: spectator
+ *                 description: User role (defaults to spectator if not specified)
  *     responses:
  *       201:
  *         description: User registered successfully
@@ -100,6 +106,7 @@ router.post("/register", authController.register);
  *   post:
  *     tags: [Auth]
  *     summary: Login user
+ *     description: Authenticate with email and password. Email must be in valid format.
  *     requestBody:
  *       required: true
  *       content:
@@ -113,11 +120,13 @@ router.post("/register", authController.register);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com   
+ *                 example: user@test.com
+ *                 description: Valid email address
  *               password:
  *                 type: string
  *                 format: password
- *                 example: password123
+ *                 example: Password123!
+ *                 description: Account password
  *     responses:
  *       200:
  *         description: Login successful
@@ -235,6 +244,7 @@ router.post("/refresh", authController.refreshToken);
  *   post:
  *     tags: [Auth]
  *     summary: Change password
+ *     description: Change user password. New password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -250,11 +260,14 @@ router.post("/refresh", authController.refreshToken);
  *               oldPassword:
  *                 type: string
  *                 format: password
- *                 example: password123
+ *                 example: Password123!
+ *                 description: Current password
  *               newPassword:
  *                 type: string
  *                 format: password
  *                 example: NewStrongPass456!
+ *                 minLength: 8
+ *                 description: New password (min 8 chars, 1 uppercase, 1 number, 1 special character)
  *     responses:
  *       200:
  *         description: Password changed successfully
@@ -342,6 +355,7 @@ router.post("/logout", authenticate, authController.logout);
  *   post:
  *     tags: [Auth]
  *     summary: Request password reset - Send OTP to email
+ *     description: Request a password reset OTP. Email must be in valid format.
  *     requestBody:
  *       required: true
  *       content:
@@ -355,7 +369,7 @@ router.post("/logout", authenticate, authController.logout);
  *                 type: string
  *                 format: email
  *                 example: user@test.com
- *                 description: Email address to receive OTP
+ *                 description: Valid email address to receive OTP
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -448,6 +462,7 @@ router.post("/verify-otp", authController.verifyOtp);
  *   post:
  *     tags: [Auth]
  *     summary: Reset password with verified OTP
+ *     description: Reset password using OTP. New password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character. Email must be in valid format.
  *     requestBody:
  *       required: true
  *       content:
@@ -463,6 +478,7 @@ router.post("/verify-otp", authController.verifyOtp);
  *                 type: string
  *                 format: email
  *                 example: user@test.com
+ *                 description: Valid email address
  *               otp:
  *                 type: string
  *                 minLength: 6
@@ -473,7 +489,8 @@ router.post("/verify-otp", authController.verifyOtp);
  *                 type: string
  *                 format: password
  *                 example: NewPassword123!
- *                 description: New password to set
+ *                 minLength: 8
+ *                 description: New password (min 8 chars, 1 uppercase, 1 number, 1 special character)
  *     responses:
  *       200:
  *         description: Password reset successfully
