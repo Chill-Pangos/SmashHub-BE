@@ -49,6 +49,21 @@ export class TournamentController {
     }
   }
 
+  async findByIdWithContents(req: Request, res: Response): Promise<void> {
+    try {
+      const tournament = await tournamentService.findByIdWithContents(
+        Number(req.params.id)
+      );
+      if (!tournament) {
+        res.status(404).json({ message: "Tournament not found" });
+        return;
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching tournament with contents", error });
+    }
+  }
+
   async findByStatus(req: Request, res: Response): Promise<void> {
     try {
       const status = req.params.status;
@@ -94,6 +109,22 @@ export class TournamentController {
       res.status(200).json(tournament);
     } catch (error) {
       res.status(400).json({ message: "Error updating tournament", error });
+    }
+  }
+
+  async updateWithContents(req: Request, res: Response): Promise<void> {
+    try {
+      const tournament = await tournamentService.update(
+        Number(req.params.id),
+        req.body
+      );
+      if (!tournament) {
+        res.status(404).json({ message: "Tournament not found" });
+        return;
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      res.status(400).json({ message: "Error updating tournament with contents", error });
     }
   }
 

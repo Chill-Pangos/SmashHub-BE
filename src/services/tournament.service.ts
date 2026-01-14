@@ -26,26 +26,25 @@ export class TournamentService {
 
       // Create tournament contents if provided
       if (data.contents && data.contents.length > 0) {
-        for (const contentData of data.contents) {
-          await TournamentContent.create(
-            {
-              tournamentId: tournament.id,
-              name: contentData.name,
-              type: contentData.type,
-              maxEntries: contentData.maxEntries,
-              maxSets: contentData.maxSets,
-              numberOfSingles: contentData.numberOfSingles ? contentData.numberOfSingles : null,
-              numberOfDoubles: contentData.numberOfDoubles ? contentData.numberOfDoubles : null,
-              minAge: contentData.minAge ? contentData.minAge : null,
-              maxAge: contentData.maxAge ? contentData.maxAge : null,
-              minElo: contentData.minElo ? contentData.minElo : null,
-              maxElo: contentData.maxElo ? contentData.maxElo : null,
-              racketCheck: contentData.racketCheck,
-              isGroupStage: contentData.isGroupStage,
-            } as any,
-            { transaction }
-          );
-        }
+        await TournamentContent.bulkCreate(
+          data.contents.map(contentData => ({
+            tournamentId: tournament.id,
+            name: contentData.name,
+            type: contentData.type,
+            maxEntries: contentData.maxEntries,
+            maxSets: contentData.maxSets,
+            numberOfSingles: contentData.numberOfSingles ?? null,
+            numberOfDoubles: contentData.numberOfDoubles ?? null,
+            minAge: contentData.minAge ?? null,
+            maxAge: contentData.maxAge ?? null,
+            minElo: contentData.minElo ?? null,
+            maxElo: contentData.maxElo ?? null,
+            racketCheck: contentData.racketCheck,
+            gender: contentData.gender ?? null,
+            isGroupStage: contentData.isGroupStage,
+          })),
+          { transaction }
+        );
       }
 
       await transaction.commit();
@@ -76,7 +75,25 @@ export class TournamentService {
   }
 
   async findById(id: number): Promise<Tournament | null> {
-    return await Tournament.findByPk(id);
+    return await Tournament.findByPk(id, {
+      include: [
+        {
+          model: TournamentContent,
+          as: "contents",
+        },
+      ],
+    });
+  }
+
+  async findByIdWithContents(id: number): Promise<Tournament | null> {
+    return await Tournament.findByPk(id, {
+      include: [
+        {
+          model: TournamentContent,
+          as: "contents",
+        },
+      ],
+    });
   }
 
   async findByStatus(
@@ -95,11 +112,69 @@ export class TournamentService {
   async update(
     id: number,
     data: UpdateTournamentDto
-  ): Promise<[number, Tournament[]]> {
-    return await Tournament.update(data, {
-      where: { id },
-      returning: true,
-    });
+  ): Promise<Tournament | null> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Check if tournament exists
+      const tournament = await Tournament.findByPk(id, { transaction });
+      if (!tournament) {
+        await transaction.rollback();
+        return null;
+      }
+
+      // Update tournament basic info
+      await tournament.update(
+        {
+          name: data.name,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          location: data.location,
+          status: data.status,
+        },
+        { transaction }
+      );
+
+      // Update or create tournament contents if provided
+      if (data.contents !== undefined) {
+        // Delete existing contents
+        await TournamentContent.destroy({
+          where: { tournamentId: id },
+          transaction,
+        });
+
+        // Create new contents if provided
+        if (data.contents.length > 0) {
+          await TournamentContent.bulkCreate(
+            data.contents.map(c => ({
+              tournamentId: id,
+              name: c.name,
+              type: c.type,
+              maxEntries: c.maxEntries,
+              maxSets: c.maxSets,
+              numberOfSingles: c.numberOfSingles ?? null,
+              numberOfDoubles: c.numberOfDoubles ?? null,
+              minAge: c.minAge ?? null,
+              maxAge: c.maxAge ?? null,
+              minElo: c.minElo ?? null,
+              maxElo: c.maxElo ?? null,
+              racketCheck: c.racketCheck,
+              gender: c.gender ?? null,
+              isGroupStage: c.isGroupStage,
+            })),
+            { transaction }
+          );
+        }
+      }
+
+      await transaction.commit();
+
+      // Fetch updated tournament with contents
+      return await this.findById(id);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   }
 
   async delete(id: number): Promise<number> {

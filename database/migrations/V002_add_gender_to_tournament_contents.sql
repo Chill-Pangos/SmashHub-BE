@@ -6,5 +6,5 @@
 -- Add gender column to tournament_contents table
 ALTER TABLE tournament_contents
 ADD COLUMN gender ENUM('male', 'female', 'mixed') NULL
-AFTER racket_check
+AFTER maxElo;
 
