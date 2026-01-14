@@ -21,7 +21,6 @@ const router = Router();
  *               - type
  *               - maxEntries
  *               - maxSets
- *               - racketCheck
  *             properties:
  *               tournamentId:
  *                 type: integer
@@ -45,9 +44,6 @@ const router = Router();
  *               numberOfDoubles:
  *                 type: integer
  *                 example: 2
- *               racketCheck:
- *                 type: boolean
- *                 example: true
  *               gender:
  *                 type: string
  *                 enum: [male, female, mixed]
@@ -123,9 +119,6 @@ router.get(
  *               numberOfDoubles:
  *                 type: integer
  *                 example: 2
- *               racketCheck:
- *                 type: boolean
- *                 example: true
  *               gender:
  *                 type: string
  *                 enum: [male, female, mixed]

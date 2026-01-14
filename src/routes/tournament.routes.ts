@@ -57,7 +57,6 @@ const router = Router();
  *                     - type
  *                     - maxEntries
  *                     - maxSets
- *                     - racketCheck
  *                   properties:
  *                     name:
  *                       type: string
@@ -84,10 +83,6 @@ const router = Router();
  *                       type: integer
  *                       description: Number of doubles matches
  *                       example: 2
- *                     racketCheck:
- *                       type: boolean
- *                       description: Whether racket check is required
- *                       example: true
  *                     gender:
  *                       type: string
  *                       enum: [male, female, mixed]
@@ -111,14 +106,12 @@ const router = Router();
  *                     type: "single"
  *                     maxEntries: 32
  *                     maxSets: 3
- *                     racketCheck: true
  *                     gender: "male"
  *                     isGroupStage: false
  *                   - name: "Women's Singles"
  *                     type: "single"
  *                     maxEntries: 32
  *                     maxSets: 3
- *                     racketCheck: true
  *                     gender: "female"
  *                     isGroupStage: false
  *             minimal:
@@ -187,8 +180,6 @@ const router = Router();
  *                         type: integer
  *                       numberOfDoubles:
  *                         type: integer
- *                       racketCheck:
- *                         type: boolean
  *                       gender:
  *                         type: string
  *                         enum: [male, female, mixed]
@@ -258,7 +249,7 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Maximum number of records to return
+ *         description: Maximum number of records to return. Use 0 to get all tournaments without limit
  *       - in: query
  *         name: userId
  *         schema:
@@ -302,12 +293,6 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *           enum: [male, female, mixed]
  *         description: Filter by gender category
  *         example: "male"
- *       - in: query
- *         name: racketCheck
- *         schema:
- *           type: boolean
- *         description: Filter by racket check requirement
- *         example: true
  *       - in: query
  *         name: isGroupStage
  *         schema:
@@ -363,14 +348,36 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *                             gender:
  *                               type: string
  *                               enum: [male, female, mixed]
- *                             racketCheck:
- *                               type: boolean
+
  *                             isGroupStage:
  *                               type: boolean
- *                 total:
- *                   type: integer
- *                   description: Total number of tournaments matching the filters
- *                   example: 42
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       description: Total number of tournaments matching the filters
+ *                       example: 42
+ *                     page:
+ *                       type: integer
+ *                       description: Current page number
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       description: Number of items per page
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       description: Total number of pages
+ *                       example: 5
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       description: Whether there is a next page
+ *                       example: true
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       description: Whether there is a previous page
+ *                       example: false
  *       500:
  *         description: Internal server error
  */
@@ -443,8 +450,6 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                         type: integer
  *                       numberOfDoubles:
  *                         type: integer
- *                       racketCheck:
- *                         type: boolean
  *                       gender:
  *                         type: string
  *                         enum: [male, female, mixed]
@@ -495,7 +500,6 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                     - type
  *                     - maxEntries
  *                     - maxSets
- *                     - racketCheck
  *                   properties:
  *                     name:
  *                       type: string
@@ -516,9 +520,6 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                     numberOfDoubles:
  *                       type: integer
  *                       example: 2
- *                     racketCheck:
- *                       type: boolean
- *                       example: true
  *                     gender:
  *                       type: string
  *                       enum: [male, female, mixed]

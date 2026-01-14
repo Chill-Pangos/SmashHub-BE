@@ -20,7 +20,7 @@ export interface CreateTournamentContentDto {
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
-  racketCheck: boolean;
+
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -45,7 +45,6 @@ export interface UpdateTournamentContentDto {
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
-  racketCheck: boolean;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -69,8 +68,19 @@ export interface TournamentFilterDto {
   minElo?: number | undefined;
   maxElo?: number | undefined;
   gender?: 'male' | 'female' | 'mixed' | undefined;
-  racketCheck?: boolean | undefined;
   isGroupStage?: boolean | undefined;
   skip?: number;
   limit?: number;
+}
+
+export interface TournamentPaginatedResponseDto {
+  tournaments: any[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
 }
