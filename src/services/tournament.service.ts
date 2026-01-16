@@ -1,7 +1,7 @@
 import Tournament from "../models/tournament.model";
 import TournamentContent from "../models/tournamentContent.model";
 import Entries from "../models/entries.model";
-import EntryMember from "../models/entrymember.model";
+import EntryMember from "../models/entryMember.model";
 import Profile from "../models/profile.model";
 import {
   CreateTournamentDto,
@@ -117,17 +117,7 @@ export class TournamentService {
     // Determine if we should filter by content or just include all
     const hasContentFilters = Object.keys(contentWhere).length > 0;
     
-    // Build include for filtering by userId if provided
-    const includeOptions: any[] = [
-      {
-        model: TournamentContent,
-        as: "contents",
-        where: hasContentFilters ? contentWhere : undefined,
-        required: false, // Always optional to allow getting all tournaments
-      },
-    ];
-
-    // If userId is provided, filter tournaments where user has entries
+    // Build tournament where clause
     const tournamentWhere: WhereOptions<any> = {};
     
     // Add createdBy filter if provided
@@ -135,6 +125,46 @@ export class TournamentService {
       tournamentWhere.createdBy = createdBy;
     }
     
+    // If we have content filters, find tournaments that have matching contents
+    if (hasContentFilters) {
+      const matchingContents = await TournamentContent.findAll({
+        where: contentWhere,
+        attributes: ['tournamentId'],
+      });
+      
+      const tournamentIdsWithMatchingContent = [
+        ...new Set(matchingContents.map((c) => c.tournamentId)),
+      ];
+      
+      if (tournamentIdsWithMatchingContent.length === 0) {
+        // No tournaments have content matching the filters
+        return {
+          tournaments: [],
+          pagination: {
+            total: 0,
+            page: 1,
+            limit: limit && limit > 0 ? limit : 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
+      }
+      
+      // Add to tournament where clause
+      tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingContent };
+    }
+    
+    // Build include for all contents (no filter on include)
+    const includeOptions: any[] = [
+      {
+        model: TournamentContent,
+        as: "contents",
+        required: false, // Include all contents of the tournament
+      },
+    ];
+    
+    // If userId is provided, filter tournaments where user has entries
     if (userId !== undefined) {
       // Find tournaments where user has entries
       const userEntries = await Entries.findAll({
@@ -164,7 +194,28 @@ export class TournamentService {
         ];
 
         if (finalTournamentIds.length > 0) {
-          tournamentWhere.id = { [Op.in]: finalTournamentIds };
+          // Merge with existing id filter if present
+          if (tournamentWhere.id && tournamentWhere.id[Op.in]) {
+            const existingIds = tournamentWhere.id[Op.in];
+            const intersection = finalTournamentIds.filter(id => existingIds.includes(id));
+            if (intersection.length === 0) {
+              // No overlap between filters
+              return {
+                tournaments: [],
+                pagination: {
+                  total: 0,
+                  page: 1,
+                  limit: limit && limit > 0 ? limit : 0,
+                  totalPages: 0,
+                  hasNextPage: false,
+                  hasPrevPage: false,
+                },
+              };
+            }
+            tournamentWhere.id = { [Op.in]: intersection };
+          } else {
+            tournamentWhere.id = { [Op.in]: finalTournamentIds };
+          }
         } else {
           // User has no entries matching filters
           return {

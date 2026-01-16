@@ -15,6 +15,8 @@ import eloHistoryRoutes from "./eloHistory.routes";
 import complaintRoutes from "./complaint.routes";
 import complaintMessageRoutes from "./complaintMessage.routes";
 import complaintWorkflowRoutes from "./complaintWorkflow.routes";
+import teamRoutes from "./team.routes";
+import teamMemberRoutes from "./teamMember.routes";
 
 const router = Router();
 
@@ -35,5 +37,7 @@ router.use("/elo-histories", eloHistoryRoutes);
 router.use("/complaints", complaintRoutes);
 router.use("/complaint-messages", complaintMessageRoutes);
 router.use("/complaint-workflows", complaintWorkflowRoutes);
+router.use("/teams", teamRoutes);
+router.use("/team-members", teamMemberRoutes);
 
 export default router;
