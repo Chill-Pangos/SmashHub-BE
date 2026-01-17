@@ -302,4 +302,175 @@ router.post(
   entryImportController.confirmDoubleEntries.bind(entryImportController)
 );
 
+/**
+ * @swagger
+ * /entries/import/team/preview:
+ *   post:
+ *     summary: Preview Excel import data for team entries (3-5 players)
+ *     tags: [Entries]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - contentId
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Excel file (.xlsx or .xls) containing team entries data
+ *               contentId:
+ *                 type: integer
+ *                 description: ID of the tournament content (must be type 'team')
+ *                 example: 3
+ *     responses:
+ *       200:
+ *         description: Excel file parsed and validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     valid:
+ *                       type: boolean
+ *                       example: true
+ *                     entries:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           players:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 name:
+ *                                   type: string
+ *                                   example: "John Doe"
+ *                                 userId:
+ *                                   type: number
+ *                                   example: 1
+ *                                 email:
+ *                                   type: string
+ *                                   example: "john@example.com"
+ *                           teamId:
+ *                             type: number
+ *                             example: 1
+ *                           rowNumber:
+ *                             type: number
+ *                             example: 2
+ *                     errors:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           rowNumber:
+ *                             type: number
+ *                           field:
+ *                             type: string
+ *                           message:
+ *                             type: string
+ *                           value:
+ *                             type: string
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalEntries:
+ *                           type: number
+ *                         entriesWithErrors:
+ *                           type: number
+ *                         contentType:
+ *                           type: string
+ *                           example: "team"
+ *                         maxEntries:
+ *                           type: number
+ *                         currentEntries:
+ *                           type: number
+ *                         availableSlots:
+ *                           type: number
+ *       400:
+ *         description: Invalid file format or validation errors
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/import/team/preview",
+  authenticate,
+  uploadExcel.single("file"),
+  entryImportController.previewTeamEntries.bind(entryImportController)
+);
+
+/**
+ * @swagger
+ * /entries/import/team/confirm:
+ *   post:
+ *     summary: Confirm and save team entries import (3-5 players per entry)
+ *     tags: [Entries]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contentId
+ *               - entries
+ *             properties:
+ *               contentId:
+ *                 type: number
+ *                 example: 3
+ *               entries:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     players:
+ *                       type: array
+ *                       minItems: 3
+ *                       maxItems: 5
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                             example: "John Doe"
+ *                           userId:
+ *                             type: number
+ *                             example: 1
+ *                           email:
+ *                             type: string
+ *                             example: "john@example.com"
+ *                     teamId:
+ *                       type: number
+ *                       example: 1
+ *                     rowNumber:
+ *                       type: number
+ *                       example: 2
+ *     responses:
+ *       201:
+ *         description: Team entries created successfully
+ *       400:
+ *         description: Invalid data or import failed
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/import/team/confirm",
+  authenticate,
+  entryImportController.confirmTeamEntries.bind(entryImportController)
+);
+
 export default router;
