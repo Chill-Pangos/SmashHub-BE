@@ -3,6 +3,8 @@ import EntryMember from "../models/entryMember.model";
 import Team from "../models/team.model";
 import TournamentContent from "../models/tournamentContent.model";
 import EloScore from "../models/eloScore.model";
+import User from "../models/user.model";
+import TeamMember from "../models/teamMember.model";
 import { CreateEntryDto, UpdateEntryDto, RegisterEntryDto } from "../dto/entry.dto";
 import { withTransaction } from "../utils/transaction.helper";
 import { ValidationHelper } from "../utils/validation.helper";
@@ -45,6 +47,9 @@ export class EntryService {
       // Verify all members belong to the team
       await ValidationHelper.verifyTeamMembers(data.teamId, data.memberIds, transaction);
 
+      // Validate gender requirements
+      await this.validateMembersGender(data.memberIds, content, transaction);
+
       // Create entry
       const entry = await Entries.create(
         {
@@ -63,8 +68,17 @@ export class EntryService {
 
       await EntryMember.bulkCreate(entryMembersData, { transaction });
 
-      // Fetch the created entry with all related data
-      return await this.findEntryWithRelations(entry.id);
+      // Fetch the created entry with all related data within the same transaction
+      const entryWithRelations = await Entries.findByPk(entry.id, {
+        include: QueryHelper.entryWithRelations(),
+        transaction,
+      });
+
+      if (!entryWithRelations) {
+        throw new Error('Entry not found after creation');
+      }
+
+      return entryWithRelations;
     });
   }
 
@@ -89,16 +103,40 @@ export class EntryService {
     );
   }
 
-  private async findEntryWithRelations(id: number): Promise<Entries> {
-    const entry = await Entries.findByPk(id, {
-      include: QueryHelper.entryWithRelations(),
-    });
-
-    if (!entry) {
-      throw new Error('Entry not found after creation');
+  /**
+   * Validate members gender against content requirements
+   */
+  private async validateMembersGender(
+    memberIds: number[],
+    content: TournamentContent,
+    transaction: any
+  ): Promise<void> {
+    // If content doesn't have gender requirement, skip validation
+    if (!content.gender) {
+      return;
     }
 
-    return entry;
+    // Get all members with their user info
+    const users = await User.findAll({
+      where: { id: memberIds },
+      ...(transaction && { transaction }),
+    });
+
+    // Check each user's gender
+    const invalidUsers: string[] = [];
+    for (const user of users) {
+      if (!user.gender) {
+        invalidUsers.push(`${user.username} (gender not set)`);
+      } else if (user.gender !== content.gender) {
+        invalidUsers.push(`${user.username} (${user.gender})`);
+      }
+    }
+
+    if (invalidUsers.length > 0) {
+      throw new Error(
+        `Gender mismatch: Content requires "${content.gender}" but found: ${invalidUsers.join(', ')}`
+      );
+    }
   }
 
   async findAll(skip = 0, limit = 10): Promise<Entries[]> {

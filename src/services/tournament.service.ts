@@ -51,9 +51,7 @@ export class TournamentService {
         );
       }
 
-      await transaction.commit();
-
-      // Fetch the created tournament with all related data
+      // Fetch the created tournament with all related data within transaction
       const createdTournament = await Tournament.findByPk(tournament.id, {
         include: [
           {
@@ -61,9 +59,16 @@ export class TournamentService {
             as: "contents",
           },
         ],
+        transaction,
       });
 
-      return createdTournament!;
+      await transaction.commit();
+
+      if (!createdTournament) {
+        throw new Error('Tournament not found after creation');
+      }
+
+      return createdTournament;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -365,10 +370,20 @@ export class TournamentService {
         }
       }
 
+      // Fetch updated tournament with contents within transaction
+      const updatedTournament = await Tournament.findByPk(id, {
+        include: [
+          {
+            model: TournamentContent,
+            as: "contents",
+          },
+        ],
+        transaction,
+      });
+
       await transaction.commit();
 
-      // Fetch updated tournament with contents
-      return await this.findById(id);
+      return updatedTournament;
     } catch (error) {
       await transaction.rollback();
       throw error;

@@ -11,15 +11,6 @@ export class TeamController {
     }
   }
 
-  async createWithMembers(req: Request, res: Response): Promise<void> {
-    try {
-      const team = await teamService.createWithMembers(req.body);
-      res.status(201).json(team);
-    } catch (error) {
-      res.status(400).json({ message: "Error creating team with members", error });
-    }
-  }
-
   async findAll(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;

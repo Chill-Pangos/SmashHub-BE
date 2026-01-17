@@ -55,6 +55,12 @@ export default class User extends Model {
   })
   declare isEmailVerified: boolean;
 
+  @Column({
+    type: DataType.ENUM('male', 'female', 'other'),
+    allowNull: true,
+  })
+  declare gender?: string;
+
   @HasOne(() => Profile)
   profile?: Profile;
 

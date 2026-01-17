@@ -2,7 +2,7 @@
 export interface CreateTeamDto {
   tournamentId: number;
   name: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 export interface CreateTeamWithMembersDto {
