@@ -8,8 +8,9 @@ import {
   HasMany,
 } from "sequelize-typescript";
 import TournamentContent from "./tournamentContent.model";
-import EntryMember from "./entrymember.model";
+import EntryMember from "./entryMember.model";
 import Match from "./match.model";
+import Team from "./team.model";
 
 @Table({
   tableName: "entries",
@@ -30,14 +31,18 @@ export default class Entries extends Model {
   })
   declare contentId: number;
 
+  @ForeignKey(() => Team)
   @Column({
-    type: DataType.STRING(100),
+    type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare name: string;
+  declare teamId: number;
 
   @BelongsTo(() => TournamentContent)
   content?: TournamentContent;
+
+  @BelongsTo(() => Team)
+  team?: Team;
 
   @HasMany(() => EntryMember)
   members?: EntryMember[];
