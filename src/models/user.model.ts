@@ -12,11 +12,10 @@ import EloScore from "./eloScore.model";
 import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
 import Role from "./role.model";
-import EntryMember from "./entrymember.model";
+import EntryMember from "./entryMember.model";
 import Complaint from "./complaint.model";
 import ComplaintMessage from "./complaintMessage.model";
 import ComplaintWorkflow from "./complaintWorkflow.model";
-import { Col } from "sequelize/types/utils";
 
 @Table({
   tableName: "users",
@@ -55,6 +54,12 @@ export default class User extends Model {
     defaultValue: false,
   })
   declare isEmailVerified: boolean;
+
+  @Column({
+    type: DataType.ENUM('male', 'female', 'other'),
+    allowNull: true,
+  })
+  declare gender?: string;
 
   @HasOne(() => Profile)
   profile?: Profile;

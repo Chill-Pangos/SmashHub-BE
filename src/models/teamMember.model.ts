@@ -7,13 +7,13 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import User from "./user.model";
-import Entries from "./entries.model";
+import Team from "./team.model";
 
 @Table({
-  tableName: "entry_members",
+  tableName: "team_members",
   timestamps: true,
 })
-export default class EntryMember extends Model {
+export default class TeamMember extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
@@ -21,12 +21,12 @@ export default class EntryMember extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Team)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare entryId: number;
+  declare teamId: number;
 
   @ForeignKey(() => User)
   @Column({
@@ -36,13 +36,14 @@ export default class EntryMember extends Model {
   declare userId: number;
 
   @Column({
-    type: DataType.INTEGER.UNSIGNED,
+    type: DataType.ENUM("team_manager", "coach", "athlete"),
     allowNull: false,
+    defaultValue: "athlete",
   })
-  declare eloAtEntry: number;
+  declare role: string;
 
-  @BelongsTo(() => Entries)
-  entry?: Entries;
+  @BelongsTo(() => Team)
+  team?: Team;
 
   @BelongsTo(() => User)
   user?: User;

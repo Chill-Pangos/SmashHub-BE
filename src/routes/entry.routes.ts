@@ -1,5 +1,6 @@
 import { Router } from "express";
 import entryController from "../controllers/entry.controller";
+import { authenticate } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -32,6 +33,124 @@ const router = Router();
  */
 router.post("/", entryController.create.bind(entryController));
 router.get("/", entryController.findAll.bind(entryController));
+
+/**
+ * @swagger
+ * /entries/register:
+ *   post:
+ *     tags: [Entries]
+ *     summary: Register entry for team (team_manager only)
+ *     description: Team manager can register their team for a tournament content with selected members
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contentId
+ *               - teamId
+ *               - memberIds
+ *             properties:
+ *               contentId:
+ *                 type: integer
+ *                 description: ID of the tournament content to register for
+ *                 example: 1
+ *               teamId:
+ *                 type: integer
+ *                 description: ID of the team to register
+ *                 example: 1
+ *               memberIds:
+ *                 type: array
+ *                 description: Array of user IDs (team members) to participate in this entry
+ *                 items:
+ *                   type: integer
+ *                 example: [5, 10, 15]
+ *           examples:
+ *             singlePlayer:
+ *               summary: Register for singles content
+ *               value:
+ *                 contentId: 1
+ *                 teamId: 1
+ *                 memberIds: [5]
+ *             multiplePlayers:
+ *               summary: Register for team content
+ *               value:
+ *                 contentId: 2
+ *                 teamId: 1
+ *                 memberIds: [5, 10, 15, 20]
+ *     responses:
+ *       201:
+ *         description: Entry registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                   example: 1
+ *                 contentId:
+ *                   type: integer
+ *                   example: 1
+ *                 teamId:
+ *                   type: integer
+ *                   example: 1
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *                 members:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       entryId:
+ *                         type: integer
+ *                         example: 1
+ *                       userId:
+ *                         type: integer
+ *                         example: 5
+ *                       eloAtEntry:
+ *                         type: integer
+ *                         example: 1650
+ *                 team:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                 content:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *       400:
+ *         description: Bad request - Invalid data or user is not team manager
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Only team manager can register entry for the team"
+ *                 error:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized - User not authenticated
+ */
+router.post("/register", authenticate, entryController.registerEntry.bind(entryController));
 
 /**
  * @swagger
