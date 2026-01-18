@@ -23,6 +23,20 @@ export class UserService {
     return await user.update(userData);
   }
 
+  async updateProfile(
+    id: number,
+    profileData: {
+      avatarUrl?: string;
+      dob?: Date;
+      phoneNumber?: string;
+      gender?: string;
+    }
+  ): Promise<User | null> {
+    const user = await User.findByPk(id);
+    if (!user) return null;
+    return await user.update(profileData);
+  }
+
   async delete(id: number): Promise<boolean> {
     const deletedCount = await User.destroy({ where: { id } });
     return deletedCount > 0;

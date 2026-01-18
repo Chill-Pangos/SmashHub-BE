@@ -2,7 +2,6 @@ import Tournament from "../models/tournament.model";
 import TournamentContent from "../models/tournamentContent.model";
 import Entries from "../models/entries.model";
 import EntryMember from "../models/entryMember.model";
-import Profile from "../models/profile.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,

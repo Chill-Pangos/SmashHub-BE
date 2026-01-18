@@ -1,7 +1,6 @@
 import { Router } from "express";
 import authRoutes from "./auth.routes";
 import userRoutes from "./user.routes";
-import profileRoutes from "./profile.routes";
 import roleRoutes from "./role.routes";
 import permissionRoutes from "./permission.routes";
 import tournamentRoutes from "./tournament.routes";
@@ -25,7 +24,6 @@ const router = Router();
 // Mount all routes
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
-router.use("/profiles", profileRoutes);
 router.use("/roles", roleRoutes);
 router.use("/permissions", permissionRoutes);
 router.use("/tournaments", tournamentRoutes);

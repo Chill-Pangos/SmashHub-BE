@@ -18,6 +18,7 @@ const router = Router();
  *             required:
  *               - username
  *               - email
+ *               - password
  *             properties:
  *               username:
  *                 type: string
@@ -25,6 +26,16 @@ const router = Router();
  *                 type: string
  *               password:
  *                 type: string
+ *               avatarUrl:
+ *                 type: string
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *               phoneNumber:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
  *     responses:
  *       201:
  *         description: User created successfully
@@ -66,6 +77,23 @@ router.get("/", userController.findAll.bind(userController));
  *         application/json:
  *           schema:
  *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               avatarUrl:
+ *                 type: string
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *               phoneNumber:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
  *     responses:
  *       200:
  *         description: User updated successfully
@@ -85,5 +113,38 @@ router.get("/", userController.findAll.bind(userController));
 router.get("/:id", userController.findById.bind(userController));
 router.put("/:id", userController.update.bind(userController));
 router.delete("/:id", userController.delete.bind(userController));
+
+/**
+ * @swagger
+ * /users/{id}/profile:
+ *   put:
+ *     tags: [Users]
+ *     summary: Update user profile (avatarUrl, dob, phoneNumber, gender)
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatarUrl:
+ *                 type: string
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *               phoneNumber:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
+ *     responses:
+ *       200:
+ *         description: User profile updated successfully
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.put("/:id/profile", userController.updateProfile.bind(userController));
 
 export default router;
