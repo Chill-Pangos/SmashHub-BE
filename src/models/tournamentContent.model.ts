@@ -6,7 +6,7 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
-  HasOne,
+  BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
 import Entries from "./entries.model";
@@ -17,6 +17,13 @@ import Schedule from "./schedule.model";
   timestamps: true,
 })
 export default class TournamentContent extends Model {
+  @BeforeValidate
+  static validateGender(instance: TournamentContent) {
+    // Only 'double' type can have 'mixed' gender
+    if (instance.gender === 'mixed' && instance.type !== 'double') {
+      throw new Error('Only double type content can have mixed gender');
+    }
+  }
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,

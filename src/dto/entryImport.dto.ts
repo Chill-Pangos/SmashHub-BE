@@ -23,6 +23,24 @@ export interface ParsedDoubleEntryDto {
 }
 
 /**
+ * DTO for parsed team entry data from Excel (3-5 players)
+ */
+export interface ParsedTeamEntryDto {
+  stt: number;
+  player1Name?: string;
+  player1Email?: string;
+  player2Name?: string;
+  player2Email?: string;
+  player3Name?: string;
+  player3Email?: string;
+  player4Name?: string;
+  player4Email?: string;
+  player5Name?: string;
+  player5Email?: string;
+  rowNumber: number;
+}
+
+/**
  * Validated single entry with resolved userId
  */
 export interface ValidatedSingleEntryDto {
@@ -49,6 +67,19 @@ export interface ValidatedDoubleEntryDto {
 }
 
 /**
+ * Validated team entry with resolved userIds (3-5 players)
+ */
+export interface ValidatedTeamEntryDto {
+  players: Array<{
+    name: string;
+    userId: number;
+    email: string;
+  }>;
+  teamId: number;
+  rowNumber: number;
+}
+
+/**
  * Validation error for a specific row
  */
 export interface EntryImportValidationError {
@@ -63,7 +94,7 @@ export interface EntryImportValidationError {
  */
 export interface EntryImportPreviewDto {
   valid: boolean;
-  entries: ValidatedSingleEntryDto[] | ValidatedDoubleEntryDto[];
+  entries: ValidatedSingleEntryDto[] | ValidatedDoubleEntryDto[] | ValidatedTeamEntryDto[];
   errors: EntryImportValidationError[];
   summary: {
     totalEntries: number;
@@ -80,7 +111,7 @@ export interface EntryImportPreviewDto {
  */
 export interface ConfirmEntryImportDto {
   contentId: number;
-  entries: ValidatedSingleEntryDto[] | ValidatedDoubleEntryDto[];
+  entries: ValidatedSingleEntryDto[] | ValidatedDoubleEntryDto[] | ValidatedTeamEntryDto[];
 }
 
 /**

@@ -7,7 +7,6 @@ import {
   HasMany,
   BelongsToMany,
 } from "sequelize-typescript";
-import Profile from "./profile.model";
 import EloScore from "./eloScore.model";
 import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
@@ -61,8 +60,23 @@ export default class User extends Model {
   })
   declare gender?: string;
 
-  @HasOne(() => Profile)
-  profile?: Profile;
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  declare avatarUrl?: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare dob?: Date;
+
+  @Column({
+    type: DataType.STRING(20),
+    allowNull: true,
+  })
+  declare phoneNumber?: string;
 
   @HasOne(() => EloScore)
   eloScore?: EloScore;
