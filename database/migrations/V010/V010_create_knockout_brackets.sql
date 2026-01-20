@@ -18,10 +18,6 @@ CREATE TABLE IF NOT EXISTS knockout_brackets (
     entryBId INT UNSIGNED COMMENT 'Second entry in this bracket position',
     winnerEntryId INT UNSIGNED COMMENT 'Winner of this match',
     
-    -- Seeding information
-    seedA INT UNSIGNED COMMENT 'Seed number for entry A',
-    seedB INT UNSIGNED COMMENT 'Seed number for entry B',
-    
     -- Navigation in bracket tree
     nextBracketId INT UNSIGNED COMMENT 'ID of the bracket position winner advances to',
     previousBracketAId INT UNSIGNED COMMENT 'ID of bracket that feeds into entry A position',
