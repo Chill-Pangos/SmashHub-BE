@@ -24,7 +24,6 @@ const swaggerDefinition = {
   ],
   tags: [
     { name: "Users", description: "User management endpoints" },
-    { name: "Profiles", description: "User profile endpoints" },
     { name: "Roles", description: "Role management endpoints" },
     { name: "Permissions", description: "Permission management endpoints" },
     { name: "Tournaments", description: "Tournament management endpoints" },
@@ -135,19 +134,6 @@ const swaggerDefinition = {
           expiresAt: { type: "string", format: "date-time", description: "OTP expiration time" },
           isUsed: { type: "boolean", default: false, description: "Whether the OTP has been used" },
           usedAt: { type: "string", format: "date-time", description: "When the OTP was used" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
-      Profile: {
-        type: "object",
-        required: ["userId"],
-        properties: {
-          id: { type: "integer" },
-          userId: { type: "integer" },
-          avatarUrl: { type: "string", maxLength: 255 },
-          dob: { type: "string", format: "date" },
-          phoneNumber: { type: "string", maxLength: 20 },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },

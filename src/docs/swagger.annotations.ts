@@ -28,6 +28,22 @@
  *           type: boolean
  *           default: false
  *           description: Whether the email is verified
+ *         gender:
+ *           type: string
+ *           enum: [male, female, other]
+ *           description: User gender
+ *         avatarUrl:
+ *           type: string
+ *           maxLength: 255
+ *           description: URL to user avatar image
+ *         dob:
+ *           type: string
+ *           format: date
+ *           description: Date of birth
+ *         phoneNumber:
+ *           type: string
+ *           maxLength: 20
+ *           description: User phone number
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -36,6 +52,8 @@
  *           format: date-time
  *
  *     Profile:
+ *       deprecated: true
+ *       description: Profile is deprecated. Use User schema instead. Profile fields are now part of User.
  *       type: object
  *       required:
  *         - userId
@@ -168,6 +186,10 @@
  *           type: string
  *           maxLength: 100
  *           description: Tournament venue location
+ *         numberOfTables:
+ *           type: integer
+ *           default: 1
+ *           description: Number of tables available for concurrent matches
  *         createdBy:
  *           type: integer
  *           description: ID of the user who created this tournament
@@ -511,9 +533,9 @@
  *
  * tags:
  *   - name: Users
- *     description: User management
+ *     description: User management (includes profile information)
  *   - name: Profiles
- *     description: User profiles
+ *     description: "[DEPRECATED] User profiles - now merged into Users"
  *   - name: Tournaments
  *     description: Tournament management
  *   - name: Matches

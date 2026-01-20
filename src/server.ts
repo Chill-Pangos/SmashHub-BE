@@ -2,7 +2,7 @@ import "reflect-metadata";
 import app from "./app";
 import config from "./config/config";
 import sequelize from "./config/database";
-import { startCleanupCrons } from "./cron/cleanup.cron";
+import { startCleanupCrons } from "./crons/cleanup.cron";
 
 const checkConnection = async () => {
   try {

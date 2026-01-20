@@ -1,7 +1,6 @@
 import { Router } from "express";
 import authRoutes from "./auth.routes";
 import userRoutes from "./user.routes";
-import profileRoutes from "./profile.routes";
 import roleRoutes from "./role.routes";
 import permissionRoutes from "./permission.routes";
 import tournamentRoutes from "./tournament.routes";
@@ -19,13 +18,14 @@ import teamRoutes from "./team.routes";
 import teamMemberRoutes from "./teamMember.routes";
 import teamImportRoutes from "./teamImport.routes";
 import entryImportRoutes from "./entryImport.routes";
+import groupStandingRoutes from "./groupStanding.routes";
+import knockoutBracketRoutes from "./knockoutBracket.routes";
 
 const router = Router();
 
 // Mount all routes
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
-router.use("/profiles", profileRoutes);
 router.use("/roles", roleRoutes);
 router.use("/permissions", permissionRoutes);
 router.use("/tournaments", tournamentRoutes);
@@ -43,5 +43,7 @@ router.use("/complaint-workflows", complaintWorkflowRoutes);
 router.use("/teams", teamRoutes);
 router.use("/teams", teamImportRoutes);
 router.use("/team-members", teamMemberRoutes);
+router.use("/group-standings", groupStandingRoutes);
+router.use("/knockout-brackets", knockoutBracketRoutes);
 
 export default router;
