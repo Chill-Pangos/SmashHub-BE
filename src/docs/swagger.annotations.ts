@@ -186,6 +186,10 @@
  *           type: string
  *           maxLength: 100
  *           description: Tournament venue location
+ *         numberOfTables:
+ *           type: integer
+ *           default: 1
+ *           description: Number of tables available for concurrent matches
  *         createdBy:
  *           type: integer
  *           description: ID of the user who created this tournament
