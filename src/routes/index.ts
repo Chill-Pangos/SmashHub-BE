@@ -18,6 +18,8 @@ import teamRoutes from "./team.routes";
 import teamMemberRoutes from "./teamMember.routes";
 import teamImportRoutes from "./teamImport.routes";
 import entryImportRoutes from "./entryImport.routes";
+import groupStandingRoutes from "./groupStanding.routes";
+import knockoutBracketRoutes from "./knockoutBracket.routes";
 
 const router = Router();
 
@@ -41,5 +43,7 @@ router.use("/complaint-workflows", complaintWorkflowRoutes);
 router.use("/teams", teamRoutes);
 router.use("/teams", teamImportRoutes);
 router.use("/team-members", teamMemberRoutes);
+router.use("/group-standings", groupStandingRoutes);
+router.use("/knockout-brackets", knockoutBracketRoutes);
 
 export default router;

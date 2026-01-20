@@ -54,6 +54,13 @@ export default class Tournament extends Model {
   })
   declare createdBy: number;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare numberOfTables: number;
+
   @HasMany(() => TournamentContent)
   contents?: TournamentContent[];
 

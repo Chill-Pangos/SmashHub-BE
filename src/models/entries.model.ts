@@ -8,9 +8,9 @@ import {
   HasMany,
 } from "sequelize-typescript";
 import TournamentContent from "./tournamentContent.model";
-import EntryMember from "./entryMember.model";
 import Match from "./match.model";
 import Team from "./team.model";
+import EntryMember from "./entryMember.model";
 
 @Table({
   tableName: "entries",

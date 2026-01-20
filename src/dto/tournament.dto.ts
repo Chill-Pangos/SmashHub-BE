@@ -6,6 +6,7 @@ export interface CreateTournamentDto {
   location: string;
   status?: "upcoming" | "ongoing" | "completed";
   createdBy: number;
+  numberOfTables?: number;
   contents?: CreateTournamentContentDto[];
 }
 
@@ -31,6 +32,7 @@ export interface UpdateTournamentDto {
   endDate?: Date;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
+  numberOfTables?: number;
   contents?: UpdateTournamentContentDto[];
 }
 
@@ -56,6 +58,7 @@ export interface TournamentResponseDto {
   startDate: Date;
   endDate?: Date;
   location: string;
+  numberOfTables: number;
   createdAt: Date;
   updatedAt: Date;
 }

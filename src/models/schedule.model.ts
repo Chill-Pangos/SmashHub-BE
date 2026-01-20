@@ -42,6 +42,25 @@ export default class Schedule extends Model {
   declare groupName?: string;
 
   @Column({
+    type: DataType.ENUM('group', 'knockout'),
+    allowNull: true,
+    defaultValue: 'group',
+  })
+  declare stage?: 'group' | 'knockout';
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
+  declare knockoutRound?: string; // e.g., 'Round of 16', 'Quarter-final', 'Semi-final', 'Final'
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare tableNumber?: number; // Số bàn thi đấu (1-N)
+
+  @Column({
     type: DataType.DATE,
     allowNull: false,
   })

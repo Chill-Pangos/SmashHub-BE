@@ -47,6 +47,10 @@ const router = Router();
  *                 enum: [upcoming, ongoing, completed]
  *                 description: Tournament status (default is 'upcoming')
  *                 example: "upcoming"
+ *               numberOfTables:
+ *                 type: integer
+ *                 description: Number of tables available for concurrent matches (default is 1)
+ *                 example: 4
  *               contents:
  *                 type: array
  *                 description: Array of tournament contents
@@ -101,6 +105,7 @@ const router = Router();
  *                 endDate: "2026-03-20T18:00:00Z"
  *                 location: "National Stadium"
  *                 status: "upcoming"
+ *                 numberOfTables: 4
  *                 contents:
  *                   - name: "Men's Singles"
  *                     type: "single"
@@ -148,6 +153,9 @@ const router = Router();
  *                 status:
  *                   type: string
  *                   example: "upcoming"
+ *                 numberOfTables:
+ *                   type: integer
+ *                   example: 4
  *                 createdBy:
  *                   type: integer
  *                   description: ID of the user who created this tournament
@@ -490,6 +498,10 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                 type: string
  *                 enum: [upcoming, ongoing, completed]
  *                 example: "ongoing"
+ *               numberOfTables:
+ *                 type: integer
+ *                 description: Number of tables available for concurrent matches
+ *                 example: 6
  *               contents:
  *                 type: array
  *                 description: Array of tournament contents (optional). If provided, replaces all existing contents.

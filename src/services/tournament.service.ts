@@ -23,6 +23,7 @@ export class TournamentService {
           endDate: data.endDate ? data.endDate : null,
           location: data.location,
           status: data.status || "upcoming",
+          numberOfTables: data.numberOfTables || 1,
           createdBy: data.createdBy,
         } as any,
         { transaction }
@@ -333,6 +334,7 @@ export class TournamentService {
           startDate: data.startDate,
           endDate: data.endDate,
           location: data.location,
+          numberOfTables: data.numberOfTables ?? 1,
           status: data.status,
         },
         { transaction }
