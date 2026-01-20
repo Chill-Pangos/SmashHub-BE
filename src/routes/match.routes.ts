@@ -115,4 +115,46 @@ router.get(
   matchController.findByStatus.bind(matchController)
 );
 
+/**
+ * @swagger
+ * /matches/{id}/start:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Start a match
+ *     description: Automatically assign 2 available referees and change match status from scheduled to in_progress
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Match started successfully with referees assigned
+ *       400:
+ *         description: Bad request - Match is not in scheduled status or not enough available referees
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/start", matchController.startMatch.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}/finalize:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Finalize match result
+ *     description: |
+ *       Finalize match by checking set scores to determine winner and update standings/brackets:
+ *       - Check if a team has won enough sets (maxSets/2 + 1)
+ *       - For group stage: update group standings with match and set statistics
+ *       - For knockout stage: update bracket with winner and create next match if both entries are ready
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Match finalized successfully, standings/brackets updated
+ *       400:
+ *         description: Bad request - Match not in_progress, not enough sets completed, or no clear winner
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/finalize", matchController.finalizeMatch.bind(matchController));
+
 export default router;

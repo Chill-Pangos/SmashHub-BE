@@ -89,6 +89,32 @@ export class MatchController {
     }
   }
 
+  async startMatch(req: Request, res: Response): Promise<void> {
+    try {
+      const match = await matchService.startMatch(Number(req.params.id));
+      res.status(200).json(match);
+    } catch (error: any) {
+      if (error.message === "Match not found") {
+        res.status(404).json({ message: error.message });
+        return;
+      }
+      res.status(400).json({ message: error.message || "Error starting match", error });
+    }
+  }
+
+  async finalizeMatch(req: Request, res: Response): Promise<void> {
+    try {
+      const match = await matchService.finalizeMatch(Number(req.params.id));
+      res.status(200).json(match);
+    } catch (error: any) {
+      if (error.message === "Match not found") {
+        res.status(404).json({ message: error.message });
+        return;
+      }
+      res.status(400).json({ message: error.message || "Error finalizing match", error });
+    }
+  }
+
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const deleted = await matchService.delete(Number(req.params.id));

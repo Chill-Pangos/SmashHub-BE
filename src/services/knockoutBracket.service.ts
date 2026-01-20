@@ -495,8 +495,16 @@ export class KnockoutBracketService {
     const numByes = bracketSize - totalTeams;
     const halfSize = bracketSize / 2;
 
-    // Xóa brackets cũ
-    await KnockoutBracket.destroy({ where: { contentId } });
+    // Kiểm tra xem đã có brackets chưa
+    const existingBrackets = await KnockoutBracket.findAll({
+      where: { contentId },
+      order: [
+        ["roundNumber", "ASC"],
+        ["bracketPosition", "ASC"],
+      ],
+    });
+
+    const shouldUpdate = existingBrackets.length > 0;
 
     // Phân bổ bye matches đều vào 2 nhánh
     const byesPerHalf = Math.floor(numByes / 2);
@@ -557,13 +565,25 @@ export class KnockoutBracketService {
     const shuffledTop = this.shuffleArray(topHalf);
     const shuffledBottom = this.shuffleArray(bottomHalf);
 
-    // Tạo bracket tree
-    const brackets = await this.createBracketTreeFromHalves(
-      contentId,
-      bracketSize,
-      shuffledTop,
-      shuffledBottom
-    );
+    let brackets: KnockoutBracket[];
+
+    if (shouldUpdate) {
+      // Cập nhật vào brackets đã có
+      brackets = await this.updateBracketTreeFromHalves(
+        contentId,
+        existingBrackets,
+        shuffledTop,
+        shuffledBottom
+      );
+    } else {
+      // Tạo bracket tree mới
+      brackets = await this.createBracketTreeFromHalves(
+        contentId,
+        bracketSize,
+        shuffledTop,
+        shuffledBottom
+      );
+    }
 
     return this.formatBracketTree(contentId, brackets);
   }
@@ -651,6 +671,91 @@ export class KnockoutBracketService {
     }
 
     return brackets;
-  }}
+  }
+
+  /**
+   * Cập nhật entries vào bracket tree đã tồn tại
+   */
+  private async updateBracketTreeFromHalves(
+    contentId: number,
+    existingBrackets: KnockoutBracket[],
+    topHalf: (number | null)[],
+    bottomHalf: (number | null)[]
+  ): Promise<KnockoutBracket[]> {
+    const allPositions = [...topHalf, ...bottomHalf];
+    
+    // Lấy các brackets vòng 1
+    const round1Brackets = existingBrackets.filter(b => b.roundNumber === 1);
+    
+    if (round1Brackets.length !== allPositions.length / 2) {
+      throw new Error(
+        `Số lượng brackets không khớp. Expected ${allPositions.length / 2}, got ${round1Brackets.length}`
+      );
+    }
+
+    // Cập nhật từng bracket vòng 1
+    for (let i = 0; i < round1Brackets.length; i++) {
+      const bracket = round1Brackets[i]!;
+      const entryAIndex = i * 2;
+      const entryBIndex = i * 2 + 1;
+
+      const entryAId = allPositions[entryAIndex];
+      const entryBId = allPositions[entryBIndex];
+
+      const isByeMatch = !entryAId || !entryBId;
+      const status = isByeMatch ? "completed" : entryAId && entryBId ? "ready" : "pending";
+
+      // Nếu là bye match, winner là đội có mặt
+      let winnerEntryId: number | undefined;
+      if (isByeMatch) {
+        winnerEntryId = entryAId || entryBId || undefined;
+      }
+
+      // Cập nhật bracket
+      await bracket.update({
+        entryAId: entryAId || undefined,
+        entryBId: entryBId || undefined,
+        winnerEntryId,
+        status,
+        isByeMatch,
+      });
+
+      // Nếu là bye match, cập nhật winner vào bracket tiếp theo
+      if (isByeMatch && winnerEntryId && bracket.nextBracketId) {
+        const nextBracket = await KnockoutBracket.findByPk(bracket.nextBracketId);
+        if (nextBracket) {
+          let updateData: any = {};
+          
+          if (nextBracket.previousBracketAId === bracket.id) {
+            updateData.entryAId = winnerEntryId;
+          } else if (nextBracket.previousBracketBId === bracket.id) {
+            updateData.entryBId = winnerEntryId;
+          }
+
+          // Kiểm tra nếu cả 2 entries đã có
+          await nextBracket.reload();
+          const willHaveBothEntries = 
+            (updateData.entryAId && nextBracket.entryBId) || 
+            (nextBracket.entryAId && updateData.entryBId);
+          
+          if (willHaveBothEntries) {
+            updateData.status = "ready";
+          }
+
+          await nextBracket.update(updateData);
+        }
+      }
+    }
+
+    // Trả về tất cả brackets sau khi cập nhật
+    return await KnockoutBracket.findAll({
+      where: { contentId },
+      order: [
+        ["roundNumber", "ASC"],
+        ["bracketPosition", "ASC"],
+      ],
+    });
+  }
+}
 
 export default new KnockoutBracketService();
