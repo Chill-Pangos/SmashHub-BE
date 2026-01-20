@@ -92,4 +92,47 @@ router.get(
   matchSetController.findByMatchId.bind(matchSetController)
 );
 
+/**
+ * @swagger
+ * /match-sets/score:
+ *   post:
+ *     tags: [Match Sets]
+ *     summary: Create a new match set with final score
+ *     description: Create a new set with validated final score following badminton rules (must have winner - first to 11 points or win by 2 points from 10-10). Set number is automatically calculated.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - matchId
+ *               - entryAScore
+ *               - entryBScore
+ *             properties:
+ *               matchId:
+ *                 type: integer
+ *                 description: ID of the match
+ *                 example: 1
+ *               entryAScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Final score of Entry A
+ *                 example: 11
+ *               entryBScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Final score of Entry B
+ *                 example: 9
+ *     responses:
+ *       201:
+ *         description: Match set created successfully with validated score
+ *       400:
+ *         description: Invalid score (must have winner, follow badminton rules)
+ */
+router.post(
+  "/score",
+  matchSetController.createSetWithScore.bind(matchSetController)
+);
+
 export default router;

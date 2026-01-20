@@ -66,6 +66,15 @@ export class MatchSetController {
     }
   }
 
+  async createSetWithScore(req: Request, res: Response): Promise<void> {
+    try {
+      const matchSet = await matchSetService.createSetWithScore(req.body);
+      res.status(201).json(matchSet);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Error creating match set with score", error });
+    }
+  }
+
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const deleted = await matchSetService.delete(Number(req.params.id));
