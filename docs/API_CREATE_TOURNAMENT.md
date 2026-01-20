@@ -32,11 +32,12 @@ API này tạo một tournament mới kèm theo các tournament contents (nếu 
 
 ### **Optional Fields (Tùy chọn):**
 
-| Field      | Type              | Description                       | Example                  | Default      |
-| ---------- | ----------------- | --------------------------------- | ------------------------ | ------------ |
-| `endDate`  | string (ISO 8601) | Ngày giờ kết thúc tournament      | `"2026-03-20T18:00:00Z"` | `null`       |
-| `status`   | enum string       | Trạng thái tournament             | `"upcoming"`             | `"upcoming"` |
-| `contents` | array             | Danh sách các tournament contents | Xem bên dưới             | `[]`         |
+| Field            | Type              | Description                                              | Example                  | Default      |
+| ---------------- | ----------------- | -------------------------------------------------------- | ------------------------ | ------------ |
+| `endDate`        | string (ISO 8601) | Ngày giờ kết thúc tournament                             | `"2026-03-20T18:00:00Z"` | `null`       |
+| `status`         | enum string       | Trạng thái tournament                                    | `"upcoming"`             | `"upcoming"` |
+| `numberOfTables` | integer           | Số bàn thi đấu có sẵn để chơi đồng thời (mặc định là 1) | `4`                      | `1`          |
+| `contents`       | array             | Danh sách các tournament contents                        | Xem bên dưới             | `[]`         |
 
 ### **Enum Values:**
 
@@ -54,13 +55,12 @@ Mỗi item trong array `contents` có cấu trúc:
 
 ### **Required Fields:**
 
-| Field         | Type        | Description                        | Example           |
-| ------------- | ----------- | ---------------------------------- | ----------------- |
-| `name`        | string      | Tên của nội dung thi đấu           | `"Men's Singles"` |
-| `type`        | enum string | Loại hình thi đấu                  | `"single"`        |
-| `maxEntries`  | integer     | Số lượng tối đa người/đội tham gia | `32`              |
-| `maxSets`     | integer     | Số lượng set tối đa mỗi trận       | `3`               |
-| `racketCheck` | boolean     | Có kiểm tra vợt hay không          | `true`            |
+| Field        | Type        | Description                        | Example           |
+| ------------ | ----------- | ---------------------------------- | ----------------- |
+| `name`       | string      | Tên của nội dung thi đấu           | `"Men's Singles"` |
+| `type`       | enum string | Loại hình thi đấu                  | `"single"`        |
+| `maxEntries` | integer     | Số lượng tối đa người/đội tham gia | `32`              |
+| `maxSets`    | integer     | Số lượng set tối đa mỗi trận       | `3`               |
 
 ### **Optional Fields:**
 
@@ -143,6 +143,7 @@ Mỗi item trong array `contents` có cấu trúc:
   "endDate": "2026-03-20T18:00:00Z",
   "location": "National Stadium",
   "status": "upcoming",
+  "numberOfTables": 4,
   "contents": [
     {
       "name": "Men's Singles U21",
@@ -152,7 +153,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "minAge": 15,
       "maxAge": 21,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": false
     },
     {
@@ -163,7 +163,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "minElo": 1400,
       "maxElo": 1800,
       "gender": "female",
-      "racketCheck": true,
       "isGroupStage": false
     },
     {
@@ -173,7 +172,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxSets": 3,
       "numberOfSingles": 4,
       "numberOfDoubles": 1,
-      "racketCheck": true,
       "isGroupStage": true
     }
   ]
@@ -187,6 +185,7 @@ Mỗi item trong array `contents` có cấu trúc:
   "name": "National Team Championship 2026",
   "startDate": "2026-05-10T08:00:00Z",
   "location": "Sports Complex Hall 1",
+  "numberOfTables": 3,
   "contents": [
     {
       "name": "Men's Team Competition",
@@ -195,7 +194,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxSets": 5,
       "numberOfSingles": 4,
       "numberOfDoubles": 1,
-      "racketCheck": true,
       "isGroupStage": true
     }
   ]
@@ -208,7 +206,8 @@ Mỗi item trong array `contents` có cấu trúc:
 {
   "name": "Local Tournament 2026",
   "startDate": "2026-04-01T10:00:00Z",
-  "location": "Community Center"
+  "location": "Community Center",
+  "numberOfTables": 2
 }
 ```
 
@@ -220,6 +219,7 @@ Mỗi item trong array `contents` có cấu trúc:
   "startDate": "2026-06-01T09:00:00Z",
   "endDate": null,
   "location": "Regional Stadium",
+  "numberOfTables": 5,
   "contents": [
     {
       "name": "Team Format - 5 Singles",
@@ -227,8 +227,7 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxEntries": 16,
       "maxSets": 3,
       "numberOfSingles": 5,
-      "numberOfDoubles": 0,
-      "racketCheck": true
+      "numberOfDoubles": 0
     },
     {
       "name": "Team Format - 3 Singles",
@@ -236,8 +235,7 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxEntries": 16,
       "maxSets": 3,
       "numberOfSingles": 3,
-      "numberOfDoubles": 0,
-      "racketCheck": false
+      "numberOfDoubles": 0
     }
   ]
 }
@@ -251,6 +249,7 @@ Mỗi item trong array `contents` có cấu trúc:
   "startDate": "2026-07-15T09:00:00Z",
   "endDate": "2026-07-20T18:00:00Z",
   "location": "Youth Sports Center",
+  "numberOfTables": 6,
   "contents": [
     {
       "name": "Boys U18 Singles - Beginner",
@@ -261,7 +260,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxAge": 18,
       "maxElo": 1400,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": true
     },
     {
@@ -273,7 +271,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "maxAge": 18,
       "minElo": 1800,
       "gender": "female",
-      "racketCheck": true,
       "isGroupStage": false
     },
     {
@@ -281,8 +278,7 @@ Mỗi item trong array `contents` có cấu trúc:
       "type": "double",
       "maxEntries": 16,
       "maxSets": 3,
-      "gender": "mixed",
-      "racketCheck": false
+      "gender": "mixed"
     }
   ]
 }
@@ -302,6 +298,7 @@ Mỗi item trong array `contents` có cấu trúc:
   "endDate": "2026-03-20T18:00:00Z",
   "location": "National Stadium",
   "status": "upcoming",
+  "numberOfTables": 4,
   "createdBy": 1,
   "createdAt": "2026-01-14T10:00:00Z",
   "updatedAt": "2026-01-14T10:00:00Z",
@@ -320,7 +317,6 @@ Mỗi item trong array `contents` có cấu trúc:
       "minElo": null,
       "maxElo": null,
       "gender": "mixed",
-      "racketCheck": true,
       "isGroupStage": false,
       "createdAt": "2026-01-14T10:00:00Z",
       "updatedAt": "2026-01-14T10:00:00Z"
@@ -387,7 +383,7 @@ Mỗi item trong array `contents` có cấu trúc:
 ### **7. Required vs Optional**
 
 - **Tournament**: 3 field bắt buộc (`name`, `startDate`, `location`)
-- **Contents**: 5 field bắt buộc (`name`, `type`, `maxEntries`, `maxSets`, `racketCheck`)
+- **Contents**: 4 field bắt buộc (`name`, `type`, `maxEntries`, `maxSets`)
 
 ### **8. ⚠️ QUAN TRỌNG - Validation cho Type "team"**
 
@@ -503,7 +499,6 @@ interface CreateTournamentContentDto {
   minElo?: number; // ELO tối thiểu
   maxElo?: number; // ELO tối đa
   gender?: "male" | "female" | "mixed"; // Giới tính
-  racketCheck: boolean;
   isGroupStage?: boolean;
 }
 
@@ -514,6 +509,7 @@ interface TournamentResponseDto {
   startDate: Date;
   endDate?: Date;
   location: string;
+  numberOfTables: number;
   createdBy: number;
   createdAt: Date;
   updatedAt: Date;
@@ -534,7 +530,6 @@ interface TournamentContentResponseDto {
   minElo?: number;
   maxElo?: number;
   gender?: "male" | "female" | "mixed";
-  racketCheck: boolean;
   isGroupStage?: boolean;
   createdAt: Date;
   updatedAt: Date;

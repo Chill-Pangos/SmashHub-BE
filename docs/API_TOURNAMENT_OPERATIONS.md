@@ -57,6 +57,7 @@ GET /api/tournaments?skip=0&limit=20
     "startDate": "2026-03-15T09:00:00Z",
     "endDate": "2026-03-20T18:00:00Z",
     "location": "National Stadium",
+    "numberOfTables": 4,
     "createdBy": 1,
     "createdAt": "2026-01-14T10:00:00Z",
     "updatedAt": "2026-01-14T10:00:00Z"
@@ -68,6 +69,7 @@ GET /api/tournaments?skip=0&limit=20
     "startDate": "2026-06-10T08:00:00Z",
     "endDate": null,
     "location": "City Sports Center",
+    "numberOfTables": 2,
     "createdBy": 2,
     "createdAt": "2026-01-15T14:30:00Z",
     "updatedAt": "2026-01-15T14:30:00Z"
@@ -141,11 +143,10 @@ Tìm kiếm tournaments với nhiều bộ lọc chi tiết. API này rất mạ
 
 #### **Other Filters:**
 
-| Parameter      | Type    | Description               | Example  | Enum Values               |
-| -------------- | ------- | ------------------------- | -------- | ------------------------- |
-| `gender`       | string  | Lọc theo giới tính        | `"male"` | `male`, `female`, `mixed` |
-| `racketCheck`  | boolean | Có kiểm tra vợt hay không | `true`   | `true`, `false`           |
-| `isGroupStage` | boolean | Có vòng bảng hay không    | `false`  | `true`, `false`           |
+| Parameter      | Type    | Description            | Example  | Enum Values               |
+| -------------- | ------- | ---------------------- | -------- | ------------------------- |
+| `gender`       | string  | Lọc theo giới tính     | `"male"` | `male`, `female`, `mixed` |
+| `isGroupStage` | boolean | Có vòng bảng hay không | `false`  | `true`, `false`           |
 
 ### **Filter Logic Explanation**
 
@@ -181,10 +182,10 @@ GET /api/tournaments/search?userId=5
 GET /api/tournaments/search?minAge=25&maxAge=25&minElo=1500&maxElo=1500
 ```
 
-#### **Example 3: Tìm tournaments nam, có vòng bảng, kiểm tra vợt**
+#### **Example 3: Tìm tournaments nam, có vòng bảng**
 
 ```http
-GET /api/tournaments/search?gender=male&isGroupStage=true&racketCheck=true
+GET /api/tournaments/search?gender=male&isGroupStage=true
 ```
 
 #### **Example 4: Tìm tournaments do user 3 tạo**
@@ -196,7 +197,7 @@ GET /api/tournaments/search?createdBy=3&skip=0&limit=10
 #### **Example 5: Combined filters**
 
 ```http
-GET /api/tournaments/search?gender=female&minAge=18&maxAge=30&minElo=1200&maxElo=1800&racketCheck=true&limit=20
+GET /api/tournaments/search?gender=female&minAge=18&maxAge=30&minElo=1200&maxElo=1800&limit=20
 ```
 
 ### **Response - 200 OK**
@@ -211,6 +212,7 @@ GET /api/tournaments/search?gender=female&minAge=18&maxAge=30&minElo=1200&maxElo
       "startDate": "2026-03-15T09:00:00Z",
       "endDate": "2026-03-20T18:00:00Z",
       "location": "National Stadium",
+      "numberOfTables": 4,
       "createdBy": 1,
       "createdAt": "2026-01-14T10:00:00Z",
       "updatedAt": "2026-01-14T10:00:00Z",
@@ -227,7 +229,6 @@ GET /api/tournaments/search?gender=female&minAge=18&maxAge=30&minElo=1200&maxElo
           "minElo": 1000,
           "maxElo": 2000,
           "gender": "female",
-          "racketCheck": true,
           "isGroupStage": false,
           "createdAt": "2026-01-14T10:00:00Z",
           "updatedAt": "2026-01-14T10:00:00Z"
@@ -295,6 +296,7 @@ GET /api/tournaments/1
   "startDate": "2026-03-15T09:00:00Z",
   "endDate": "2026-03-20T18:00:00Z",
   "location": "National Stadium",
+  "numberOfTables": 4,
   "createdBy": 1,
   "createdAt": "2026-01-14T10:00:00Z",
   "updatedAt": "2026-01-14T10:00:00Z",
@@ -313,7 +315,6 @@ GET /api/tournaments/1
       "minElo": 1200,
       "maxElo": 1800,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": false,
       "createdAt": "2026-01-14T10:00:00Z",
       "updatedAt": "2026-01-14T10:00:00Z"
@@ -332,7 +333,6 @@ GET /api/tournaments/1
       "minElo": null,
       "maxElo": null,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": true,
       "createdAt": "2026-01-14T10:00:00Z",
       "updatedAt": "2026-01-14T10:00:00Z"
@@ -412,6 +412,7 @@ GET /api/tournaments/status/completed?limit=50
     "startDate": "2026-03-15T09:00:00Z",
     "endDate": "2026-03-20T18:00:00Z",
     "location": "National Stadium",
+    "numberOfTables": 4,
     "createdBy": 1,
     "createdAt": "2026-01-14T10:00:00Z",
     "updatedAt": "2026-01-14T10:00:00Z"
@@ -477,14 +478,15 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 #### **Tournament Fields:**
 
-| Field       | Type              | Description                  | Example                      |
-| ----------- | ----------------- | ---------------------------- | ---------------------------- |
-| `name`      | string            | Tên của tournament           | `"Spring Championship 2026"` |
-| `startDate` | string (ISO 8601) | Ngày giờ bắt đầu             | `"2026-03-15T09:00:00Z"`     |
-| `endDate`   | string (ISO 8601) | Ngày giờ kết thúc            | `"2026-03-20T18:00:00Z"`     |
-| `location`  | string            | Địa điểm tổ chức             | `"National Stadium"`         |
-| `status`    | enum string       | Trạng thái tournament        | `"ongoing"`                  |
-| `contents`  | array             | **Thay thế** tất cả contents | Xem structure bên dưới       |
+| Field            | Type              | Description                      | Example                      |
+| ---------------- | ----------------- | -------------------------------- | ---------------------------- |
+| `name`           | string            | Tên của tournament               | `"Spring Championship 2026"` |
+| `startDate`      | string (ISO 8601) | Ngày giờ bắt đầu                 | `"2026-03-15T09:00:00Z"`     |
+| `endDate`        | string (ISO 8601) | Ngày giờ kết thúc                | `"2026-03-20T18:00:00Z"`     |
+| `location`       | string            | Địa điểm tổ chức                 | `"National Stadium"`         |
+| `status`         | enum string       | Trạng thái tournament            | `"ongoing"`                  |
+| `numberOfTables` | integer           | Số bàn thi đấu có sẵn            | `4`                          |
+| `contents`       | array             | **Thay thế** tất cả contents     | Xem structure bên dưới       |
 
 **Status enum:** `upcoming`, `ongoing`, `completed`
 
@@ -519,7 +521,6 @@ Xem chi tiết tại [API_CREATE_TOURNAMENT.md](./API_CREATE_TOURNAMENT.md#tourn
       "minAge": 18,
       "maxAge": 35,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": false
     }
   ]
@@ -553,6 +554,7 @@ Xem chi tiết tại [API_CREATE_TOURNAMENT.md](./API_CREATE_TOURNAMENT.md#tourn
   "startDate": "2026-03-15T09:00:00Z",
   "endDate": "2026-03-20T18:00:00Z",
   "location": "National Stadium - Hall A",
+  "numberOfTables": 4,
   "createdBy": 1,
   "createdAt": "2026-01-14T10:00:00Z",
   "updatedAt": "2026-01-15T15:30:00Z",
@@ -569,7 +571,6 @@ Xem chi tiết tại [API_CREATE_TOURNAMENT.md](./API_CREATE_TOURNAMENT.md#tourn
       "minElo": null,
       "maxElo": null,
       "gender": "male",
-      "racketCheck": true,
       "isGroupStage": false,
       "createdAt": "2026-01-15T15:30:00Z",
       "updatedAt": "2026-01-15T15:30:00Z"
@@ -748,13 +749,13 @@ Phải viết chính xác, lowercase, không viết hoa.
 
 ```javascript
 // ✅ ĐÚNG
-?racketCheck=true
-?racketCheck=false
+?isGroupStage=true
+?isGroupStage=false
 
 // ❌ SAI
-?racketCheck=1
-?racketCheck=0
-?racketCheck="true"
+?isGroupStage=1
+?isGroupStage=0
+?isGroupStage="true"
 ```
 
 ### **8. Filter Combinations**
@@ -762,7 +763,7 @@ Phải viết chính xác, lowercase, không viết hoa.
 Tất cả filters có thể combine với nhau:
 
 ```http
-GET /api/tournaments/search?userId=5&gender=male&minAge=18&maxAge=35&racketCheck=true&skip=0&limit=20
+GET /api/tournaments/search?userId=5&gender=male&minAge=18&maxAge=35&skip=0&limit=20
 ```
 
 ---
@@ -883,6 +884,7 @@ interface UpdateTournamentRequest {
   endDate?: string | null;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
+  numberOfTables?: number;
   contents?: UpdateTournamentContentDto[];
 }
 
@@ -899,7 +901,6 @@ interface UpdateTournamentContentDto {
   minElo?: number;
   maxElo?: number;
   gender?: "male" | "female" | "mixed";
-  racketCheck: boolean;
   isGroupStage?: boolean;
 }
 ```
