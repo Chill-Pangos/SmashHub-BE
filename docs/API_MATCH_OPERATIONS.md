@@ -18,8 +18,10 @@ Tài liệu này mô tả các API để **quản lý matches (trận đấu)** 
 3. [Get Match by ID](#3-get-match-by-id)
 4. [Get Matches by Schedule ID](#4-get-matches-by-schedule-id)
 5. [Get Matches by Status](#5-get-matches-by-status)
-6. [Update Match](#6-update-match)
-7. [Delete Match](#7-delete-match)
+6. [Start Match](#6-start-match)
+7. [Finalize Match](#7-finalize-match)
+8. [Update Match](#8-update-match)
+9. [Delete Match](#9-delete-match)
 
 ---
 
@@ -369,7 +371,220 @@ GET /api/matches/status/completed?skip=0&limit=20
 
 ---
 
-## **6. Update Match**
+## **6. Start Match**
+
+### **Endpoint**
+
+```
+POST /api/matches/{id}/start
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
+Bắt đầu một trận đấu:
+- Tự động tìm và assign **2 trọng tài** (umpire + assistant umpire) còn trống
+- Thay đổi status từ `scheduled` → `in_progress`
+- Chỉ start được khi match đang ở trạng thái `scheduled`
+
+**Use case:**
+- Khi trận đấu sắp bắt đầu, gọi API này để chuẩn bị
+- Hệ thống tự động phân công trọng tài không bị trùng lịch
+- Frontend có thể hiển thị thông tin trọng tài được assign
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Example**
+
+```http
+POST /api/matches/1/start
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "id": 1,
+  "scheduleId": 5,
+  "entryAId": 10,
+  "entryBId": 15,
+  "status": "in_progress",
+  "umpire": 45,
+  "assistantUmpire": 48,
+  "winnerEntryId": null,
+  "createdAt": "2026-01-20T10:00:00.000Z",
+  "updatedAt": "2026-01-20T14:30:00.000Z"
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request - Match không ở trạng thái scheduled**
+
+```json
+{
+  "message": "Cannot start match. Current status is in_progress, but it must be scheduled"
+}
+```
+
+**400 Bad Request - Không đủ trọng tài**
+
+```json
+{
+  "message": "Not enough available referees. Found 1, need 2"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+---
+
+## **7. Finalize Match**
+
+### **Endpoint**
+
+```
+POST /api/matches/{id}/finalize
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
+Tổng kết và kết thúc trận đấu:
+
+1. **Kiểm tra tỉ số sets** để xác định người thắng
+   - Best of 3: cần thắng 2 sets
+   - Best of 5: cần thắng 3 sets
+2. **Update status** từ `in_progress` → `completed`
+3. **Set winnerEntryId** dựa trên kết quả
+4. **Update vòng bảng** (Group Stage):
+   - Cập nhật `matchesPlayed`, `matchesWon`, `matchesLost`
+   - Cập nhật `setsWon`, `setsLost`, `setsDiff`
+   - Tính lại `position` trong bảng
+5. **Update vòng knockout** (Knockout Stage):
+   - Ghi nhận `winnerEntryId` vào bracket
+   - **Tự động tạo match vòng tiếp theo** nếu đủ 2 entries
+   - Liên kết winner vào `nextBracketId`
+
+**⚠️ Điều kiện:**
+- Match phải đang ở trạng thái `in_progress`
+- Phải có đủ sets đã hoàn thành
+- Phải có người thắng rõ ràng (không hòa)
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Example**
+
+```http
+POST /api/matches/1/finalize
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### **Response - 200 OK**
+
+**Scenario: Group Stage Match**
+
+```json
+{
+  "id": 1,
+  "scheduleId": 5,
+  "entryAId": 10,
+  "entryBId": 15,
+  "status": "completed",
+  "winnerEntryId": 10,
+  "umpire": 45,
+  "assistantUmpire": 48,
+  "isConfirmedByWinner": false,
+  "createdAt": "2026-01-20T10:00:00.000Z",
+  "updatedAt": "2026-01-20T15:45:00.000Z"
+}
+```
+
+**Kết quả:**
+- ✅ Entry A (ID: 10) thắng 2-0
+- ✅ Group standings đã được update
+- ✅ Match status = completed
+
+**Scenario: Knockout Stage Match**
+
+```json
+{
+  "id": 15,
+  "scheduleId": 22,
+  "entryAId": 3,
+  "entryBId": 7,
+  "status": "completed",
+  "winnerEntryId": 7,
+  "umpire": 45,
+  "assistantUmpire": 48,
+  "createdAt": "2026-01-22T10:00:00.000Z",
+  "updatedAt": "2026-01-22T16:30:00.000Z"
+}
+```
+
+**Kết quả:**
+- ✅ Entry B (ID: 7) thắng 2-1
+- ✅ Knockout bracket đã được update với winner
+- ✅ Nếu đối thủ vòng sau đã có, match tiếp theo sẽ được tạo tự động
+
+### **Error Responses**
+
+**400 Bad Request - Match không in_progress**
+
+```json
+{
+  "message": "Cannot finalize match. Match status must be in_progress"
+}
+```
+
+**400 Bad Request - Chưa đủ sets**
+
+```json
+{
+  "message": "Cannot finalize match. Not enough sets completed. Entry A: 1 sets, Entry B: 0 sets"
+}
+```
+
+**400 Bad Request - Không có winner**
+
+```json
+{
+  "message": "Cannot finalize match. No clear winner determined"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+---
+
+## **8. Update Match**
 
 ### **Endpoint**
 
@@ -496,7 +711,7 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 ---
 
-## **7. Delete Match**
+## **9. Delete Match**
 
 ### **Endpoint**
 
@@ -556,17 +771,38 @@ scheduled → in_progress → completed
 - **completed:** Đã hoàn tất, có winner
 - **cancelled:** Bị hủy
 
-### **2. Cập nhật điểm và winner**
+### **2. Workflow Thi Đấu (Recommended)**
 
-❌ **KHÔNG** cập nhật điểm real-time từng ball
-
-✅ **CÓ** cập nhật điểm tổng kết mỗi set
+✅ **Workflow tự động với Start & Finalize APIs:**
 
 ```javascript
-// Workflow đúng:
-// 1. Update status = in_progress
+// 1. Bắt đầu trận đấu (auto assign trọng tài)
+POST /api/matches/1/start
+// → Status: scheduled → in_progress
+// → Umpires assigned automatically
+
+// 2. Sau mỗi set kết thúc, nhập điểm set
+POST /api/match-sets/score
+{
+  "matchId": 1,
+  "entryAScore": 11,
+  "entryBScore": 5
+}
+
+// 3. Kết thúc trận đấu (auto tính winner và update standings/brackets)
+POST /api/matches/1/finalize
+// → Status: in_progress → completed
+// → Winner determined automatically
+// → Group standings or knockout brackets updated
+// → Next match created (if knockout stage)
+```
+
+❌ **Workflow thủ công (không khuyến khích):**
+
+```javascript
+// 1. Update status = in_progress thủ công
 PUT /api/matches/1
-{ "status": "in_progress" }
+{ "status": "in_progress", "umpire": 45, "assistantUmpire": 48 }
 
 // 2. Sau mỗi set kết thúc, update điểm set
 POST /api/match-sets
@@ -577,11 +813,7 @@ POST /api/match-sets
   "entryBScore": 5
 }
 
-// 3. Sau khi tất cả sets kết thúc, tính winner
-// Ví dụ: Best of 3, Entry A thắng 2-0
-// → winnerEntryId = entryAId
-
-// 4. Update match với winner và status
+// 3. Update match với winner và status thủ công
 PUT /api/matches/1
 {
   "status": "completed",

@@ -44,12 +44,12 @@ Tạo một schedule mới thủ công (không recommend - nên dùng các API g
 
 ### **Request Body**
 
-| Field            | Type     | Required | Description                                      |
-| ---------------- | -------- | -------- | ------------------------------------------------ |
-| `contentId`      | integer  | Yes      | Tournament content ID                            |
-| `matchTime`      | datetime | Yes      | Thời gian thi đấu (YYYY-MM-DD HH:mm:ss)          |
-| `tableNumber`    | integer  | No       | Số bàn thi đấu (1-10), default lấy từ số bàn có sẵn |
-| `matchId`        | integer  | No       | Match ID nếu đã có match                         |
+| Field         | Type     | Required | Description                                         |
+| ------------- | -------- | -------- | --------------------------------------------------- |
+| `contentId`   | integer  | Yes      | Tournament content ID                               |
+| `matchTime`   | datetime | Yes      | Thời gian thi đấu (YYYY-MM-DD HH:mm:ss)             |
+| `tableNumber` | integer  | No       | Số bàn thi đấu (1-10), default lấy từ số bàn có sẵn |
+| `matchId`     | integer  | No       | Match ID nếu đã có match                            |
 
 ### **Request Example**
 
@@ -228,11 +228,11 @@ Tự động tạo schedules cho tournament dựa trên matches đã có. API n�
 
 ### **Request Body**
 
-| Field       | Type    | Required | Description                                     |
-| ----------- | ------- | -------- | ----------------------------------------------- |
-| `contentId` | integer | Yes      | Tournament content ID                           |
-| `startDate` | string  | Yes      | Ngày bắt đầu (YYYY-MM-DD)                       |
-| `endDate`   | string  | Yes      | Ngày kết thúc (YYYY-MM-DD)                      |
+| Field       | Type    | Required | Description                |
+| ----------- | ------- | -------- | -------------------------- |
+| `contentId` | integer | Yes      | Tournament content ID      |
+| `startDate` | string  | Yes      | Ngày bắt đầu (YYYY-MM-DD)  |
+| `endDate`   | string  | Yes      | Ngày kết thúc (YYYY-MM-DD) |
 
 ### **Request Example**
 
@@ -277,9 +277,9 @@ Cập nhật entries cho knockout stage matches sau khi vòng bảng kết thúc
 
 ### **Request Body**
 
-| Field          | Type    | Required | Description                                     |
-| -------------- | ------- | -------- | ----------------------------------------------- |
-| `contentId`    | integer | Yes      | Tournament content ID                           |
+| Field          | Type    | Required | Description                                          |
+| -------------- | ------- | -------- | ---------------------------------------------------- |
+| `contentId`    | integer | Yes      | Tournament content ID                                |
 | `groupResults` | array   | Yes      | Mảng kết quả từng bảng với danh sách qualified teams |
 
 ### **Request Example**
@@ -332,14 +332,15 @@ POST /api/schedules/generate-group-stage
 Tạo schedules cho vòng bảng dựa trên group standings đã có. API này chỉ tạo lịch cho vòng bảng, không tạo knockout.
 
 ### **⚠️ Điều kiện:**
+
 - Phải đã có group standings (entries đã được chia bảng)
 - Tournament content phải có `isGroupStage = true`
 
 ### **Request Body**
 
-| Field       | Type    | Required | Description                |
-| ----------- | ------- | -------- | -------------------------- |
-| `contentId` | integer | Yes      | Tournament content ID      |
+| Field       | Type    | Required | Description           |
+| ----------- | ------- | -------- | --------------------- |
+| `contentId` | integer | Yes      | Tournament content ID |
 
 ### **Request Example**
 
@@ -646,6 +647,7 @@ POST /api/schedules/generate-knockout-stage
 Tạo schedules cho vòng knockout dựa trên knockout brackets đã có. API này chỉ tạo lịch cho knockout stage, không tạo group stage.
 
 ### **⚠️ Điều kiện:**
+
 - Phải đã có knockout brackets được tạo sẵn
 - Vòng bảng phải đã hoàn thành (nếu có)
 

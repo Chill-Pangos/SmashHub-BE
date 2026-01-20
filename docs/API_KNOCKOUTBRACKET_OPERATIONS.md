@@ -715,21 +715,30 @@ POST /api/knockout-brackets/generate-from-groups
 
 ### **Description**
 
-Tạo knockout bracket từ **kết quả vòng bảng** (qualified teams).
+Tạo knockout bracket từ **kết quả vòng bảng** đã được tính toán bởi API `/group-standings/calculate`.
+
+**⚠️ Yêu cầu:**
+- Vòng bảng (Group Stage) **đã hoàn tất**
+- **Đã gọi API calculate** để tính xếp hạng bảng đấu
+- Mỗi bảng đã có `position` (thứ hạng) cho từng entry
+
+**Tính năng:**
+- ✅ Tự động lấy **top 2 teams mỗi bảng** để vào knockout
+- ✅ Tạo bracket structure với seeding hợp lý (A1 vs D2, B1 vs C2...)
+- ✅ Set `status = ready` cho các bracket có đủ 2 entries
+- ✅ Liên kết winner path (`nextBracketId`)
 
 **Khi nào sử dụng:**
-
 - Tournament **CÓ vòng bảng** trước knockout
-- Vòng bảng đã hoàn tất và có standings
-- Cần lấy top N teams mỗi bảng vào knockout
+- Sau khi đã gọi `/group-standings/calculate` để tính thứ hạng
+- Cần chuyển từ group stage sang knockout stage
 
-**Workflow:**
-
-1. Vòng bảng kết thúc
-2. Calculate group standings
-3. Generate bracket from groups (API này)
-4. Generate knockout schedule
-5. Play knockout matches
+**Workflow đầy đủ:**
+1. Vòng bảng kết thúc → Gọi `/matches/{id}/finalize` cho từng match
+2. Tính xếp hạng → Gọi `/group-standings/calculate` với `contentId`
+3. Tạo knockout bracket → Gọi API này `/knockout-brackets/generate-from-groups`
+4. Tạo lịch knockout → Gọi `/schedules/generate-knockout-stage`
+5. Thi đấu knockout → Gọi `/matches/{id}/start` và `/matches/{id}/finalize`
 
 ### **Request Body**
 

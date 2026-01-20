@@ -17,8 +17,9 @@ Tài liệu này mô tả các API để **quản lý match sets (các set trong
 2. [Get All Match Sets](#2-get-all-match-sets)
 3. [Get Match Set by ID](#3-get-match-set-by-id)
 4. [Get Match Sets by Match ID](#4-get-match-sets-by-match-id)
-5. [Update Match Set](#5-update-match-set)
-6. [Delete Match Set](#6-delete-match-set)
+5. [Create Match Set with Score (Recommended)](#5-create-match-set-with-score-recommended)
+6. [Update Match Set](#6-update-match-set)
+7. [Delete Match Set](#7-delete-match-set)
 
 ---
 
@@ -294,7 +295,128 @@ GET /api/match-sets/match/1?skip=0&limit=10
 
 ---
 
-## **5. Update Match Set**
+## **5. Create Match Set with Score (Recommended)**
+
+### **Endpoint**
+
+```
+POST /api/match-sets/score
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
+🎯 **API KHUYẾN KHÍCH SỬ DỤNG** - Tạo match set mới với điểm tổng kết và **tự động validate** theo quy tắc cầu lông:
+
+**Quy tắc validate:**
+1. **Phải có người thắng** - không thể hòa
+2. **Đạt 11 điểm trước thắng** nếu đối phương < 10
+3. **Từ 10-10 phải hơn 2 điểm** (ví dụ: 12-10, 13-11, 14-12...)
+4. **Không giới hạn điểm tối đa** khi deuce (có thể 30-28, 50-48...)
+5. Điểm không được âm
+
+**Lợi ích:**
+- ✅ Không cần truyền `setNumber` - tự động tính
+- ✅ Validate điểm theo luật cầu lông
+- ✅ Đảm bảo kết quả hợp lệ
+- ✅ Tránh lỗi người dùng nhập sai
+
+### **Request Body**
+
+| Field         | Type    | Required | Description                | Example |
+| ------------- | ------- | -------- | -------------------------- | ------- |
+| `matchId`     | integer | Yes      | ID của match               | `1`     |
+| `entryAScore` | integer | Yes      | Điểm cuối cùng của entry A | `11`    |
+| `entryBScore` | integer | Yes      | Điểm cuối cùng của entry B | `9`     |
+
+### **Request Example**
+
+**Scenario 1: Set thắng thông thường (11-9)**
+
+```json
+{
+  "matchId": 1,
+  "entryAScore": 11,
+  "entryBScore": 9
+}
+```
+
+**Scenario 2: Set deuce (12-10)**
+
+```json
+{
+  "matchId": 1,
+  "entryAScore": 12,
+  "entryBScore": 10
+}
+```
+
+**Scenario 3: Set deuce kéo dài (30-28)**
+
+```json
+{
+  "matchId": 1,
+  "entryAScore": 30,
+  "entryBScore": 28
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "id": 1,
+  "matchId": 1,
+  "setNumber": 1,
+  "entryAScore": 11,
+  "entryBScore": 9,
+  "createdAt": "2026-01-20T10:30:00.000Z",
+  "updatedAt": "2026-01-20T10:30:00.000Z"
+}
+```
+
+**Note:** `setNumber` được tự động tính từ số sets hiện có + 1
+
+### **Error Responses**
+
+**400 Bad Request - Chưa có người thắng**
+
+```json
+{
+  "message": "Invalid score: Must have a winner. Current score: 9-7"
+}
+```
+
+**400 Bad Request - Chưa đạt 11 điểm**
+
+```json
+{
+  "message": "Invalid score: No one reached 11 points yet. Current score: 10-8"
+}
+```
+
+**400 Bad Request - Deuce chưa hơn 2 điểm**
+
+```json
+{
+  "message": "Invalid score: From 10-10, must win by 2 points. Current score: 11-10"
+}
+```
+
+**400 Bad Request - Điểm âm**
+
+```json
+{
+  "message": "Invalid score: Scores cannot be negative"
+}
+```
+
+---
+
+## **6. Update Match Set**
 
 ### **Endpoint**
 
@@ -369,7 +491,7 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 ---
 
-## **6. Delete Match Set**
+## **7. Delete Match Set**
 
 ### **Endpoint**
 
@@ -416,50 +538,70 @@ Không có response body. Status code 204 nghĩa là xóa thành công.
 
 ## **Important Notes cho Frontend**
 
-### **1. Workflow cập nhật điểm trận đấu**
+### **1. Workflow Nhập Điểm (Recommended)**
+
+✅ **Sử dụng API /match-sets/score (Khuyến khích):**
 
 ```javascript
-// ❌ SAI - Không update điểm real-time từng ball
-// Không làm: 1-0, 2-0, 2-1, 3-1, ...
+// Sau mỗi set kết thúc, nhập điểm
+POST /api/match-sets/score
+{
+  "matchId": 1,
+  "entryAScore": 11,
+  "entryBScore": 5
+}
+// ✅ Auto validate theo luật cầu lông
+// ✅ Auto tính setNumber
+// ✅ Đảm bảo kết quả hợp lệ
+```
 
-// ✅ ĐÚNG - Chỉ update điểm TỔNG KẾT khi set kết thúc
-// Set 1 kết thúc: 11-5
+❌ **Sử dụng API thủ công (Không khuyến khích):**
+
+```javascript
+// Phải tự tính setNumber và validate
 POST /api/match-sets
 {
   "matchId": 1,
-  "setNumber": 1,
+  "setNumber": 1, // Phải tự tính
+  "entryAScore": 11,
+  "entryBScore": 5
+}
+// ❌ Không có validation tự động
+// ❌ Có thể nhập sai setNumber
+```
+
+### **2. Workflow Hoàn Chỉnh với Match**
+
+```javascript
+// 1. Start match
+POST /api/matches/1/start
+
+// 2. Nhập điểm từng set
+POST /api/match-sets/score
+{
+  "matchId": 1,
   "entryAScore": 11,
   "entryBScore": 5
 }
 
-// Set 2 kết thúc: 11-9
-POST /api/match-sets
+POST /api/match-sets/score
 {
   "matchId": 1,
-  "setNumber": 2,
   "entryAScore": 11,
   "entryBScore": 9
 }
 
-// Set 3 kết thúc: 9-11
-POST /api/match-sets
-{
-  "matchId": 1,
-  "setNumber": 3,
-  "entryAScore": 9,
-  "entryBScore": 11
-}
-
-// Tính winner: Entry A thắng 2-1
-// Update match với winner
-PUT /api/matches/1
-{
-  "status": "completed",
-  "winnerEntryId": entryAId
-}
+// 3. Finalize match (auto tính winner)
+POST /api/matches/1/finalize
 ```
 
-### **2. Tính Winner từ Match Sets**
+### **3. Lưu ý quan trọng**
+
+❌ **KHÔNG** update điểm real-time từng ball (1-0, 2-0, 2-1...)
+
+✅ **CHỈ** update điểm TỔNG KẾT khi set kết thúc
+
+### **4. Tính Winner từ Match Sets (Nếu dùng API thủ công)**
 
 ```javascript
 const calculateMatchWinner = (matchSets, match) => {

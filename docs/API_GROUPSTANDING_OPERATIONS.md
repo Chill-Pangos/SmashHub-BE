@@ -440,7 +440,7 @@ POST /api/group-standings/random-draw-and-save
 ### **Endpoint**
 
 ```
-POST /api/group-standings/calculate-standings
+POST /api/group-standings/calculate
 ```
 
 ### **Authentication**
@@ -449,31 +449,37 @@ POST /api/group-standings/calculate-standings
 
 ### **Description**
 
-Tính toán **xếp hạng bảng đấu** dựa trên kết quả matches.
+Tính toán **xếp hạng bảng đấu** dựa trên kết quả matches đã hoàn thành trong vòng bảng.
+
+**Tính năng:**
+- ✅ Tính tất cả bảng nếu chỉ truyền `contentId`
+- ✅ Tính một bảng cụ thể nếu truyền thêm `groupName`
+- ✅ Auto update `position`, `matchesPlayed`, `matchesWon`, `matchesLost`, `setsWon`, `setsLost`, `setsDiff`
 
 **Khi nào sử dụng:**
-
 - Sau khi các trận đấu vòng bảng kết thúc
-- Update standings theo real-time
+- Muốn cập nhật xếp hạng theo real-time
 - Recalculate khi có sửa đổi match results
 
-**Ranking logic:**
-
-1. Số trận thắng (matchesWon) - cao hơn = xếp trên
-2. Hiệu số sets (setsDiff = setsWon - setsLost) - cao hơn = xếp trên
-3. Tổng số sets thắng (setsWon) - cao hơn = xếp trên
-4. Head-to-head result (nếu cần)
+**Ranking logic (Quy tắc ưu tiên):**
+1. **Match points** - Win = 3, Draw = 1, Loss = 0 (cao hơn = xếp trên)
+2. **Head-to-head** - Kết quả đối đầu trực tiếp (nếu hòa điểm)
+3. **Games (sets) difference** - Hiệu số sets (setsWon - setsLost)
+4. **Games won** - Tổng số sets thắng
+5. **Points difference** - Hiệu số điểm
+6. **Points won** - Tổng điểm ghi được
+7. **Random draw** - Bốc thăm nếu vẫn hòa
 
 ### **Request Body**
 
-| Field       | Type    | Required | Description                          | Example    |
-| ----------- | ------- | -------- | ------------------------------------ | ---------- |
-| `contentId` | integer | Yes      | Tournament Content ID                | `1`        |
-| `groupName` | string  | No       | Tính cho bảng cụ thể (null = tất cả) | `"Bảng A"` |
+| Field       | Type    | Required | Description                                          | Example    |
+| ----------- | ------- | -------- | ---------------------------------------------------- | ---------- |
+| `contentId` | integer | Yes      | Tournament Content ID                                | `1`        |
+| `groupName` | string  | No       | Tính cho bảng cụ thể (không truyền = tính tất cả bảng) | `"Group A"` |
 
 ### **Request Example**
 
-**Tính tất cả bảng:**
+**Tính tất cả bảng (Recommended):**
 
 ```json
 {
@@ -486,7 +492,7 @@ Tính toán **xếp hạng bảng đấu** dựa trên kết quả matches.
 ```json
 {
   "contentId": 1,
-  "groupName": "Bảng A"
+  "groupName": "Group A"
 }
 ```
 
