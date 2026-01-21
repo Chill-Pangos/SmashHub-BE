@@ -8,6 +8,7 @@ import TournamentContent from "../models/tournamentContent.model";
 import Schedule from "../models/schedule.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
+import TournamentReferee from "../models/tournamentReferee.model";
 
 export class MatchService {
   async create(data: CreateMatchDto): Promise<Match> {
@@ -57,7 +58,14 @@ export class MatchService {
   }
 
   async startMatch(id: number): Promise<Match | null> {
-    const match = await Match.findByPk(id);
+    const match = await Match.findByPk(id, {
+      include: [
+        {
+          model: Schedule,
+          include: [{ model: TournamentContent }],
+        },
+      ],
+    });
     
     if (!match) {
       throw new Error("Match not found");
@@ -66,6 +74,14 @@ export class MatchService {
     if (match.status !== "scheduled") {
       throw new Error(`Cannot start match. Current status is ${match.status}, but it must be scheduled`);
     }
+
+    // Lấy tournamentId từ schedule -> tournamentContent
+    const schedule = match.schedule;
+    if (!schedule || !schedule.tournamentContent) {
+      throw new Error("Cannot find tournament information for this match");
+    }
+
+    const tournamentId = schedule.tournamentContent.tournamentId;
 
     // Lấy danh sách ID của các trọng tài đang điều hành trận đấu
     const busyMatches = await Match.findAll({
@@ -81,30 +97,32 @@ export class MatchService {
       if (m.assistantUmpire) busyRefereeIds.add(m.assistantUmpire);
     });
 
-    // Tìm tất cả users có role "referee" và không đang bận
-    const availableReferees = await User.findAll({
-      include: [
-        {
-          model: Role,
-          where: { name: "referee" },
-          through: { attributes: [] },
-        },
-      ],
+    // Tìm trọng tài từ bảng tournament_referees của tournament này
+    // và không đang bận điều hành trận khác
+    const availableReferees = await TournamentReferee.findAll({
       where: {
-        id: {
+        tournamentId,
+        isAvailable: true,
+        refereeId: {
           [Op.notIn]: Array.from(busyRefereeIds),
         },
       },
+      include: [
+        {
+          model: User,
+          as: "referee",
+        },
+      ],
       limit: 2,
     });
 
     if (availableReferees.length < 2) {
-      throw new Error(`Not enough available referees. Found ${availableReferees.length}, need 2`);
+      throw new Error(`Not enough available referees for tournament ${tournamentId}. Found ${availableReferees.length}, need 2`);
     }
 
     await match.update({
-      umpire: availableReferees[0]!.id,
-      assistantUmpire: availableReferees[1]!.id,
+      umpire: availableReferees[0]!.refereeId,
+      assistantUmpire: availableReferees[1]!.refereeId,
       status: "in_progress",
     });
 
@@ -136,11 +154,11 @@ export class MatchService {
       throw new Error(`Cannot finalize match. Current status is ${match.status}, must be in_progress`);
     }
 
-    if (!match.schedule || !match.schedule.content) {
+    if (!match.schedule || !match.schedule.tournamentContent) {
       throw new Error("Match schedule or content not found");
     }
 
-    const content = match.schedule.content;
+    const content = match.schedule.tournamentContent;
     const matchSets = match.matchSets || [];
 
     if (matchSets.length === 0) {
