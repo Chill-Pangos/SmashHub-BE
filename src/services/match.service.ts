@@ -9,6 +9,7 @@ import Schedule from "../models/schedule.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import TournamentReferee from "../models/tournamentReferee.model";
+import eloCalculationService from "./eloCalculation.service";
 
 export class MatchService {
   async create(data: CreateMatchDto): Promise<Match> {
@@ -55,6 +56,64 @@ export class MatchService {
 
   async delete(id: number): Promise<number> {
     return await Match.destroy({ where: { id } });
+  }
+
+  /**
+   * Lấy danh sách các trận đấu có kết quả pending chờ phê duyệt
+   */
+  async findPendingMatches(skip = 0, limit = 10): Promise<{ rows: Match[]; count: number }> {
+    const { rows, count } = await Match.findAndCountAll({
+      where: {
+        status: "completed",
+        resultStatus: "pending",
+      },
+      include: [
+        {
+          model: Schedule,
+          include: [{ model: TournamentContent }],
+        },
+        { model: MatchSet },
+      ],
+      offset: skip,
+      limit,
+      order: [["updatedAt", "DESC"]],
+    });
+
+    return { rows, count };
+  }
+
+  /**
+   * Lấy chi tiết trận đấu pending kèm preview thay đổi ELO
+   */
+  async getPendingMatchWithEloPreview(id: number): Promise<{
+    match: Match;
+    eloPreview: any;
+  }> {
+    const match = await Match.findByPk(id, {
+      include: [
+        {
+          model: Schedule,
+          include: [{ model: TournamentContent }],
+        },
+        { model: MatchSet },
+      ],
+    });
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Match result status is ${match.resultStatus}, must be pending to preview`);
+    }
+
+    // Lấy preview thay đổi ELO
+    const eloPreview = await eloCalculationService.previewEloChanges(id);
+
+    return {
+      match,
+      eloPreview,
+    };
   }
 
   async startMatch(id: number): Promise<Match | null> {
@@ -130,10 +189,8 @@ export class MatchService {
   }
 
   /**
-   * Tổng kết kết quả trận đấu:
-   * 1. Kiểm tra tỉ số set để xác định winner
-   * 2. Cập nhật groupStanding hoặc knockoutBracket
-   * 3. Kiểm tra và tạo match cho vòng sau (knockout)
+   * Submit kết quả trận đấu (bởi trọng tài)
+   * Kết quả sẽ ở trạng thái pending chờ chief referee phê duyệt
    */
   async finalizeMatch(id: number): Promise<Match> {
     const match = await Match.findByPk(id, {
@@ -188,17 +245,71 @@ export class MatchService {
     }
 
     const winnerEntryId = entryASetsWon >= setsToWin ? match.entryAId : match.entryBId;
-    const loserEntryId = winnerEntryId === match.entryAId ? match.entryBId : match.entryAId;
 
-    // Cập nhật match status và winner
+    // Cập nhật match với kết quả pending chờ phê duyệt
     await match.update({
       status: "completed",
       winnerEntryId,
+      resultStatus: "pending", // Kết quả chờ chief referee phê duyệt
     });
 
-    // 2. Cập nhật groupStanding hoặc knockoutBracket
+    return match;
+  }
+
+  /**
+   * Chief referee phê duyệt kết quả trận đấu
+   * Sau khi phê duyệt mới cập nhật standings/brackets và tính ELO
+   */
+  async approveMatchResult(id: number, reviewNotes?: string): Promise<Match> {
+    const match = await Match.findByPk(id, {
+      include: [
+        { model: MatchSet },
+        {
+          model: Schedule,
+          include: [{ model: TournamentContent }],
+        },
+      ],
+    });
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.status !== "completed") {
+      throw new Error(`Cannot approve result. Match status is ${match.status}, must be completed`);
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Cannot approve result. Result status is ${match.resultStatus}, must be pending`);
+    }
+
+    if (!match.schedule || !match.schedule.tournamentContent) {
+      throw new Error("Match schedule or content not found");
+    }
+
+    const content = match.schedule.tournamentContent;
+    const matchSets = match.matchSets || [];
+
+    // Tính lại số set để cập nhật standings
+    let entryASetsWon = 0;
+    let entryBSetsWon = 0;
+
+    matchSets.forEach((set) => {
+      if (set.entryAScore > set.entryBScore) {
+        entryASetsWon++;
+      } else if (set.entryBScore > set.entryAScore) {
+        entryBSetsWon++;
+      }
+    });
+
+    // Cập nhật result status thành approved
+    await match.update({
+      resultStatus: "approved",
+      reviewNotes,
+    });
+
+    // Cập nhật groupStanding hoặc knockoutBracket
     if (match.schedule.stage === "group" && content.isGroupStage) {
-      // Vòng bảng: cập nhật groupStanding
       await this.updateGroupStanding(
         content.id,
         match.schedule.groupName!,
@@ -206,15 +317,52 @@ export class MatchService {
         match.entryBId,
         entryASetsWon,
         entryBSetsWon,
-        winnerEntryId
+        match.winnerEntryId!
       );
     } else if (match.schedule.stage === "knockout") {
-      // Vòng knockout: cập nhật knockoutBracket
-      await this.updateKnockoutBracket(match.id, winnerEntryId);
-
-      // 3. Kiểm tra và tạo match cho vòng sau
-      await this.checkAndCreateNextMatch(match.id, winnerEntryId);
+      await this.updateKnockoutBracket(match.id, match.winnerEntryId!);
+      await this.checkAndCreateNextMatch(match.id, match.winnerEntryId!);
     }
+
+    // Cập nhật điểm Elo cho tất cả vận động viên
+    try {
+      await eloCalculationService.updateEloForMatch(match.id);
+    } catch (error) {
+      console.error("Error updating Elo scores:", error);
+    }
+
+    return match;
+  }
+
+  /**
+   * Chief referee từ chối kết quả trận đấu
+   */
+  async rejectMatchResult(id: number, reviewNotes: string): Promise<Match> {
+    const match = await Match.findByPk(id);
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.status !== "completed") {
+      throw new Error(`Cannot reject result. Match status is ${match.status}, must be completed`);
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Cannot reject result. Result status is ${match.resultStatus}, must be pending`);
+    }
+
+    if (!reviewNotes) {
+      throw new Error("Review notes are required when rejecting match result");
+    }
+
+    // Cập nhật result status thành rejected và quay lại in_progress
+    await match.update({
+      status: "in_progress",
+      resultStatus: "rejected",
+      reviewNotes,
+      winnerEntryId: null, // Xóa winner để referee có thể nhập lại
+    });
 
     return match;
   }
