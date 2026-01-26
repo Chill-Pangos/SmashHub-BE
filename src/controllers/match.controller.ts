@@ -25,7 +25,12 @@ export class MatchController {
 
   async findById(req: Request, res: Response): Promise<void> {
     try {
-      const match = await matchService.findById(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const match = await matchService.findById(id);
       if (!match) {
         res.status(404).json({ message: "Match not found" });
         return;
@@ -79,7 +84,12 @@ export class MatchController {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const match = await matchService.update(Number(req.params.id), req.body);
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const match = await matchService.update(id, req.body);
       if (!match) {
         res.status(404).json({ message: "Match not found" });
         return;
@@ -92,7 +102,12 @@ export class MatchController {
 
   async startMatch(req: Request, res: Response): Promise<void> {
     try {
-      const match = await matchService.startMatch(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const match = await matchService.startMatch(id);
       res.status(200).json(match);
     } catch (error: any) {
       if (error.message === "Match not found") {
@@ -105,7 +120,12 @@ export class MatchController {
 
   async finalizeMatch(req: Request, res: Response): Promise<void> {
     try {
-      const match = await matchService.finalizeMatch(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const match = await matchService.finalizeMatch(id);
       res.status(200).json({
         message: "Match result submitted successfully. Waiting for chief referee approval.",
         match,
@@ -122,6 +142,10 @@ export class MatchController {
   async approveMatchResult(req: Request, res: Response): Promise<void> {
     try {
       const matchId = Number(req.params.id);
+      if (isNaN(matchId)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
       const { reviewNotes } = req.body;
 
       const match = await matchService.approveMatchResult(matchId, reviewNotes);
@@ -144,6 +168,10 @@ export class MatchController {
   async rejectMatchResult(req: Request, res: Response): Promise<void> {
     try {
       const matchId = Number(req.params.id);
+      if (isNaN(matchId)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
       const { reviewNotes } = req.body;
 
       if (!reviewNotes) {
@@ -170,7 +198,12 @@ export class MatchController {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const deleted = await matchService.delete(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const deleted = await matchService.delete(id);
       if (!deleted) {
         res.status(404).json({ message: "Match not found" });
         return;
@@ -183,7 +216,12 @@ export class MatchController {
 
   async previewEloChanges(req: Request, res: Response): Promise<void> {
     try {
-      const preview = await eloCalculationService.previewEloChanges(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const preview = await eloCalculationService.previewEloChanges(id);
       res.status(200).json(preview);
     } catch (error: any) {
       if (error.message === "Match not found") {
@@ -207,7 +245,12 @@ export class MatchController {
 
   async getPendingMatchWithEloPreview(req: Request, res: Response): Promise<void> {
     try {
-      const result = await matchService.getPendingMatchWithEloPreview(Number(req.params.id));
+      const id = Number(req.params.id);
+      if (isNaN(id)) {
+        res.status(400).json({ message: "Invalid match ID" });
+        return;
+      }
+      const result = await matchService.getPendingMatchWithEloPreview(id);
       res.status(200).json(result);
     } catch (error: any) {
       if (error.message === "Match not found") {

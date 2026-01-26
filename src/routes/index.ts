@@ -21,6 +21,7 @@ import teamImportRoutes from "./teamImport.routes";
 import entryImportRoutes from "./entryImport.routes";
 import groupStandingRoutes from "./groupStanding.routes";
 import knockoutBracketRoutes from "./knockoutBracket.routes";
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
 
@@ -47,5 +48,6 @@ router.use("/teams", teamImportRoutes);
 router.use("/team-members", teamMemberRoutes);
 router.use("/group-standings", groupStandingRoutes);
 router.use("/knockout-brackets", knockoutBracketRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

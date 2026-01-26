@@ -35,6 +35,24 @@ router.get("/", matchController.findAll.bind(matchController));
 
 /**
  * @swagger
+ * /matches/pending:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get all pending matches waiting for approval (Chief Referee)
+ *     description: |
+ *       Get list of matches with resultStatus = 'pending' that need chief referee approval.
+ *       These are matches where referees have submitted results but not yet approved.
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of pending matches
+ */
+router.get("/pending", matchController.findPendingMatches.bind(matchController));
+
+/**
+ * @swagger
  * /matches/{id}:
  *   get:
  *     tags: [Matches]
@@ -133,24 +151,6 @@ router.get(
  *         $ref: '#/components/responses/NotFound'
  */
 router.post("/:id/start", matchController.startMatch.bind(matchController));
-
-/**
- * @swagger
- * /matches/pending:
- *   get:
- *     tags: [Matches]
- *     summary: Get all pending matches waiting for approval (Chief Referee)
- *     description: |
- *       Get list of matches with resultStatus = 'pending' that need chief referee approval.
- *       These are matches where referees have submitted results but not yet approved.
- *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of pending matches
- */
-router.get("/pending", matchController.findPendingMatches.bind(matchController));
 
 /**
  * @swagger

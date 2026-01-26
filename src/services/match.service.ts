@@ -61,8 +61,8 @@ export class MatchService {
   /**
    * Lấy danh sách các trận đấu có kết quả pending chờ phê duyệt
    */
-  async findPendingMatches(skip = 0, limit = 10): Promise<{ rows: Match[]; count: number }> {
-    const { rows, count } = await Match.findAndCountAll({
+  async findPendingMatches(skip = 0, limit = 10): Promise<{ matches: Match[]; count: number }> {
+    const { rows: matches, count } = await Match.findAndCountAll({
       where: {
         status: "completed",
         resultStatus: "pending",
@@ -70,7 +70,13 @@ export class MatchService {
       include: [
         {
           model: Schedule,
-          include: [{ model: TournamentContent }],
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
         },
         { model: MatchSet },
       ],
@@ -79,7 +85,7 @@ export class MatchService {
       order: [["updatedAt", "DESC"]],
     });
 
-    return { rows, count };
+    return { matches, count };
   }
 
   /**
@@ -93,7 +99,13 @@ export class MatchService {
       include: [
         {
           model: Schedule,
-          include: [{ model: TournamentContent }],
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
         },
         { model: MatchSet },
       ],
@@ -117,25 +129,33 @@ export class MatchService {
   }
 
   async startMatch(id: number): Promise<Match | null> {
-    const match = await Match.findByPk(id, {
+    const matchInstance = await Match.findByPk(id, {
       include: [
         {
           model: Schedule,
-          include: [{ model: TournamentContent }],
+          include: [
+            { 
+              model: TournamentContent,
+            }
+          ],
         },
       ],
     });
+
     
-    if (!match) {
+    if (!matchInstance) {
       throw new Error("Match not found");
     }
+
+    // Get plain object for easy data access
+    const match = matchInstance.get({ plain: true }) as any;
 
     if (match.status !== "scheduled") {
       throw new Error(`Cannot start match. Current status is ${match.status}, but it must be scheduled`);
     }
 
     // Lấy tournamentId từ schedule -> tournamentContent
-    const schedule = match.schedule;
+    const schedule = match.schedule;    
     if (!schedule || !schedule.tournamentContent) {
       throw new Error("Cannot find tournament information for this match");
     }
@@ -179,13 +199,14 @@ export class MatchService {
       throw new Error(`Not enough available referees for tournament ${tournamentId}. Found ${availableReferees.length}, need 2`);
     }
 
-    await match.update({
+    // Use matchInstance for update method
+    await matchInstance.update({
       umpire: availableReferees[0]!.refereeId,
       assistantUmpire: availableReferees[1]!.refereeId,
       status: "in_progress",
     });
 
-    return match;
+    return matchInstance;
   }
 
   /**
@@ -193,15 +214,27 @@ export class MatchService {
    * Kết quả sẽ ở trạng thái pending chờ chief referee phê duyệt
    */
   async finalizeMatch(id: number): Promise<Match> {
-    const match = await Match.findByPk(id, {
+    const matchInstance = await Match.findByPk(id, {
       include: [
         { model: MatchSet },
         {
           model: Schedule,
-          include: [{ model: TournamentContent }],
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
         },
       ],
     });
+
+    if (!matchInstance) {
+      throw new Error("Match not found");
+    }
+
+    const match = matchInstance?.get({ plain: true }) as any;
 
     if (!match) {
       throw new Error("Match not found");
@@ -226,7 +259,7 @@ export class MatchService {
     let entryASetsWon = 0;
     let entryBSetsWon = 0;
 
-    matchSets.forEach((set) => {
+    matchSets.forEach((set : any) => {
       if (set.entryAScore > set.entryBScore) {
         entryASetsWon++;
       } else if (set.entryBScore > set.entryAScore) {
@@ -247,13 +280,13 @@ export class MatchService {
     const winnerEntryId = entryASetsWon >= setsToWin ? match.entryAId : match.entryBId;
 
     // Cập nhật match với kết quả pending chờ phê duyệt
-    await match.update({
+    await matchInstance.update({
       status: "completed",
       winnerEntryId,
       resultStatus: "pending", // Kết quả chờ chief referee phê duyệt
     });
 
-    return match;
+    return matchInstance;
   }
 
   /**
@@ -261,15 +294,27 @@ export class MatchService {
    * Sau khi phê duyệt mới cập nhật standings/brackets và tính ELO
    */
   async approveMatchResult(id: number, reviewNotes?: string): Promise<Match> {
-    const match = await Match.findByPk(id, {
+    const matchInstance = await Match.findByPk(id, {
       include: [
         { model: MatchSet },
         {
           model: Schedule,
-          include: [{ model: TournamentContent }],
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
         },
       ],
     });
+
+    if(!matchInstance) {
+      throw new Error("Match not found");
+    }
+
+      const match = matchInstance?.get({ plain: true }) as any;
 
     if (!match) {
       throw new Error("Match not found");
@@ -294,7 +339,7 @@ export class MatchService {
     let entryASetsWon = 0;
     let entryBSetsWon = 0;
 
-    matchSets.forEach((set) => {
+    matchSets.forEach((set : any) => {
       if (set.entryAScore > set.entryBScore) {
         entryASetsWon++;
       } else if (set.entryBScore > set.entryAScore) {
@@ -303,7 +348,7 @@ export class MatchService {
     });
 
     // Cập nhật result status thành approved
-    await match.update({
+    await matchInstance.update({
       resultStatus: "approved",
       reviewNotes,
     });
@@ -331,7 +376,7 @@ export class MatchService {
       console.error("Error updating Elo scores:", error);
     }
 
-    return match;
+    return matchInstance;
   }
 
   /**

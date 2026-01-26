@@ -108,7 +108,7 @@ export default class Match extends Model {
   })
   declare reviewNotes?: string;
 
-  @BelongsTo(() => Schedule)
+  @BelongsTo(() => Schedule, 'scheduleId')
   schedule?: Schedule;
 
   @BelongsTo(() => Entries, "entryAId")
