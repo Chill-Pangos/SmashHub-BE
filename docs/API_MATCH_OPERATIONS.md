@@ -15,13 +15,18 @@ Tài liệu này mô tả các API để **quản lý matches (trận đấu)** 
 
 1. [Create Match](#1-create-match)
 2. [Get All Matches](#2-get-all-matches)
-3. [Get Match by ID](#3-get-match-by-id)
-4. [Get Matches by Schedule ID](#4-get-matches-by-schedule-id)
-5. [Get Matches by Status](#5-get-matches-by-status)
-6. [Start Match](#6-start-match)
-7. [Finalize Match](#7-finalize-match)
-8. [Update Match](#8-update-match)
-9. [Delete Match](#9-delete-match)
+3. [Get Pending Matches](#3-get-pending-matches)
+4. [Get Match by ID](#4-get-match-by-id)
+5. [Get Matches by Schedule ID](#5-get-matches-by-schedule-id)
+6. [Get Matches by Status](#6-get-matches-by-status)
+7. [Start Match](#7-start-match)
+8. [Get Pending Match with ELO Preview](#8-get-pending-match-with-elo-preview)
+9. [Finalize Match](#9-finalize-match)
+10. [Approve Match Result](#10-approve-match-result)
+11. [Reject Match Result](#11-reject-match-result)
+12. [Preview ELO Changes](#12-preview-elo-changes)
+13. [Update Match](#13-update-match)
+14. [Delete Match](#14-delete-match)
 
 ---
 
@@ -186,7 +191,57 @@ GET /api/matches?skip=0&limit=20
 
 ---
 
-## **3. Get Match by ID**
+## **3. Get Pending Matches**
+
+### **Endpoint**
+
+```
+GET /api/matches/pending
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token (Chief Referee)
+
+### **Description**
+
+Lấy danh sách các trận đấu đang **chờ phê duyệt kết quả** (`resultStatus = 'pending'`).
+
+**Use case:**
+- Trưởng ban trọng tài (Chief Referee) xem danh sách trận cần duyệt
+- Dashboard quản lý kết quả trận đấu
+- Theo dõi trận đấu đã finalize nhưng chưa được approve
+
+### **Query Parameters**
+
+| Parameter | Type    | Required | Default | Description                    |
+| --------- | ------- | -------- | ------- | ------------------------------ |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua        |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về |
+
+### **Response - 200 OK**
+
+```json
+[
+  {
+    "id": 15,
+    "scheduleId": 22,
+    "entryAId": 3,
+    "entryBId": 7,
+    "status": "completed",
+    "resultStatus": "pending",
+    "winnerEntryId": 7,
+    "umpire": 45,
+    "assistantUmpire": 48,
+    "createdAt": "2026-01-22T10:00:00.000Z",
+    "updatedAt": "2026-01-22T16:30:00.000Z"
+  }
+]
+```
+
+---
+
+## **4. Get Match by ID**
 
 ### **Endpoint**
 
@@ -246,7 +301,7 @@ GET /api/matches/1
 
 ---
 
-## **4. Get Matches by Schedule ID**
+## **5. Get Matches by Schedule ID**
 
 ### **Endpoint**
 
@@ -302,7 +357,7 @@ GET /api/matches/schedule/1?skip=0&limit=10
 
 ---
 
-## **5. Get Matches by Status**
+## **6. Get Matches by Status**
 
 ### **Endpoint**
 
@@ -371,7 +426,7 @@ GET /api/matches/status/completed?skip=0&limit=20
 
 ---
 
-## **6. Start Match**
+## **7. Start Match**
 
 ### **Endpoint**
 
@@ -453,7 +508,107 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
-## **7. Finalize Match**
+## **8. Get Pending Match with ELO Preview**
+
+### **Endpoint**
+
+```
+GET /api/matches/{id}/pending-with-elo
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token (Chief Referee)
+
+### **Description**
+
+Lấy thông tin chi tiết trận đấu đang pending **kèm theo preview thay đổi ELO** cho tất cả players.
+
+**Use case:**
+- Chief Referee xem chi tiết trận đấu trước khi approve
+- Kiểm tra điểm ELO sẽ thay đổi như thế nào
+- Đảm bảo kết quả hợp lý trước khi phê duyệt
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Response - 200 OK**
+
+```json
+{
+  "match": {
+    "id": 15,
+    "scheduleId": 22,
+    "entryAId": 3,
+    "entryBId": 7,
+    "status": "completed",
+    "resultStatus": "pending",
+    "winnerEntryId": 7,
+    "umpire": 45,
+    "assistantUmpire": 48,
+    "entryA": {
+      "id": 3,
+      "team": { "name": "Team Alpha" }
+    },
+    "entryB": {
+      "id": 7,
+      "team": { "name": "Team Beta" }
+    }
+  },
+  "eloPreview": {
+    "entryA": {
+      "averageElo": 1450,
+      "expectedScore": 0.54,
+      "actualScore": 0
+    },
+    "entryB": {
+      "averageElo": 1420,
+      "expectedScore": 0.46,
+      "actualScore": 1
+    },
+    "marginMultiplier": 1.2,
+    "changes": [
+      {
+        "userId": 10,
+        "currentElo": 1450,
+        "expectedElo": 1432,
+        "change": -18
+      },
+      {
+        "userId": 15,
+        "currentElo": 1420,
+        "expectedElo": 1438,
+        "change": 18
+      }
+    ]
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request - Match không ở trạng thái pending**
+
+```json
+{
+  "message": "Match is not in pending status"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+---
+
+## **9. Finalize Match**
 
 ### **Endpoint**
 
@@ -584,7 +739,245 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
-## **8. Update Match**
+## **10. Approve Match Result**
+
+### **Endpoint**
+
+```
+POST /api/matches/{id}/approve
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token (Chief Referee only)
+
+### **Description**
+
+**Trưởng ban trọng tài phê duyệt kết quả trận đấu.** Khi approve:
+
+1. Cập nhật `resultStatus` → `approved`
+2. **Update group standings** (nếu vòng bảng):
+   - `matchesPlayed`, `matchesWon`, `matchesLost`
+   - `setsWon`, `setsLost`, `setsDiff`
+   - Tính lại `position`
+3. **Update knockout brackets** (nếu vòng knockout):
+   - Ghi nhận `winnerEntryId`
+   - Tự động tạo match vòng tiếp theo
+4. **Tính và cập nhật ELO** cho tất cả players
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Body**
+
+| Field         | Type   | Required | Description                       |
+| ------------- | ------ | -------- | --------------------------------- |
+| `reviewNotes` | string | No       | Ghi chú từ trưởng ban trọng tài   |
+
+### **Request Example**
+
+```json
+{
+  "reviewNotes": "Kết quả chính xác, đã kiểm tra video"
+}
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "success": true,
+  "message": "Match result approved successfully",
+  "data": {
+    "id": 15,
+    "status": "completed",
+    "resultStatus": "approved",
+    "winnerEntryId": 7,
+    "reviewNotes": "Kết quả chính xác, đã kiểm tra video",
+    "eloUpdated": true
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request - Match không ở trạng thái pending**
+
+```json
+{
+  "message": "Match result is not pending approval"
+}
+```
+
+---
+
+## **11. Reject Match Result**
+
+### **Endpoint**
+
+```
+POST /api/matches/{id}/reject
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token (Chief Referee only)
+
+### **Description**
+
+**Trưởng ban trọng tài từ chối kết quả trận đấu.** Khi reject:
+
+1. Cập nhật `resultStatus` → `rejected`
+2. Reset `status` về `in_progress`
+3. Clear `winnerEntryId` để trọng tài có thể nhập lại
+4. **Không update** standings/brackets/ELO
+
+**Use case:**
+- Kết quả không chính xác
+- Cần kiểm tra lại video
+- Có khiếu nại từ đội thi đấu
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Body**
+
+| Field         | Type   | Required | Description                          |
+| ------------- | ------ | -------- | ------------------------------------ |
+| `reviewNotes` | string | **Yes**  | Lý do từ chối (bắt buộc phải có)     |
+
+### **Request Example**
+
+```json
+{
+  "reviewNotes": "Điểm set 2 không khớp với video, cần kiểm tra lại"
+}
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "success": true,
+  "message": "Match result rejected, referee needs to resubmit",
+  "data": {
+    "id": 15,
+    "status": "in_progress",
+    "resultStatus": "rejected",
+    "winnerEntryId": null,
+    "reviewNotes": "Điểm set 2 không khớp với video, cần kiểm tra lại"
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request - Thiếu lý do từ chối**
+
+```json
+{
+  "message": "Review notes are required when rejecting a match result"
+}
+```
+
+---
+
+## **12. Preview ELO Changes**
+
+### **Endpoint**
+
+```
+GET /api/matches/{id}/elo-preview
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
+Preview thay đổi điểm ELO cho tất cả players **trước khi** match được approve.
+
+**Thông tin trả về:**
+- ELO trung bình của mỗi entry
+- Expected score dựa trên ELO
+- Actual score (thắng/thua)
+- Margin multiplier (dựa trên tỉ số sets)
+- Thay đổi ELO cho từng player
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Response - 200 OK**
+
+```json
+{
+  "entryA": {
+    "averageElo": 1450,
+    "expectedScore": 0.54,
+    "actualScore": 0
+  },
+  "entryB": {
+    "averageElo": 1420,
+    "expectedScore": 0.46,
+    "actualScore": 1
+  },
+  "marginMultiplier": 1.2,
+  "changes": [
+    {
+      "userId": 10,
+      "username": "player1",
+      "currentElo": 1450,
+      "expectedElo": 1432,
+      "change": -18
+    },
+    {
+      "userId": 11,
+      "username": "player2",
+      "currentElo": 1480,
+      "expectedElo": 1462,
+      "change": -18
+    },
+    {
+      "userId": 15,
+      "username": "player3",
+      "currentElo": 1420,
+      "expectedElo": 1438,
+      "change": 18
+    },
+    {
+      "userId": 16,
+      "username": "player4",
+      "currentElo": 1400,
+      "expectedElo": 1418,
+      "change": 18
+    }
+  ]
+}
+```
+
+### **Error Responses**
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+---
+
+## **13. Update Match**
 
 ### **Endpoint**
 
@@ -711,7 +1104,7 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 ---
 
-## **9. Delete Match**
+## **14. Delete Match**
 
 ### **Endpoint**
 
@@ -793,9 +1186,52 @@ POST /api/match-sets/score
 POST /api/matches/1/finalize
 // → Status: in_progress → completed
 // → Winner determined automatically
-// → Group standings or knockout brackets updated
-// → Next match created (if knockout stage)
+// → resultStatus: 'pending' (chờ Chief Referee approve)
 ```
+
+### **2.1. Match Result Approval Workflow (Chief Referee)**
+
+```
+finalized → pending → approved ✅
+                ↓
+             rejected → in_progress (referee resubmit)
+```
+
+```javascript
+// 1. Trọng tài finalize trận đấu
+POST /api/matches/1/finalize
+// → resultStatus: 'pending'
+
+// 2. Chief Referee xem các match cần approve
+GET /api/matches/pending
+
+// 3a. Chief Referee preview ELO changes trước khi approve
+GET /api/matches/1/elo-preview
+
+// 3b. Chief Referee approve → update standings + ELO
+POST /api/matches/1/approve
+{
+  "reviewNotes": "Kết quả chính xác"
+}
+// → resultStatus: 'approved'
+// → ELO updated
+// → Group standings / Knockout brackets updated
+
+// OR: Chief Referee reject → referee phải nhập lại
+POST /api/matches/1/reject
+{
+  "reviewNotes": "Điểm set 2 không khớp video"
+}
+// → resultStatus: 'rejected'
+// → status: 'in_progress'
+// → winnerEntryId: null
+```
+
+**Result Status Flow:**
+- `null` → Match chưa finalize
+- `pending` → Chờ Chief Referee approve
+- `approved` → Đã được approve, ELO đã cập nhật
+- `rejected` → Bị từ chối, cần finalize lại
 
 ❌ **Workflow thủ công (không khuyến khích):**
 
@@ -854,12 +1290,14 @@ interface Match {
   entryAId: number;
   entryBId: number;
   status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  resultStatus?: "pending" | "approved" | "rejected" | null;
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
   coachAId?: number;
   coachBId?: number;
   isConfirmedByWinner?: boolean;
+  reviewNotes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -886,6 +1324,30 @@ interface UpdateMatchRequest {
   coachAId?: number;
   coachBId?: number;
   isConfirmedByWinner?: boolean;
+}
+
+// ELO Preview Response
+interface EloPreviewResponse {
+  entryA: {
+    averageElo: number;
+    expectedScore: number;
+    actualScore: number;
+  };
+  entryB: {
+    averageElo: number;
+    expectedScore: number;
+    actualScore: number;
+  };
+  marginMultiplier: number;
+  changes: EloChange[];
+}
+
+interface EloChange {
+  userId: number;
+  username: string;
+  currentElo: number;
+  expectedElo: number;
+  change: number;
 }
 ```
 

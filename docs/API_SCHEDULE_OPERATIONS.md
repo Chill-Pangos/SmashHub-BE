@@ -12,77 +12,20 @@ Tài liệu này mô tả các API để **quản lý lịch thi đấu (schedul
 
 ## **Table of Contents**
 
-1. [Create Schedule](#1-create-schedule)
-2. [Get All Schedules](#2-get-all-schedules)
-3. [Get Schedule by ID](#3-get-schedule-by-id)
-4. [Generate Schedule](#4-generate-schedule)
-5. [Update Knockout Entries](#5-update-knockout-entries)
-6. [Generate Group Stage Schedule](#6-generate-group-stage-schedule)
-7. [Generate Complete Schedule](#7-generate-complete-schedule)
-8. [Generate Knockout Only Schedule](#8-generate-knockout-only-schedule)
-9. [Generate Knockout Stage Schedule](#9-generate-knockout-stage-schedule)
-10. [Update Schedule](#10-update-schedule)
-11. [Delete Schedule](#11-delete-schedule)
+1. [Get All Schedules](#1-get-all-schedules)
+2. [Get Schedule by ID](#2-get-schedule-by-id)
+3. [Generate Schedule](#3-generate-schedule)
+4. [Update Knockout Entries](#4-update-knockout-entries)
+5. [Generate Group Stage Schedule](#5-generate-group-stage-schedule)
+6. [Generate Complete Schedule](#6-generate-complete-schedule)
+7. [Generate Knockout Only Schedule](#7-generate-knockout-only-schedule)
+8. [Generate Knockout Stage Schedule](#8-generate-knockout-stage-schedule)
+9. [Update Schedule](#9-update-schedule)
+10. [Delete Schedule](#10-delete-schedule)
 
 ---
 
-## **1. Create Schedule**
-
-### **Endpoint**
-
-```
-POST /api/schedules
-```
-
-### **Authentication**
-
-✅ **Required**
-
-### **Description**
-
-Tạo một schedule mới thủ công (không recommend - nên dùng các API generate tự động).
-
-### **Request Body**
-
-| Field         | Type     | Required | Description                                         |
-| ------------- | -------- | -------- | --------------------------------------------------- |
-| `contentId`   | integer  | Yes      | Tournament content ID                               |
-| `matchTime`   | datetime | Yes      | Thời gian thi đấu (YYYY-MM-DD HH:mm:ss)             |
-| `tableNumber` | integer  | No       | Số bàn thi đấu (1-10), default lấy từ số bàn có sẵn |
-| `matchId`     | integer  | No       | Match ID nếu đã có match                            |
-
-### **Request Example**
-
-```json
-{
-  "contentId": 1,
-  "matchTime": "2024-12-25 14:00:00",
-  "tableNumber": 1,
-  "matchId": 42
-}
-```
-
-### **Response Example**
-
-```json
-{
-  "success": true,
-  "message": "Schedule created successfully",
-  "data": {
-    "id": 123,
-    "contentId": 1,
-    "matchTime": "2024-12-25T14:00:00.000Z",
-    "tableNumber": 1,
-    "matchId": 42,
-    "createdAt": "2024-12-20T10:30:00.000Z",
-    "updatedAt": "2024-12-20T10:30:00.000Z"
-  }
-}
-```
-
----
-
-## **2. Get All Schedules**
+## **1. Get All Schedules**
 
 ### **Endpoint**
 
@@ -153,7 +96,7 @@ GET /api/schedules?skip=0&limit=20
 
 ---
 
-## **3. Get Schedule by ID**
+## **2. Get Schedule by ID**
 
 ### **Endpoint**
 
@@ -210,7 +153,7 @@ GET /api/schedules/1
 
 ---
 
-## **4. Generate Schedule**
+## **3. Generate Schedule**
 
 ### **Endpoint**
 
@@ -259,7 +202,7 @@ Tự động tạo schedules cho tournament dựa trên matches đã có. API n�
 
 ---
 
-## **5. Update Knockout Entries**
+## **4. Update Knockout Entries**
 
 ### **Endpoint**
 
@@ -315,7 +258,7 @@ Cập nhật entries cho knockout stage matches sau khi vòng bảng kết thúc
 
 ---
 
-## **6. Generate Group Stage Schedule**
+## **5. Generate Group Stage Schedule**
 
 ### **Endpoint**
 
@@ -366,7 +309,7 @@ Tạo schedules cho vòng bảng dựa trên group standings đã có. API này 
 
 ---
 
-## **7. Generate Complete Schedule**
+## **6. Generate Complete Schedule**
 
 ### **Endpoint**
 
@@ -501,7 +444,7 @@ POST /api/schedules/generate-complete
 
 ---
 
-## **8. Generate Knockout Only Schedule**
+## **7. Generate Knockout Only Schedule**
 
 ### **Endpoint**
 
@@ -630,7 +573,7 @@ POST /api/schedules/generate-knockout-only
 
 ---
 
-## **9. Generate Knockout Stage Schedule**
+## **8. Generate Knockout Stage Schedule**
 
 ### **Endpoint**
 
@@ -681,7 +624,7 @@ Tạo schedules cho vòng knockout dựa trên knockout brackets đã có. API n
 
 ---
 
-## **10. Update Schedule**
+## **9. Update Schedule**
 
 ### **Endpoint**
 
@@ -755,7 +698,7 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 ---
 
-## **11. Delete Schedule**
+## **10. Delete Schedule**
 
 ### **Endpoint**
 
