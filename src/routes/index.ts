@@ -5,6 +5,7 @@ import roleRoutes from "./role.routes";
 import permissionRoutes from "./permission.routes";
 import tournamentRoutes from "./tournament.routes";
 import tournamentContentRoutes from "./tournamentContent.routes";
+import tournamentRefereeRoutes from "./tournamentReferee.routes";
 import entryRoutes from "./entry.routes";
 import scheduleRoutes from "./schedule.routes";
 import matchRoutes from "./match.routes";
@@ -20,6 +21,7 @@ import teamImportRoutes from "./teamImport.routes";
 import entryImportRoutes from "./entryImport.routes";
 import groupStandingRoutes from "./groupStanding.routes";
 import knockoutBracketRoutes from "./knockoutBracket.routes";
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
 
@@ -30,6 +32,7 @@ router.use("/roles", roleRoutes);
 router.use("/permissions", permissionRoutes);
 router.use("/tournaments", tournamentRoutes);
 router.use("/tournament-contents", tournamentContentRoutes);
+router.use("/tournament-referees", tournamentRefereeRoutes);
 router.use("/entries", entryRoutes);
 router.use("/entries", entryImportRoutes);
 router.use("/schedules", scheduleRoutes);
@@ -45,5 +48,6 @@ router.use("/teams", teamImportRoutes);
 router.use("/team-members", teamMemberRoutes);
 router.use("/group-standings", groupStandingRoutes);
 router.use("/knockout-brackets", knockoutBracketRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

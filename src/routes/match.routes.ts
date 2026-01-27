@@ -35,6 +35,24 @@ router.get("/", matchController.findAll.bind(matchController));
 
 /**
  * @swagger
+ * /matches/pending:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get all pending matches waiting for approval (Chief Referee)
+ *     description: |
+ *       Get list of matches with resultStatus = 'pending' that need chief referee approval.
+ *       These are matches where referees have submitted results but not yet approved.
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of pending matches
+ */
+router.get("/pending", matchController.findPendingMatches.bind(matchController));
+
+/**
+ * @swagger
  * /matches/{id}:
  *   get:
  *     tags: [Matches]
@@ -136,25 +154,181 @@ router.post("/:id/start", matchController.startMatch.bind(matchController));
 
 /**
  * @swagger
- * /matches/{id}/finalize:
- *   post:
+ * /matches/{id}/pending-with-elo:
+ *   get:
  *     tags: [Matches]
- *     summary: Finalize match result
+ *     summary: Get pending match with ELO preview (Chief Referee)
  *     description: |
- *       Finalize match by checking set scores to determine winner and update standings/brackets:
- *       - Check if a team has won enough sets (maxSets/2 + 1)
- *       - For group stage: update group standings with match and set statistics
- *       - For knockout stage: update bracket with winner and create next match if both entries are ready
+ *       Get match details with pending status and preview of ELO changes.
+ *       This helps chief referee review the result and see how ELO will change before approval.
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Match finalized successfully, standings/brackets updated
+ *         description: Pending match with ELO preview
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 match:
+ *                   type: object
+ *                   description: Match details
+ *                 eloPreview:
+ *                   type: object
+ *                   description: Preview of ELO changes for all players
  *       400:
- *         description: Bad request - Match not in_progress, not enough sets completed, or no clear winner
+ *         description: Bad request - Match is not in pending status
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get("/:id/pending-with-elo", matchController.getPendingMatchWithEloPreview.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}/finalize:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Submit match result for approval (Referee)
+ *     description: |
+ *       Referee submits match result which will be in pending status:
+ *       - Check if a team has won enough sets (maxSets/2 + 1)
+ *       - Set match status to completed with resultStatus = pending
+ *       - Chief referee must approve before standings/brackets and Elo are updated
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Match result submitted, waiting for chief referee approval
+ *       400:
+ *         description: Bad request - Match not in_progress or not enough sets completed
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
 router.post("/:id/finalize", matchController.finalizeMatch.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}/approve:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Approve match result (Chief Referee only)
+ *     description: |
+ *       Chief referee approves the pending match result:
+ *       - Update resultStatus to approved
+ *       - Update group standings or knockout brackets
+ *       - Calculate and update Elo scores for all players
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reviewNotes:
+ *                 type: string
+ *                 description: Optional review notes from chief referee
+ *     responses:
+ *       200:
+ *         description: Match result approved, standings/brackets and Elo updated
+ *       400:
+ *         description: Bad request - Invalid match state
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/approve", matchController.approveMatchResult.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}/reject:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Reject match result (Chief Referee only)
+ *     description: |
+ *       Chief referee rejects the pending match result:
+ *       - Update resultStatus to rejected
+ *       - Reset match to in_progress status
+ *       - Clear winner so referee can resubmit
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reviewNotes
+ *             properties:
+ *               reviewNotes:
+ *                 type: string
+ *                 description: Required notes explaining why the result was rejected
+ *     responses:
+ *       200:
+ *         description: Match result rejected, referee needs to resubmit
+ *       400:
+ *         description: Bad request - Review notes required or invalid state
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/reject", matchController.rejectMatchResult.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}/elo-preview:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Preview Elo changes for a match
+ *     description: |
+ *       Calculate and preview how Elo scores will change for all players after match completion.
+ *       Useful for checking expected Elo changes before finalizing the match.
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Elo changes preview
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 entryA:
+ *                   type: object
+ *                   properties:
+ *                     averageElo:
+ *                       type: number
+ *                     expectedScore:
+ *                       type: number
+ *                     actualScore:
+ *                       type: number
+ *                 entryB:
+ *                   type: object
+ *                   properties:
+ *                     averageElo:
+ *                       type: number
+ *                     expectedScore:
+ *                       type: number
+ *                     actualScore:
+ *                       type: number
+ *                 marginMultiplier:
+ *                   type: number
+ *                 changes:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       userId:
+ *                         type: number
+ *                       currentElo:
+ *                         type: number
+ *                       expectedElo:
+ *                         type: number
+ *                       change:
+ *                         type: number
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get("/:id/elo-preview", matchController.previewEloChanges.bind(matchController));
 
 export default router;

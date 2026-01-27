@@ -116,6 +116,8 @@ export default class TournamentContent extends Model {
   @HasMany(() => Entries)
   entries?: Entries[];
 
-  @HasMany(() => Schedule)
+  @HasMany(() => Schedule, {
+    foreignKey: 'contentId',
+  }) 
   schedules?: Schedule[];
 }

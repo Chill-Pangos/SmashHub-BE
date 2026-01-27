@@ -66,8 +66,10 @@ export default class Schedule extends Model {
   })
   declare scheduledAt: Date;
 
-  @BelongsTo(() => TournamentContent)
-  content?: TournamentContent;
+  @BelongsTo(() => TournamentContent, {
+    foreignKey: 'contentId',
+  })
+  tournamentContent?: TournamentContent;
 
   @HasMany(() => Match)
   matches?: Match[];
