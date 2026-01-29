@@ -131,7 +131,7 @@ router.post(
  *       200:
  *         description: Brackets retrieved successfully
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Internal server error
  */
 router.get(
   "/content/:contentId",

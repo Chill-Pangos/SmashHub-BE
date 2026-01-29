@@ -263,6 +263,133 @@ export class MatchController {
       });
     }
   }
+
+  async getAvailableCoachesForEntry(req: Request, res: Response): Promise<void> {
+    try {
+      const entryId = Number(req.params.entryId);
+      if (isNaN(entryId)) {
+        res.status(400).json({ message: "Invalid entry ID" });
+        return;
+      }
+      const coaches = await matchService.getAvailableCoachesForEntry(entryId);
+      res.status(200).json(coaches);
+    } catch (error: any) {
+      if (error.message === "Entry not found") {
+        res.status(404).json({ message: error.message });
+        return;
+      }
+      res.status(500).json({ 
+        message: error.message || "Error fetching available coaches", 
+        error 
+      });
+    }
+  }
+
+  async getUpcomingMatchesByAthlete(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = Number(req.params.userId);
+      if (isNaN(userId)) {
+        res.status(400).json({ message: "Invalid user ID" });
+        return;
+      }
+
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+
+      const result = await matchService.findUpcomingMatchesByAthlete(
+        userId,
+        skip,
+        limit
+      );
+
+      res.status(200).json({
+        matches: result.matches,
+        count: result.count,
+        skip,
+        limit,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        message: error.message || "Error fetching upcoming matches",
+        error,
+      });
+    }
+  }
+
+  async getMatchHistoryByAthlete(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = Number(req.params.userId);
+      if (isNaN(userId)) {
+        res.status(400).json({ message: "Invalid user ID" });
+        return;
+      }
+
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+
+      const result = await matchService.findMatchHistoryByAthlete(
+        userId,
+        skip,
+        limit
+      );
+
+      res.status(200).json({
+        matches: result.matches,
+        count: result.count,
+        skip,
+        limit,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        message: error.message || "Error fetching match history",
+        error,
+      });
+    }
+  }
+
+  async getMatchesByTeam(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = Number(req.params.userId);
+      if (isNaN(userId)) {
+        res.status(400).json({ message: "Invalid user ID" });
+        return;
+      }
+
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const status = req.query.status as string | undefined;
+
+      // Validate status if provided
+      if (status) {
+        const validStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+          res.status(400).json({ 
+            message: "Invalid status. Must be one of: scheduled, in_progress, completed, cancelled" 
+          });
+          return;
+        }
+      }
+
+      const result = await matchService.findMatchesByTeam(
+        userId,
+        skip,
+        limit,
+        status
+      );
+
+      res.status(200).json({
+        matches: result.matches,
+        count: result.count,
+        skip,
+        limit,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        message: error.message || "Error fetching team matches",
+        error,
+      });
+    }
+  }
 }
 
 export default new MatchController();

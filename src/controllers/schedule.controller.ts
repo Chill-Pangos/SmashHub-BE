@@ -235,6 +235,58 @@ export class ScheduleController {
       message: "Not implemented",
     });
   }
+
+  /**
+   * Get schedules by tournament content ID
+   * GET /schedules/content/:contentId
+   */
+  async getSchedulesByContentId(req: Request, res: Response): Promise<void> {
+    try {
+      const contentId = Number(req.params.contentId);
+      if (isNaN(contentId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid content ID",
+        });
+        return;
+      }
+
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const stage = req.query.stage as 'group' | 'knockout' | undefined;
+
+      // Validate stage if provided
+      if (stage && !['group', 'knockout'].includes(stage)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid stage. Must be 'group' or 'knockout'",
+        });
+        return;
+      }
+
+      const result = await scheduleService.findSchedulesByContentId(
+        contentId,
+        skip,
+        limit,
+        stage
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          schedules: result.schedules,
+          count: result.count,
+          skip,
+          limit,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Error fetching schedules",
+      });
+    }
+  }
 }
 
 export default new ScheduleController();
