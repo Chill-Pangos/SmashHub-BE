@@ -449,4 +449,55 @@ router.get("/:id", scheduleController.findById.bind(scheduleController));
 router.put("/:id", scheduleController.update.bind(scheduleController));
 router.delete("/:id", scheduleController.delete.bind(scheduleController));
 
+/**
+ * @swagger
+ * /schedules/content/{contentId}:
+ *   get:
+ *     tags: [Schedules]
+ *     summary: Get schedules by tournament content ID
+ *     description: Retrieve all schedules for a specific tournament content, with optional filtering by stage
+ *     parameters:
+ *       - in: path
+ *         name: contentId
+ *         required: true
+ *         schema:
+ *           type: number
+ *         description: ID of the tournament content
+ *       - in: query
+ *         name: stage
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [group, knockout]
+ *         description: Filter by stage (group or knockout)
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of schedules for the tournament content
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     schedules:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     count:
+ *                       type: number
+ *                     skip:
+ *                       type: number
+ *                     limit:
+ *                       type: number
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ */
+router.get("/content/:contentId", scheduleController.getSchedulesByContentId.bind(scheduleController));
+
 export default router;

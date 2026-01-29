@@ -268,7 +268,7 @@ export class KnockoutBracketService {
         winnerEntryId,
         status,
         roundName: this.getRoundName(1, totalBrackets * 2),
-        isByeMatch,bracketSize
+        isByeMatch,
       } as any);
 
       brackets.push(bracket);

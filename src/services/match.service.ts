@@ -10,6 +10,9 @@ import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import eloCalculationService from "./eloCalculation.service";
+import Entries from "../models/entries.model";
+import EntryMember from "../models/entryMember.model";
+import TeamMember from "../models/teamMember.model";
 
 export class MatchService {
   async create(data: CreateMatchDto): Promise<Match> {
@@ -545,6 +548,440 @@ export class MatchService {
         });
       }
     }
+  }
+
+  /**
+   * Lấy danh sách các huấn luyện viên của entry đang không chỉ đạo trận đấu nào khác
+   */
+  async getAvailableCoachesForEntry(entryId: number): Promise<User[]> {
+    // Lấy danh sách tất cả member của entry này
+    const entry = await Entries.findByPk(entryId, {
+      include: [
+        {
+          model: EntryMember,
+          as: "members",
+          include: [
+            {
+              model: User,
+              as: "user",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!entry) {
+      throw new Error("Entry not found");
+    }
+
+    const members = entry.members || [];
+    const memberUserIds = members.map((m) => m.userId);
+
+    if (memberUserIds.length === 0) {
+      return [];
+    }
+
+    // Lấy danh sách các coach đang chỉ đạo trận đấu (status in_progress hoặc scheduled)
+    const activeMatches = await Match.findAll({
+      where: {
+        status: {
+          [Op.in]: ["in_progress", "scheduled"],
+        },
+        [Op.or]: [
+          { coachAId: { [Op.ne]: null } },
+          { coachBId: { [Op.ne]: null } },
+        ],
+      },
+      attributes: ["coachAId", "coachBId"],
+    });
+
+    // Tạo set các coach ID đang bận
+    const busyCoachIds = new Set<number>();
+    activeMatches.forEach((match) => {
+      if (match.coachAId) busyCoachIds.add(match.coachAId);
+      if (match.coachBId) busyCoachIds.add(match.coachBId);
+    });
+
+    // Lấy danh sách các user là member của entry và không đang chỉ đạo
+    const availableCoaches = await User.findAll({
+      where: {
+        id: {
+          [Op.in]: memberUserIds,
+          [Op.notIn]: Array.from(busyCoachIds),
+        },
+      },
+      attributes: ["id", "username", "email", "avatarUrl"],
+    });
+
+    return availableCoaches;
+  }
+
+  /**
+   * Lấy danh sách các trận đấu sắp tới của một vận động viên
+   * @param userId - ID của vận động viên
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @returns Danh sách các trận đấu sắp tới
+   */
+  async findUpcomingMatchesByAthlete(
+    userId: number,
+    skip = 0,
+    limit = 10
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các entry mà user này là thành viên
+    const entryMembers = await EntryMember.findAll({
+      where: { userId },
+      attributes: ["entryId"],
+    });
+
+    const entryIds = entryMembers.map((em) => em.entryId);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm các trận đấu sắp tới (scheduled hoặc in_progress) 
+    // mà user này tham gia (thuộc entryA hoặc entryB)
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        [Op.or]: [
+          { entryAId: { [Op.in]: entryIds } },
+          { entryBId: { [Op.in]: entryIds } },
+        ],
+        status: { [Op.in]: ["scheduled", "in_progress"] },
+      },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["schedule", "scheduledAt", "ASC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
+  }
+
+  /**
+   * Lấy lịch sử các trận đấu đã hoàn thành của một vận động viên
+   * @param userId - ID của vận động viên
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @returns Danh sách các trận đấu đã hoàn thành
+   */
+  async findMatchHistoryByAthlete(
+    userId: number,
+    skip = 0,
+    limit = 10
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các entry mà user này là thành viên
+    const entryMembers = await EntryMember.findAll({
+      where: { userId },
+      attributes: ["entryId"],
+    });
+
+    const entryIds = entryMembers.map((em) => em.entryId);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm các trận đấu đã hoàn thành mà user này tham gia
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        [Op.or]: [
+          { entryAId: { [Op.in]: entryIds } },
+          { entryBId: { [Op.in]: entryIds } },
+        ],
+        status: "completed",
+      },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "winnerEntry",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: MatchSet,
+          as: "matchSets",
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["updatedAt", "DESC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
+  }
+
+  /**
+   * Lấy toàn bộ các trận đấu của một đội (cho coach xem)
+   * @param userId - ID của user (coach hoặc team manager)
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @param status - Lọc theo status (optional)
+   * @returns Danh sách các trận đấu của đội
+   */
+  async findMatchesByTeam(
+    userId: number,
+    skip = 0,
+    limit = 10,
+    status?: string
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các team mà user này là thành viên (coach hoặc team_manager)
+    const teamMembers = await TeamMember.findAll({
+      where: { 
+        userId,
+        role: { [Op.in]: ["coach", "team_manager"] }
+      },
+      attributes: ["teamId"],
+    });
+
+    const teamIds = teamMembers.map((tm) => tm.teamId);
+
+    if (teamIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm tất cả các entry của các team này
+    const entries = await Entries.findAll({
+      where: { teamId: { [Op.in]: teamIds } },
+      attributes: ["id"],
+    });
+
+    const entryIds = entries.map((e) => e.id);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Xây dựng điều kiện where
+    const whereCondition: any = {
+      [Op.or]: [
+        { entryAId: { [Op.in]: entryIds } },
+        { entryBId: { [Op.in]: entryIds } },
+      ],
+    };
+
+    // Nếu có filter theo status
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Tìm các trận đấu của đội này
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: whereCondition,
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "winnerEntry",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: MatchSet,
+          as: "matchSets",
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "coachA",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "coachB",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
   }
 }
 
