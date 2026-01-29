@@ -153,7 +153,7 @@ GET /api/schedules/1
 
 ---
 
-## **3. Generate Schedule**
+## **3. Generate Schedule (Not Implemented)**
 
 ### **Endpoint**
 
@@ -167,6 +167,8 @@ POST /api/schedules/generate
 
 ### **Description**
 
+⚠️ **Not Implemented** - Use `/schedules/generate-group-stage` endpoint instead.
+
 Tự động tạo schedules cho tournament dựa trên matches đã có. API này sẽ phân bổ thời gian và bàn thi đấu tự động.
 
 ### **Request Body**
@@ -176,6 +178,15 @@ Tự động tạo schedules cho tournament dựa trên matches đã có. API n�
 | `contentId` | integer | Yes      | Tournament content ID      |
 | `startDate` | string  | Yes      | Ngày bắt đầu (YYYY-MM-DD)  |
 | `endDate`   | string  | Yes      | Ngày kết thúc (YYYY-MM-DD) |
+
+### **Response - 501 Not Implemented**
+
+```json
+{
+  "success": false,
+  "message": "Not implemented. Use /generate-group-stage endpoint instead."
+}
+```
 
 ### **Request Example**
 
@@ -202,7 +213,7 @@ Tự động tạo schedules cho tournament dựa trên matches đã có. API n�
 
 ---
 
-## **4. Update Knockout Entries**
+## **4. Update Knockout Entries (Not Implemented)**
 
 ### **Endpoint**
 
@@ -272,6 +283,51 @@ POST /api/schedules/generate-group-stage
 
 ### **Description**
 
+Tạo schedule cho vòng bảng dựa trên group standings đã có.
+
+**Điều kiện:**
+- Khung giờ: 8h-11h30 (sáng), 13h30-17h (chiều), 18h30-22h (tối)
+- Thời gian mỗi trận: Single/Double 30 phút, Team 60 phút
+- Các đội không đấu liên tiếp 2 trận trong cùng buổi
+- Round-robin: Tất cả đội đấu với nhau trong mỗi bảng
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                      |
+| ----------- | ------- | -------- | -------------------------------- |
+| `contentId` | integer | Yes      | Tournament content ID            |
+| `startDate` | string  | Yes      | Ngày bắt đầu thi đấu (YYYY-MM-DD) |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 1,
+  "startDate": "2026-02-01"
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Group stage schedules generated successfully",
+  "data": {
+    "totalSchedules": 24,
+    "totalMatches": 24,
+    "schedules": [...],
+    "matches": [...]
+  }
+}
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
 Tạo schedules cho vòng bảng dựa trên group standings đã có. API này chỉ tạo lịch cho vòng bảng, không tạo knockout.
 
 ### **⚠️ Điều kiện:**
@@ -315,6 +371,57 @@ Tạo schedules cho vòng bảng dựa trên group standings đã có. API này 
 
 ```
 POST /api/schedules/generate-complete
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+Tạo lịch thi đấu hoàn chỉnh cho tournament content bao gồm:
+1. Chia entries thành bảng đấu (nếu chưa có)
+2. Tạo knockout brackets từ top 2 mỗi bảng
+3. Tạo schedules cho vòng bảng (max 2 trận/ngày)
+4. Tạo schedules cho vòng knockout (max 3 trận/ngày, mỗi buổi 1 trận)
+5. Đảm bảo kết thúc vòng bảng trước khi bắt đầu knockout
+
+**Điều kiện:**
+- Khung giờ: 8h-11h30 (sáng), 13h30-17h (chiều), 18h30-22h (tối)
+- Thời gian mỗi trận: Single/Double 30 phút, Team 90 phút
+- Không đấu liên tiếp trong cùng buổi
+- Hỗ trợ nhiều bàn thi đấu song song
+- Tự động tính toán và validate thời gian
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                                                                    |
+| ----------- | ------- | -------- | ------------------------------------------------------------------------------ |
+| `contentId` | integer | Yes      | Tournament content ID (startDate và endDate sẽ được lấy từ tournament table) |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 1
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Complete schedule generated successfully",
+  "data": {
+    "groupStandings": 16,
+    "groupSchedules": 24,
+    "groupMatches": 24,
+    "knockoutBrackets": 7,
+    "knockoutSchedules": 7,
+    "knockoutMatches": 7
+  }
+}
 ```
 
 ### **Authentication**
@@ -454,6 +561,53 @@ POST /api/schedules/generate-knockout-only
 
 ### **Authentication**
 
+✅ **Required**
+
+### **Description**
+
+Tạo lịch thi đấu cho tournament content chỉ có knockout stage (không qua vòng bảng):
+1. Tạo knockout brackets trực tiếp từ entries (nếu chưa có)
+2. Tạo schedules cho tất cả các vòng knockout
+3. Hỗ trợ placeholder cho các vòng sau
+
+**Điều kiện:**
+- Khung giờ: 8h-11h30 (sáng), 13h30-17h (chiều), 18h30-22h (tối)
+- Thời gian mỗi trận: Single/Double 30 phút, Team 90 phút
+- Max 3 trận/ngày cho mỗi entry
+- Không đấu liên tiếp trong cùng buổi
+- Hỗ trợ nhiều bàn thi đấu song song
+- startDate và endDate lấy từ tournament table
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                                        |
+| ----------- | ------- | -------- | -------------------------------------------------- |
+| `contentId` | integer | Yes      | Tournament content ID (phải có isGroupStage = false) |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 2
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Knockout-only schedule generated successfully",
+  "data": {
+    "knockoutBrackets": 15,
+    "knockoutSchedules": 15,
+    "knockoutMatches": 15
+  }
+}
+```
+
+### **Authentication**
+
 ❌ **Not Required** (Nên thêm authentication trong production)
 
 ### **Description**
@@ -587,6 +741,70 @@ POST /api/schedules/generate-knockout-stage
 
 ### **Description**
 
+Tạo schedule cho vòng knockout dựa trên knockout brackets đã được tạo từ group stage.
+
+**Điều kiện:**
+- Khung giờ: 8h-11h30 (sáng), 13h30-17h (chiều), 18h30-22h (tối)
+- Thời gian mỗi trận: Single/Double 30 phút, Team 90 phút
+- Các đội không đấu liên tiếp 2 trận trong cùng buổi
+- Mỗi entry tối đa 2 trận/ngày
+- Hỗ trợ nhiều bàn thi đấu song song
+- Xếp lịch theo từng vòng: R16, QF, SF, Final
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                                           |
+| ----------- | ------- | -------- | ----------------------------------------------------- |
+| `contentId` | integer | Yes      | Tournament content ID (phải có knockout brackets đã tạo) |
+| `startDate` | string  | Yes      | Ngày bắt đầu vòng knockout (YYYY-MM-DD)              |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 1,
+  "startDate": "2026-02-10"
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Knockout stage schedules generated successfully",
+  "data": {
+    "totalSchedules": 7,
+    "totalMatches": 7,
+    "schedules": [
+      {
+        "id": 25,
+        "contentId": 1,
+        "stage": "knockout",
+        "knockoutRound": "Semi-final",
+        "scheduledAt": "2026-02-10T08:00:00.000Z",
+        "tableNumber": 1
+      }
+    ],
+    "matches": [
+      {
+        "id": 25,
+        "scheduleId": 25,
+        "entryAId": 5,
+        "entryBId": 8,
+        "status": "scheduled"
+      }
+    ]
+  }
+}
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
 Tạo schedules cho vòng knockout dựa trên knockout brackets đã có. API này chỉ tạo lịch cho knockout stage, không tạo group stage.
 
 ### **⚠️ Điều kiện:**
@@ -624,12 +842,29 @@ Tạo schedules cho vòng knockout dựa trên knockout brackets đã có. API n
 
 ---
 
-## **9. Update Schedule**
+## **9. Update Schedule (Not Implemented)**
 
 ### **Endpoint**
 
 ```
 PUT /api/schedules/{id}
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+⚠️ **Not Implemented**
+
+### **Response - 501 Not Implemented**
+
+```json
+{
+  "success": false,
+  "message": "Not implemented"
+}
 ```
 
 ### **Authentication**
@@ -698,12 +933,115 @@ Tất cả fields đều **optional** - chỉ gửi những gì cần update.
 
 ---
 
-## **10. Delete Schedule**
+## **10. Delete Schedule (Not Implemented)**
 
 ### **Endpoint**
 
 ```
 DELETE /api/schedules/{id}
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+⚠️ **Not Implemented**
+
+### **Response - 501 Not Implemented**
+
+```json
+{
+  "success": false,
+  "message": "Not implemented"
+}
+```
+
+---
+
+## **11. Get Schedules by Content ID**
+
+### **Endpoint**
+
+```
+GET /api/schedules/content/{contentId}
+```
+
+### **Authentication**
+
+❌ **Not Required** - Public endpoint
+
+### **Description**
+
+Lấy tất cả schedules của một tournament content, có thể filter theo stage.
+
+### **Path Parameters**
+
+| Parameter   | Type    | Required | Description           |
+| ----------- | ------- | -------- | --------------------- |
+| `contentId` | integer | Yes      | Tournament content ID |
+
+### **Query Parameters**
+
+| Parameter | Type   | Required | Default | Description                      |
+| --------- | ------ | -------- | ------- | -------------------------------- |
+| `stage`   | string | No       | -       | Filter by stage (group/knockout) |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua          |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về   |
+
+### **Request Example**
+
+```http
+GET /api/schedules/content/1?stage=knockout&skip=0&limit=20
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "success": true,
+  "data": {
+    "schedules": [
+      {
+        "id": 1,
+        "contentId": 1,
+        "roundNumber": null,
+        "groupName": null,
+        "stage": "knockout",
+        "knockoutRound": "Final",
+        "tableNumber": 1,
+        "scheduledAt": "2026-02-15T08:00:00.000Z",
+        "createdAt": "2026-01-20T10:00:00.000Z",
+        "updatedAt": "2026-01-20T10:00:00.000Z",
+        "matches": [
+          {
+            "id": 1,
+            "scheduleId": 1,
+            "entryAId": 5,
+            "entryBId": 8,
+            "status": "scheduled",
+            "winnerEntryId": null
+          }
+        ]
+      }
+    ],
+    "count": 10,
+    "skip": 0,
+    "limit": 20
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "Invalid stage value. Must be 'group' or 'knockout'"
+}
 ```
 
 ### **Authentication**

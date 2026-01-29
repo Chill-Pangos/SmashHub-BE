@@ -201,6 +201,60 @@ GET /api/matches/pending
 
 ### **Authentication**
 
+✅ **Required** - Chief Referee only
+
+### **Description**
+
+Lấy danh sách các trận đấu có kết quả `pending` chờ phê duyệt.
+
+Các trận đấu này đã được trọng tài submit kết quả nhưng chưa được chief referee phê duyệt.
+
+### **Query Parameters**
+
+| Parameter | Type    | Required | Default | Description                    |
+| --------- | ------- | -------- | ------- | ------------------------------ |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua        |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về |
+
+### **Request Example**
+
+```http
+GET /api/matches/pending?skip=0&limit=10
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "matches": [
+    {
+      "id": 15,
+      "scheduleId": 10,
+      "entryAId": 5,
+      "entryBId": 8,
+      "status": "completed",
+      "winnerEntryId": 5,
+      "resultStatus": "pending",
+      "isConfirmedByWinner": true,
+      "createdAt": "2026-01-20T10:00:00.000Z",
+      "updatedAt": "2026-01-20T15:30:00.000Z"
+    }
+  ],
+  "count": 5
+}
+```
+
+### **Error Responses**
+
+```json
+{
+  "message": "Error fetching pending matches",
+  "error": {}
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token (Chief Referee)
 
 ### **Description**
@@ -208,6 +262,7 @@ GET /api/matches/pending
 Lấy danh sách các trận đấu đang **chờ phê duyệt kết quả** (`resultStatus = 'pending'`).
 
 **Use case:**
+
 - Trưởng ban trọng tài (Chief Referee) xem danh sách trận cần duyệt
 - Dashboard quản lý kết quả trận đấu
 - Theo dõi trận đấu đã finalize nhưng chưa được approve
@@ -441,11 +496,13 @@ POST /api/matches/{id}/start
 ### **Description**
 
 Bắt đầu một trận đấu:
+
 - Tự động tìm và assign **2 trọng tài** (umpire + assistant umpire) còn trống
 - Thay đổi status từ `scheduled` → `in_progress`
 - Chỉ start được khi match đang ở trạng thái `scheduled`
 
 **Use case:**
+
 - Khi trận đấu sắp bắt đầu, gọi API này để chuẩn bị
 - Hệ thống tự động phân công trọng tài không bị trùng lịch
 - Frontend có thể hiển thị thông tin trọng tài được assign
@@ -518,6 +575,102 @@ GET /api/matches/{id}/pending-with-elo
 
 ### **Authentication**
 
+✅ **Required** - Chief Referee only
+
+### **Description**
+
+Lấy chi tiết trận đấu pending kèm preview thay đổi ELO.
+
+Giúp chief referee xem trước kết quả và sự thay đổi ELO trước khi phê duyệt.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Example**
+
+```http
+GET /api/matches/15/pending-with-elo
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "match": {
+    "id": 15,
+    "scheduleId": 10,
+    "entryAId": 5,
+    "entryBId": 8,
+    "status": "completed",
+    "winnerEntryId": 5,
+    "resultStatus": "pending",
+    "isConfirmedByWinner": true,
+    "matchSets": [
+      {
+        "setNumber": 1,
+        "entryAScore": 11,
+        "entryBScore": 9
+      },
+      {
+        "setNumber": 2,
+        "entryAScore": 11,
+        "entryBScore": 7
+      }
+    ]
+  },
+  "eloPreview": {
+    "entryA": {
+      "averageElo": 1500,
+      "expectedScore": 0.5,
+      "actualScore": 1
+    },
+    "entryB": {
+      "averageElo": 1480,
+      "expectedScore": 0.5,
+      "actualScore": 0
+    },
+    "marginMultiplier": 1.2,
+    "changes": [
+      {
+        "userId": 10,
+        "currentElo": 1500,
+        "expectedElo": 1524,
+        "change": 24
+      },
+      {
+        "userId": 11,
+        "currentElo": 1480,
+        "expectedElo": 1456,
+        "change": -24
+      }
+    ]
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Match is not in pending status"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token (Chief Referee)
 
 ### **Description**
@@ -525,6 +678,7 @@ GET /api/matches/{id}/pending-with-elo
 Lấy thông tin chi tiết trận đấu đang pending **kèm theo preview thay đổi ELO** cho tất cả players.
 
 **Use case:**
+
 - Chief Referee xem chi tiết trận đấu trước khi approve
 - Kiểm tra điểm ELO sẽ thay đổi như thế nào
 - Đảm bảo kết quả hợp lý trước khi phê duyệt
@@ -618,6 +772,69 @@ POST /api/matches/{id}/finalize
 
 ### **Authentication**
 
+✅ **Required** - Referee only
+
+### **Description**
+
+Trọng tài submit kết quả trận đấu để chờ chief referee phê duyệt.
+
+**Quy trình:**
+
+1. Kiểm tra một đội đã thắng đủ số set (maxSets/2 + 1)
+2. Set match status = `completed` với `resultStatus` = `pending`
+3. Chief referee phải approve trước khi cập nhật standings/brackets và ELO
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Example**
+
+```http
+POST /api/matches/15/finalize
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "message": "Match result submitted successfully. Waiting for chief referee approval.",
+  "match": {
+    "id": 15,
+    "scheduleId": 10,
+    "entryAId": 5,
+    "entryBId": 8,
+    "status": "completed",
+    "winnerEntryId": 5,
+    "resultStatus": "pending",
+    "isConfirmedByWinner": true,
+    "updatedAt": "2026-01-20T15:30:00.000Z"
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Match is not in progress"
+}
+```
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Not enough sets completed to determine winner"
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token
 
 ### **Description**
@@ -639,6 +856,7 @@ Tổng kết và kết thúc trận đấu:
    - Liên kết winner vào `nextBracketId`
 
 **⚠️ Điều kiện:**
+
 - Match phải đang ở trạng thái `in_progress`
 - Phải có đủ sets đã hoàn thành
 - Phải có người thắng rõ ràng (không hòa)
@@ -677,6 +895,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 **Kết quả:**
+
 - ✅ Entry A (ID: 10) thắng 2-0
 - ✅ Group standings đã được update
 - ✅ Match status = completed
@@ -699,6 +918,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 **Kết quả:**
+
 - ✅ Entry B (ID: 7) thắng 2-1
 - ✅ Knockout bracket đã được update với winner
 - ✅ Nếu đối thủ vòng sau đã có, match tiếp theo sẽ được tạo tự động
@@ -749,6 +969,78 @@ POST /api/matches/{id}/approve
 
 ### **Authentication**
 
+✅ **Required** - Chief Referee only
+
+### **Description**
+
+Chief referee phê duyệt kết quả trận đấu pending.
+
+**Quy trình:**
+
+1. Cập nhật `resultStatus` = `approved`
+2. Cập nhật group standings hoặc knockout brackets
+3. Tính toán và cập nhật ELO scores cho tất cả players
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Body**
+
+| Field         | Type   | Required | Description                               |
+| ------------- | ------ | -------- | ----------------------------------------- |
+| `reviewNotes` | string | No       | Ghi chú từ chief referee (không bắt buộc) |
+
+### **Request Example**
+
+```json
+{
+  "reviewNotes": "Match result is correct and verified"
+}
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "message": "Match result approved successfully",
+  "match": {
+    "id": 15,
+    "scheduleId": 10,
+    "entryAId": 5,
+    "entryBId": 8,
+    "status": "completed",
+    "winnerEntryId": 5,
+    "resultStatus": "approved",
+    "reviewNotes": "Match result is correct and verified",
+    "isConfirmedByWinner": true,
+    "updatedAt": "2026-01-20T16:00:00.000Z"
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Match is not in pending status"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token (Chief Referee only)
 
 ### **Description**
@@ -773,9 +1065,9 @@ POST /api/matches/{id}/approve
 
 ### **Request Body**
 
-| Field         | Type   | Required | Description                       |
-| ------------- | ------ | -------- | --------------------------------- |
-| `reviewNotes` | string | No       | Ghi chú từ trưởng ban trọng tài   |
+| Field         | Type   | Required | Description                     |
+| ------------- | ------ | -------- | ------------------------------- |
+| `reviewNotes` | string | No       | Ghi chú từ trưởng ban trọng tài |
 
 ### **Request Example**
 
@@ -824,6 +1116,86 @@ POST /api/matches/{id}/reject
 
 ### **Authentication**
 
+✅ **Required** - Chief Referee only
+
+### **Description**
+
+Chief referee từ chối kết quả trận đấu pending.
+
+**Quy trình:**
+
+1. Cập nhật `resultStatus` = `rejected`
+2. Reset match về trạng thái `in_progress`
+3. Xóa `winnerEntryId` để trọng tài có thể submit lại
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Body**
+
+| Field         | Type   | Required | Description                                          |
+| ------------- | ------ | -------- | ---------------------------------------------------- |
+| `reviewNotes` | string | Yes      | Lý do từ chối (bắt buộc để giải thích cho trọng tài) |
+
+### **Request Example**
+
+```json
+{
+  "reviewNotes": "Score calculation error. Please recount and resubmit."
+}
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "message": "Match result rejected. Referee needs to resubmit.",
+  "match": {
+    "id": 15,
+    "scheduleId": 10,
+    "entryAId": 5,
+    "entryBId": 8,
+    "status": "in_progress",
+    "winnerEntryId": null,
+    "resultStatus": "rejected",
+    "reviewNotes": "Score calculation error. Please recount and resubmit.",
+    "isConfirmedByWinner": false,
+    "updatedAt": "2026-01-20T16:00:00.000Z"
+  }
+}
+```
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Review notes are required when rejecting match result"
+}
+```
+
+**400 Bad Request**
+
+```json
+{
+  "message": "Match is not in pending status"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token (Chief Referee only)
 
 ### **Description**
@@ -836,6 +1208,7 @@ POST /api/matches/{id}/reject
 4. **Không update** standings/brackets/ELO
 
 **Use case:**
+
 - Kết quả không chính xác
 - Cần kiểm tra lại video
 - Có khiếu nại từ đội thi đấu
@@ -848,9 +1221,9 @@ POST /api/matches/{id}/reject
 
 ### **Request Body**
 
-| Field         | Type   | Required | Description                          |
-| ------------- | ------ | -------- | ------------------------------------ |
-| `reviewNotes` | string | **Yes**  | Lý do từ chối (bắt buộc phải có)     |
+| Field         | Type   | Required | Description                      |
+| ------------- | ------ | -------- | -------------------------------- |
+| `reviewNotes` | string | **Yes**  | Lý do từ chối (bắt buộc phải có) |
 
 ### **Request Example**
 
@@ -898,6 +1271,313 @@ GET /api/matches/{id}/elo-preview
 
 ### **Authentication**
 
+✅ **Required**
+
+### **Description**
+
+Tính toán và preview sự thay đổi ELO scores cho tất cả players sau khi hoàn thành trận đấu.
+
+Hữu ích để kiểm tra ELO thay đổi dự kiến trước khi finalize trận đấu.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `id`      | integer | Yes      | Match ID    |
+
+### **Request Example**
+
+```http
+GET /api/matches/15/elo-preview
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "entryA": {
+    "averageElo": 1500,
+    "expectedScore": 0.5,
+    "actualScore": 1
+  },
+  "entryB": {
+    "averageElo": 1480,
+    "expectedScore": 0.5,
+    "actualScore": 0
+  },
+  "marginMultiplier": 1.2,
+  "changes": [
+    {
+      "userId": 10,
+      "currentElo": 1500,
+      "expectedElo": 1524,
+      "change": 24
+    },
+    {
+      "userId": 11,
+      "currentElo": 1480,
+      "expectedElo": 1456,
+      "change": -24
+    }
+  ]
+}
+```
+
+### **Error Responses**
+
+**404 Not Found**
+
+```json
+{
+  "message": "Match not found"
+}
+```
+
+---
+
+## **15. Get Available Coaches for Entry**
+
+### **Endpoint**
+
+```
+GET /api/matches/entry/{entryId}/available-coaches
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+Lấy danh sách các huấn luyện viên của entry đang không chỉ đạo trận đấu nào khác.
+
+Trả về coaches không được assign vào bất kỳ trận đấu nào có status `in_progress` hoặc `scheduled`.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description |
+| --------- | ------- | -------- | ----------- |
+| `entryId` | integer | Yes      | Entry ID    |
+
+### **Request Example**
+
+```http
+GET /api/matches/entry/5/available-coaches
+```
+
+### **Response - 200 OK**
+
+```json
+[
+  {
+    "id": 20,
+    "username": "coach_john",
+    "email": "john@example.com",
+    "avatarUrl": "https://example.com/avatars/john.jpg"
+  },
+  {
+    "id": 21,
+    "username": "coach_sarah",
+    "email": "sarah@example.com",
+    "avatarUrl": "https://example.com/avatars/sarah.jpg"
+  }
+]
+```
+
+---
+
+## **16. Get Upcoming Matches by Athlete**
+
+### **Endpoint**
+
+```
+GET /api/matches/athlete/{userId}/upcoming
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+Lấy danh sách các trận đấu sắp tới của một vận động viên.
+
+Bao gồm các trận đấu có status `scheduled` và `in_progress`.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description     |
+| --------- | ------- | -------- | --------------- |
+| `userId`  | integer | Yes      | Athlete/User ID |
+
+### **Query Parameters**
+
+| Parameter | Type    | Required | Default | Description                    |
+| --------- | ------- | -------- | ------- | ------------------------------ |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua        |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về |
+
+### **Request Example**
+
+```http
+GET /api/matches/athlete/10/upcoming?skip=0&limit=10
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "matches": [
+    {
+      "id": 20,
+      "scheduleId": 15,
+      "entryAId": 5,
+      "entryBId": 8,
+      "status": "scheduled",
+      "schedule": {
+        "scheduledAt": "2026-02-01T08:00:00.000Z",
+        "stage": "group",
+        "groupName": "Group A"
+      }
+    }
+  ],
+  "count": 3,
+  "skip": 0,
+  "limit": 10
+}
+```
+
+---
+
+## **17. Get Match History by Athlete**
+
+### **Endpoint**
+
+```
+GET /api/matches/athlete/{userId}/history
+```
+
+### **Authentication**
+
+✅ **Required**
+
+### **Description**
+
+Lấy lịch sử các trận đấu đã hoàn thành của một vận động viên.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description     |
+| --------- | ------- | -------- | --------------- |
+| `userId`  | integer | Yes      | Athlete/User ID |
+
+### **Query Parameters**
+
+| Parameter | Type    | Required | Default | Description                    |
+| --------- | ------- | -------- | ------- | ------------------------------ |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua        |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về |
+
+### **Request Example**
+
+```http
+GET /api/matches/athlete/10/history?skip=0&limit=10
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "matches": [
+    {
+      "id": 15,
+      "scheduleId": 10,
+      "entryAId": 5,
+      "entryBId": 8,
+      "status": "completed",
+      "winnerEntryId": 5,
+      "resultStatus": "approved",
+      "schedule": {
+        "scheduledAt": "2026-01-20T08:00:00.000Z",
+        "stage": "group",
+        "groupName": "Group A"
+      }
+    }
+  ],
+  "count": 12,
+  "skip": 0,
+  "limit": 10
+}
+```
+
+---
+
+## **18. Get Matches by Team (Coach View)**
+
+### **Endpoint**
+
+```
+GET /api/matches/coach/{userId}
+```
+
+### **Authentication**
+
+✅ **Required** - Coach or Team Manager only
+
+### **Description**
+
+Lấy tất cả các trận đấu của team mà coach/team manager quản lý.
+
+Bao gồm các trận đấu sắp tới, đang diễn ra, và đã hoàn thành.
+
+### **Path Parameters**
+
+| Parameter | Type    | Required | Description                |
+| --------- | ------- | -------- | -------------------------- |
+| `userId`  | integer | Yes      | Coach/Team Manager User ID |
+
+### **Query Parameters**
+
+| Parameter | Type    | Required | Default | Description                                                  |
+| --------- | ------- | -------- | ------- | ------------------------------------------------------------ |
+| `status`  | string  | No       | -       | Filter by status (scheduled/in_progress/completed/cancelled) |
+| `skip`    | integer | No       | `0`     | Số lượng records bỏ qua                                      |
+| `limit`   | integer | No       | `10`    | Số lượng records tối đa trả về                               |
+
+### **Request Example**
+
+```http
+GET /api/matches/coach/20?status=completed&skip=0&limit=10
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "matches": [
+    {
+      "id": 15,
+      "scheduleId": 10,
+      "entryAId": 5,
+      "entryBId": 8,
+      "status": "completed",
+      "winnerEntryId": 5,
+      "coachAId": 20,
+      "schedule": {
+        "scheduledAt": "2026-01-20T08:00:00.000Z",
+        "stage": "group",
+        "groupName": "Group A"
+      }
+    }
+  ],
+  "count": 8,
+  "skip": 0,
+  "limit": 10
+}
+```
+
+### **Authentication**
+
 ✅ **Required** - Bearer Token
 
 ### **Description**
@@ -905,6 +1585,7 @@ GET /api/matches/{id}/elo-preview
 Preview thay đổi điểm ELO cho tất cả players **trước khi** match được approve.
 
 **Thông tin trả về:**
+
 - ELO trung bình của mỗi entry
 - Expected score dựa trên ELO
 - Actual score (thắng/thua)
@@ -1228,6 +1909,7 @@ POST /api/matches/1/reject
 ```
 
 **Result Status Flow:**
+
 - `null` → Match chưa finalize
 - `pending` → Chờ Chief Referee approve
 - `approved` → Đã được approve, ELO đã cập nhật

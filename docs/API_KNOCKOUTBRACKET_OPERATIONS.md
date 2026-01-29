@@ -55,17 +55,19 @@ Tạo một knockout bracket entry mới (thường dùng khi manual setup).
 
 #### **Optional Fields:**
 
-| Field                | Type    | Description                    | Example          |
-| -------------------- | ------- | ------------------------------ | ---------------- |
-| `entryAId`           | integer | ID của entry A                 | `5`              |
-| `entryBId`           | integer | ID của entry B                 | `8`              |
-| `seedA`              | integer | Seed của entry A               | `1`              |
-| `seedB`              | integer | Seed của entry B               | `8`              |
-| `nextBracketId`      | integer | ID của bracket vòng sau        | `10`             |
-| `previousBracketAId` | integer | ID của bracket trước (entry A) | `5`              |
-| `previousBracketBId` | integer | ID của bracket trước (entry B) | `6`              |
-| `roundName`          | string  | Tên vòng đấu                   | `"Semi-Final 1"` |
-| `isByeMatch`         | boolean | Trận đấu bye (không đấu)       | `false`          |
+| Field                | Type    | Description                               | Example          |
+| -------------------- | ------- | ----------------------------------------- | ---------------- |
+| `entryAId`           | integer | ID của entry A                            | `5`              |
+| `entryBId`           | integer | ID của entry B                            | `8`              |
+| `seedA`              | integer | Seed của entry A                          | `1`              |
+| `seedB`              | integer | Seed của entry B                          | `8`              |
+| `nextBracketId`      | integer | ID của bracket vòng sau                   | `10`             |
+| `previousBracketAId` | integer | ID của bracket trước (entry A)            | `5`              |
+| `previousBracketBId` | integer | ID của bracket trước (entry B)            | `6`              |
+| `roundName`          | string  | Tên vòng đấu                              | `"Semi-Final 1"` |
+| `isByeMatch`         | boolean | Trận đấu bye (một entry tự động đi tiếp) | `false`          |
+
+> 📝 **Về isByeMatch:** Khi `isByeMatch = true`, nghĩa là trận đấu này không diễn ra thực tế. Entry trong trận bye sẽ tự động advance sang vòng tiếp theo mà không cần thi đấu. Thường dùng khi số lượng entries không phải là lũy thừa của 2 (ví dụ: 12 đội thì cần 4 bye matches để tạo thành bracket 16).
 
 ### **Request Example**
 
@@ -520,6 +522,127 @@ POST /api/knockout-brackets/generate
 
 ### **Description**
 
+Tự động tạo cấu trúc nhánh đấu vòng loại trực tiếp (single elimination bracket).
+
+**Điều kiện:**
+1. Số nhánh phải là lũy thừa của 2 (16, 32, 64...)
+2. Entries cùng team không gặp nhau ở vòng đầu (nếu có thông tin team)
+3. **Bye matches được phân bổ ngẫu nhiên** vào các vị trí trong bracket
+4. Cân bằng 2 nhánh đấu (top half và bottom half)
+5. Tối thiểu 12 đội
+
+**Xử lý Bye Matches:**
+- Khi số entries không phải lũy thừa của 2, hệ thống tự động tính toán số bye matches cần thiết
+- Ví dụ: 12 entries → bracket size 16 → cần 4 bye matches
+- Bye matches (`isByeMatch = true`) được đặt ngẫu nhiên vào các vị trí vòng 1
+- Entry trong bye match tự động advance sang vòng tiếp theo
+- Các bye matches được phân bổ đều vào cả 2 nhánh (top half và bottom half)
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                               |
+| ----------- | ------- | -------- | ----------------------------------------- |
+| `contentId` | integer | Yes      | Tournament content ID (tự động lấy entries từ database) |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 1
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Knockout bracket generated successfully",
+  "data": {
+    "contentId": 1,
+    "totalRounds": 4,
+    "totalBrackets": 15,
+    "bracketSize": 16,
+    "numEntries": 12,
+    "numByes": 4,
+    "rounds": [
+      {
+        "roundNumber": 4,
+        "roundName": "Round of 16",
+        "brackets": [
+          {
+            "id": 1,
+            "contentId": 1,
+            "roundNumber": 4,
+            "bracketPosition": 0,
+            "entryAId": 5,
+            "entryBId": null,
+            "isByeMatch": true,
+            "status": "ready",
+            "roundName": "Round of 16",
+            "nextBracketId": 9
+          },
+          {
+            "id": 2,
+            "contentId": 1,
+            "roundNumber": 4,
+            "bracketPosition": 1,
+            "entryAId": 8,
+            "entryBId": 12,
+            "isByeMatch": false,
+            "status": "ready",
+            "roundName": "Round of 16",
+            "nextBracketId": 9
+          }
+        ]
+      },
+      {
+        "roundNumber": 3,
+        "roundName": "Quarter-final",
+        "brackets": [
+          {
+            "id": 9,
+            "contentId": 1,
+            "roundNumber": 3,
+            "bracketPosition": 0,
+            "entryAId": null,
+            "entryBId": null,
+            "isByeMatch": false,
+            "status": "pending",
+            "roundName": "Quarter-final",
+            "previousBracketAId": 1,
+            "previousBracketBId": 2,
+            "nextBracketId": 13
+          }
+        ]
+      },
+      {
+        "roundNumber": 2,
+        "roundName": "Semi-final",
+        "brackets": [...]
+      },
+      {
+        "roundNumber": 1,
+        "roundName": "Final",
+        "brackets": [...]
+      }
+    ]
+  }
+}
+```
+
+> 📝 **Lưu ý về Response:**
+> - `totalBrackets`: Tổng số bracket = bracketSize - 1 (ví dụ: bracket 16 có 15 brackets)
+> - `numByes`: Số bye matches = bracketSize - numEntries
+> - Brackets có `isByeMatch = true` chỉ có `entryAId`, `entryBId = null`
+> - Brackets vòng sau có `status = "pending"` cho đến khi có winner từ vòng trước
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
 Tự động tạo **toàn bộ cấu trúc knockout bracket** dựa trên entries của tournament content.
 
 **Khi nào sử dụng:**
@@ -715,6 +838,129 @@ POST /api/knockout-brackets/generate-from-groups
 
 ### **Description**
 
+Tạo nhánh đấu knockout từ kết quả vòng bảng.
+
+**Quy tắc:**
+1. Lấy **top 2 mỗi bảng** (nhất và nhì)
+2. Chia đều bye matches vào 2 nhánh (top half và bottom half)
+3. **Tất cả bye matches dành cho đội nhất bảng**
+4. **Đội nhì bảng gặp đội nhất bảng khác** (không cùng bảng)
+5. Cân bằng 2 nhánh đấu
+
+**Xử lý Bye Matches:**
+- Khi số entries qualified không phải lũy thừa của 2, tự động tạo bye matches
+- Ví dụ: 4 bảng × 2 entries = 8 qualified → bracket size 8 → không cần bye
+- Ví dụ: 3 bảng × 2 entries = 6 qualified → bracket size 8 → cần 2 bye matches
+- Bye matches ưu tiên cho các đội nhất bảng (đội có thứ hạng cao hơn)
+- Các bye matches được phân bổ ngẫu nhiên vào các vị trí vòng 1
+
+### **Request Body**
+
+| Field       | Type    | Required | Description                                      |
+| ----------- | ------- | -------- | ------------------------------------------------ |
+| `contentId` | integer | Yes      | Tournament content ID (phải có group standings đã hoàn thành) |
+
+### **Request Example**
+
+```json
+{
+  "contentId": 1
+}
+```
+
+### **Response - 201 Created**
+
+```json
+{
+  "success": true,
+  "message": "Knockout bracket generated from groups successfully",
+  "data": {
+    "contentId": 1,
+    "totalRounds": 3,
+    "totalBrackets": 7,
+    "bracketSize": 8,
+    "numEntries": 6,
+    "numByes": 2,
+    "qualifiedEntries": [
+      { "entryId": 1, "groupName": "Group A", "rank": 1 },
+      { "entryId": 2, "groupName": "Group A", "rank": 2 },
+      { "entryId": 5, "groupName": "Group B", "rank": 1 },
+      { "entryId": 6, "groupName": "Group B", "rank": 2 },
+      { "entryId": 9, "groupName": "Group C", "rank": 1 },
+      { "entryId": 10, "groupName": "Group C", "rank": 2 }
+    ],
+    "rounds": [
+      {
+        "roundNumber": 3,
+        "roundName": "Quarter-final",
+        "brackets": [
+          {
+            "id": 1,
+            "contentId": 1,
+            "roundNumber": 3,
+            "bracketPosition": 0,
+            "entryAId": 1,
+            "entryBId": null,
+            "seedA": 1,
+            "seedB": null,
+            "isByeMatch": true,
+            "status": "ready",
+            "roundName": "Quarter-final",
+            "nextBracketId": 5
+          },
+          {
+            "id": 2,
+            "contentId": 1,
+            "roundNumber": 3,
+            "bracketPosition": 1,
+            "entryAId": 6,
+            "entryBId": 5,
+            "seedA": 2,
+            "seedB": 1,
+            "isByeMatch": false,
+            "status": "ready",
+            "roundName": "Quarter-final",
+            "nextBracketId": 5
+          }
+        ]
+      },
+      {
+        "roundNumber": 2,
+        "roundName": "Semi-final",
+        "brackets": [...]
+      },
+      {
+        "roundNumber": 1,
+        "roundName": "Final",
+        "brackets": [...]
+      }
+    ]
+  }
+}
+```
+
+> 📌 **Giải thích seeding:**
+> - `seedA`, `seedB`: Thứ hạng trong bảng (1 = nhất bảng, 2 = nhì bảng)
+> - Các đội nhất bảng có bye matches và không gặp nhau ở vòng đầu
+> - Đội nhì bảng sẽ gặp đội nhất bảng khác để tránh đối đầu cùng bảng sớm
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "Not enough completed group standings to generate knockout bracket"
+}
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
 Tạo knockout bracket từ **kết quả vòng bảng** đã được tính toán bởi API `/group-standings/calculate`.
 
 **⚠️ Yêu cầu:**
@@ -826,6 +1072,114 @@ Tạo knockout bracket từ **kết quả vòng bảng** đã được tính to�
 
 ```
 POST /api/knockout-brackets/advance-winner
+```
+
+### **Authentication**
+
+✅ **Required** - Bearer Token
+
+### **Description**
+
+Cập nhật winner và tự động advance entry sang bracket tiếp theo.
+
+**Quy trình:**
+1. Cập nhật `winnerEntryId` vào bracket hiện tại
+2. Set bracket `status` = `completed`
+3. Tìm `nextBracketId` (bracket vòng sau)
+4. Cập nhật entry vào vị trí tương ứng trong bracket vòng sau
+5. Nếu bracket vòng sau đã đủ 2 entries → set `status` = `ready`
+
+**Xử lý Bye Matches:**
+- Nếu bracket có `isByeMatch = true`, winner được tự động set là `entryAId`
+- Bye match không cần match thực tế, entry tự động advance
+- System có thể tự động advance winner của bye match khi tạo schedule
+
+**Quy trình:**
+1. Cập nhật `winnerEntryId` vào bracket hiện tại
+2. Set bracket `status` = `completed`
+3. Tìm `nextBracketId` (bracket vòng sau)
+4. Cập nhật entry vào vị trí tương ứng trong bracket vòng sau
+5. Nếu bracket vòng sau đã đủ 2 entries → set `status` = `ready`
+
+**Xử lý Bye Matches:**
+- Nếu bracket có `isByeMatch = true`, winner được tự động set là `entryAId`
+- Bye match không cần match thực tế, entry tự động advance
+- System có thể tự động advance winner của bye match khi tạo schedule
+
+### **Request Body**
+
+| Field           | Type    | Required | Description           |
+| --------------- | ------- | -------- | --------------------- |
+| `bracketId`     | integer | Yes      | ID của bracket hiện tại |
+| `winnerEntryId` | integer | Yes      | ID của entry thắng    |
+
+### **Request Example**
+
+```json
+{
+  "bracketId": 1,
+  "winnerEntryId": 5
+}
+```
+
+### **Response - 200 OK**
+
+```json
+{
+  "success": true,
+  "message": "Winner advanced successfully",
+  "data": {
+    "currentBracket": {
+      "id": 1,
+      "contentId": 1,
+      "roundNumber": 4,
+      "bracketPosition": 0,
+      "entryAId": 5,
+      "entryBId": 8,
+      "winnerEntryId": 5,
+      "status": "completed",
+      "isByeMatch": false,
+      "nextBracketId": 9
+    },
+    "nextBracket": {
+      "id": 9,
+      "contentId": 1,
+      "roundNumber": 3,
+      "bracketPosition": 0,
+      "entryAId": 5,
+      "entryBId": null,
+      "winnerEntryId": null,
+      "status": "pending",
+      "isByeMatch": false,
+      "roundName": "Quarter-final"
+    }
+  }
+}
+```
+
+> 📝 **Lưu ý:**
+> - Nếu `nextBracket` vẫn `status = "pending"`, nghĩa là đang chờ kết quả từ bracket khác
+> - Khi `nextBracket` có đủ 2 entries, `status` sẽ tự động chuyển sang `"ready"`
+> - Winner của Final (roundNumber = 1) sẽ không có `nextBracketId`
+
+### **Error Responses**
+
+**400 Bad Request**
+
+```json
+{
+  "success": false,
+  "message": "Winner entry must be either entryAId or entryBId of this bracket"
+}
+```
+
+**404 Not Found**
+
+```json
+{
+  "success": false,
+  "message": "Bracket not found"
+}
 ```
 
 ### **Authentication**
