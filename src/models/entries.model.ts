@@ -10,7 +10,7 @@ import {
 import TournamentContent from "./tournamentContent.model";
 import Match from "./match.model";
 import Team from "./team.model";
-import EntryMember from "./entryMember.model";
+import EntryMember from "./entrymember.model";
 
 @Table({
   tableName: "entries",

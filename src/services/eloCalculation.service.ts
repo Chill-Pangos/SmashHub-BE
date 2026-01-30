@@ -1,7 +1,7 @@
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
 import Entries from "../models/entries.model";
-import EntryMember from "../models/entryMember.model";
+import EntryMember from "../models/entrymember.model";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";
 import eloScoreService from "./eloScore.service";
@@ -74,10 +74,22 @@ export class EloCalculationService {
   /**
    * Tính điểm Elo trung bình của một entry (team/đôi)
    */
-  private async calculateEntryAverageElo(entryId: number): Promise<number> {
-    const entryMembers = await EntryMember.findAll({
-      where: { entryId },
-    });
+  private async calculateEntryAverageElo(entryId: number, members?: EntryMember[]): Promise<number> {
+    // Nếu có members được pass vào, sử dụng nó; nếu không thì query
+    let entryMembers = members;
+    
+    if (!entryMembers) {
+      const entry = await Entries.findByPk(entryId, {
+        include: [
+          {
+            model: EntryMember,
+            as: 'members',
+          },
+        ],
+      });
+      
+      entryMembers = entry?.members || [];
+    }
 
     if (entryMembers.length === 0) {
       return 1000; // Điểm mặc định nếu không có thành viên
@@ -153,9 +165,13 @@ export class EloCalculationService {
 
     const totalSets = entryASetsWon + entryBSetsWon;
 
+    // Extract members từ entries
+    const entryAMembers = match.entryA?.members || [];
+    const entryBMembers = match.entryB?.members || [];
+
     // Tính Elo trung bình của mỗi entry
-    const entryAElo = await this.calculateEntryAverageElo(match.entryAId);
-    const entryBElo = await this.calculateEntryAverageElo(match.entryBId);
+    const entryAElo = await this.calculateEntryAverageElo(match.entryAId, entryAMembers);
+    const entryBElo = await this.calculateEntryAverageElo(match.entryBId, entryBMembers);
 
     // Tính các thông số chung cho trận đấu
     const expectedScoreA = this.calculateExpectedScore(entryAElo, entryBElo);
@@ -173,7 +189,6 @@ export class EloCalculationService {
     const changeReason = `Match ${matchId}: ${entryASetsWon}-${entryBSetsWon}`;
 
     // Cập nhật Elo cho từng thành viên của entry A
-    const entryAMembers = match.entryA?.members || [];
     for (const member of entryAMembers) {
       await this.updatePlayerElo(
         member.userId,
@@ -186,7 +201,6 @@ export class EloCalculationService {
     }
 
     // Cập nhật Elo cho từng thành viên của entry B
-    const entryBMembers = match.entryB?.members || [];
     for (const member of entryBMembers) {
       await this.updatePlayerElo(
         member.userId,
@@ -296,8 +310,11 @@ export class EloCalculationService {
 
     const totalSets = entryASetsWon + entryBSetsWon;
 
-    const entryAElo = await this.calculateEntryAverageElo(match.entryAId);
-    const entryBElo = await this.calculateEntryAverageElo(match.entryBId);
+    const entryAMembers = match.entryA?.members || [];
+    const entryBMembers = match.entryB?.members || [];
+    
+    const entryAElo = await this.calculateEntryAverageElo(match.entryAId, entryAMembers);
+    const entryBElo = await this.calculateEntryAverageElo(match.entryBId, entryBMembers);
 
     const expectedScoreA = this.calculateExpectedScore(entryAElo, entryBElo);
     const expectedScoreB = 1 - expectedScoreA;
@@ -318,7 +335,6 @@ export class EloCalculationService {
     }> = [];
 
     // Tính toán cho entry A
-    const entryAMembers = match.entryA?.members || [];
     for (const member of entryAMembers) {
       const eloScore = await this.getOrCreateEloScore(member.userId);
       const newElo = this.calculateNewElo(
@@ -336,7 +352,6 @@ export class EloCalculationService {
     }
 
     // Tính toán cho entry B
-    const entryBMembers = match.entryB?.members || [];
     for (const member of entryBMembers) {
       const eloScore = await this.getOrCreateEloScore(member.userId);
       const newElo = this.calculateNewElo(
