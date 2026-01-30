@@ -17,11 +17,7 @@ export class ScheduleController {
       });
     }
   }
-  /**
-   * Tạo schedule cho vòng bảng
-   * POST /schedules/generate-group-stage
-   * Body: { contentId: number, startDate: string }
-   */
+  
   async generateGroupStageSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId, startDate } = req.body;
@@ -63,11 +59,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo lịch thi đấu hoàn chỉnh (group + knockout)
-   * POST /schedules/generate-complete
-   * Body: { contentId: number, startDate: string, endDate: string }
-   */
+  
   async generateCompleteSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId } = req.body;
@@ -103,11 +95,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo schedule cho nội dung chỉ có knockout stage (không có group stage)
-   * POST /schedules/generate-knockout-only
-   * Body: { contentId: number }
-   */
+  
   async generateKnockoutOnlySchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId } = req.body;
@@ -140,11 +128,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo schedule cho vòng knockout
-   * POST /schedules/generate-knockout-stage
-   * Body: { contentId: number, startDate: string }
-   */
+  
   async generateKnockoutStageSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId, startDate } = req.body;

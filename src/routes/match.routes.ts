@@ -1,5 +1,8 @@
 import { Router } from "express";
 import matchController from "../controllers/match.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Matches]
  *     summary: Create a new match
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of matches
  */
-router.post("/", matchController.create.bind(matchController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_CREATE),
+  matchController.create.bind(matchController)
+);
 router.get("/", matchController.findAll.bind(matchController));
 
 /**
@@ -42,6 +51,8 @@ router.get("/", matchController.findAll.bind(matchController));
  *     description: |
  *       Get list of matches with resultStatus = 'pending' that need chief referee approval.
  *       These are matches where referees have submitted results but not yet approved.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
@@ -49,43 +60,7 @@ router.get("/", matchController.findAll.bind(matchController));
  *       200:
  *         description: List of pending matches
  */
-router.get("/pending", matchController.findPendingMatches.bind(matchController));
-
-/**
- * @swagger
- * /matches/{id}:
- *   get:
- *     tags: [Matches]
- *     summary: Get match by ID
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Match details
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   put:
- *     tags: [Matches]
- *     summary: Update match
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Match updated
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   delete:
- *     tags: [Matches]
- *     summary: Delete match
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       204:
- *         $ref: '#/components/responses/NoContent'
- */
-router.get("/:id", matchController.findById.bind(matchController));
-router.put("/:id", matchController.update.bind(matchController));
-router.delete("/:id", matchController.delete.bind(matchController));
+router.get("/pending", authenticate, checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT), matchController.findPendingMatches.bind(matchController));
 
 /**
  * @swagger
@@ -140,6 +115,8 @@ router.get(
  *     tags: [Matches]
  *     summary: Start a match
  *     description: Automatically assign 2 available referees and change match status from scheduled to in_progress
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -150,7 +127,11 @@ router.get(
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post("/:id/start", matchController.startMatch.bind(matchController));
+router.post("/:id/start", 
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_START),
+  matchController.startMatch.bind(matchController)
+);
 
 /**
  * @swagger
@@ -161,6 +142,8 @@ router.post("/:id/start", matchController.startMatch.bind(matchController));
  *     description: |
  *       Get match details with pending status and preview of ELO changes.
  *       This helps chief referee review the result and see how ELO will change before approval.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -182,7 +165,11 @@ router.post("/:id/start", matchController.startMatch.bind(matchController));
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:id/pending-with-elo", matchController.getPendingMatchWithEloPreview.bind(matchController));
+router.get("/:id/pending-with-elo", 
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  matchController.getPendingMatchWithEloPreview.bind(matchController)
+);
 
 /**
  * @swagger
@@ -195,6 +182,8 @@ router.get("/:id/pending-with-elo", matchController.getPendingMatchWithEloPrevie
  *       - Check if a team has won enough sets (maxSets/2 + 1)
  *       - Set match status to completed with resultStatus = pending
  *       - Chief referee must approve before standings/brackets and Elo are updated
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -205,7 +194,11 @@ router.get("/:id/pending-with-elo", matchController.getPendingMatchWithEloPrevie
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post("/:id/finalize", matchController.finalizeMatch.bind(matchController));
+router.post("/:id/finalize",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_REPORT_RESULT),
+  matchController.finalizeMatch.bind(matchController)
+);
 
 /**
  * @swagger
@@ -218,6 +211,8 @@ router.post("/:id/finalize", matchController.finalizeMatch.bind(matchController)
  *       - Update resultStatus to approved
  *       - Update group standings or knockout brackets
  *       - Calculate and update Elo scores for all players
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -237,7 +232,11 @@ router.post("/:id/finalize", matchController.finalizeMatch.bind(matchController)
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post("/:id/approve", matchController.approveMatchResult.bind(matchController));
+router.post("/:id/approve",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  matchController.approveMatchResult.bind(matchController)
+);
 
 /**
  * @swagger
@@ -250,6 +249,8 @@ router.post("/:id/approve", matchController.approveMatchResult.bind(matchControl
  *       - Update resultStatus to rejected
  *       - Reset match to in_progress status
  *       - Clear winner so referee can resubmit
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -272,7 +273,11 @@ router.post("/:id/approve", matchController.approveMatchResult.bind(matchControl
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post("/:id/reject", matchController.rejectMatchResult.bind(matchController));
+router.post("/:id/reject",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  matchController.rejectMatchResult.bind(matchController)
+);
 
 /**
  * @swagger
@@ -283,6 +288,8 @@ router.post("/:id/reject", matchController.rejectMatchResult.bind(matchControlle
  *     description: |
  *       Calculate and preview how Elo scores will change for all players after match completion.
  *       Useful for checking expected Elo changes before finalizing the match.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -329,7 +336,7 @@ router.post("/:id/reject", matchController.rejectMatchResult.bind(matchControlle
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:id/elo-preview", matchController.previewEloChanges.bind(matchController));
+router.get("/:id/elo-preview", authenticate, checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT), matchController.previewEloChanges.bind(matchController));
 
 /**
  * @swagger
@@ -340,6 +347,8 @@ router.get("/:id/elo-preview", matchController.previewEloChanges.bind(matchContr
  *     description: |
  *       Get list of coaches (members) of an entry who are not currently managing any other active matches.
  *       Returns coaches who are not assigned to any match with status 'in_progress' or 'scheduled'.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: entryId
@@ -368,7 +377,7 @@ router.get("/:id/elo-preview", matchController.previewEloChanges.bind(matchContr
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/entry/:entryId/available-coaches", matchController.getAvailableCoachesForEntry.bind(matchController));
+router.get("/entry/:entryId/available-coaches", authenticate, matchController.getAvailableCoachesForEntry.bind(matchController));
 
 /**
  * @swagger
@@ -377,6 +386,8 @@ router.get("/entry/:entryId/available-coaches", matchController.getAvailableCoac
  *     tags: [Matches]
  *     summary: Get upcoming matches for an athlete
  *     description: Get list of scheduled and in-progress matches that an athlete is participating in
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -407,7 +418,7 @@ router.get("/entry/:entryId/available-coaches", matchController.getAvailableCoac
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.get("/athlete/:userId/upcoming", matchController.getUpcomingMatchesByAthlete.bind(matchController));
+router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomingMatchesByAthlete.bind(matchController));
 
 /**
  * @swagger
@@ -416,6 +427,8 @@ router.get("/athlete/:userId/upcoming", matchController.getUpcomingMatchesByAthl
  *     tags: [Matches]
  *     summary: Get match history for an athlete
  *     description: Get list of completed matches that an athlete has participated in
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -446,7 +459,7 @@ router.get("/athlete/:userId/upcoming", matchController.getUpcomingMatchesByAthl
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.get("/athlete/:userId/history", matchController.getMatchHistoryByAthlete.bind(matchController));
+router.get("/athlete/:userId/history", authenticate, matchController.getMatchHistoryByAthlete.bind(matchController));
 
 /**
  * @swagger
@@ -455,6 +468,8 @@ router.get("/athlete/:userId/history", matchController.getMatchHistoryByAthlete.
  *     tags: [Matches]
  *     summary: Get all matches for a coach's team(s)
  *     description: Get list of all matches (upcoming, in progress, and completed) that coach's team(s) have participated in. User must be a coach or team_manager.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -492,6 +507,54 @@ router.get("/athlete/:userId/history", matchController.getMatchHistoryByAthlete.
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.get("/coach/:userId", matchController.getMatchesByTeam.bind(matchController));
+router.get("/coach/:userId", authenticate, checkPermission(PERMISSIONS.MATCHES_VIEW), matchController.getMatchesByTeam.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/{id}:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get match by ID
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Match details
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *   put:
+ *     tags: [Matches]
+ *     summary: Update match
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Match updated
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *   delete:
+ *     tags: [Matches]
+ *     summary: Delete match
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       204:
+ *         $ref: '#/components/responses/NoContent'
+ */
+router.get("/:id", matchController.findById.bind(matchController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_UPDATE),
+  matchController.update.bind(matchController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_DELETE),
+  matchController.delete.bind(matchController)
+);
 
 export default router;

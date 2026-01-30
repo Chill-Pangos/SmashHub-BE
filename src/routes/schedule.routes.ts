@@ -1,7 +1,12 @@
 import { Router } from "express";
 import scheduleController from "../controllers/schedule.controller";
+import userController from "../controllers/user.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
+
 
 /**
  * @swagger
@@ -43,6 +48,8 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  *       - Singles and Doubles matches: 20 minutes each
  *       - Team matches: 60 minutes each
  *       - Includes lunch break from 12:00 to 14:00 by default
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -137,7 +144,11 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/generate", scheduleController.generateSchedule.bind(scheduleController));
+router.post("/generate",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  scheduleController.generateSchedule.bind(scheduleController)
+);
 
 /**
  * @swagger
@@ -148,6 +159,8 @@ router.post("/generate", scheduleController.generateSchedule.bind(scheduleContro
  *     description: |
  *       Updates knockout stage matches with qualified teams from group stage.
  *       Call this endpoint after group stage results are finalized.
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -182,7 +195,11 @@ router.post("/generate", scheduleController.generateSchedule.bind(scheduleContro
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/update-knockout", scheduleController.updateKnockoutEntries.bind(scheduleController));
+router.post("/update-knockout",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  scheduleController.updateKnockoutEntries.bind(scheduleController)
+);
 
 /**
  * @swagger
@@ -197,6 +214,8 @@ router.post("/update-knockout", scheduleController.updateKnockoutEntries.bind(sc
  *       - Thời gian mỗi trận: Single/Double 30 phút, Team 60 phút
  *       - Các đội không đấu liên tiếp 2 trận trong cùng buổi
  *       - Round-robin: Tất cả đội đấu với nhau trong mỗi bảng
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -222,7 +241,11 @@ router.post("/update-knockout", scheduleController.updateKnockoutEntries.bind(sc
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/generate-group-stage", scheduleController.generateGroupStageSchedule.bind(scheduleController));
+router.post("/generate-group-stage",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  scheduleController.generateGroupStageSchedule.bind(scheduleController)
+);
 
 /**
  * @swagger
@@ -244,6 +267,8 @@ router.post("/generate-group-stage", scheduleController.generateGroupStageSchedu
  *       - Không đấu liên tiếp trong cùng buổi
  *       - Hỗ trợ nhiều bàn thi đấu song song
  *       - Tự động tính toán và validate thời gian
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -287,7 +312,11 @@ router.post("/generate-group-stage", scheduleController.generateGroupStageSchedu
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/generate-complete", scheduleController.generateCompleteSchedule.bind(scheduleController));
+router.post("/generate-complete",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  scheduleController.generateCompleteSchedule.bind(scheduleController)
+);
 
 /**
  * @swagger
@@ -308,6 +337,8 @@ router.post("/generate-complete", scheduleController.generateCompleteSchedule.bi
  *       - Không đấu liên tiếp trong cùng buổi
  *       - Hỗ trợ nhiều bàn thi đấu song song
  *       - startDate và endDate lấy từ tournament table
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -345,7 +376,11 @@ router.post("/generate-complete", scheduleController.generateCompleteSchedule.bi
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/generate-knockout-only", scheduleController.generateKnockoutOnlySchedule.bind(scheduleController));
+router.post("/generate-knockout-only",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  scheduleController.generateKnockoutOnlySchedule.bind(scheduleController)
+);
 
 /**
  * @swagger
@@ -362,6 +397,8 @@ router.post("/generate-knockout-only", scheduleController.generateKnockoutOnlySc
  *       - Mỗi entry tối đa 2 trận/ngày
  *       - Hỗ trợ nhiều bàn thi đấu song song
  *       - Xếp lịch theo từng vòng: R16, QF, SF, Final
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -411,7 +448,11 @@ router.post("/generate-knockout-only", scheduleController.generateKnockoutOnlySc
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.post("/generate-knockout-stage", scheduleController.generateKnockoutStageSchedule.bind(scheduleController));
+router.post("/generate-knockout-stage",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  scheduleController.generateKnockoutStageSchedule.bind(scheduleController)
+);
 
 /**
  * @swagger

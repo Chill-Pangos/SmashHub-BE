@@ -1,6 +1,8 @@
 import { Router } from "express";
 import notificationController from "../controllers/notification.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -66,7 +68,11 @@ const router = Router();
  *       500:
  *         description: Server error
  */
-router.post("/send", authenticate, notificationController.sendNotification);
+router.post("/send",
+  authenticate,
+  checkPermission(PERMISSIONS.NOTIFICATIONS_SEND),
+  notificationController.sendNotification
+);
 
 /**
  * @swagger
@@ -108,7 +114,11 @@ router.post("/send", authenticate, notificationController.sendNotification);
  *       500:
  *         description: Server error
  */
-router.post("/event", authenticate, notificationController.sendEvent);
+router.post("/event",
+  authenticate,
+  checkPermission(PERMISSIONS.NOTIFICATIONS_SEND),
+  notificationController.sendEvent
+);
 
 /**
  * @swagger

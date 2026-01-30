@@ -1,5 +1,8 @@
 import { Router } from "express";
 import matchSetController from "../controllers/matchSet.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Match Sets]
  *     summary: Create a new match set
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of match sets
  */
-router.post("/", matchSetController.create.bind(matchSetController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_UPDATE),
+  matchSetController.create.bind(matchSetController)
+);
 router.get("/", matchSetController.findAll.bind(matchSetController));
 
 /**
@@ -49,6 +58,8 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *   put:
  *     tags: [Match Sets]
  *     summary: Update match set
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -59,6 +70,8 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *   delete:
  *     tags: [Match Sets]
  *     summary: Delete match set
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -66,8 +79,16 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", matchSetController.findById.bind(matchSetController));
-router.put("/:id", matchSetController.update.bind(matchSetController));
-router.delete("/:id", matchSetController.delete.bind(matchSetController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_UPDATE),
+  matchSetController.update.bind(matchSetController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.MATCHES_UPDATE),
+  matchSetController.delete.bind(matchSetController)
+);
 
 /**
  * @swagger
@@ -99,6 +120,8 @@ router.get(
  *     tags: [Match Sets]
  *     summary: Create a new match set with final score
  *     description: Create a new set with validated final score following badminton rules (must have winner - first to 11 points or win by 2 points from 10-10). Set number is automatically calculated.
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:

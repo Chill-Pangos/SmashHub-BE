@@ -1,5 +1,9 @@
 import { Router } from "express";
 import tournamentRefereeController from "../controllers/tournamentReferee.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
+import userController from "../controllers/user.controller";
 
 const router = Router();
 
@@ -10,6 +14,8 @@ const router = Router();
  *     tags: [Tournament Referees]
  *     summary: Create a tournament referee
  *     description: Add a referee to a tournament
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -42,6 +48,8 @@ const router = Router();
  */
 router.post(
   "/",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
   tournamentRefereeController.create.bind(tournamentRefereeController)
 );
 
@@ -52,6 +60,8 @@ router.post(
  *     tags: [Tournament Referees]
  *     summary: Assign multiple referees to a tournament
  *     description: Assign multiple referees to a tournament at once
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -80,6 +90,8 @@ router.post(
  */
 router.post(
   "/assign",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
   tournamentRefereeController.assignReferees.bind(tournamentRefereeController)
 );
 
@@ -112,11 +124,57 @@ router.post(
  *       200:
  *         description: List of tournament referees
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Server error
  */
 router.get(
   "/",
   tournamentRefereeController.findAll.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/available-chief-referees:
+ *   get:
+ *     tags: [Tournament Referees]
+ *     summary: Get list of available chief referees
+ *     description: Get all chief referees who are not currently assigned to any tournament as main referee
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of available chief referees
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     example: 1
+ *                   username:
+ *                     type: string
+ *                     example: "referee_user"
+ *                   email:
+ *                     type: string
+ *                     example: "referee@example.com"
+ *                   avatarUrl:
+ *                     type: string
+ *                     nullable: true
+ *                     example: "https://example.com/avatar.jpg"
+ *                   phoneNumber:
+ *                     type: string
+ *                     nullable: true
+ *                     example: "0123456789"
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/available-chief-referees",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  userController.getAvailableChiefReferees.bind(userController)
 );
 
 /**
@@ -149,7 +207,7 @@ router.get(
  *       200:
  *         description: List of tournament referees
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Server error
  */
 router.get(
   "/tournament/:tournamentId",
@@ -182,7 +240,7 @@ router.get(
  *       200:
  *         description: List of available referees
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Server error
  */
 router.get(
   "/tournament/:tournamentId/available",
@@ -211,7 +269,7 @@ router.get(
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Server error
  */
 router.get(
   "/:id",
@@ -225,6 +283,8 @@ router.get(
  *     tags: [Tournament Referees]
  *     summary: Update tournament referee
  *     description: Update a tournament referee's information
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -256,6 +316,8 @@ router.get(
  */
 router.put(
   "/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
   tournamentRefereeController.update.bind(tournamentRefereeController)
 );
 
@@ -308,6 +370,8 @@ router.patch(
  *     tags: [Tournament Referees]
  *     summary: Delete tournament referee
  *     description: Remove a referee from a tournament
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -321,11 +385,12 @@ router.patch(
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
- *         $ref: '#/components/responses/InternalServerError'
+ *         description: Server error
  */
 router.delete(
   "/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
   tournamentRefereeController.delete.bind(tournamentRefereeController)
 );
-
 export default router;

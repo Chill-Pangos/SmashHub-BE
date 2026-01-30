@@ -1,5 +1,8 @@
 import { Router } from "express";
 import teamController from "../controllers/team.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -10,6 +13,8 @@ const router = Router();
  *     tags: [Teams]
  *     summary: Create a new team
  *     description: Create a team for a specific tournament
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -156,7 +161,11 @@ const router = Router();
  *                 error:
  *                   type: object
  */
-router.post("/", teamController.create.bind(teamController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.TEAMS_CREATE),
+  teamController.create.bind(teamController)
+);
 router.get("/", teamController.findAll.bind(teamController));
 
 /**
@@ -244,6 +253,8 @@ router.get("/", teamController.findAll.bind(teamController));
  *     tags: [Teams]
  *     summary: Update team
  *     description: Update team information
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -323,6 +334,8 @@ router.get("/", teamController.findAll.bind(teamController));
  *     tags: [Teams]
  *     summary: Delete team
  *     description: Delete a team from the tournament
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -352,8 +365,16 @@ router.get("/", teamController.findAll.bind(teamController));
  *                   type: object
  */
 router.get("/:id", teamController.findById.bind(teamController));
-router.put("/:id", teamController.update.bind(teamController));
-router.delete("/:id", teamController.delete.bind(teamController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.TEAMS_UPDATE),
+  teamController.update.bind(teamController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.TEAMS_DELETE),
+  teamController.delete.bind(teamController)
+);
 
 /**
  * @swagger

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import eloScoreController from "../controllers/eloScore.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [ELO Scores]
  *     summary: Create a new ELO score
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of ELO scores
  */
-router.post("/", eloScoreController.create.bind(eloScoreController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.ELO_MANAGE),
+  eloScoreController.create.bind(eloScoreController)
+);
 router.get("/", eloScoreController.findAll.bind(eloScoreController));
 
 /**
@@ -68,6 +77,8 @@ router.get(
  *   put:
  *     tags: [ELO Scores]
  *     summary: Update ELO score
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -78,6 +89,8 @@ router.get(
  *   delete:
  *     tags: [ELO Scores]
  *     summary: Delete ELO score
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
