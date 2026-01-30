@@ -1,5 +1,8 @@
 import { Router } from "express";
 import knockoutBracketController from "../controllers/knockoutBracket.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -16,6 +19,8 @@ const router = Router();
  *       3. Bye matches được random ngẫu nhiên
  *       4. Cân bằng 2 nhánh đấu
  *       5. Tối thiểu 12 đội
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -37,6 +42,8 @@ const router = Router();
  */
 router.post(
   "/generate",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   knockoutBracketController.generateBracket.bind(knockoutBracketController)
 );
 
@@ -47,6 +54,8 @@ router.post(
  *     tags: [Knockout Brackets]
  *     summary: Advance winner to next round
  *     description: Cập nhật winner và tự động advance sang bracket tiếp theo
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -73,6 +82,8 @@ router.post(
  */
 router.post(
   "/advance-winner",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
   knockoutBracketController.advanceWinner.bind(knockoutBracketController)
 );
 
@@ -89,6 +100,8 @@ router.post(
  *       3. Tất cả bye matches dành cho đội nhất bảng
  *       4. Đội nhì bảng gặp đội nhất bảng khác (không cùng bảng)
  *       5. Cân bằng 2 nhánh đấu
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -110,6 +123,8 @@ router.post(
  */
 router.post(
   "/generate-from-groups",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   knockoutBracketController.generateFromGroups.bind(knockoutBracketController)
 );
 
@@ -191,6 +206,8 @@ router.get(
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Create a new bracket
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -203,6 +220,8 @@ router.get(
  */
 router.post(
   "/",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   knockoutBracketController.create.bind(knockoutBracketController)
 );
 
@@ -212,6 +231,8 @@ router.post(
  *   put:
  *     tags: [Knockout Brackets]
  *     summary: Update a bracket
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - name: id
  *         in: path
@@ -239,6 +260,8 @@ router.put(
  *   delete:
  *     tags: [Knockout Brackets]
  *     summary: Delete a bracket
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - name: id
  *         in: path

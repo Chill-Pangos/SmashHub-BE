@@ -1,6 +1,8 @@
 import { Router } from "express";
 import entryController from "../controllers/entry.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -10,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Entries]
  *     summary: Create a new entry
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -31,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of entries
  */
-router.post("/", entryController.create.bind(entryController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  entryController.create.bind(entryController)
+);
 router.get("/", entryController.findAll.bind(entryController));
 
 /**
@@ -150,7 +158,7 @@ router.get("/", entryController.findAll.bind(entryController));
  *       401:
  *         description: Unauthorized - User not authenticated
  */
-router.post("/register", authenticate, entryController.registerEntry.bind(entryController));
+router.post("/register", authenticate, checkPermission(PERMISSIONS.ENTRIES_CREATE), entryController.registerEntry.bind(entryController));
 
 /**
  * @swagger
@@ -168,6 +176,8 @@ router.post("/register", authenticate, entryController.registerEntry.bind(entryC
  *   put:
  *     tags: [Entries]
  *     summary: Update entry
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -178,6 +188,8 @@ router.post("/register", authenticate, entryController.registerEntry.bind(entryC
  *   delete:
  *     tags: [Entries]
  *     summary: Delete entry
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -185,8 +197,16 @@ router.post("/register", authenticate, entryController.registerEntry.bind(entryC
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", entryController.findById.bind(entryController));
-router.put("/:id", entryController.update.bind(entryController));
-router.delete("/:id", entryController.delete.bind(entryController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  entryController.update.bind(entryController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.ENTRIES_DELETE),
+  entryController.delete.bind(entryController)
+);
 
 /**
  * @swagger

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import permissionController from "../controllers/permission.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Permissions]
  *     summary: Create a new permission
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of permissions
  */
-router.post("/", permissionController.create.bind(permissionController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.PERMISSIONS_MANAGE),
+  permissionController.create.bind(permissionController)
+);
 router.get("/", permissionController.findAll.bind(permissionController));
 
 /**
@@ -49,6 +58,8 @@ router.get("/", permissionController.findAll.bind(permissionController));
  *   put:
  *     tags: [Permissions]
  *     summary: Update permission
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -59,6 +70,8 @@ router.get("/", permissionController.findAll.bind(permissionController));
  *   delete:
  *     tags: [Permissions]
  *     summary: Delete permission
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -66,7 +79,15 @@ router.get("/", permissionController.findAll.bind(permissionController));
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", permissionController.findById.bind(permissionController));
-router.put("/:id", permissionController.update.bind(permissionController));
-router.delete("/:id", permissionController.delete.bind(permissionController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.PERMISSIONS_MANAGE),
+  permissionController.update.bind(permissionController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.PERMISSIONS_MANAGE),
+  permissionController.delete.bind(permissionController)
+);
 
 export default router;

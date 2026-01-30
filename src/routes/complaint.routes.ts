@@ -1,5 +1,8 @@
 import { Router } from "express";
 import complaintController from "../controllers/complaint.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Complaints]
  *     summary: Create a new complaint
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -30,7 +35,11 @@ const router = Router();
  *       200:
  *         description: List of complaints
  */
-router.post("/", complaintController.create.bind(complaintController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.COMPLAINTS_CREATE),
+  complaintController.create.bind(complaintController)
+);
 router.get("/", complaintController.findAll.bind(complaintController));
 
 /**
@@ -49,6 +58,8 @@ router.get("/", complaintController.findAll.bind(complaintController));
  *   put:
  *     tags: [Complaints]
  *     summary: Update complaint
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -59,6 +70,8 @@ router.get("/", complaintController.findAll.bind(complaintController));
  *   delete:
  *     tags: [Complaints]
  *     summary: Delete complaint
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -66,8 +79,16 @@ router.get("/", complaintController.findAll.bind(complaintController));
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", complaintController.findById.bind(complaintController));
-router.put("/:id", complaintController.update.bind(complaintController));
-router.delete("/:id", complaintController.delete.bind(complaintController));
+router.put("/:id",
+  authenticate,
+  checkAnyPermission([PERMISSIONS.COMPLAINTS_UPDATE, PERMISSIONS.COMPLAINTS_RESOLVE]),
+  complaintController.update.bind(complaintController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.COMPLAINTS_RESOLVE),
+  complaintController.delete.bind(complaintController)
+);
 
 /**
  * @swagger

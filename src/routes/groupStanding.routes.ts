@@ -1,5 +1,8 @@
 import { Router } from "express";
 import groupStandingController from "../controllers/groupStanding.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -13,6 +16,8 @@ const router = Router();
  *       Tạo danh sách bảng đấu placeholder cho tournament content.
  *       Số lượng bảng phải là lũy thừa của 2 (4, 8, 16, 32, 64) và tối thiểu là 4.
  *       Mỗi bảng có 3-5 đội.
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -34,6 +39,8 @@ const router = Router();
  */
 router.post(
   "/generate-placeholders",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
 );
 
@@ -46,6 +53,8 @@ router.post(
  *     description: |
  *       Bốc thăm ngẫu nhiên các entries vào các bảng đấu.
  *       Đảm bảo các entry cùng team không vào cùng bảng (nếu số entry của team < số bảng).
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -67,6 +76,8 @@ router.post(
  */
 router.post(
   "/random-draw",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   groupStandingController.randomDraw.bind(groupStandingController)
 );
 
@@ -77,6 +88,8 @@ router.post(
  *     tags: [Group Standings]
  *     summary: Save group assignments
  *     description: Lưu kết quả phân bổ entries vào các bảng đấu vào database
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -112,6 +125,8 @@ router.post(
  */
 router.post(
   "/save-assignments",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   groupStandingController.saveAssignments.bind(groupStandingController)
 );
 
@@ -122,6 +137,8 @@ router.post(
  *     tags: [Group Standings]
  *     summary: Random draw and save
  *     description: Bốc thăm ngẫu nhiên và lưu luôn kết quả vào database
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -143,6 +160,8 @@ router.post(
  */
 router.post(
   "/random-draw-and-save",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
   groupStandingController.randomDrawAndSave.bind(groupStandingController)
 );
 
@@ -162,6 +181,8 @@ router.post(
  *       5. Points difference
  *       6. Points won
  *       7. Random draw if still tied
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -187,6 +208,8 @@ router.post(
  */
 router.post(
   "/calculate",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
   groupStandingController.calculateStandings.bind(groupStandingController)
 );
 

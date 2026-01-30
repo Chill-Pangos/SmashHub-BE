@@ -38,7 +38,7 @@ export default class TournamentReferee extends Model {
   @Column({
     type: DataType.ENUM("main", "assistant"),
     allowNull: false,
-    defaultValue: "main",
+    defaultValue: "assistant",
   })
   declare role: string;
 

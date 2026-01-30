@@ -74,6 +74,15 @@ export class UserController {
       res.status(500).json({ message: "Error deleting user", error });
     }
   }
+
+  async getAvailableChiefReferees(req: Request, res: Response): Promise<void> {
+    try {
+      const referees = await userService.findAvailableChiefReferees();
+      res.status(200).json(referees);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching available chief referees", error });
+    }
+  }
 }
 
 export default new UserController();

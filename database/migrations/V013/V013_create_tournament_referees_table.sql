@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS tournament_referees (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tournamentId INT UNSIGNED NOT NULL,
     refereeId INT UNSIGNED NOT NULL,
-    role ENUM('main', 'assistant') NOT NULL DEFAULT 'main',
+    role ENUM('main', 'assistant') NOT NULL DEFAULT 'assistant',
     isAvailable BOOLEAN NOT NULL DEFAULT TRUE,
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

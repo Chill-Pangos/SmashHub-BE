@@ -1,5 +1,8 @@
 import { Router } from "express";
 import roleController from "../controllers/role.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Roles]
  *     summary: Create a new role
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -35,7 +40,11 @@ const router = Router();
  *       200:
  *         description: List of roles
  */
-router.post("/", roleController.create.bind(roleController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.ROLES_CREATE),
+  roleController.create.bind(roleController)
+);
 router.get("/", roleController.findAll.bind(roleController));
 
 /**
@@ -54,6 +63,8 @@ router.get("/", roleController.findAll.bind(roleController));
  *   put:
  *     tags: [Roles]
  *     summary: Update role
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -64,6 +75,8 @@ router.get("/", roleController.findAll.bind(roleController));
  *   delete:
  *     tags: [Roles]
  *     summary: Delete role
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -71,8 +84,16 @@ router.get("/", roleController.findAll.bind(roleController));
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", roleController.findById.bind(roleController));
-router.put("/:id", roleController.update.bind(roleController));
-router.delete("/:id", roleController.delete.bind(roleController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.ROLES_UPDATE),
+  roleController.update.bind(roleController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.ROLES_DELETE),
+  roleController.delete.bind(roleController)
+);
 
 /**
  * @swagger
