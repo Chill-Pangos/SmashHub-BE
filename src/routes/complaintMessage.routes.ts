@@ -1,5 +1,8 @@
 import { Router } from "express";
 import complaintMessageController from "../controllers/complaintMessage.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Complaint Messages]
  *     summary: Create a new complaint message
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -32,6 +37,8 @@ const router = Router();
  */
 router.post(
   "/",
+  authenticate,
+  checkPermission(PERMISSIONS.COMPLAINTS_CREATE),
   complaintMessageController.create.bind(complaintMessageController)
 );
 router.get(
@@ -55,6 +62,8 @@ router.get(
  *   put:
  *     tags: [Complaint Messages]
  *     summary: Update message
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -65,6 +74,8 @@ router.get(
  *   delete:
  *     tags: [Complaint Messages]
  *     summary: Delete message
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -136,6 +147,8 @@ router.get(
  *   patch:
  *     tags: [Complaint Messages]
  *     summary: Mark message as read
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:

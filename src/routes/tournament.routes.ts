@@ -1,6 +1,8 @@
 import { Router } from "express";
 import tournamentController from "../controllers/tournament.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -235,7 +237,11 @@ const router = Router();
  *       200:
  *         description: List of tournaments
  */
-router.post("/", authenticate, tournamentController.create.bind(tournamentController));
+router.post("/", 
+  authenticate, 
+  checkPermission(PERMISSIONS.TOURNAMENTS_CREATE),
+  tournamentController.create.bind(tournamentController)
+);
 router.get("/", tournamentController.findAll.bind(tournamentController));
 
 /**
@@ -562,8 +568,16 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *         $ref: '#/components/responses/NoContent'
  */
 router.get("/:id", tournamentController.findById.bind(tournamentController));
-router.put("/:id", authenticate, tournamentController.updateWithContents.bind(tournamentController));
-router.delete("/:id", authenticate, tournamentController.delete.bind(tournamentController));
+router.put("/:id", 
+  authenticate, 
+  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
+  tournamentController.updateWithContents.bind(tournamentController)
+);
+router.delete("/:id", 
+  authenticate, 
+  checkPermission(PERMISSIONS.TOURNAMENTS_DELETE),
+  tournamentController.delete.bind(tournamentController)
+);
 
 /**
  * @swagger

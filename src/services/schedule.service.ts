@@ -924,6 +924,70 @@ export class ScheduleService {
 
     await Schedule.destroy({ where: { contentId } });
   }
+
+  /**
+   * Lấy danh sách schedules theo tournamentContentId
+   * @param contentId - ID của tournament content
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @param stage - Lọc theo stage (optional): 'group' hoặc 'knockout'
+   * @returns Danh sách schedules và số lượng
+   */
+  async findSchedulesByContentId(
+    contentId: number,
+    skip = 0,
+    limit = 10,
+    stage?: 'group' | 'knockout'
+  ): Promise<{ schedules: Schedule[]; count: number }> {
+    const whereCondition: any = { contentId };
+
+    if (stage) {
+      whereCondition.stage = stage;
+    }
+
+    const { rows: schedules, count } = await Schedule.findAndCountAll({
+      where: whereCondition,
+      include: [
+        {
+          model: TournamentContent,
+          as: "tournamentContent",
+          include: [
+            {
+              model: Tournament,
+              as: "tournament",
+            },
+          ],
+        },
+        {
+          model: Match,
+          as: "matches",
+          include: [
+            {
+              model: Entries,
+              as: "entryA",
+            },
+            {
+              model: Entries,
+              as: "entryB",
+            },
+            {
+              model: Entries,
+              as: "winnerEntry",
+            },
+          ],
+        },
+      ],
+      order: [
+        ["scheduledAt", "ASC"],
+        ["roundNumber", "ASC"],
+        ["tableNumber", "ASC"],
+      ],
+      offset: skip,
+      limit,
+    });
+
+    return { schedules, count };
+  }
 }
 
 export default new ScheduleService();

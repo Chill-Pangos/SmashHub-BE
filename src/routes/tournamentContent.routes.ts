@@ -1,5 +1,8 @@
 import { Router } from "express";
 import tournamentContentController from "../controllers/tournamentContent.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Tournament Contents]
  *     summary: Create a new tournament content
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -68,6 +73,8 @@ const router = Router();
  */
 router.post(
   "/",
+  authenticate,
+  checkPermission(PERMISSIONS.CONTENT_CREATE),
   tournamentContentController.create.bind(tournamentContentController)
 );
 router.get(
@@ -91,6 +98,8 @@ router.get(
  *   put:
  *     tags: [Tournament Contents]
  *     summary: Update tournament content
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -134,6 +143,8 @@ router.get(
  *   delete:
  *     tags: [Tournament Contents]
  *     summary: Delete tournament content
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -146,10 +157,14 @@ router.get(
 );
 router.put(
   "/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.CONTENT_UPDATE),
   tournamentContentController.update.bind(tournamentContentController)
 );
 router.delete(
   "/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.CONTENT_DELETE),
   tournamentContentController.delete.bind(tournamentContentController)
 );
 

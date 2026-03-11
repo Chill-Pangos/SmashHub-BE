@@ -1,5 +1,18 @@
 import Match from "../models/match.model";
 import { CreateMatchDto, UpdateMatchDto } from "../dto/match.dto";
+import User from "../models/user.model";
+import Role from "../models/role.model";
+import { Op } from "sequelize";
+import MatchSet from "../models/matchSet.model";
+import TournamentContent from "../models/tournamentContent.model";
+import Schedule from "../models/schedule.model";
+import GroupStanding from "../models/groupStanding.model";
+import KnockoutBracket from "../models/knockoutBracket.model";
+import TournamentReferee from "../models/tournamentReferee.model";
+import eloCalculationService from "./eloCalculation.service";
+import Entries from "../models/entries.model";
+import EntryMember from "../models/entryMember.model";
+import TeamMember from "../models/teamMember.model";
 
 export class MatchService {
   async create(data: CreateMatchDto): Promise<Match> {
@@ -46,6 +59,929 @@ export class MatchService {
 
   async delete(id: number): Promise<number> {
     return await Match.destroy({ where: { id } });
+  }
+
+  /**
+   * Lấy danh sách các trận đấu có kết quả pending chờ phê duyệt
+   */
+  async findPendingMatches(skip = 0, limit = 10): Promise<{ matches: Match[]; count: number }> {
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        status: "completed",
+        resultStatus: "pending",
+      },
+      include: [
+        {
+          model: Schedule,
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
+        },
+        { model: MatchSet },
+      ],
+      offset: skip,
+      limit,
+      order: [["updatedAt", "DESC"]],
+    });
+
+    return { matches, count };
+  }
+
+  /**
+   * Lấy chi tiết trận đấu pending kèm preview thay đổi ELO
+   */
+  async getPendingMatchWithEloPreview(id: number): Promise<{
+    match: Match;
+    eloPreview: any;
+  }> {
+    const match = await Match.findByPk(id, {
+      include: [
+        {
+          model: Schedule,
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
+        },
+        { model: MatchSet },
+      ],
+    });
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Match result status is ${match.resultStatus}, must be pending to preview`);
+    }
+
+    // Lấy preview thay đổi ELO
+    const eloPreview = await eloCalculationService.previewEloChanges(id);
+
+    return {
+      match,
+      eloPreview,
+    };
+  }
+
+  async startMatch(id: number): Promise<Match | null> {
+    const matchInstance = await Match.findByPk(id, {
+      include: [
+        {
+          model: Schedule,
+          include: [
+            { 
+              model: TournamentContent,
+            }
+          ],
+        },
+      ],
+    });
+
+    
+    if (!matchInstance) {
+      throw new Error("Match not found");
+    }
+
+    // Get plain object for easy data access
+    const match = matchInstance.get({ plain: true }) as any;
+
+    if (match.status !== "scheduled") {
+      throw new Error(`Cannot start match. Current status is ${match.status}, but it must be scheduled`);
+    }
+
+    // Lấy tournamentId từ schedule -> tournamentContent
+    const schedule = match.schedule;    
+    if (!schedule || !schedule.tournamentContent) {
+      throw new Error("Cannot find tournament information for this match");
+    }
+
+    const tournamentId = schedule.tournamentContent.tournamentId;
+
+    // Lấy danh sách ID của các trọng tài đang điều hành trận đấu
+    const busyMatches = await Match.findAll({
+      where: {
+        status: "in_progress",
+      },
+      attributes: ["umpire", "assistantUmpire"],
+    });
+
+    const busyRefereeIds = new Set<number>();
+    busyMatches.forEach((m) => {
+      if (m.umpire) busyRefereeIds.add(m.umpire);
+      if (m.assistantUmpire) busyRefereeIds.add(m.assistantUmpire);
+    });
+
+    // Tìm trọng tài từ bảng tournament_referees của tournament này
+    // và không đang bận điều hành trận khác
+    const availableReferees = await TournamentReferee.findAll({
+      where: {
+        tournamentId,
+        isAvailable: true,
+        refereeId: {
+          [Op.notIn]: Array.from(busyRefereeIds),
+        },
+      },
+      include: [
+        {
+          model: User,
+          as: "referee",
+        },
+      ],
+      limit: 2,
+    });
+
+    if (availableReferees.length < 2) {
+      throw new Error(`Not enough available referees for tournament ${tournamentId}. Found ${availableReferees.length}, need 2`);
+    }
+
+    // Use matchInstance for update method
+    await matchInstance.update({
+      umpire: availableReferees[0]!.refereeId,
+      assistantUmpire: availableReferees[1]!.refereeId,
+      status: "in_progress",
+    });
+
+    return matchInstance;
+  }
+
+  /**
+   * Submit kết quả trận đấu (bởi trọng tài)
+   * Kết quả sẽ ở trạng thái pending chờ chief referee phê duyệt
+   */
+  async finalizeMatch(id: number): Promise<Match> {
+    const matchInstance = await Match.findByPk(id, {
+      include: [
+        { model: MatchSet },
+        {
+          model: Schedule,
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
+        },
+      ],
+    });
+
+    if (!matchInstance) {
+      throw new Error("Match not found");
+    }
+
+    const match = matchInstance?.get({ plain: true }) as any;
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.status !== "in_progress") {
+      throw new Error(`Cannot finalize match. Current status is ${match.status}, must be in_progress`);
+    }
+
+    if (!match.schedule || !match.schedule.tournamentContent) {
+      throw new Error("Match schedule or content not found");
+    }
+
+    const content = match.schedule.tournamentContent;
+    const matchSets = match.matchSets || [];
+
+    if (matchSets.length === 0) {
+      throw new Error("No sets found for this match");
+    }
+
+    // 1. Tính số set thắng của mỗi entry
+    let entryASetsWon = 0;
+    let entryBSetsWon = 0;
+
+    matchSets.forEach((set : any) => {
+      if (set.entryAScore > set.entryBScore) {
+        entryASetsWon++;
+      } else if (set.entryBScore > set.entryAScore) {
+        entryBSetsWon++;
+      }
+    });
+
+    // Tính số set cần thắng: maxSets / 2 + 1
+    const setsToWin = Math.floor(content.maxSets / 2) + 1;
+
+    // Kiểm tra đã có người thắng chưa
+    if (entryASetsWon < setsToWin && entryBSetsWon < setsToWin) {
+      throw new Error(
+        `Match is not complete. Need ${setsToWin} sets to win. Current: Entry A ${entryASetsWon}, Entry B ${entryBSetsWon}`
+      );
+    }
+
+    const winnerEntryId = entryASetsWon >= setsToWin ? match.entryAId : match.entryBId;
+
+    // Cập nhật match với kết quả pending chờ phê duyệt
+    await matchInstance.update({
+      status: "completed",
+      winnerEntryId,
+      resultStatus: "pending", // Kết quả chờ chief referee phê duyệt
+    });
+
+    return matchInstance;
+  }
+
+  /**
+   * Chief referee phê duyệt kết quả trận đấu
+   * Sau khi phê duyệt mới cập nhật standings/brackets và tính ELO
+   */
+  async approveMatchResult(id: number, reviewNotes?: string): Promise<Match> {
+    const matchInstance = await Match.findByPk(id, {
+      include: [
+        { model: MatchSet },
+        {
+          model: Schedule,
+          as: 'schedule',
+          include: [
+            { 
+              model: TournamentContent, 
+              as: 'tournamentContent' 
+            }
+          ],
+        },
+      ],
+    });
+
+    if(!matchInstance) {
+      throw new Error("Match not found");
+    }
+
+      const match = matchInstance?.get({ plain: true }) as any;
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.status !== "completed") {
+      throw new Error(`Cannot approve result. Match status is ${match.status}, must be completed`);
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Cannot approve result. Result status is ${match.resultStatus}, must be pending`);
+    }
+
+    if (!match.schedule || !match.schedule.tournamentContent) {
+      throw new Error("Match schedule or content not found");
+    }
+
+    const content = match.schedule.tournamentContent;
+    const matchSets = match.matchSets || [];
+
+    // Tính lại số set để cập nhật standings
+    let entryASetsWon = 0;
+    let entryBSetsWon = 0;
+
+    matchSets.forEach((set : any) => {
+      if (set.entryAScore > set.entryBScore) {
+        entryASetsWon++;
+      } else if (set.entryBScore > set.entryAScore) {
+        entryBSetsWon++;
+      }
+    });
+
+    // Cập nhật result status thành approved
+    await matchInstance.update({
+      resultStatus: "approved",
+      reviewNotes,
+    });
+
+    // Cập nhật groupStanding hoặc knockoutBracket
+    if (match.schedule.stage === "group" && content.isGroupStage) {
+      await this.updateGroupStanding(
+        content.id,
+        match.schedule.groupName!,
+        match.entryAId,
+        match.entryBId,
+        entryASetsWon,
+        entryBSetsWon,
+        match.winnerEntryId!
+      );
+    } else if (match.schedule.stage === "knockout") {
+      await this.updateKnockoutBracket(match.id, match.winnerEntryId!);
+      await this.checkAndCreateNextMatch(match.id, match.winnerEntryId!);
+    }
+
+    // Cập nhật điểm Elo cho tất cả vận động viên
+    try {
+      await eloCalculationService.updateEloForMatch(match.id);
+    } catch (error) {
+      console.error("Error updating Elo scores:", error);
+    }
+
+    return matchInstance;
+  }
+
+  /**
+   * Chief referee từ chối kết quả trận đấu
+   */
+  async rejectMatchResult(id: number, reviewNotes: string): Promise<Match> {
+    const match = await Match.findByPk(id);
+
+    if (!match) {
+      throw new Error("Match not found");
+    }
+
+    if (match.status !== "completed") {
+      throw new Error(`Cannot reject result. Match status is ${match.status}, must be completed`);
+    }
+
+    if (match.resultStatus !== "pending") {
+      throw new Error(`Cannot reject result. Result status is ${match.resultStatus}, must be pending`);
+    }
+
+    if (!reviewNotes) {
+      throw new Error("Review notes are required when rejecting match result");
+    }
+
+    // Cập nhật result status thành rejected và quay lại in_progress
+    await match.update({
+      status: "in_progress",
+      resultStatus: "rejected",
+      reviewNotes,
+      winnerEntryId: null, // Xóa winner để referee có thể nhập lại
+    });
+
+    return match;
+  }
+
+  /**
+   * Cập nhật groupStanding cho vòng bảng
+   */
+  private async updateGroupStanding(
+    contentId: number,
+    groupName: string,
+    entryAId: number,
+    entryBId: number,
+    entryASetsWon: number,
+    entryBSetsWon: number,
+    winnerEntryId: number
+  ): Promise<void> {
+    // Tìm hoặc tạo standing cho entry A
+    const [standingA] = await GroupStanding.findOrCreate({
+      where: { contentId, groupName, entryId: entryAId },
+      defaults: {
+        contentId,
+        groupName,
+        entryId: entryAId,
+        matchesPlayed: 0,
+        matchesWon: 0,
+        matchesLost: 0,
+        setsWon: 0,
+        setsLost: 0,
+        setsDiff: 0,
+      } as any,
+    });
+
+    // Tìm hoặc tạo standing cho entry B
+    const [standingB] = await GroupStanding.findOrCreate({
+      where: { contentId, groupName, entryId: entryBId },
+      defaults: {
+        contentId,
+        groupName,
+        entryId: entryBId,
+        matchesPlayed: 0,
+        matchesWon: 0,
+        matchesLost: 0,
+        setsWon: 0,
+        setsLost: 0,
+        setsDiff: 0,
+      } as any,
+    });
+
+    // Cập nhật standing cho entry A
+    await standingA.update({
+      matchesPlayed: standingA.matchesPlayed + 1,
+      matchesWon: standingA.matchesWon + (winnerEntryId === entryAId ? 1 : 0),
+      matchesLost: standingA.matchesLost + (winnerEntryId !== entryAId ? 1 : 0),
+      setsWon: standingA.setsWon + entryASetsWon,
+      setsLost: standingA.setsLost + entryBSetsWon,
+      setsDiff: standingA.setsWon + entryASetsWon - (standingA.setsLost + entryBSetsWon),
+    });
+
+    // Cập nhật standing cho entry B
+    await standingB.update({
+      matchesPlayed: standingB.matchesPlayed + 1,
+      matchesWon: standingB.matchesWon + (winnerEntryId === entryBId ? 1 : 0),
+      matchesLost: standingB.matchesLost + (winnerEntryId !== entryBId ? 1 : 0),
+      setsWon: standingB.setsWon + entryBSetsWon,
+      setsLost: standingB.setsLost + entryASetsWon,
+      setsDiff: standingB.setsWon + entryBSetsWon - (standingB.setsLost + entryASetsWon),
+    });
+  }
+
+  /**
+   * Cập nhật knockoutBracket
+   */
+  private async updateKnockoutBracket(
+    matchId: number,
+    winnerEntryId: number
+  ): Promise<void> {
+    const bracket = await KnockoutBracket.findOne({
+      where: { matchId },
+    });
+
+    if (bracket) {
+      await bracket.update({
+        winnerEntryId,
+        status: "completed",
+      });
+    }
+  }
+
+  /**
+   * Kiểm tra và tạo match cho vòng sau (knockout)
+   */
+  private async checkAndCreateNextMatch(
+    matchId: number,
+    winnerEntryId: number
+  ): Promise<void> {
+    // Tìm bracket hiện tại
+    const currentBracket = await KnockoutBracket.findOne({
+      where: { matchId },
+    });
+
+    if (!currentBracket || !currentBracket.nextBracketId) {
+      return; // Không có vòng tiếp theo (Final)
+    }
+
+    // Tìm bracket tiếp theo
+    const nextBracket = await KnockoutBracket.findByPk(currentBracket.nextBracketId);
+
+    if (!nextBracket) {
+      return;
+    }
+
+    // Cập nhật winner vào bracket tiếp theo
+    if (nextBracket.previousBracketAId === currentBracket.id) {
+      await nextBracket.update({ entryAId: winnerEntryId });
+    } else if (nextBracket.previousBracketBId === currentBracket.id) {
+      await nextBracket.update({ entryBId: winnerEntryId });
+    }
+
+    // Kiểm tra đã đủ 2 entry chưa
+    await nextBracket.reload();
+    
+    if (nextBracket.entryAId && nextBracket.entryBId && !nextBracket.matchId) {
+      // Đủ entry, tạo match mới
+      if (nextBracket.scheduleId) {
+        const newMatch = await Match.create({
+          scheduleId: nextBracket.scheduleId,
+          entryAId: nextBracket.entryAId,
+          entryBId: nextBracket.entryBId,
+          status: "scheduled",
+        } as any);
+
+        await nextBracket.update({
+          matchId: newMatch.id,
+          status: "ready",
+        });
+      }
+    }
+  }
+
+  /**
+   * Lấy danh sách các huấn luyện viên của entry đang không chỉ đạo trận đấu nào khác
+   */
+  async getAvailableCoachesForEntry(entryId: number): Promise<User[]> {
+    // Lấy danh sách tất cả member của entry này
+    const entry = await Entries.findByPk(entryId, {
+      include: [
+        {
+          model: EntryMember,
+          as: "members",
+          include: [
+            {
+              model: User,
+              as: "user",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!entry) {
+      throw new Error("Entry not found");
+    }
+
+    const members = entry.members || [];
+    const memberUserIds = members.map((m) => m.userId);
+
+    if (memberUserIds.length === 0) {
+      return [];
+    }
+
+    // Lấy danh sách các coach đang chỉ đạo trận đấu (status in_progress hoặc scheduled)
+    const activeMatches = await Match.findAll({
+      where: {
+        status: {
+          [Op.in]: ["in_progress", "scheduled"],
+        },
+        [Op.or]: [
+          { coachAId: { [Op.ne]: null } },
+          { coachBId: { [Op.ne]: null } },
+        ],
+      },
+      attributes: ["coachAId", "coachBId"],
+    });
+
+    // Tạo set các coach ID đang bận
+    const busyCoachIds = new Set<number>();
+    activeMatches.forEach((match) => {
+      if (match.coachAId) busyCoachIds.add(match.coachAId);
+      if (match.coachBId) busyCoachIds.add(match.coachBId);
+    });
+
+    // Lấy danh sách các user là member của entry và không đang chỉ đạo
+    const availableCoaches = await User.findAll({
+      where: {
+        id: {
+          [Op.in]: memberUserIds,
+          [Op.notIn]: Array.from(busyCoachIds),
+        },
+      },
+      attributes: ["id", "username", "email", "avatarUrl"],
+    });
+
+    return availableCoaches;
+  }
+
+  /**
+   * Lấy danh sách các trận đấu sắp tới của một vận động viên
+   * @param userId - ID của vận động viên
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @returns Danh sách các trận đấu sắp tới
+   */
+  async findUpcomingMatchesByAthlete(
+    userId: number,
+    skip = 0,
+    limit = 10
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các entry mà user này là thành viên
+    const entryMembers = await EntryMember.findAll({
+      where: { userId },
+      attributes: ["entryId"],
+    });
+
+    const entryIds = entryMembers.map((em) => em.entryId);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm các trận đấu sắp tới (scheduled hoặc in_progress) 
+    // mà user này tham gia (thuộc entryA hoặc entryB)
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        [Op.or]: [
+          { entryAId: { [Op.in]: entryIds } },
+          { entryBId: { [Op.in]: entryIds } },
+        ],
+        status: { [Op.in]: ["scheduled", "in_progress"] },
+      },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["schedule", "scheduledAt", "ASC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
+  }
+
+  /**
+   * Lấy lịch sử các trận đấu đã hoàn thành của một vận động viên
+   * @param userId - ID của vận động viên
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @returns Danh sách các trận đấu đã hoàn thành
+   */
+  async findMatchHistoryByAthlete(
+    userId: number,
+    skip = 0,
+    limit = 10
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các entry mà user này là thành viên
+    const entryMembers = await EntryMember.findAll({
+      where: { userId },
+      attributes: ["entryId"],
+    });
+
+    const entryIds = entryMembers.map((em) => em.entryId);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm các trận đấu đã hoàn thành mà user này tham gia
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        [Op.or]: [
+          { entryAId: { [Op.in]: entryIds } },
+          { entryBId: { [Op.in]: entryIds } },
+        ],
+        status: "completed",
+      },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "winnerEntry",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: MatchSet,
+          as: "matchSets",
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["updatedAt", "DESC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
+  }
+
+  /**
+   * Lấy toàn bộ các trận đấu của một đội (cho coach xem)
+   * @param userId - ID của user (coach hoặc team manager)
+   * @param skip - Số lượng bản ghi bỏ qua
+   * @param limit - Số lượng bản ghi trả về
+   * @param status - Lọc theo status (optional)
+   * @returns Danh sách các trận đấu của đội
+   */
+  async findMatchesByTeam(
+    userId: number,
+    skip = 0,
+    limit = 10,
+    status?: string
+  ): Promise<{ matches: Match[]; count: number }> {
+    // Tìm tất cả các team mà user này là thành viên (coach hoặc team_manager)
+    const teamMembers = await TeamMember.findAll({
+      where: { 
+        userId,
+        role: { [Op.in]: ["coach", "team_manager"] }
+      },
+      attributes: ["teamId"],
+    });
+
+    const teamIds = teamMembers.map((tm) => tm.teamId);
+
+    if (teamIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Tìm tất cả các entry của các team này
+    const entries = await Entries.findAll({
+      where: { teamId: { [Op.in]: teamIds } },
+      attributes: ["id"],
+    });
+
+    const entryIds = entries.map((e) => e.id);
+
+    if (entryIds.length === 0) {
+      return { matches: [], count: 0 };
+    }
+
+    // Xây dựng điều kiện where
+    const whereCondition: any = {
+      [Op.or]: [
+        { entryAId: { [Op.in]: entryIds } },
+        { entryBId: { [Op.in]: entryIds } },
+      ],
+    };
+
+    // Nếu có filter theo status
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Tìm các trận đấu của đội này
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: whereCondition,
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [
+            {
+              model: TournamentContent,
+              as: "tournamentContent",
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryA",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "entryB",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: Entries,
+          as: "winnerEntry",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "email", "avatarUrl"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: MatchSet,
+          as: "matchSets",
+        },
+        {
+          model: User,
+          as: "umpireUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "assistantUser",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "coachA",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+        {
+          model: User,
+          as: "coachB",
+          attributes: ["id", "username", "email", "avatarUrl"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+      offset: skip,
+      limit,
+    });
+
+    return { matches, count };
   }
 }
 

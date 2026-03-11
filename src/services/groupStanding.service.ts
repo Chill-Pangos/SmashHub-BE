@@ -353,22 +353,15 @@ export class GroupStandingService {
 
   /**
    * Tính toán position cho một bảng cụ thể
+   * Chỉ sắp xếp và cập nhật thứ hạng, không cập nhật thống kê (thống kê được cập nhật từ match.service khi finalize)
    */
   private async calculateSingleGroupStandings(
     contentId: number,
     groupName: string,
     standings: GroupStanding[]
   ): Promise<void> {
-    // Cập nhật thống kê từ matches
-    await this.updateStandingsFromMatches(contentId, groupName, standings);
-
-    // Lấy lại standings sau khi cập nhật
-    const updatedStandings = await GroupStanding.findAll({
-      where: { contentId, groupName },
-    });
-
     // Sắp xếp theo thứ tự ưu tiên
-    const sorted = await this.sortStandingsByRules(updatedStandings);
+    const sorted = await this.sortStandingsByRules(standings);
 
     // Cập nhật position
     for (let i = 0; i < sorted.length; i++) {

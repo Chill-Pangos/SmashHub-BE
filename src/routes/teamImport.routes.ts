@@ -1,6 +1,8 @@
 import { Router } from "express";
 import teamImportController from "../controllers/teamImport.controller";
 import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 import { uploadExcel } from "../middlewares/upload.middleware";
 
 const router = Router();
@@ -117,6 +119,7 @@ const router = Router();
 router.post(
   "/import/preview",
   authenticate,
+  checkPermission(PERMISSIONS.TEAMS_CREATE),
   uploadExcel.single('file'),
   teamImportController.previewImport.bind(teamImportController)
 );
@@ -215,6 +218,7 @@ router.post(
 router.post(
   "/import/confirm",
   authenticate,
+  checkPermission(PERMISSIONS.TEAMS_CREATE),
   teamImportController.confirmImport.bind(teamImportController)
 );
 

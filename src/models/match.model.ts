@@ -94,7 +94,21 @@ export default class Match extends Model {
   })
   declare isConfirmedByWinner?: boolean;
 
-  @BelongsTo(() => Schedule)
+  @Column({
+    type: DataType.ENUM("pending", "approved", "rejected"),
+    allowNull: true,
+    comment: "Status of match result approval by chief referee",
+  })
+  declare resultStatus?: "pending" | "approved" | "rejected";
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    comment: "Review notes from chief referee",
+  })
+  declare reviewNotes?: string;
+
+  @BelongsTo(() => Schedule, 'scheduleId')
   schedule?: Schedule;
 
   @BelongsTo(() => Entries, "entryAId")

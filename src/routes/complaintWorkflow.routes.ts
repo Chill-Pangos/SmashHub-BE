@@ -1,5 +1,8 @@
 import { Router } from "express";
 import complaintWorkflowController from "../controllers/complaintWorkflow.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Complaint Workflows]
  *     summary: Create a new complaint workflow entry
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -32,6 +37,8 @@ const router = Router();
  */
 router.post(
   "/",
+  authenticate,
+  checkPermission(PERMISSIONS.COMPLAINTS_ASSIGN),
   complaintWorkflowController.create.bind(complaintWorkflowController)
 );
 router.get(
@@ -55,6 +62,8 @@ router.get(
  *   delete:
  *     tags: [Complaint Workflows]
  *     summary: Delete workflow entry
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:

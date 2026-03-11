@@ -1,5 +1,8 @@
 import { Router } from "express";
 import eloHistoryController from "../controllers/eloHistory.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [ELO Histories]
  *     summary: Create a new ELO history entry
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -31,7 +36,11 @@ const router = Router();
  *       200:
  *         description: List of ELO history entries
  */
-router.post("/", eloHistoryController.create.bind(eloHistoryController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.ELO_MANAGE),
+  eloHistoryController.create.bind(eloHistoryController)
+);
 router.get("/", eloHistoryController.findAll.bind(eloHistoryController));
 
 /**
@@ -50,6 +59,8 @@ router.get("/", eloHistoryController.findAll.bind(eloHistoryController));
  *   delete:
  *     tags: [ELO Histories]
  *     summary: Delete ELO history entry
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:

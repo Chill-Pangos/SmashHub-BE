@@ -17,11 +17,7 @@ export class ScheduleController {
       });
     }
   }
-  /**
-   * Tạo schedule cho vòng bảng
-   * POST /schedules/generate-group-stage
-   * Body: { contentId: number, startDate: string }
-   */
+  
   async generateGroupStageSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId, startDate } = req.body;
@@ -63,11 +59,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo lịch thi đấu hoàn chỉnh (group + knockout)
-   * POST /schedules/generate-complete
-   * Body: { contentId: number, startDate: string, endDate: string }
-   */
+  
   async generateCompleteSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId } = req.body;
@@ -103,11 +95,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo schedule cho nội dung chỉ có knockout stage (không có group stage)
-   * POST /schedules/generate-knockout-only
-   * Body: { contentId: number }
-   */
+  
   async generateKnockoutOnlySchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId } = req.body;
@@ -140,11 +128,7 @@ export class ScheduleController {
     }
   }
 
-  /**
-   * Tạo schedule cho vòng knockout
-   * POST /schedules/generate-knockout-stage
-   * Body: { contentId: number, startDate: string }
-   */
+  
   async generateKnockoutStageSchedule(req: Request, res: Response): Promise<void> {
     try {
       const { contentId, startDate } = req.body;
@@ -234,6 +218,58 @@ export class ScheduleController {
       success: false,
       message: "Not implemented",
     });
+  }
+
+  /**
+   * Get schedules by tournament content ID
+   * GET /schedules/content/:contentId
+   */
+  async getSchedulesByContentId(req: Request, res: Response): Promise<void> {
+    try {
+      const contentId = Number(req.params.contentId);
+      if (isNaN(contentId)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid content ID",
+        });
+        return;
+      }
+
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const stage = req.query.stage as 'group' | 'knockout' | undefined;
+
+      // Validate stage if provided
+      if (stage && !['group', 'knockout'].includes(stage)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid stage. Must be 'group' or 'knockout'",
+        });
+        return;
+      }
+
+      const result = await scheduleService.findSchedulesByContentId(
+        contentId,
+        skip,
+        limit,
+        stage
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          schedules: result.schedules,
+          count: result.count,
+          skip,
+          limit,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Error fetching schedules",
+      });
+    }
   }
 }
 

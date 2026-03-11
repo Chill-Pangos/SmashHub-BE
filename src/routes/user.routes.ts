@@ -1,5 +1,8 @@
 import { Router } from "express";
 import userController from "../controllers/user.controller";
+import { authenticate } from "../middlewares/auth.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
+import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -9,6 +12,8 @@ const router = Router();
  *   post:
  *     tags: [Users]
  *     summary: Create a new user
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -50,7 +55,11 @@ const router = Router();
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
-router.post("/", userController.create.bind(userController));
+router.post("/",
+  authenticate,
+  checkPermission(PERMISSIONS.USERS_CREATE),
+  userController.create.bind(userController)
+);
 router.get("/", userController.findAll.bind(userController));
 
 /**
@@ -69,6 +78,8 @@ router.get("/", userController.findAll.bind(userController));
  *   put:
  *     tags: [Users]
  *     summary: Update user
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -102,6 +113,8 @@ router.get("/", userController.findAll.bind(userController));
  *   delete:
  *     tags: [Users]
  *     summary: Delete user
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -111,8 +124,16 @@ router.get("/", userController.findAll.bind(userController));
  *         $ref: '#/components/responses/NotFound'
  */
 router.get("/:id", userController.findById.bind(userController));
-router.put("/:id", userController.update.bind(userController));
-router.delete("/:id", userController.delete.bind(userController));
+router.put("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.USERS_UPDATE),
+  userController.update.bind(userController)
+);
+router.delete("/:id",
+  authenticate,
+  checkPermission(PERMISSIONS.USERS_DELETE),
+  userController.delete.bind(userController)
+);
 
 /**
  * @swagger
@@ -120,6 +141,8 @@ router.delete("/:id", userController.delete.bind(userController));
  *   put:
  *     tags: [Users]
  *     summary: Update user profile (avatarUrl, dob, phoneNumber, gender)
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     requestBody:
@@ -145,6 +168,9 @@ router.delete("/:id", userController.delete.bind(userController));
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put("/:id/profile", userController.updateProfile.bind(userController));
+router.put("/:id/profile",
+  authenticate,
+  userController.updateProfile.bind(userController)
+);
 
 export default router;

@@ -1,5 +1,8 @@
 import User from "../models/user.model";
+import Role from "../models/role.model";
+import TournamentReferee from "../models/tournamentReferee.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
+import { Op } from "sequelize";
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
@@ -40,6 +43,36 @@ export class UserService {
   async delete(id: number): Promise<boolean> {
     const deletedCount = await User.destroy({ where: { id } });
     return deletedCount > 0;
+  }
+
+  async findAvailableChiefReferees(): Promise<User[]> {
+    const assignedRefereeIds = await TournamentReferee.findAll({
+      attributes: ['refereeId'],
+      where: {
+        role: 'main'
+      },
+      raw: true
+    });
+
+    const assignedIds = assignedRefereeIds.map(ref => ref.refereeId);
+
+    return await User.findAll({
+      include: [
+        {
+          model: Role,
+          as: 'roles',
+          where: {
+            name: 'chief_referee'
+          },
+          through: { attributes: [] }
+        }
+      ],
+      where: assignedIds.length > 0 ? {
+        id: {
+          [Op.notIn]: assignedIds
+        }
+      } : {}
+    });
   }
 }
 

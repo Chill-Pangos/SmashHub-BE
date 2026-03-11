@@ -11,6 +11,12 @@ export interface UpdateMatchSetDto {
   entryBScore?: number;
 }
 
+export interface UpdateMatchSetScoreDto {
+  matchId: number;
+  entryAScore: number;
+  entryBScore: number;
+}
+
 export interface MatchSetResponseDto {
   id: number;
   matchId: number;

@@ -80,19 +80,6 @@ export default class KnockoutBracket extends Model {
   })
   declare winnerEntryId?: number;
 
-  // Seeding information
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare seedA?: number;
-
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare seedB?: number;
-
   // Navigation in bracket tree
   @ForeignKey(() => KnockoutBracket)
   @Column({
