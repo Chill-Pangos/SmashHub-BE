@@ -105,7 +105,7 @@ class NotificationService {
     };
 
     this.io.to(`user:${userId}`).emit("notification", payload);
-    console.log(`Notification sent to user ${userId}:`, notification.type);
+    console.log(`Notification sent to user ${userId}`, { type: notification.type });
   }
 
   /**
@@ -126,7 +126,7 @@ class NotificationService {
       this.io.to(`user:${userId}`).emit("notification", payload);
     });
     
-    console.log(`Notification sent to ${userIds.length} users:`, notification.type);
+    console.log(`Notification sent to ${userIds.length} users`, { type: notification.type });
   }
 
   /**
@@ -144,7 +144,7 @@ class NotificationService {
     };
 
     this.io.to(roomId).emit("notification", payload);
-    console.log(`Notification sent to room ${roomId}:`, notification.type);
+    console.log(`Notification sent to room ${roomId}`, { type: notification.type });
   }
 
   /**
@@ -162,7 +162,7 @@ class NotificationService {
     };
 
     this.io.emit("notification", payload);
-    console.log(`Broadcast notification sent:`, notification.type);
+    console.log(`Broadcast notification sent`, { type: notification.type });
   }
 
   /**
