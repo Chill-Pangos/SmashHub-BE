@@ -4,6 +4,9 @@ import fs from "fs";
 import path from "path";
 
 const modelGlob = path.join(__dirname, "../models/*.model.{ts,js}");
+const caContent = config.mysql.caBase64
+  ? Buffer.from(config.mysql.caBase64, "base64").toString("utf8")
+  : fs.readFileSync(path.resolve(config.mysql.caPath), "utf8");
 
 const sequelize = new Sequelize({
   database: config.mysql.database,
@@ -15,7 +18,7 @@ const sequelize = new Sequelize({
   logging: false,
   dialectOptions: {
     ssl: {
-      ca: fs.readFileSync(path.resolve(config.mysql.ca)),
+      ca: caContent,
     },
   },
   define: {

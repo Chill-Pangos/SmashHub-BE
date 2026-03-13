@@ -21,7 +21,6 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=true
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/certs ./src/certs
 
 EXPOSE 3000
 

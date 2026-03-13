@@ -15,7 +15,8 @@ const envSchema = Joi.object({
   DB_USERNAME: Joi.string().required(),
   DB_PASSWORD: Joi.string().required(),
   DB_DATABASE: Joi.string().required(),
-  DB_SSL_CA_PATH: Joi.string().required(),
+  DB_SSL_CA_PATH: Joi.string().allow(""),
+  DB_SSL_CA_BASE64: Joi.string().allow(""),
 
   //Email
   SMTP_HOST: Joi.string().required(),
@@ -24,7 +25,9 @@ const envSchema = Joi.object({
   SMTP_PASSWORD: Joi.string().required(),
   SMTP_FROM_EMAIL: Joi.string().email().required(),
   SMTP_FROM_NAME: Joi.string().default("SmashHub"),
-}).unknown(true);
+})
+  .or("DB_SSL_CA_PATH", "DB_SSL_CA_BASE64")
+  .unknown(true);
 
 const { error, value: envVars } = envSchema
   .prefs({ errors: { label: "key" } })
@@ -50,7 +53,8 @@ const config = {
     database: envVars.DB_DATABASE,
     username: envVars.DB_USERNAME,
     password: envVars.DB_PASSWORD,
-    ca: envVars.DB_SSL_CA_PATH,
+    caPath: envVars.DB_SSL_CA_PATH,
+    caBase64: envVars.DB_SSL_CA_BASE64,
   },
   email: {
     smtp: {
