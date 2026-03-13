@@ -1,6 +1,7 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ENV HUSKY=0
 
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
@@ -14,6 +15,7 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HUSKY=0
 
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=true

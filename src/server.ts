@@ -17,14 +17,14 @@ const checkConnection = async () => {
 
 checkConnection().then(() => {
   const httpServer = createServer(app);
-  
+
   // Initialize Socket.IO
   NotificationService.initialize(httpServer);
-  
+
   httpServer.listen(config.port, () => {
     console.log(`Server is running on port ${config.port}`);
     console.log(`Socket.IO is ready for connections`);
-    
+
     // Start cron jobs
     startCleanupCrons();
   });
