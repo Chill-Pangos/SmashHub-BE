@@ -3,6 +3,8 @@ import config from "./config";
 import fs from "fs";
 import path from "path";
 
+const modelGlob = path.join(__dirname, "../models/*.model.{ts,js}");
+
 const sequelize = new Sequelize({
   database: config.mysql.database,
   username: config.mysql.username,
@@ -27,7 +29,7 @@ const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-  models: [__dirname + "/../models/*.model.ts"],
+  models: [modelGlob],
 });
 
 export { sequelize };

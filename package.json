@@ -1,7 +1,7 @@
 {
   "name": "smashhub-be",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "scripts": {
     "prepare": "husky install",
     "dev": "dotenvx run -f .env.development -- ts-node-dev --respawn --transpile-only src/server.ts",
