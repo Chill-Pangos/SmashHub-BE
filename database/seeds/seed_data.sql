@@ -9,9 +9,6 @@ SET FOREIGN_KEY_CHECKS=0;
 -- ==========================================
 -- Clear existing data (CAUTION: This will delete all data!)
 -- ==========================================
-TRUNCATE TABLE complaint_workflow;
-TRUNCATE TABLE complaint_messages;
-TRUNCATE TABLE complaints;
 TRUNCATE TABLE elo_histories;
 TRUNCATE TABLE elo_scores;
 TRUNCATE TABLE match_sets;

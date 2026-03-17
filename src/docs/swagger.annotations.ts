@@ -438,99 +438,6 @@
  *           type: string
  *           format: date-time
  *
- *     Complaint:
- *       type: object
- *       required:
- *         - createdBy
- *         - tournamentId
- *         - topic
- *         - description
- *       properties:
- *         id:
- *           type: integer
- *         createdBy:
- *           type: integer
- *         tournamentId:
- *           type: integer
- *         matchId:
- *           type: integer
- *         topic:
- *           type: string
- *           maxLength: 255
- *         description:
- *           type: string
- *         status:
- *           type: string
- *           enum: [submitted, under_review, escalated, resolved, rejected]
- *           default: submitted
- *         currentHandlerId:
- *           type: integer
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
- *     ComplaintMessage:
- *       type: object
- *       required:
- *         - complaintId
- *         - senderId
- *         - message
- *       properties:
- *         id:
- *           type: integer
- *         complaintId:
- *           type: integer
- *         senderId:
- *           type: integer
- *         receiverId:
- *           type: integer
- *         message:
- *           type: string
- *         messageType:
- *           type: string
- *           enum: [comment, request_info, response]
- *           default: comment
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
- *     ComplaintWorkflow:
- *       type: object
- *       required:
- *         - complaintId
- *       properties:
- *         id:
- *           type: integer
- *         complaintId:
- *           type: integer
- *         fromRole:
- *           type: string
- *           maxLength: 50
- *         toRole:
- *           type: string
- *           maxLength: 50
- *         fromUserId:
- *           type: integer
- *         toUserId:
- *           type: integer
- *         action:
- *           type: string
- *           enum: [submit, forward, approve, reject, request_info]
- *         note:
- *           type: string
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
  * tags:
  *   - name: Users
  *     description: User management (includes profile information)
@@ -542,7 +449,5 @@
  *     description: Match management
  *   - name: ELO Scores
  *     description: ELO scoring system
- *   - name: Complaints
- *     description: Complaint system
  */
 
