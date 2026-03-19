@@ -7,10 +7,10 @@ export interface CreateTournamentDto {
   status?: "upcoming" | "ongoing" | "completed";
   createdBy: number;
   numberOfTables?: number;
-  contents?: CreateTournamentContentDto[];
+  contents?: CreateTournamentCategoryDto[];
 }
 
-export interface CreateTournamentContentDto {
+export interface CreateTournamentCategoryDto {
   name: string;
   type: 'single' | 'team' | 'double';
   maxEntries: number;
@@ -33,10 +33,10 @@ export interface UpdateTournamentDto {
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
   numberOfTables?: number;
-  contents?: UpdateTournamentContentDto[];
+  contents?: UpdateTournamentCategoryDto[];
 }
 
-export interface UpdateTournamentContentDto {
+export interface UpdateTournamentCategoryDto {
   name: string;
   type: 'single' | 'team' | 'double';
   maxEntries: number;

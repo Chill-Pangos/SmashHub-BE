@@ -7,8 +7,6 @@ export interface CreateMatchDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
 }
 
 export interface UpdateMatchDto {
@@ -16,9 +14,6 @@ export interface UpdateMatchDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
-  isConfirmedByWinner?: boolean;
 }
 
 export interface MatchResponseDto {
@@ -30,9 +25,6 @@ export interface MatchResponseDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
-  isConfirmedByWinner?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

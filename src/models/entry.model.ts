@@ -7,7 +7,7 @@ import {
   BelongsTo,
   HasMany,
 } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
+import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
 import Team from "./team.model";
 import EntryMember from "./entryMember.model";
@@ -24,7 +24,7 @@ export default class Entries extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentContent)
+  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -38,8 +38,8 @@ export default class Entries extends Model {
   })
   declare teamId: number;
 
-  @BelongsTo(() => TournamentContent)
-  content?: TournamentContent;
+  @BelongsTo(() => TournamentCategory)
+  content?: TournamentCategory;
 
   @BelongsTo(() => Team)
   team?: Team;

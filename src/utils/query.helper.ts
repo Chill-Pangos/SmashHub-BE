@@ -1,6 +1,6 @@
 import TeamMember from "../models/teamMember.model";
 import Team from "../models/team.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import EntryMember from "../models/entryMember.model";
 
 /**
@@ -33,7 +33,7 @@ export class QueryHelper {
         as: 'team',
       },
       {
-        model: TournamentContent,
+        model: TournamentCategory,
         as: 'content',
       },
     ];
@@ -45,7 +45,7 @@ export class QueryHelper {
   static tournamentWithContents() {
     return [
       {
-        model: TournamentContent,
+        model: TournamentCategory,
         as: "contents",
       },
     ];

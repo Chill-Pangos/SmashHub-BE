@@ -1,5 +1,5 @@
 import { Router } from "express";
-import tournamentContentController from "../controllers/tournamentContent.controller";
+import TournamentCategoryController from "../controllers/TournamentCategory.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
 import { PERMISSIONS } from "../constants/permissions";
@@ -75,11 +75,11 @@ router.post(
   "/",
   authenticate,
   checkPermission(PERMISSIONS.CONTENT_CREATE),
-  tournamentContentController.create.bind(tournamentContentController)
+  TournamentCategoryController.create.bind(TournamentCategoryController)
 );
 router.get(
   "/",
-  tournamentContentController.findAll.bind(tournamentContentController)
+  TournamentCategoryController.findAll.bind(TournamentCategoryController)
 );
 
 /**
@@ -153,19 +153,19 @@ router.get(
  */
 router.get(
   "/:id",
-  tournamentContentController.findById.bind(tournamentContentController)
+  TournamentCategoryController.findById.bind(TournamentCategoryController)
 );
 router.put(
   "/:id",
   authenticate,
   checkPermission(PERMISSIONS.CONTENT_UPDATE),
-  tournamentContentController.update.bind(tournamentContentController)
+  TournamentCategoryController.update.bind(TournamentCategoryController)
 );
 router.delete(
   "/:id",
   authenticate,
   checkPermission(PERMISSIONS.CONTENT_DELETE),
-  tournamentContentController.delete.bind(tournamentContentController)
+  TournamentCategoryController.delete.bind(TournamentCategoryController)
 );
 
 /**
@@ -188,8 +188,8 @@ router.delete(
  */
 router.get(
   "/tournament/:tournamentId",
-  tournamentContentController.findByTournamentId.bind(
-    tournamentContentController
+  TournamentCategoryController.findByTournamentId.bind(
+    TournamentCategoryController
   )
 );
 

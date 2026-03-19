@@ -6,10 +6,10 @@ import {
   ForeignKey,
   BelongsTo,
 } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
+import TournamentCategory from "./tournamentCategory.model";
 import Schedule from "./schedule.model";
 import Match from "./match.model";
-import Entries from "./entries.model";
+import Entries from "./entry.model";
 
 @Table({
   tableName: "knockout_brackets",
@@ -23,7 +23,7 @@ export default class KnockoutBracket extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentContent)
+  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -125,8 +125,8 @@ export default class KnockoutBracket extends Model {
   declare isByeMatch: boolean;
 
   // Associations
-  @BelongsTo(() => TournamentContent)
-  content?: TournamentContent;
+  @BelongsTo(() => TournamentCategory)
+  content?: TournamentCategory;
 
   @BelongsTo(() => Schedule)
   schedule?: Schedule;

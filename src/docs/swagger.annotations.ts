@@ -200,7 +200,7 @@
  *           type: string
  *           format: date-time
  *
- *     TournamentContent:
+ *     TournamentCategory:
  *       type: object
  *       required:
  *         - tournamentId
@@ -349,15 +349,6 @@
  *         assistantUmpire:
  *           type: integer
  *           description: ID of the assistant umpire
- *         coachAId:
- *           type: integer
- *           description: ID of coach for entry A
- *         coachBId:
- *           type: integer
- *           description: ID of coach for entry B
- *         isConfirmedByWinner:
- *           type: boolean
- *           description: Whether the result is confirmed by winner
  *         createdAt:
  *           type: string
  *           format: date-time

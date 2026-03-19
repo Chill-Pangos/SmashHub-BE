@@ -2,7 +2,7 @@ import MatchSet from "../models/matchSet.model";
 import { CreateMatchSetDto, UpdateMatchSetDto, UpdateMatchSetScoreDto } from "../dto/matchSet.dto";
 import Match from "../models/match.model";
 import Schedule from "../models/schedule.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 
 export class MatchSetService {
   async create(data: CreateMatchSetDto): Promise<MatchSet> {
@@ -101,7 +101,7 @@ export class MatchSetService {
           model: Schedule,
           include: [
             {
-              model: TournamentContent,
+              model: TournamentCategory,
             }
           ],
         },
@@ -115,11 +115,11 @@ export class MatchSetService {
     }
 
     const schedule = match.schedule;
-    if (!schedule || !schedule.tournamentContent) {
+    if (!schedule || !schedule.TournamentCategory) {
       throw new Error("Cannot find tournament information for this match");
     }
 
-    const maxSets = schedule.tournamentContent.maxSets;
+    const maxSets = schedule.TournamentCategory.maxSets;
 
     // Kiểm tra match phải đang in_progress
     if (match.status !== "in_progress") {

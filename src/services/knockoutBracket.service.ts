@@ -6,8 +6,8 @@ import {
   BracketTreeDto,
   RoundDto,
 } from "../dto/knockoutBracket.dto";
-import TournamentContent from "../models/tournamentContent.model";
-import Entries from "../models/entries.model";
+import TournamentCategory from "../models/tournamentCategory.model";
+import Entries from "../models/entry.model";
 import GroupStanding from "../models/groupStanding.model";
 
 export class KnockoutBracketService {

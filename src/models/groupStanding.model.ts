@@ -6,8 +6,8 @@ import {
   ForeignKey,
   BelongsTo,
 } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
-import Entries from "./entries.model";
+import TournamentCategory from "./tournamentCategory.model";
+import Entries from "./entry.model";
 
 @Table({
   tableName: "group_standings",
@@ -21,7 +21,7 @@ export default class GroupStanding extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentContent)
+  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -92,8 +92,8 @@ export default class GroupStanding extends Model {
   })
   declare position?: number;
 
-  @BelongsTo(() => TournamentContent)
-  content?: TournamentContent;
+  @BelongsTo(() => TournamentCategory)
+  content?: TournamentCategory;
 
   @BelongsTo(() => Entries)
   entry?: Entries;

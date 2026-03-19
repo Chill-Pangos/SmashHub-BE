@@ -1,5 +1,5 @@
-// TournamentContent DTOs
-export interface CreateTournamentContentDto {
+// TournamentCategory DTOs
+export interface CreateTournamentCategoryDto {
   tournamentId: number;
   name: string;
   type: 'single' | 'team' | 'double';
@@ -11,7 +11,7 @@ export interface CreateTournamentContentDto {
   isGroupStage?: boolean;
 }
 
-export interface UpdateTournamentContentDto {
+export interface UpdateTournamentCategoryDto {
   name?: string;
   type?: 'single' | 'team' | 'double';
   maxEntries?: number;
@@ -22,7 +22,7 @@ export interface UpdateTournamentContentDto {
   isGroupStage?: boolean;
 }
 
-export interface TournamentContentResponseDto {
+export interface TournamentCategoryResponseDto {
   id: number;
   tournamentId: number;
   name: string;

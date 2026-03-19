@@ -1,5 +1,5 @@
-import { Table, Column, Model, DataType, HasMany, ForeignKey, BelongsTo } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
+import { Table, Column, Model, DataType, HasMany, ForeignKey } from "sequelize-typescript";
+import TournamentCategory from "./tournamentCategory.model";
 import User from "./user.model";
 import TournamentReferee from "./tournamentReferee.model";
 
@@ -61,8 +61,8 @@ export default class Tournament extends Model {
   })
   declare numberOfTables: number;
 
-  @HasMany(() => TournamentContent)
-  contents?: TournamentContent[];
+  @HasMany(() => TournamentCategory)
+  contents?: TournamentCategory[];
 
   @HasMany(() => TournamentReferee)
   referees?: TournamentReferee[];

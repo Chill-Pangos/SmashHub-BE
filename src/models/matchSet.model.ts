@@ -7,10 +7,17 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import Match from "./match.model";
+import SubMatch from './subMatch.model';
 
 @Table({
   tableName: "match_sets",
   timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ["subMatchId", "setNumber"],
+    },
+  ],
 })
 export default class MatchSet extends Model {
   @Column({
@@ -20,12 +27,12 @@ export default class MatchSet extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Match)
+  @ForeignKey(() => SubMatch)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare matchId: number;
+  declare subMatchId: number;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -47,6 +54,6 @@ export default class MatchSet extends Model {
   })
   declare entryBScore: number;
 
-  @BelongsTo(() => Match)
-  match?: Match;
+  @BelongsTo(() => SubMatch)
+  subMatch?: SubMatch;
 }

@@ -3,30 +3,23 @@ import {
   Column,
   Model,
   DataType,
+  HasMany,
   ForeignKey,
   BelongsTo,
 } from "sequelize-typescript";
 import User from "./user.model";
-import Entries from "./entry.model";
 
 @Table({
-  tableName: "entry_members",
+  tableName: "tournament_participants",
   timestamps: true,
 })
-export default class EntryMember extends Model {
+export default class TournamentParticipant extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
     primaryKey: true,
   })
   declare id: number;
-
-  @ForeignKey(() => Entries)
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
-  })
-  declare entryId: number;
 
   @ForeignKey(() => User)
   @Column({
@@ -39,10 +32,13 @@ export default class EntryMember extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare eloAtEntry: number;
+  declare tournamentId: number;
 
-  @BelongsTo(() => Entries)
-  entry?: Entries;
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+  })
+  declare teamId: number;
 
   @BelongsTo(() => User)
   user?: User;

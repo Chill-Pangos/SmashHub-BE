@@ -36,9 +36,9 @@ export default class TeamMember extends Model {
   declare userId: number;
 
   @Column({
-    type: DataType.ENUM("team_manager", "coach", "athlete"),
+    type: DataType.ENUM("member", "captain"),
     allowNull: false,
-    defaultValue: "athlete",
+    defaultValue: "member",
   })
   declare role: string;
 

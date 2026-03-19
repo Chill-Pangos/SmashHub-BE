@@ -6,12 +6,15 @@ import {
   HasOne,
   HasMany,
   BelongsToMany,
+  BelongsTo,
 } from "sequelize-typescript";
 import EloScore from "./eloScore.model";
 import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
 import Role from "./role.model";
 import EntryMember from "./entryMember.model";
+import Tournament from "./tournament.model";
+import TournamentParticipant from "./tournamentParticipant.model";
 
 @Table({
   tableName: "users",
@@ -86,4 +89,6 @@ export default class User extends Model {
 
   @BelongsToMany(() => Role, () => UserRole)
   roles?: Role[];
+
+
 }

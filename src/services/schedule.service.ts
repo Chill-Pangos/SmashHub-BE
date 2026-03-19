@@ -1,10 +1,10 @@
 import Schedule from "../models/schedule.model";
 import Match from "../models/match.model";
 import GroupStanding from "../models/groupStanding.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
-import Entries from "../models/entries.model";
+import Entries from "../models/entry.model";
 import { Op } from "sequelize";
 import { GroupStandingService } from "./groupStanding.service";
 import { KnockoutBracketService } from "./knockoutBracket.service";
@@ -54,7 +54,7 @@ export class ScheduleService {
     knockoutMatches: Match[];
   }> {
     // 1. Lấy thông tin content và tournament
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error("Tournament content not found");
     }
@@ -161,7 +161,7 @@ export class ScheduleService {
     knockoutMatches: Match[];
   }> {
     // 1. Lấy thông tin content và tournament
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error("Tournament content not found");
     }
@@ -273,7 +273,7 @@ export class ScheduleService {
     startDate: Date
   ): Promise<{ schedules: Schedule[]; matches: Match[] }> {
     // Lấy thông tin tournament content và tournament
-    const content = await TournamentContent.findByPk(contentId, {
+    const content = await TournamentCategory.findByPk(contentId, {
       include: [{
         model: Tournament,
         as: 'tournament',
@@ -368,7 +368,7 @@ export class ScheduleService {
     startDate: Date
   ): Promise<{ schedules: Schedule[]; matches: Match[] }> {
     // Lấy thông tin tournament content và tournament
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error("Tournament content not found");
     }
@@ -503,7 +503,7 @@ export class ScheduleService {
     maxMatchesPerDay: number = 3
   ): Promise<{ schedules: Schedule[]; matches: Match[] }> {
     // Lấy thông tin tournament content và tournament
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error("Tournament content not found");
     }
@@ -926,7 +926,7 @@ export class ScheduleService {
   }
 
   /**
-   * Lấy danh sách schedules theo tournamentContentId
+   * Lấy danh sách schedules theo TournamentCategoryId
    * @param contentId - ID của tournament content
    * @param skip - Số lượng bản ghi bỏ qua
    * @param limit - Số lượng bản ghi trả về
@@ -949,8 +949,8 @@ export class ScheduleService {
       where: whereCondition,
       include: [
         {
-          model: TournamentContent,
-          as: "tournamentContent",
+          model: TournamentCategory,
+          as: "TournamentCategory",
           include: [
             {
               model: Tournament,

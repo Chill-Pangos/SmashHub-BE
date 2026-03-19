@@ -4,13 +4,13 @@ import User from "../models/user.model";
 import Role from "../models/role.model";
 import { Op } from "sequelize";
 import MatchSet from "../models/matchSet.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import Schedule from "../models/schedule.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import eloCalculationService from "./eloCalculation.service";
-import Entries from "../models/entries.model";
+import Entries from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import TeamMember from "../models/teamMember.model";
 
@@ -76,8 +76,8 @@ export class MatchService {
           as: 'schedule',
           include: [
             { 
-              model: TournamentContent, 
-              as: 'tournamentContent' 
+              model: TournamentCategory, 
+              as: 'TournamentCategory' 
             }
           ],
         },
@@ -105,8 +105,8 @@ export class MatchService {
           as: 'schedule',
           include: [
             { 
-              model: TournamentContent, 
-              as: 'tournamentContent' 
+              model: TournamentCategory, 
+              as: 'TournamentCategory' 
             }
           ],
         },
@@ -138,7 +138,7 @@ export class MatchService {
           model: Schedule,
           include: [
             { 
-              model: TournamentContent,
+              model: TournamentCategory,
             }
           ],
         },
@@ -157,13 +157,13 @@ export class MatchService {
       throw new Error(`Cannot start match. Current status is ${match.status}, but it must be scheduled`);
     }
 
-    // Lấy tournamentId từ schedule -> tournamentContent
+    // Lấy tournamentId từ schedule -> TournamentCategory
     const schedule = match.schedule;    
-    if (!schedule || !schedule.tournamentContent) {
+    if (!schedule || !schedule.TournamentCategory) {
       throw new Error("Cannot find tournament information for this match");
     }
 
-    const tournamentId = schedule.tournamentContent.tournamentId;
+    const tournamentId = schedule.TournamentCategory.tournamentId;
 
     // Lấy danh sách ID của các trọng tài đang điều hành trận đấu
     const busyMatches = await Match.findAll({
@@ -225,8 +225,8 @@ export class MatchService {
           as: 'schedule',
           include: [
             { 
-              model: TournamentContent, 
-              as: 'tournamentContent' 
+              model: TournamentCategory, 
+              as: 'TournamentCategory' 
             }
           ],
         },
@@ -247,11 +247,11 @@ export class MatchService {
       throw new Error(`Cannot finalize match. Current status is ${match.status}, must be in_progress`);
     }
 
-    if (!match.schedule || !match.schedule.tournamentContent) {
+    if (!match.schedule || !match.schedule.TournamentCategory) {
       throw new Error("Match schedule or content not found");
     }
 
-    const content = match.schedule.tournamentContent;
+    const content = match.schedule.TournamentCategory;
     const matchSets = match.matchSets || [];
 
     if (matchSets.length === 0) {
@@ -305,8 +305,8 @@ export class MatchService {
           as: 'schedule',
           include: [
             { 
-              model: TournamentContent, 
-              as: 'tournamentContent' 
+              model: TournamentCategory, 
+              as: 'TournamentCategory' 
             }
           ],
         },
@@ -331,11 +331,11 @@ export class MatchService {
       throw new Error(`Cannot approve result. Result status is ${match.resultStatus}, must be pending`);
     }
 
-    if (!match.schedule || !match.schedule.tournamentContent) {
+    if (!match.schedule || !match.schedule.TournamentCategory) {
       throw new Error("Match schedule or content not found");
     }
 
-    const content = match.schedule.tournamentContent;
+    const content = match.schedule.TournamentCategory;
     const matchSets = match.matchSets || [];
 
     // Tính lại số set để cập nhật standings
@@ -551,72 +551,6 @@ export class MatchService {
   }
 
   /**
-   * Lấy danh sách các huấn luyện viên của entry đang không chỉ đạo trận đấu nào khác
-   */
-  async getAvailableCoachesForEntry(entryId: number): Promise<User[]> {
-    // Lấy danh sách tất cả member của entry này
-    const entry = await Entries.findByPk(entryId, {
-      include: [
-        {
-          model: EntryMember,
-          as: "members",
-          include: [
-            {
-              model: User,
-              as: "user",
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!entry) {
-      throw new Error("Entry not found");
-    }
-
-    const members = entry.members || [];
-    const memberUserIds = members.map((m) => m.userId);
-
-    if (memberUserIds.length === 0) {
-      return [];
-    }
-
-    // Lấy danh sách các coach đang chỉ đạo trận đấu (status in_progress hoặc scheduled)
-    const activeMatches = await Match.findAll({
-      where: {
-        status: {
-          [Op.in]: ["in_progress", "scheduled"],
-        },
-        [Op.or]: [
-          { coachAId: { [Op.ne]: null } },
-          { coachBId: { [Op.ne]: null } },
-        ],
-      },
-      attributes: ["coachAId", "coachBId"],
-    });
-
-    // Tạo set các coach ID đang bận
-    const busyCoachIds = new Set<number>();
-    activeMatches.forEach((match) => {
-      if (match.coachAId) busyCoachIds.add(match.coachAId);
-      if (match.coachBId) busyCoachIds.add(match.coachBId);
-    });
-
-    // Lấy danh sách các user là member của entry và không đang chỉ đạo
-    const availableCoaches = await User.findAll({
-      where: {
-        id: {
-          [Op.in]: memberUserIds,
-          [Op.notIn]: Array.from(busyCoachIds),
-        },
-      },
-      attributes: ["id", "username", "email", "avatarUrl"],
-    });
-
-    return availableCoaches;
-  }
-
-  /**
    * Lấy danh sách các trận đấu sắp tới của một vận động viên
    * @param userId - ID của vận động viên
    * @param skip - Số lượng bản ghi bỏ qua
@@ -656,8 +590,8 @@ export class MatchService {
           as: "schedule",
           include: [
             {
-              model: TournamentContent,
-              as: "tournamentContent",
+              model: TournamentCategory,
+              as: "TournamentCategory",
             },
           ],
         },
@@ -753,8 +687,8 @@ export class MatchService {
           as: "schedule",
           include: [
             {
-              model: TournamentContent,
-              as: "tournamentContent",
+              model: TournamentCategory,
+              as: "TournamentCategory",
             },
           ],
         },
@@ -833,8 +767,8 @@ export class MatchService {
   }
 
   /**
-   * Lấy toàn bộ các trận đấu của một đội (cho coach xem)
-   * @param userId - ID của user (coach hoặc team manager)
+    
+   * @param userId - ID của user (team manager)
    * @param skip - Số lượng bản ghi bỏ qua
    * @param limit - Số lượng bản ghi trả về
    * @param status - Lọc theo status (optional)
@@ -846,11 +780,11 @@ export class MatchService {
     limit = 10,
     status?: string
   ): Promise<{ matches: Match[]; count: number }> {
-    // Tìm tất cả các team mà user này là thành viên (coach hoặc team_manager)
+    // Tìm tất cả các team mà user này là thành viên (team_manager)
     const teamMembers = await TeamMember.findAll({
       where: { 
         userId,
-        role: { [Op.in]: ["coach", "team_manager"] }
+        role: { [Op.in]: ["team_manager"] }
       },
       attributes: ["teamId"],
     });
@@ -895,8 +829,8 @@ export class MatchService {
           as: "schedule",
           include: [
             {
-              model: TournamentContent,
-              as: "tournamentContent",
+              model: TournamentCategory,
+              as: "TournamentCategory",
             },
           ],
         },
@@ -963,16 +897,6 @@ export class MatchService {
         {
           model: User,
           as: "assistantUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
-        },
-        {
-          model: User,
-          as: "coachA",
-          attributes: ["id", "username", "email", "avatarUrl"],
-        },
-        {
-          model: User,
-          as: "coachB",
           attributes: ["id", "username", "email", "avatarUrl"],
         },
       ],

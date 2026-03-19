@@ -1,7 +1,7 @@
-import Entries from "../models/entries.model";
+import Entries from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import Team from "../models/team.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
 import TeamMember from "../models/teamMember.model";
@@ -21,7 +21,7 @@ export class EntryService {
       await ValidationHelper.verifyTeamManager(userId, data.teamId, transaction);
 
       // Verify team belongs to the tournament of the content
-      const content = await TournamentContent.findByPk(data.contentId, { transaction });
+      const content = await TournamentCategory.findByPk(data.contentId, { transaction });
       if (!content) {
         throw new Error('Content not found');
       }
@@ -108,7 +108,7 @@ export class EntryService {
    */
   private async validateMembersGender(
     memberIds: number[],
-    content: TournamentContent,
+    content: TournamentCategory,
     transaction: any
   ): Promise<void> {
     // If content doesn't have gender requirement, skip validation

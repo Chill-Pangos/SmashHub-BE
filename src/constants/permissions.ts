@@ -69,8 +69,6 @@ export const ROLES = {
   ORGANIZER: 'organizer',
   CHIEF_REFEREE: 'chief_referee',
   REFEREE: 'referee',
-  COACH: 'coach',
-  TEAM_MANAGER: 'team_manager',
   ATHLETE: 'athlete',
   SPECTATOR: 'spectator',
 } as const;

@@ -264,27 +264,6 @@ export class MatchController {
     }
   }
 
-  async getAvailableCoachesForEntry(req: Request, res: Response): Promise<void> {
-    try {
-      const entryId = Number(req.params.entryId);
-      if (isNaN(entryId)) {
-        res.status(400).json({ message: "Invalid entry ID" });
-        return;
-      }
-      const coaches = await matchService.getAvailableCoachesForEntry(entryId);
-      res.status(200).json(coaches);
-    } catch (error: any) {
-      if (error.message === "Entry not found") {
-        res.status(404).json({ message: error.message });
-        return;
-      }
-      res.status(500).json({ 
-        message: error.message || "Error fetching available coaches", 
-        error 
-      });
-    }
-  }
-
   async getUpcomingMatchesByAthlete(req: Request, res: Response): Promise<void> {
     try {
       const userId = Number(req.params.userId);
