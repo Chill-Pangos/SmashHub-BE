@@ -14,6 +14,19 @@ import Entries from "./entry.model";
 @Table({
   tableName: "knockout_brackets",
   timestamps: true,
+  indexes: [
+    { fields: ["contentId"] },
+    { fields: ["scheduleId"] },
+    { fields: ["matchId"] },
+    { fields: ["entryAId"] },
+    { fields: ["entryBId"] },
+    { fields: ["winnerEntryId"] },
+    { fields: ["nextBracketId"] },
+    { fields: ["previousBracketAId"] },
+    { fields: ["previousBracketBId"] },
+    { fields: ["contentId", "roundNumber", "bracketPosition"] },
+    { fields: ["status"] },
+  ],
 })
 export default class KnockoutBracket extends Model {
   @Column({

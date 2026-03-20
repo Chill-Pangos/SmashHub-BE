@@ -14,11 +14,13 @@ import UserRole from "./userRole.model";
 import Role from "./role.model";
 import EntryMember from "./entryMember.model";
 import Tournament from "./tournament.model";
-import TournamentParticipant from "./tournamentParticipant.model";
 
 @Table({
   tableName: "users",
   timestamps: true,
+  indexes: [
+    { fields: ["dob"] },
+  ],
 })
 export default class User extends Model {
   @Column({

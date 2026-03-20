@@ -12,6 +12,11 @@ import User from "./user.model";
 @Table({
   tableName: "tournament_referees",
   timestamps: true,
+  indexes: [
+    { fields: ["tournamentId"] },
+    { fields: ["refereeId"] },
+    { fields: ["tournamentId", "role", "isAvailable"] },
+  ],
 })
 export default class TournamentReferee extends Model {
   @Column({

@@ -12,6 +12,10 @@ import Entries from "./entry.model";
 @Table({
   tableName: "entry_members",
   timestamps: true,
+  indexes: [
+    { fields: ["userId"] },
+    { fields: ["entryId", "userId"] },
+  ],
 })
 export default class EntryMember extends Model {
   @Column({

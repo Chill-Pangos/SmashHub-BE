@@ -13,6 +13,13 @@ import Match from "./match.model";
 @Table({
   tableName: "schedules",
   timestamps: true,
+  indexes: [
+    { fields: ["scheduledAt"] },
+    { fields: ["stage"] },
+    { fields: ["contentId", "stage"] },
+    { fields: ["contentId", "groupName"] },
+    { fields: ["contentId", "roundNumber"] },
+  ],
 })
 export default class Schedule extends Model {
   @Column({

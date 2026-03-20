@@ -13,6 +13,9 @@ import Tournament from "./tournament.model";
 @Table({
   tableName: "teams",
   timestamps: true,
+  indexes: [
+    { fields: ["tournamentId", "name"] },
+  ],
 })
 export default class Team extends Model {
   @Column({

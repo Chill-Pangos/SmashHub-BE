@@ -12,6 +12,11 @@ import Team from "./team.model";
 @Table({
   tableName: "team_members",
   timestamps: true,
+  indexes: [
+    { fields: ["userId"] },
+    { fields: ["teamId", "userId"] },
+    { fields: ["teamId", "role"] },
+  ],
 })
 export default class TeamMember extends Model {
   @Column({

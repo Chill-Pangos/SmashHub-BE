@@ -15,6 +15,10 @@ import SubMatchPlayer from './subMatchPlayer.model';
 @Table({
     tableName: "sub_matches",
     timestamps: true,
+    indexes: [
+        { fields: ["status"] },
+        { fields: ["matchId", "subMatchNumber"] },
+    ],
 })
 
 export default class SubMatch extends Model {

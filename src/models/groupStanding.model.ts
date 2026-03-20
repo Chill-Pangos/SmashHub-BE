@@ -12,6 +12,11 @@ import Entries from "./entry.model";
 @Table({
   tableName: "group_standings",
   timestamps: true,
+  indexes: [
+    { fields: ["entryId"] },
+    { fields: ["contentId", "groupName"] },
+    { fields: ["contentId", "position"] },
+  ],
 })
 export default class GroupStanding extends Model {
   @Column({

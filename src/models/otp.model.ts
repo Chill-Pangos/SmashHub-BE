@@ -12,6 +12,10 @@ import User from "./user.model";
   tableName: "otps",
   timestamps: true,
   underscored: false,
+  indexes: [
+    { fields: ["expiresAt"] },
+    { fields: ["userId", "type", "isUsed"] },
+  ],
 })
 export default class Otp extends Model {
   @Column({

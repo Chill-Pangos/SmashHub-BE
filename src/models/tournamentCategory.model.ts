@@ -13,8 +13,14 @@ import Entries from "./entry.model";
 import Schedule from "./schedule.model";
 
 @Table({
-  tableName: "tournament_contents",
+  tableName: "tournament_category",
   timestamps: true,
+  indexes: [
+    { fields: ["type"] },
+    { fields: ["gender"] },
+    { fields: ["isGroupStage"] },
+    { fields: ["tournamentId", "type"] },
+  ],
 })
 export default class TournamentCategory extends Model {
   @BeforeValidate

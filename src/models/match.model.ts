@@ -16,6 +16,16 @@ import Entries from "./entry.model";
 @Table({
   tableName: "matches",
   timestamps: true,
+  indexes: [
+    { fields: ["entryAId"] },
+    { fields: ["entryBId"] },
+    { fields: ["winnerEntryId"] },
+    { fields: ["umpire"] },
+    { fields: ["assistantUmpire"] },
+    { fields: ["status"] },
+    { fields: ["resultStatus"] },
+    { fields: ["scheduleId", "status"] },
+  ],
 })
 export default class Match extends Model {
   @Column({

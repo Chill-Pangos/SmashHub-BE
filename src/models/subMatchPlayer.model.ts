@@ -12,6 +12,11 @@ import SubMatch from "./subMatch.model";
 @Table({
   tableName: "sub_match_players",
   timestamps: true,
+  indexes: [
+    { fields: ["subMatchId"] },
+    { fields: ["entryMemberId"] },
+    { fields: ["subMatchId", "team"] },
+  ],
 })
 export default class SubMatchPlayer extends Model {
   @Column({

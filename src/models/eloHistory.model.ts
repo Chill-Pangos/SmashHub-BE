@@ -12,6 +12,10 @@ import User from "./user.model";
 @Table({
   tableName: "elo_histories",
   timestamps: true,
+  indexes: [
+    { fields: ["matchId"] },
+    { fields: ["userId", "createdAt"] },
+  ],
 })
 export default class EloHistory extends Model {
   @Column({

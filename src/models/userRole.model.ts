@@ -12,6 +12,10 @@ import Role from "./role.model";
 @Table({
   tableName: "user_roles",
   timestamps: true,
+  indexes: [
+    { fields: ["roleId"] },
+    { fields: ["userId", "roleId"] },
+  ],
 })
 export default class UserRole extends Model {
   @Column({
