@@ -51,38 +51,6 @@
  *           type: string
  *           format: date-time
  *
- *     Profile:
- *       deprecated: true
- *       description: Profile is deprecated. Use User schema instead. Profile fields are now part of User.
- *       type: object
- *       required:
- *         - userId
- *       properties:
- *         id:
- *           type: integer
- *           description: Profile ID
- *         userId:
- *           type: integer
- *           description: ID of the user this profile belongs to
- *         avatarUrl:
- *           type: string
- *           maxLength: 255
- *           description: URL to user avatar image
- *         dob:
- *           type: string
- *           format: date
- *           description: Date of birth
- *         phoneNumber:
- *           type: string
- *           maxLength: 20
- *           description: User phone number
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
  *     Role:
  *       type: object
  *       required:
@@ -313,6 +281,218 @@
  *           type: string
  *           format: date-time
  *
+ *     Team:
+ *       type: object
+ *       required:
+ *         - tournamentId
+ *         - name
+ *       properties:
+ *         id:
+ *           type: integer
+ *         tournamentId:
+ *           type: integer
+ *         name:
+ *           type: string
+ *           maxLength: 100
+ *         description:
+ *           type: string
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     TeamMember:
+ *       type: object
+ *       required:
+ *         - teamId
+ *         - userId
+ *       properties:
+ *         id:
+ *           type: integer
+ *         teamId:
+ *           type: integer
+ *         userId:
+ *           type: integer
+ *         role:
+ *           type: string
+ *           enum: [member, captain]
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     GroupStanding:
+ *       type: object
+ *       required:
+ *         - contentId
+ *         - groupName
+ *         - entryId
+ *       properties:
+ *         id:
+ *           type: integer
+ *         contentId:
+ *           type: integer
+ *         groupName:
+ *           type: string
+ *           maxLength: 50
+ *         entryId:
+ *           type: integer
+ *         matchesPlayed:
+ *           type: integer
+ *           default: 0
+ *         matchesWon:
+ *           type: integer
+ *           default: 0
+ *         matchesLost:
+ *           type: integer
+ *           default: 0
+ *         setsWon:
+ *           type: integer
+ *           default: 0
+ *         setsLost:
+ *           type: integer
+ *           default: 0
+ *         setsDiff:
+ *           type: integer
+ *           default: 0
+ *         position:
+ *           type: integer
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     TournamentReferee:
+ *       type: object
+ *       required:
+ *         - tournamentId
+ *         - refereeId
+ *         - role
+ *       properties:
+ *         id:
+ *           type: integer
+ *         tournamentId:
+ *           type: integer
+ *         refereeId:
+ *           type: integer
+ *         role:
+ *           type: string
+ *           enum: [main, assistant]
+ *         isAvailable:
+ *           type: boolean
+ *           default: true
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     KnockoutBracket:
+ *       type: object
+ *       required:
+ *         - contentId
+ *         - roundNumber
+ *         - bracketPosition
+ *       properties:
+ *         id:
+ *           type: integer
+ *         contentId:
+ *           type: integer
+ *         roundNumber:
+ *           type: integer
+ *         bracketPosition:
+ *           type: integer
+ *         scheduleId:
+ *           type: integer
+ *         matchId:
+ *           type: integer
+ *         entryAId:
+ *           type: integer
+ *         entryBId:
+ *           type: integer
+ *         winnerEntryId:
+ *           type: integer
+ *         nextBracketId:
+ *           type: integer
+ *         previousBracketAId:
+ *           type: integer
+ *         previousBracketBId:
+ *           type: integer
+ *         status:
+ *           type: string
+ *           enum: [pending, ready, in_progress, completed]
+ *           default: pending
+ *         roundName:
+ *           type: string
+ *           maxLength: 50
+ *         isByeMatch:
+ *           type: boolean
+ *           default: false
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     PendingMatchResult:
+ *       type: object
+ *       required:
+ *         - id
+ *         - scheduleId
+ *         - entryAId
+ *         - entryBId
+ *         - status
+ *       properties:
+ *         id:
+ *           type: integer
+ *         scheduleId:
+ *           type: integer
+ *         entryAId:
+ *           type: integer
+ *         entryBId:
+ *           type: integer
+ *         status:
+ *           type: string
+ *           enum: [scheduled, in_progress, completed, cancelled]
+ *         resultStatus:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *         winnerEntryId:
+ *           type: integer
+ *         reviewNotes:
+ *           type: string
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     Notification:
+ *       type: object
+ *       required:
+ *         - type
+ *         - title
+ *         - message
+ *       properties:
+ *         success:
+ *           type: boolean
+ *         message:
+ *           type: string
+ *         recipientCount:
+ *           type: integer
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *
  *     Schedule:
  *       type: object
  *       required:
@@ -471,9 +651,7 @@
  *
  * tags:
  *   - name: Users
- *     description: User management (includes profile information)
- *   - name: Profiles
- *     description: "[DEPRECATED] User profiles - now merged into Users"
+ *     description: User management 
  *   - name: Tournaments
  *     description: Tournament management
  *   - name: Matches

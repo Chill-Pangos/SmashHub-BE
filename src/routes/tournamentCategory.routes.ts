@@ -1,5 +1,5 @@
 import { Router } from "express";
-import TournamentCategoryController from "../controllers/TournamentCategory.controller";
+import TournamentCategoryController from "../controllers/tournamentCategory.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
 import { PERMISSIONS } from "../constants/permissions";
@@ -8,10 +8,11 @@ const router = Router();
 
 /**
  * @swagger
- * /tournament-contents:
+ * /tournament-categories:
  *   post:
- *     tags: [Tournament Contents]
- *     summary: Create a new tournament content
+ *     tags: [Tournament Categories]
+ *     summary: Create a new tournament category
+ *     description: "Note: gender = mixed is only valid when type = double"
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -49,6 +50,18 @@ const router = Router();
  *               numberOfDoubles:
  *                 type: integer
  *                 example: 2
+ *               minAge:
+ *                 type: integer
+ *                 example: 16
+ *               maxAge:
+ *                 type: integer
+ *                 example: 35
+ *               minElo:
+ *                 type: integer
+ *                 example: 1000
+ *               maxElo:
+ *                 type: integer
+ *                 example: 2200
  *               gender:
  *                 type: string
  *                 enum: [male, female, mixed]
@@ -58,18 +71,18 @@ const router = Router();
  *                 example: false
  *     responses:
  *       201:
- *         description: Tournament content created successfully
+ *         description: Tournament category created successfully
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *   get:
- *     tags: [Tournament Contents]
- *     summary: Get all tournament contents
+ *     tags: [Tournament Categories]
+ *     summary: Get all tournament categories
  *     parameters:
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of tournament contents
+ *         description: List of tournament categories
  */
 router.post(
   "/",
@@ -84,20 +97,21 @@ router.get(
 
 /**
  * @swagger
- * /tournament-contents/{id}:
+ * /tournament-categories/{id}:
  *   get:
- *     tags: [Tournament Contents]
- *     summary: Get tournament content by ID
+ *     tags: [Tournament Categories]
+ *     summary: Get tournament category by ID
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Tournament content details
+ *         description: Tournament category details
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Tournament Contents]
- *     summary: Update tournament content
+ *     tags: [Tournament Categories]
+ *     summary: Update tournament category
+ *     description: "Note: gender = mixed is only valid when type = double"
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -128,6 +142,18 @@ router.get(
  *               numberOfDoubles:
  *                 type: integer
  *                 example: 2
+ *               minAge:
+ *                 type: integer
+ *                 example: 16
+ *               maxAge:
+ *                 type: integer
+ *                 example: 35
+ *               minElo:
+ *                 type: integer
+ *                 example: 1000
+ *               maxElo:
+ *                 type: integer
+ *                 example: 2200
  *               gender:
  *                 type: string
  *                 enum: [male, female, mixed]
@@ -137,12 +163,12 @@ router.get(
  *                 example: false
  *     responses:
  *       200:
- *         description: Tournament content updated
+ *         description: Tournament category updated
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   delete:
- *     tags: [Tournament Contents]
- *     summary: Delete tournament content
+ *     tags: [Tournament Categories]
+ *     summary: Delete tournament category
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -170,10 +196,10 @@ router.delete(
 
 /**
  * @swagger
- * /tournament-contents/tournament/{tournamentId}:
+ * /tournament-categories/tournament/{tournamentId}:
  *   get:
- *     tags: [Tournament Contents]
- *     summary: Get tournament contents by tournament ID
+ *     tags: [Tournament Categories]
+ *     summary: Get tournament categories by tournament ID
  *     parameters:
  *       - in: path
  *         name: tournamentId
@@ -184,7 +210,7 @@ router.delete(
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of tournament contents
+ *         description: List of tournament categories
  */
 router.get(
   "/tournament/:tournamentId",
