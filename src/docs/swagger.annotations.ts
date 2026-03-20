@@ -93,6 +93,8 @@
  *         name:
  *           type: string
  *           maxLength: 50
+ *         description:
+ *           type: string
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -159,8 +161,10 @@
  *       type: object
  *       required:
  *         - name
+ *         - tier
  *         - startDate
  *         - location
+ *         - createdBy
  *       properties:
  *         id:
  *           type: integer
@@ -169,6 +173,9 @@
  *           type: string
  *           maxLength: 100
  *           description: Tournament name
+ *         tier:
+ *           type: integer
+ *           description: Tournament tier level
  *         status:
  *           type: string
  *           enum: [upcoming, ongoing, completed]
@@ -235,6 +242,18 @@
  *         numberOfDoubles:
  *           type: integer
  *           description: Number of doubles matches (for team type)
+ *         minAge:
+ *           type: integer
+ *           description: Minimum age requirement
+ *         maxAge:
+ *           type: integer
+ *           description: Maximum age requirement
+ *         minElo:
+ *           type: integer
+ *           description: Minimum ELO requirement
+ *         maxElo:
+ *           type: integer
+ *           description: Maximum ELO requirement
  *         gender:
  *           type: string
  *           enum: [male, female, mixed]
@@ -253,7 +272,7 @@
  *       type: object
  *       required:
  *         - contentId
- *         - name
+ *         - teamId
  *       properties:
  *         id:
  *           type: integer
@@ -261,10 +280,9 @@
  *         contentId:
  *           type: integer
  *           description: ID of the tournament content this entry belongs to
- *         name:
- *           type: string
- *           maxLength: 100
- *           description: Name of the entry/team
+ *         teamId:
+ *           type: integer
+ *           description: ID of the team this entry belongs to
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -277,6 +295,7 @@
  *       required:
  *         - entryId
  *         - userId
+ *         - eloAtEntry
  *       properties:
  *         id:
  *           type: integer
@@ -284,6 +303,9 @@
  *           type: integer
  *         userId:
  *           type: integer
+ *         eloAtEntry:
+ *           type: integer
+ *           description: Player ELO snapshot at registration time
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -306,6 +328,14 @@
  *         groupName:
  *           type: string
  *           maxLength: 50
+ *         stage:
+ *           type: string
+ *           enum: [group, knockout]
+ *         knockoutRound:
+ *           type: string
+ *           maxLength: 50
+ *         tableNumber:
+ *           type: integer
  *         scheduledAt:
  *           type: string
  *           format: date-time
@@ -349,6 +379,13 @@
  *         assistantUmpire:
  *           type: integer
  *           description: ID of the assistant umpire
+ *         resultStatus:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *           description: Match result approval status
+ *         reviewNotes:
+ *           type: string
+ *           description: Review notes from chief referee
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -359,13 +396,16 @@
  *     MatchSet:
  *       type: object
  *       required:
- *         - matchId
+ *         - subMatchId
  *         - setNumber
  *       properties:
  *         id:
  *           type: integer
+ *         subMatchId:
+ *           type: integer
  *         matchId:
  *           type: integer
+ *           deprecated: true
  *         setNumber:
  *           type: integer
  *         entryAScore:

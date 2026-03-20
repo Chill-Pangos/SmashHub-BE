@@ -1,6 +1,7 @@
 // Tournament DTOs
 export interface CreateTournamentDto {
   name: string;
+  tier: number;
   startDate: Date;
   endDate?: Date;
   location: string;
@@ -28,6 +29,7 @@ export interface CreateTournamentCategoryDto {
 
 export interface UpdateTournamentDto {
   name?: string;
+  tier?: number;
   startDate?: Date;
   endDate?: Date;
   location?: string;
@@ -54,6 +56,7 @@ export interface UpdateTournamentCategoryDto {
 export interface TournamentResponseDto {
   id: number;
   name: string;
+  tier: number;
   status: string;
   startDate: Date;
   endDate?: Date;

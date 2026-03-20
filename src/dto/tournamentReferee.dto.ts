@@ -14,7 +14,7 @@ export interface TournamentRefereeResponseDto {
   id: number;
   tournamentId: number;
   refereeId: number;
-  role: string;
+  role: "main" | "assistant";
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -22,7 +22,6 @@ export interface TournamentRefereeResponseDto {
     id: number;
     username: string;
     email: string;
-    fullName?: string;
   };
 }
 

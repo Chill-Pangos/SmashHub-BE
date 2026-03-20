@@ -2,7 +2,7 @@ import TournamentCategory from "../models/tournamentCategory.model";
 import {
   CreateTournamentCategoryDto,
   UpdateTournamentCategoryDto,
-} from "../dto/TournamentCategory.dto";
+} from "../dto/tournamentCategory.dto";
 
 export class TournamentCategoryService {
   /**

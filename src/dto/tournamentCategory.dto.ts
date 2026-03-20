@@ -7,6 +7,10 @@ export interface CreateTournamentCategoryDto {
   maxSets: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
+  minAge?: number;
+  maxAge?: number;
+  minElo?: number;
+  maxElo?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -18,6 +22,10 @@ export interface UpdateTournamentCategoryDto {
   maxSets?: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
+  minAge?: number;
+  maxAge?: number;
+  minElo?: number;
+  maxElo?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -31,6 +39,10 @@ export interface TournamentCategoryResponseDto {
   maxSets: number;
   numberOfSingles?: number;
   numberOfDoubles?: number;
+  minAge?: number;
+  maxAge?: number;
+  minElo?: number;
+  maxElo?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
   createdAt: Date;

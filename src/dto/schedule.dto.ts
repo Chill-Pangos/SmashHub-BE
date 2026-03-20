@@ -5,6 +5,7 @@ export interface CreateScheduleDto {
   groupName?: string;
   stage?: 'group' | 'knockout';
   knockoutRound?: string;
+  tableNumber?: number;
   scheduledAt: Date;
 }
 
@@ -13,6 +14,7 @@ export interface UpdateScheduleDto {
   groupName?: string;
   stage?: 'group' | 'knockout';
   knockoutRound?: string;
+  tableNumber?: number;
   scheduledAt?: Date;
 }
 
@@ -23,6 +25,7 @@ export interface ScheduleResponseDto {
   groupName?: string;
   stage?: 'group' | 'knockout';
   knockoutRound?: string;
+  tableNumber?: number;
   scheduledAt: Date;
   createdAt: Date;
   updatedAt: Date;

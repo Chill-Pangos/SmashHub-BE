@@ -1,5 +1,5 @@
 import Team from "../models/team.model";
-import { CreateTeamDto, UpdateTeamDto, CreateTeamWithMembersDto } from "../dto/team.dto";
+import { CreateTeamDto, UpdateTeamDto } from "../dto/team.dto";
 import { QueryHelper } from "../utils/query.helper";
 
 export class TeamService {
