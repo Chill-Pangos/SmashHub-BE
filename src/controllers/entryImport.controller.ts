@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import entryImportService from "../services/entryImport.service";
-import Entries from "../models/entries.model";
+import Entries from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import { ConfirmEntryImportDto, ValidatedSingleEntryDto, ValidatedDoubleEntryDto, ValidatedTeamEntryDto } from "../dto/entryImport.dto";
 import { withTransaction } from "../utils/transaction.helper";
 
@@ -104,7 +104,7 @@ export class EntryImportController {
       }
 
       // Validate content exists before creating entries
-      const content = await TournamentContent.findByPk(data.contentId);
+      const content = await TournamentCategory.findByPk(data.contentId);
       if (!content) {
         return res.status(400).json({
           success: false,
@@ -315,7 +315,7 @@ export class EntryImportController {
       }
 
       // Validate content exists before creating entries
-      const content = await TournamentContent.findByPk(data.contentId);
+      const content = await TournamentCategory.findByPk(data.contentId);
       if (!content) {
         return res.status(400).json({
           success: false,
@@ -583,7 +583,7 @@ export class EntryImportController {
       }
 
       // Validate content exists before creating entries
-      const content = await TournamentContent.findByPk(data.contentId);
+      const content = await TournamentCategory.findByPk(data.contentId);
       if (!content) {
         return res.status(400).json({
           success: false,

@@ -1,12 +1,18 @@
-import { Table, Column, Model, DataType, HasMany, ForeignKey, BelongsTo } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
-import Complaint from "./complaint.model";
+import { Table, Column, Model, DataType, HasMany, ForeignKey } from "sequelize-typescript";
+import TournamentCategory from "./tournamentCategory.model";
 import User from "./user.model";
 import TournamentReferee from "./tournamentReferee.model";
+import { allow } from "joi";
 
 @Table({
   tableName: "tournaments",
   timestamps: true,
+  indexes: [
+    { fields: ["createdBy"] },
+    { fields: ["startDate"] },
+    { fields: ["tier"] },
+    { fields: ["status", "startDate"] },
+  ],
 })
 export default class Tournament extends Model {
   @Column({
@@ -22,6 +28,13 @@ export default class Tournament extends Model {
     unique: true,
   })
   declare name: string;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+
+  })
+  declare tier: number;
 
   @Column({
     type: DataType.ENUM("upcoming", "ongoing", "completed"),
@@ -62,11 +75,8 @@ export default class Tournament extends Model {
   })
   declare numberOfTables: number;
 
-  @HasMany(() => TournamentContent)
-  contents?: TournamentContent[];
-
-  @HasMany(() => Complaint)
-  complaints?: Complaint[];
+  @HasMany(() => TournamentCategory)
+  category?: TournamentCategory[];
 
   @HasMany(() => TournamentReferee)
   referees?: TournamentReferee[];

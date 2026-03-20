@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import tournamentContentService from "../services/tournamentContent.service";
+import TournamentCategoryService from "../services/TournamentCategory.service";
 
-export class TournamentContentController {
+export class TournamentCategoryController {
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const content = await tournamentContentService.create(req.body);
+      const content = await TournamentCategoryService.create(req.body);
       res.status(201).json(content);
     } catch (error) {
       res
@@ -17,7 +17,7 @@ export class TournamentContentController {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const contents = await tournamentContentService.findAll(skip, limit);
+      const contents = await TournamentCategoryService.findAll(skip, limit);
       res.status(200).json(contents);
     } catch (error) {
       res
@@ -28,7 +28,7 @@ export class TournamentContentController {
 
   async findById(req: Request, res: Response): Promise<void> {
     try {
-      const content = await tournamentContentService.findById(
+      const content = await TournamentCategoryService.findById(
         Number(req.params.id)
       );
       if (!content) {
@@ -47,7 +47,7 @@ export class TournamentContentController {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const contents = await tournamentContentService.findByTournamentId(
+      const contents = await TournamentCategoryService.findByTournamentId(
         Number(req.params.tournamentId),
         skip,
         limit
@@ -62,7 +62,7 @@ export class TournamentContentController {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const content = await tournamentContentService.update(
+      const content = await TournamentCategoryService.update(
         Number(req.params.id),
         req.body
       );
@@ -80,7 +80,7 @@ export class TournamentContentController {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const deleted = await tournamentContentService.delete(
+      const deleted = await TournamentCategoryService.delete(
         Number(req.params.id)
       );
       if (!deleted) {
@@ -96,4 +96,4 @@ export class TournamentContentController {
   }
 }
 
-export default new TournamentContentController();
+export default new TournamentCategoryController();

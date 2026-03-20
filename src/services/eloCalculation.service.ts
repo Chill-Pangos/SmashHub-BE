@@ -1,6 +1,6 @@
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
-import Entries from "../models/entries.model";
+import Entries from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";

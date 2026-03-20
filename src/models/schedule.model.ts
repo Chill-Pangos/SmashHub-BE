@@ -7,12 +7,19 @@ import {
   BelongsTo,
   HasMany,
 } from "sequelize-typescript";
-import TournamentContent from "./tournamentContent.model";
+import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
 
 @Table({
   tableName: "schedules",
   timestamps: true,
+  indexes: [
+    { fields: ["scheduledAt"] },
+    { fields: ["stage"] },
+    { fields: ["contentId", "stage"] },
+    { fields: ["contentId", "groupName"] },
+    { fields: ["contentId", "roundNumber"] },
+  ],
 })
 export default class Schedule extends Model {
   @Column({
@@ -22,7 +29,7 @@ export default class Schedule extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentContent)
+  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -66,10 +73,10 @@ export default class Schedule extends Model {
   })
   declare scheduledAt: Date;
 
-  @BelongsTo(() => TournamentContent, {
+  @BelongsTo(() => TournamentCategory, {
     foreignKey: 'contentId',
   })
-  tournamentContent?: TournamentContent;
+  TournamentCategory?: TournamentCategory;
 
   @HasMany(() => Match)
   matches?: Match[];

@@ -11,6 +11,11 @@ import User from "./user.model";
 @Table({
   tableName: "access_tokens",
   timestamps: true,
+  indexes: [
+    { fields: ["userId"] },
+    { fields: ["expiresAt"] },
+    { fields: ["isBlacklisted", "expiresAt"] },
+  ],
 })
 export default class AccessToken extends Model {
   @Column({

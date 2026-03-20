@@ -1,10 +1,10 @@
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import {
-  CreateTournamentContentDto,
-  UpdateTournamentContentDto,
-} from "../dto/tournamentContent.dto";
+  CreateTournamentCategoryDto,
+  UpdateTournamentCategoryDto,
+} from "../dto/tournamentCategory.dto";
 
-export class TournamentContentService {
+export class TournamentCategoryService {
   /**
    * Validate gender based on type
    */
@@ -14,31 +14,31 @@ export class TournamentContentService {
     }
   }
 
-  async create(data: CreateTournamentContentDto): Promise<TournamentContent> {
+  async create(data: CreateTournamentCategoryDto): Promise<TournamentCategory> {
     // Validate gender before creating
     if (data.gender) {
       this.validateGender(data.type, data.gender);
     }
-    return await TournamentContent.create(data as any);
+    return await TournamentCategory.create(data as any);
   }
 
-  async findAll(skip = 0, limit = 10): Promise<TournamentContent[]> {
-    return await TournamentContent.findAll({
+  async findAll(skip = 0, limit = 10): Promise<TournamentCategory[]> {
+    return await TournamentCategory.findAll({
       offset: skip,
       limit,
     });
   }
 
-  async findById(id: number): Promise<TournamentContent | null> {
-    return await TournamentContent.findByPk(id);
+  async findById(id: number): Promise<TournamentCategory | null> {
+    return await TournamentCategory.findByPk(id);
   }
 
   async findByTournamentId(
     tournamentId: number,
     skip = 0,
     limit = 10
-  ): Promise<TournamentContent[]> {
-    return await TournamentContent.findAll({
+  ): Promise<TournamentCategory[]> {
+    return await TournamentCategory.findAll({
       where: { tournamentId },
       offset: skip,
       limit,
@@ -47,12 +47,12 @@ export class TournamentContentService {
 
   async update(
     id: number,
-    data: UpdateTournamentContentDto
-  ): Promise<[number, TournamentContent[]]> {
+    data: UpdateTournamentCategoryDto
+  ): Promise<[number, TournamentCategory[]]> {
     // If updating gender or type, validate the combination
     if (data.gender || data.type) {
       // Get current content to check existing values
-      const currentContent = await TournamentContent.findByPk(id);
+      const currentContent = await TournamentCategory.findByPk(id);
       if (!currentContent) {
         throw new Error('Content not found');
       }
@@ -65,15 +65,15 @@ export class TournamentContentService {
       }
     }
 
-    return await TournamentContent.update(data, {
+    return await TournamentCategory.update(data, {
       where: { id },
       returning: true,
     });
   }
 
   async delete(id: number): Promise<number> {
-    return await TournamentContent.destroy({ where: { id } });
+    return await TournamentCategory.destroy({ where: { id } });
   }
 }
 
-export default new TournamentContentService();
+export default new TournamentCategoryService();

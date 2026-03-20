@@ -6,19 +6,21 @@ import {
   HasOne,
   HasMany,
   BelongsToMany,
+  BelongsTo,
 } from "sequelize-typescript";
 import EloScore from "./eloScore.model";
 import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
 import Role from "./role.model";
 import EntryMember from "./entryMember.model";
-import Complaint from "./complaint.model";
-import ComplaintMessage from "./complaintMessage.model";
-import ComplaintWorkflow from "./complaintWorkflow.model";
+import Tournament from "./tournament.model";
 
 @Table({
   tableName: "users",
   timestamps: true,
+  indexes: [
+    { fields: ["dob"] },
+  ],
 })
 export default class User extends Model {
   @Column({
@@ -87,24 +89,8 @@ export default class User extends Model {
   @HasMany(() => EntryMember)
   entryMembers?: EntryMember[];
 
-  @HasMany(() => Complaint, "createdBy")
-  createdComplaints?: Complaint[];
-
-  @HasMany(() => Complaint, "currentHandlerId")
-  handlingComplaints?: Complaint[];
-
-  @HasMany(() => ComplaintMessage, "senderId")
-  sentMessages?: ComplaintMessage[];
-
-  @HasMany(() => ComplaintMessage, "receiverId")
-  receivedMessages?: ComplaintMessage[];
-
-  @HasMany(() => ComplaintWorkflow, "fromUserId")
-  workflowsFrom?: ComplaintWorkflow[];
-
-  @HasMany(() => ComplaintWorkflow, "toUserId")
-  workflowsTo?: ComplaintWorkflow[];
-
   @BelongsToMany(() => Role, () => UserRole)
   roles?: Role[];
+
+
 }

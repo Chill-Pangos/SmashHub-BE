@@ -14,7 +14,7 @@ export interface CreateTeamWithMembersDto {
 
 export interface CreateTeamMemberInTeamDto {
   userId: number;
-  role?: string;
+  role?: "member" | "captain";
 }
 
 export interface UpdateTeamDto {

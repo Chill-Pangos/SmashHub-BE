@@ -9,16 +9,22 @@ import {
   BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
-import Entries from "./entries.model";
+import Entries from "./entry.model";
 import Schedule from "./schedule.model";
 
 @Table({
-  tableName: "tournament_contents",
+  tableName: "tournament_category",
   timestamps: true,
+  indexes: [
+    { fields: ["type"] },
+    { fields: ["gender"] },
+    { fields: ["isGroupStage"] },
+    { fields: ["tournamentId", "type"] },
+  ],
 })
-export default class TournamentContent extends Model {
+export default class TournamentCategory extends Model {
   @BeforeValidate
-  static validateGender(instance: TournamentContent) {
+  static validateGender(instance: TournamentCategory) {
     // Only 'double' type can have 'mixed' gender
     if (instance.gender === 'mixed' && instance.type !== 'double') {
       throw new Error('Only double type content can have mixed gender');

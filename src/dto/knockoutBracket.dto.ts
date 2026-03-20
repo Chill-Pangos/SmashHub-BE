@@ -7,8 +7,6 @@ export interface CreateKnockoutBracketDto {
   bracketPosition: number;
   entryAId?: number;
   entryBId?: number;
-  seedA?: number;
-  seedB?: number;
   nextBracketId?: number;
   previousBracketAId?: number;
   previousBracketBId?: number;
@@ -22,8 +20,6 @@ export interface UpdateKnockoutBracketDto {
   entryAId?: number;
   entryBId?: number;
   winnerEntryId?: number;
-  seedA?: number;
-  seedB?: number;
   nextBracketId?: number;
   previousBracketAId?: number;
   previousBracketBId?: number;
@@ -43,8 +39,6 @@ export interface KnockoutBracketDto {
   entryAId?: number;
   entryBId?: number;
   winnerEntryId?: number;
-  seedA?: number;
-  seedB?: number;
   nextBracketId?: number;
   previousBracketAId?: number;
   previousBracketBId?: number;

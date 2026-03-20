@@ -8,15 +8,24 @@ import {
   HasMany,
 } from "sequelize-typescript";
 import Schedule from "./schedule.model";
-import Entries from "./entries.model";
 import User from "./user.model";
 import MatchSet from "./matchSet.model";
 import EloHistory from "./eloHistory.model";
-import Complaint from "./complaint.model";
+import Entries from "./entry.model";
 
 @Table({
   tableName: "matches",
   timestamps: true,
+  indexes: [
+    { fields: ["entryAId"] },
+    { fields: ["entryBId"] },
+    { fields: ["winnerEntryId"] },
+    { fields: ["umpire"] },
+    { fields: ["assistantUmpire"] },
+    { fields: ["status"] },
+    { fields: ["resultStatus"] },
+    { fields: ["scheduleId", "status"] },
+  ],
 })
 export default class Match extends Model {
   @Column({
@@ -74,26 +83,6 @@ export default class Match extends Model {
   })
   declare assistantUmpire?: number;
 
-  @ForeignKey(() => User)
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare coachAId?: number;
-
-  @ForeignKey(() => User)
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare coachBId?: number;
-
-  @Column({
-    type: DataType.BOOLEAN,
-    allowNull: true,
-  })
-  declare isConfirmedByWinner?: boolean;
-
   @Column({
     type: DataType.ENUM("pending", "approved", "rejected"),
     allowNull: true,
@@ -126,18 +115,6 @@ export default class Match extends Model {
   @BelongsTo(() => User, "assistantUmpire")
   assistantUser?: User;
 
-  @BelongsTo(() => User, "coachAId")
-  coachA?: User;
-
-  @BelongsTo(() => User, "coachBId")
-  coachB?: User;
-
-  @HasMany(() => MatchSet)
-  matchSets?: MatchSet[];
-
   @HasMany(() => EloHistory)
   eloHistories?: EloHistory[];
-
-  @HasMany(() => Complaint)
-  complaints?: Complaint[];
 }

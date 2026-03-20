@@ -7,8 +7,8 @@ export interface CreateMatchDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
+  resultStatus?: "pending" | "approved" | "rejected";
+  reviewNotes?: string;
 }
 
 export interface UpdateMatchDto {
@@ -16,9 +16,8 @@ export interface UpdateMatchDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
-  isConfirmedByWinner?: boolean;
+  resultStatus?: "pending" | "approved" | "rejected";
+  reviewNotes?: string;
 }
 
 export interface MatchResponseDto {
@@ -30,9 +29,8 @@ export interface MatchResponseDto {
   winnerEntryId?: number;
   umpire?: number;
   assistantUmpire?: number;
-  coachAId?: number;
-  coachBId?: number;
-  isConfirmedByWinner?: boolean;
+  resultStatus?: "pending" | "approved" | "rejected";
+  reviewNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }

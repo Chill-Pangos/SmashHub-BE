@@ -1,7 +1,7 @@
 import GroupStanding from "../models/groupStanding.model";
 import { CreateGroupStandingDto, UpdateGroupStandingDto } from "../dto/groupStanding.dto";
-import TournamentContent from "../models/tournamentContent.model";
-import Entries from "../models/entries.model";
+import TournamentCategory from "../models/tournamentCategory.model";
+import Entries from "../models/entry.model";
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
 import Schedule from "../models/schedule.model";
@@ -135,7 +135,7 @@ export class GroupStandingService {
    */
   async generateGroupPlaceholders(contentId: number): Promise<any[]> {
     // Lấy thông tin content
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error('Tournament content not found');
     }

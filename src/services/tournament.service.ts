@@ -1,6 +1,6 @@
 import Tournament from "../models/tournament.model";
-import TournamentContent from "../models/tournamentContent.model";
-import Entries from "../models/entries.model";
+import TournamentCategory from "../models/tournamentCategory.model";
+import Entries from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import {
   CreateTournamentDto,
@@ -31,7 +31,7 @@ export class TournamentService {
 
       // Create tournament contents if provided
       if (data.contents && data.contents.length > 0) {
-        await TournamentContent.bulkCreate(
+        await TournamentCategory.bulkCreate(
           data.contents.map(contentData => ({
             tournamentId: tournament.id,
             name: contentData.name,
@@ -55,7 +55,7 @@ export class TournamentService {
       const createdTournament = await Tournament.findByPk(tournament.id, {
         include: [
           {
-            model: TournamentContent,
+            model: TournamentCategory,
             as: "contents",
           },
         ],
@@ -98,7 +98,7 @@ export class TournamentService {
   }> {
     const { skip = 0, limit, userId, createdBy, ...contentFilters } = filters;
 
-    // Build where clause for TournamentContent
+    // Build where clause for TournamentCategory
     const contentWhere: WhereOptions<any> = {};
     if (contentFilters.minAge !== undefined) {
       contentWhere.minAge = { [Op.lte]: contentFilters.minAge };
@@ -132,7 +132,7 @@ export class TournamentService {
     
     // If we have content filters, find tournaments that have matching contents
     if (hasContentFilters) {
-      const matchingContents = await TournamentContent.findAll({
+      const matchingContents = await TournamentCategory.findAll({
         where: contentWhere,
         attributes: ['tournamentId'],
       });
@@ -163,7 +163,7 @@ export class TournamentService {
     // Build include for all contents (no filter on include)
     const includeOptions: any[] = [
       {
-        model: TournamentContent,
+        model: TournamentCategory,
         as: "contents",
         required: false, // Include all contents of the tournament
       },
@@ -189,7 +189,7 @@ export class TournamentService {
 
       if (tournamentIds.length > 0) {
         // Get tournament IDs from content IDs
-        const contents = await TournamentContent.findAll({
+        const contents = await TournamentCategory.findAll({
           where: { id: { [Op.in]: tournamentIds } },
           attributes: ["tournamentId"],
         });
@@ -282,7 +282,7 @@ export class TournamentService {
     return await Tournament.findByPk(id, {
       include: [
         {
-          model: TournamentContent,
+          model: TournamentCategory,
           as: "contents",
         },
       ],
@@ -293,7 +293,7 @@ export class TournamentService {
     return await Tournament.findByPk(id, {
       include: [
         {
-          model: TournamentContent,
+          model: TournamentCategory,
           as: "contents",
         },
       ],
@@ -343,14 +343,14 @@ export class TournamentService {
       // Update or create tournament contents if provided
       if (data.contents !== undefined) {
         // Delete existing contents
-        await TournamentContent.destroy({
+        await TournamentCategory.destroy({
           where: { tournamentId: id },
           transaction,
         });
 
         // Create new contents if provided
         if (data.contents.length > 0) {
-          await TournamentContent.bulkCreate(
+          await TournamentCategory.bulkCreate(
             data.contents.map(c => ({
               tournamentId: id,
               name: c.name,
@@ -375,7 +375,7 @@ export class TournamentService {
       const updatedTournament = await Tournament.findByPk(id, {
         include: [
           {
-            model: TournamentContent,
+            model: TournamentCategory,
             as: "contents",
           },
         ],

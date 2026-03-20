@@ -12,6 +12,10 @@ import Permission from "./permission.model";
 @Table({
   tableName: "role_permissions",
   timestamps: true,
+  indexes: [
+    { fields: ["permissionId"] },
+    { fields: ["roleId", "permissionId"] },
+  ],
 })
 export default class RolePermission extends Model {
   @Column({

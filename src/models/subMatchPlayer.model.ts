@@ -5,21 +5,20 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
-import Match from "./match.model";
-import SubMatch from './subMatch.model';
+import SubMatch from "./subMatch.model";
 
 @Table({
-  tableName: "match_sets",
+  tableName: "sub_match_players",
   timestamps: true,
   indexes: [
-    {
-      unique: true,
-      fields: ["subMatchId", "setNumber"],
-    },
+    { fields: ["subMatchId"] },
+    { fields: ["entryMemberId"] },
+    { fields: ["subMatchId", "team"] },
   ],
 })
-export default class MatchSet extends Model {
+export default class SubMatchPlayer extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
@@ -38,21 +37,13 @@ export default class MatchSet extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare setNumber: number;
+  declare entryMemberId: number;
 
   @Column({
-    type: DataType.INTEGER.UNSIGNED,
+    type: DataType.ENUM("A", "B"),
     allowNull: false,
-    defaultValue: 0,
   })
-  declare entryAScore: number;
-
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
-    defaultValue: 0,
-  })
-  declare entryBScore: number;
+  declare team: "A" | "B";
 
   @BelongsTo(() => SubMatch)
   subMatch?: SubMatch;

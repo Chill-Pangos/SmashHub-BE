@@ -12,6 +12,11 @@ import Team from "./team.model";
 @Table({
   tableName: "team_members",
   timestamps: true,
+  indexes: [
+    { fields: ["userId"] },
+    { fields: ["teamId", "userId"] },
+    { fields: ["teamId", "role"] },
+  ],
 })
 export default class TeamMember extends Model {
   @Column({
@@ -36,9 +41,9 @@ export default class TeamMember extends Model {
   declare userId: number;
 
   @Column({
-    type: DataType.ENUM("team_manager", "coach", "athlete"),
+    type: DataType.ENUM("member", "captain"),
     allowNull: false,
-    defaultValue: "athlete",
+    defaultValue: "member",
   })
   declare role: string;
 

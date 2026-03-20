@@ -41,13 +41,6 @@ export const PERMISSIONS = {
   TEAMS_DELETE: 'teams.delete',
   TEAMS_MANAGE_MEMBERS: 'teams.manage_members',
 
-  // Complaint Management
-  COMPLAINTS_VIEW: 'complaints.view',
-  COMPLAINTS_CREATE: 'complaints.create',
-  COMPLAINTS_UPDATE: 'complaints.update',
-  COMPLAINTS_RESOLVE: 'complaints.resolve',
-  COMPLAINTS_ASSIGN: 'complaints.assign',
-
   // ELO Management
   ELO_VIEW: 'elo.view',
   ELO_MANAGE: 'elo.manage',
@@ -76,8 +69,6 @@ export const ROLES = {
   ORGANIZER: 'organizer',
   CHIEF_REFEREE: 'chief_referee',
   REFEREE: 'referee',
-  COACH: 'coach',
-  TEAM_MANAGER: 'team_manager',
   ATHLETE: 'athlete',
   SPECTATOR: 'spectator',
 } as const;

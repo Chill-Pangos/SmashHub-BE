@@ -11,6 +11,9 @@ import User from "./user.model";
 @Table({
   tableName: "elo_scores",
   timestamps: true,
+  indexes: [
+    { unique: true, fields: ["userId"] },
+  ],
 })
 export default class EloScore extends Model {
   @Column({

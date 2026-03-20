@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import User from '../models/user.model';
-import TournamentContent from '../models/tournamentContent.model';
-import Entries from '../models/entries.model';
+import TournamentCategory from '../models/tournamentCategory.model';
+import Entries from '../models/entry.model';
 import EntryMember from '../models/entryMember.model';
 import Team from '../models/team.model';
 import TeamMember from '../models/teamMember.model';
@@ -25,7 +25,7 @@ export class EntryImportService {
     contentId: number
   ): Promise<EntryImportPreviewDto> {
     // Validate content exists and is single type
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error('Content not found');
     }
@@ -237,7 +237,7 @@ export class EntryImportService {
           }
 
           // Get tournament ID from content
-          const content = await TournamentContent.findByPk(contentId);
+          const content = await TournamentCategory.findByPk(contentId);
           if (!content) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
@@ -310,7 +310,7 @@ export class EntryImportService {
     contentId: number
   ): Promise<EntryImportPreviewDto> {
     // Validate content exists and is double type
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error('Content not found');
     }
@@ -545,7 +545,7 @@ export class EntryImportService {
       let user1: User | null = null;
       let user2: User | null = null;
 
-      const content = await TournamentContent.findByPk(contentId);
+      const content = await TournamentCategory.findByPk(contentId);
       if (!content) {
         entryErrors.push({
           rowNumber: entry.rowNumber,
@@ -818,7 +818,7 @@ export class EntryImportService {
     contentId: number
   ): Promise<EntryImportPreviewDto> {
     // Validate content exists and is team type
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error('Content not found');
     }
@@ -986,7 +986,7 @@ export class EntryImportService {
     const processedUserIds = new Set<number>();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    const content = await TournamentContent.findByPk(contentId);
+    const content = await TournamentCategory.findByPk(contentId);
     if (!content) {
       throw new Error('Content not found');
     }

@@ -1,10 +1,16 @@
 import { Request, Response } from "express";
 import matchSetService from "../services/matchSet.service";
+import {
+  CreateMatchSetDto,
+  UpdateMatchSetDto,
+  UpdateMatchSetScoreDto,
+} from "../dto/matchSet.dto";
 
 export class MatchSetController {
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const matchSet = await matchSetService.create(req.body);
+      const payload = req.body as CreateMatchSetDto;
+      const matchSet = await matchSetService.create(payload);
       res.status(201).json(matchSet);
     } catch (error) {
       res.status(400).json({ message: "Error creating match set", error });
@@ -52,9 +58,10 @@ export class MatchSetController {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
+      const payload = req.body as UpdateMatchSetDto;
       const matchSet = await matchSetService.update(
         Number(req.params.id),
-        req.body
+        payload
       );
       if (!matchSet) {
         res.status(404).json({ message: "Match set not found" });
@@ -68,7 +75,8 @@ export class MatchSetController {
 
   async createSetWithScore(req: Request, res: Response): Promise<void> {
     try {
-      const matchSet = await matchSetService.createSetWithScore(req.body);
+      const payload = req.body as UpdateMatchSetScoreDto;
+      const matchSet = await matchSetService.createSetWithScore(payload);
       res.status(201).json(matchSet);
     } catch (error: any) {
       res.status(400).json({ message: error.message || "Error creating match set with score", error });

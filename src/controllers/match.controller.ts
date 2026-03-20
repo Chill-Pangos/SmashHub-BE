@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import matchService from "../services/match.service";
 import eloCalculationService from "../services/eloCalculation.service";
+import {
+  ApprovePendingMatchResultDto,
+  RejectPendingMatchResultDto,
+} from "../dto/pendingMatchResult.dto";
 
 export class MatchController {
   async create(req: Request, res: Response): Promise<void> {
@@ -146,7 +150,7 @@ export class MatchController {
         res.status(400).json({ message: "Invalid match ID" });
         return;
       }
-      const { reviewNotes } = req.body;
+      const { reviewNotes } = req.body as ApprovePendingMatchResultDto;
 
       const match = await matchService.approveMatchResult(matchId, reviewNotes);
       res.status(200).json({
@@ -172,7 +176,7 @@ export class MatchController {
         res.status(400).json({ message: "Invalid match ID" });
         return;
       }
-      const { reviewNotes } = req.body;
+      const { reviewNotes } = req.body as RejectPendingMatchResultDto;
 
       if (!reviewNotes) {
         res.status(400).json({ message: "Review notes are required when rejecting" });
@@ -259,27 +263,6 @@ export class MatchController {
       }
       res.status(400).json({ 
         message: error.message || "Error fetching pending match", 
-        error 
-      });
-    }
-  }
-
-  async getAvailableCoachesForEntry(req: Request, res: Response): Promise<void> {
-    try {
-      const entryId = Number(req.params.entryId);
-      if (isNaN(entryId)) {
-        res.status(400).json({ message: "Invalid entry ID" });
-        return;
-      }
-      const coaches = await matchService.getAvailableCoachesForEntry(entryId);
-      res.status(200).json(coaches);
-    } catch (error: any) {
-      if (error.message === "Entry not found") {
-        res.status(404).json({ message: error.message });
-        return;
-      }
-      res.status(500).json({ 
-        message: error.message || "Error fetching available coaches", 
         error 
       });
     }

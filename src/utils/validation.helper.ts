@@ -1,6 +1,6 @@
 import TeamMember from "../models/teamMember.model";
 import Team from "../models/team.model";
-import TournamentContent from "../models/tournamentContent.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import { Transaction } from "sequelize";
 
 export class ValidationHelper {
@@ -74,7 +74,7 @@ export class ValidationHelper {
     currentCount: number,
     transaction?: Transaction | null
   ): Promise<void> {
-    const content = await TournamentContent.findByPk(contentId, {
+    const content = await TournamentCategory.findByPk(contentId, {
       ...(transaction && { transaction }),
     });
 

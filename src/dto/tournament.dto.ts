@@ -1,16 +1,17 @@
 // Tournament DTOs
 export interface CreateTournamentDto {
   name: string;
+  tier: number;
   startDate: Date;
   endDate?: Date;
   location: string;
   status?: "upcoming" | "ongoing" | "completed";
   createdBy: number;
   numberOfTables?: number;
-  contents?: CreateTournamentContentDto[];
+  contents?: CreateTournamentCategoryDto[];
 }
 
-export interface CreateTournamentContentDto {
+export interface CreateTournamentCategoryDto {
   name: string;
   type: 'single' | 'team' | 'double';
   maxEntries: number;
@@ -28,15 +29,16 @@ export interface CreateTournamentContentDto {
 
 export interface UpdateTournamentDto {
   name?: string;
+  tier?: number;
   startDate?: Date;
   endDate?: Date;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
   numberOfTables?: number;
-  contents?: UpdateTournamentContentDto[];
+  contents?: UpdateTournamentCategoryDto[];
 }
 
-export interface UpdateTournamentContentDto {
+export interface UpdateTournamentCategoryDto {
   name: string;
   type: 'single' | 'team' | 'double';
   maxEntries: number;
@@ -54,6 +56,7 @@ export interface UpdateTournamentContentDto {
 export interface TournamentResponseDto {
   id: number;
   name: string;
+  tier: number;
   status: string;
   startDate: Date;
   endDate?: Date;

@@ -340,47 +340,6 @@ router.get("/:id/elo-preview", authenticate, checkPermission(PERMISSIONS.MATCHES
 
 /**
  * @swagger
- * /matches/entry/{entryId}/available-coaches:
- *   get:
- *     tags: [Matches]
- *     summary: Get available coaches for an entry
- *     description: |
- *       Get list of coaches (members) of an entry who are not currently managing any other active matches.
- *       Returns coaches who are not assigned to any match with status 'in_progress' or 'scheduled'.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: entryId
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID of the entry
- *     responses:
- *       200:
- *         description: List of available coaches
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: number
- *                   username:
- *                     type: string
- *                   email:
- *                     type: string
- *                   avatarUrl:
- *                     type: string
- *       404:
- *         $ref: '#/components/responses/NotFound'
- */
-router.get("/entry/:entryId/available-coaches", authenticate, matchController.getAvailableCoachesForEntry.bind(matchController));
-
-/**
- * @swagger
  * /matches/athlete/{userId}/upcoming:
  *   get:
  *     tags: [Matches]
@@ -461,53 +420,6 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  */
 router.get("/athlete/:userId/history", authenticate, matchController.getMatchHistoryByAthlete.bind(matchController));
 
-/**
- * @swagger
- * /matches/coach/{userId}:
- *   get:
- *     tags: [Matches]
- *     summary: Get all matches for a coach's team(s)
- *     description: Get list of all matches (upcoming, in progress, and completed) that coach's team(s) have participated in. User must be a coach or team_manager.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: number
- *         description: ID of the coach/team manager
- *       - in: query
- *         name: status
- *         required: false
- *         schema:
- *           type: string
- *           enum: [scheduled, in_progress, completed, cancelled]
- *         description: Filter matches by status
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of team matches
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 matches:
- *                   type: array
- *                   items:
- *                     type: object
- *                 count:
- *                   type: number
- *                 skip:
- *                   type: number
- *                 limit:
- *                   type: number
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- */
-router.get("/coach/:userId", authenticate, checkPermission(PERMISSIONS.MATCHES_VIEW), matchController.getMatchesByTeam.bind(matchController));
 
 /**
  * @swagger

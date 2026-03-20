@@ -17,8 +17,6 @@ export class TeamImportService {
     const roleMap: { [key: string]: string } = {
       'trưởng đoàn': 'team_manager',
       'truong doan': 'team_manager',
-      'huấn luyện viên': 'coach',
-      'huan luyen vien': 'coach',
       'vận động viên': 'athlete',
       'van dong vien': 'athlete',
     };
@@ -226,7 +224,7 @@ export class TeamImportService {
     const validatedMembers: ValidatedTeamMemberDto[] = [];
     const memberErrors: ImportValidationError[] = [];
 
-    const validRoles = ['team_manager', 'coach', 'athlete'];
+    const validRoles = ['team_manager', 'athlete'];
 
     for (const member of parsedMembers) {
       const errors: ImportValidationError[] = [];
@@ -256,7 +254,7 @@ export class TeamImportService {
         errors.push({
           rowNumber: member.rowNumber,
           field: 'role',
-          message: `Invalid role. Only accept: 'team_manager', 'coach', 'athlete'`,
+          message: `Invalid role. Only accept: 'team_manager', 'athlete'`,
           value: member.role,
         });
       }
