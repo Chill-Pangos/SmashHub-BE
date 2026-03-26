@@ -9,13 +9,13 @@ import {
 import TournamentCategory from "./tournamentCategory.model";
 import Schedule from "./schedule.model";
 import Match from "./match.model";
-import Entries from "./entry.model";
+import Entry from "./entry.model";
 
 @Table({
   tableName: "knockout_brackets",
   timestamps: true,
   indexes: [
-    { fields: ["contentId"] },
+    { fields: ["categoryId"] },
     { fields: ["scheduleId"] },
     { fields: ["matchId"] },
     { fields: ["entryAId"] },
@@ -24,7 +24,7 @@ import Entries from "./entry.model";
     { fields: ["nextBracketId"] },
     { fields: ["previousBracketAId"] },
     { fields: ["previousBracketBId"] },
-    { fields: ["contentId", "roundNumber", "bracketPosition"] },
+    { fields: ["categoryId", "roundNumber", "bracketPosition"] },
     { fields: ["status"] },
   ],
 })
@@ -41,7 +41,7 @@ export default class KnockoutBracket extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare contentId: number;
+  declare categoryId: number;
 
   // Bracket position information
   @Column({
@@ -72,21 +72,21 @@ export default class KnockoutBracket extends Model {
   declare matchId?: number;
 
   // Entries (teams/players)
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare entryAId?: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare entryBId?: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -139,7 +139,7 @@ export default class KnockoutBracket extends Model {
 
   // Associations
   @BelongsTo(() => TournamentCategory)
-  content?: TournamentCategory;
+  category?: TournamentCategory;
 
   @BelongsTo(() => Schedule)
   schedule?: Schedule;
@@ -147,14 +147,14 @@ export default class KnockoutBracket extends Model {
   @BelongsTo(() => Match)
   match?: Match;
 
-  @BelongsTo(() => Entries, "entryAId")
-  entryA?: Entries;
+  @BelongsTo(() => Entry, "entryAId")
+  entryA?: Entry;
 
-  @BelongsTo(() => Entries, "entryBId")
-  entryB?: Entries;
+  @BelongsTo(() => Entry, "entryBId")
+  entryB?: Entry;
 
-  @BelongsTo(() => Entries, "winnerEntryId")
-  winnerEntry?: Entries;
+  @BelongsTo(() => Entry, "winnerEntryId")
+  winnerEntry?: Entry;
 
   @BelongsTo(() => KnockoutBracket, "nextBracketId")
   nextBracket?: KnockoutBracket;

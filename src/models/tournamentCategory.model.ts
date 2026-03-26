@@ -9,7 +9,7 @@ import {
   BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
-import Entries from "./entry.model";
+import Entry from "./entry.model";
 import Schedule from "./schedule.model";
 
 @Table({
@@ -27,7 +27,7 @@ export default class TournamentCategory extends Model {
   static validateGender(instance: TournamentCategory) {
     // Only 'double' type can have 'mixed' gender
     if (instance.gender === 'mixed' && instance.type !== 'double') {
-      throw new Error('Only double type content can have mixed gender');
+      throw new Error('Only double type category can have mixed gender');
     }
   }
   @Column({
@@ -119,11 +119,11 @@ export default class TournamentCategory extends Model {
   @BelongsTo(() => Tournament)
   tournament?: Tournament;
 
-  @HasMany(() => Entries)
-  entries?: Entries[];
+  @HasMany(() => Entry)
+  entries?: Entry[];
 
   @HasMany(() => Schedule, {
-    foreignKey: 'contentId',
-  }) 
+    foreignKey: 'categoryId',
+  })
   schedules?: Schedule[];
 }

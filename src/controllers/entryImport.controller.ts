@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import entryImportService from "../services/entryImport.service";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
@@ -31,18 +31,18 @@ export class EntryImportController {
         });
       }
 
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
+      const categoryId = Number(req.body.categoryId);
+      if (!categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
       // Parse and validate Excel file
       const previewData = await entryImportService.parseAndValidateSingleEntries(
         req.file.buffer,
-        contentId
+        categoryId
       );
 
       res.status(200).json({
@@ -74,10 +74,10 @@ export class EntryImportController {
         });
       }
 
-      if (!data.contentId) {
+      if (!data.categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
@@ -103,18 +103,18 @@ export class EntryImportController {
         });
       }
 
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
+      // Validate category exists before creating entries
+      const category = await TournamentCategory.findByPk(data.categoryId);
+      if (!category) {
         return res.status(400).json({
           success: false,
-          message: "Tournament content not found",
+          message: "Tournament category not found",
         });
       }
 
       // Re-validate users and check for duplicates
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
+      const existingEntries = await Entry.findAll({
+        where: { categoryId: data.categoryId },
         include: [
           {
             model: EntryMember,
@@ -140,27 +140,27 @@ export class EntryImportController {
           });
         }
 
-        // Check if user already registered for this content
+        // Check if user already registered for this category
         if (existingUserIds.has(entryData.userId)) {
           return res.status(400).json({
             success: false,
-            message: `User ${user.email} is already registered for this content`,
+            message: `User ${user.email} is already registered for this category`,
           });
         }
 
         // Validate gender for single entries
-        if (content.gender) {
+        if (category.gender) {
           if (!user.gender) {
             return res.status(400).json({
               success: false,
-              message: `User ${user.email}'s gender is not set. Content requires "${content.gender}"`,
+              message: `User ${user.email}'s gender is not set. Category requires "${category.gender}"`,
             });
           }
 
-          if (user.gender !== content.gender) {
+          if (user.gender !== category.gender) {
             return res.status(400).json({
               success: false,
-              message: `User ${user.email}'s gender (${user.gender}) does not match content requirement (${content.gender})`,
+              message: `User ${user.email}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
             });
           }
         }
@@ -172,9 +172,9 @@ export class EntryImportController {
 
         for (const entryData of singleEntries) {
           // Create entry
-          const entry = await Entries.create(
+          const entry = await Entry.create(
             {
-              contentId: data.contentId,
+              categoryId: data.categoryId,
               teamId: entryData.teamId, // Use teamId from validated data (null if user has no team)
             } as any,
             { transaction }
@@ -242,18 +242,18 @@ export class EntryImportController {
         });
       }
 
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
+      const categoryId = Number(req.body.categoryId);
+      if (!categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
       // Parse and validate Excel file
       const previewData = await entryImportService.parseAndValidateDoubleEntries(
         req.file.buffer,
-        contentId
+        categoryId
       );
 
       res.status(200).json({
@@ -285,10 +285,10 @@ export class EntryImportController {
         });
       }
 
-      if (!data.contentId) {
+      if (!data.categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
@@ -314,17 +314,17 @@ export class EntryImportController {
         });
       }
 
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
+      // Validate category exists before creating entries
+      const category = await TournamentCategory.findByPk(data.categoryId);
+      if (!category) {
         return res.status(400).json({
           success: false,
-          message: "Tournament content not found",
+          message: "Tournament category not found",
         });
       }
 
       // Re-validate mixed gender requirement for double entries
-      if (content.type === 'double' && content.gender === 'mixed') {
+      if (category.type === 'double' && category.gender === 'mixed') {
         for (const entryData of doubleEntries) {
           // Get both users to check gender
           const user1 = await User.findByPk(entryData.player1UserId);
@@ -340,22 +340,22 @@ export class EntryImportController {
           if (!user1.gender || !user2.gender) {
             return res.status(400).json({
               success: false,
-              message: `Mixed gender content requires both players to have gender set`,
+              message: `Mixed gender category requires both players to have gender set`,
             });
           }
 
           if (user1.gender === user2.gender) {
             return res.status(400).json({
               success: false,
-              message: `Mixed gender content requires 1 male and 1 female. Both players are ${user1.gender}`,
+              message: `Mixed gender category requires 1 male and 1 female. Both players are ${user1.gender}`,
             });
           }
         }
       }
 
       // Check for duplicate pairs in database
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
+      const existingEntries = await Entry.findAll({
+        where: { categoryId: data.categoryId },
         include: [
           {
             model: EntryMember,
@@ -394,7 +394,7 @@ export class EntryImportController {
         if (existingUserIds.has(entryData.player1UserId)) {
           return res.status(400).json({
             success: false,
-            message: `Player ${entryData.player1Email} is already registered in this content (each user can only register once)`,
+            message: `Player ${entryData.player1Email} is already registered in this category (each user can only register once)`,
           });
         }
 
@@ -402,7 +402,7 @@ export class EntryImportController {
         if (existingUserIds.has(entryData.player2UserId)) {
           return res.status(400).json({
             success: false,
-            message: `Player ${entryData.player2Email} is already registered in this content (each user can only register once)`,
+            message: `Player ${entryData.player2Email} is already registered in this category (each user can only register once)`,
           });
         }
 
@@ -412,7 +412,7 @@ export class EntryImportController {
         if (existingPairs.has(pairKey)) {
           return res.status(400).json({
             success: false,
-            message: `Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this content`,
+            message: `Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this category`,
           });
         }
       }
@@ -426,9 +426,9 @@ export class EntryImportController {
           const teamId = entryData.player1TeamId;
 
           // Create entry
-          const entry = await Entries.create(
+          const entry = await Entry.create(
             {
-              contentId: data.contentId,
+              categoryId: data.categoryId,
               teamId,
             } as any,
             { transaction }
@@ -510,18 +510,18 @@ export class EntryImportController {
         });
       }
 
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
+      const categoryId = Number(req.body.categoryId);
+      if (!categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
       // Parse and validate Excel file
       const previewData = await entryImportService.parseAndValidateTeamEntries(
         req.file.buffer,
-        contentId
+        categoryId
       );
 
       res.status(200).json({
@@ -553,10 +553,10 @@ export class EntryImportController {
         });
       }
 
-      if (!data.contentId) {
+      if (!data.categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
@@ -582,18 +582,18 @@ export class EntryImportController {
         });
       }
 
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
+      // Validate category exists before creating entries
+      const category = await TournamentCategory.findByPk(data.categoryId);
+      if (!category) {
         return res.status(400).json({
           success: false,
-          message: "Tournament content not found",
+          message: "Tournament category not found",
         });
       }
 
       // Check for duplicate users in database
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
+      const existingEntries = await Entry.findAll({
+        where: { categoryId: data.categoryId },
         include: [
           {
             model: EntryMember,
@@ -638,23 +638,23 @@ export class EntryImportController {
           if (existingUserIds.has(player.userId)) {
             return res.status(400).json({
               success: false,
-              message: `Player ${user.email} is already registered in this content`,
+              message: `Player ${user.email} is already registered in this category`,
             });
           }
 
           // Validate gender if required
-          if (content.gender && content.gender !== 'mixed') {
+          if (category.gender && category.gender !== 'mixed') {
             if (!user.gender) {
               return res.status(400).json({
                 success: false,
-                message: `Player ${user.email}'s gender is not set. Content requires "${content.gender}"`,
+                message: `Player ${user.email}'s gender is not set. Category requires "${category.gender}"`,
               });
             }
 
-            if (user.gender !== content.gender) {
+            if (user.gender !== category.gender) {
               return res.status(400).json({
                 success: false,
-                message: `Player ${user.email}'s gender (${user.gender}) does not match content requirement (${content.gender})`,
+                message: `Player ${user.email}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
               });
             }
           }
@@ -667,9 +667,9 @@ export class EntryImportController {
 
         for (const entryData of teamEntries) {
           // Create entry
-          const entry = await Entries.create(
+          const entry = await Entry.create(
             {
-              contentId: data.contentId,
+              categoryId: data.categoryId,
               teamId: entryData.teamId,
             } as any,
             { transaction }

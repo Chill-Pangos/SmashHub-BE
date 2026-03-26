@@ -67,23 +67,23 @@ export class ValidationHelper {
   }
 
   /**
-   * Verify content capacity
+   * Verify category capacity
    */
-  static async verifyContentCapacity(
-    contentId: number,
+  static async verifyCategoryCapacity(
+    categoryId: number,
     currentCount: number,
     transaction?: Transaction | null
   ): Promise<void> {
-    const content = await TournamentCategory.findByPk(contentId, {
+    const category = await TournamentCategory.findByPk(categoryId, {
       ...(transaction && { transaction }),
     });
 
-    if (!content) {
-      throw new Error('Content not found');
+    if (!category) {
+      throw new Error('Category not found');
     }
 
-    if (currentCount >= content.maxEntries) {
-      throw new Error('Maximum number of entries has been reached for this content');
+    if (currentCount >= category.maxEntries) {
+      throw new Error('Maximum number of entries has been reached for this category');
     }
   }
 }

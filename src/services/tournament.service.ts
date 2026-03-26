@@ -1,6 +1,6 @@
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import {
   CreateTournamentDto,
@@ -9,8 +9,17 @@ import {
 } from "../dto/tournament.dto";
 import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
+import { RegistrationPeriodService } from "./registrationPeriod.service";
+import { TournamentEstimationService } from "./tournamentEstimation.service";
 
 export class TournamentService {
+  private registrationService: RegistrationPeriodService;
+  private estimationService: TournamentEstimationService;
+
+  constructor() {
+    this.registrationService = new RegistrationPeriodService();
+    this.estimationService = new TournamentEstimationService();
+  }
   async create(data: CreateTournamentDto): Promise<Tournament> {
     const transaction = await sequelize.transaction();
 
@@ -29,23 +38,23 @@ export class TournamentService {
         { transaction }
       );
 
-      // Create tournament contents if provided
-      if (data.contents && data.contents.length > 0) {
+      // Create tournament categories if provided
+      if (data.categories && data.categories.length > 0) {
         await TournamentCategory.bulkCreate(
-          data.contents.map(contentData => ({
+          data.categories.map(categoryData => ({
             tournamentId: tournament.id,
-            name: contentData.name,
-            type: contentData.type,
-            maxEntries: contentData.maxEntries,
-            maxSets: contentData.maxSets,
-            numberOfSingles: contentData.numberOfSingles ?? null,
-            numberOfDoubles: contentData.numberOfDoubles ?? null,
-            minAge: contentData.minAge ?? null,
-            maxAge: contentData.maxAge ?? null,
-            minElo: contentData.minElo ?? null,
-            maxElo: contentData.maxElo ?? null,
-            gender: contentData.gender ?? null,
-            isGroupStage: contentData.isGroupStage,
+            name: categoryData.name,
+            type: categoryData.type,
+            maxEntries: categoryData.maxEntries,
+            maxSets: categoryData.maxSets,
+            numberOfSingles: categoryData.numberOfSingles ?? null,
+            numberOfDoubles: categoryData.numberOfDoubles ?? null,
+            minAge: categoryData.minAge ?? null,
+            maxAge: categoryData.maxAge ?? null,
+            minElo: categoryData.minElo ?? null,
+            maxElo: categoryData.maxElo ?? null,
+            gender: categoryData.gender ?? null,
+            isGroupStage: categoryData.isGroupStage,
           })),
           { transaction }
         );
@@ -56,7 +65,7 @@ export class TournamentService {
         include: [
           {
             model: TournamentCategory,
-            as: "contents",
+            as: "categories",
           },
         ],
         transaction,
@@ -66,6 +75,22 @@ export class TournamentService {
 
       if (!createdTournament) {
         throw new Error('Tournament not found after creation');
+      }
+
+      // Initialize registration periods after tournament creation
+      try {
+        await this.registrationService.initializeRegistrationPeriod(createdTournament.id);
+
+        // Calculate initial duration estimate if categories exist
+        if (createdTournament.category && createdTournament.category.length > 0) {
+          await this.estimationService.calculateEstimate({
+            tournamentId: createdTournament.id,
+            userId: createdTournament.createdBy
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to initialize registration period or calculate estimate:', error);
+        // Don't throw error as tournament is already created successfully
       }
 
       return createdTournament;
@@ -83,7 +108,7 @@ export class TournamentService {
     });
   }
 
-  async findAllWithContentsFiltered(
+  async findAllWithCategoriesFiltered(
     filters: TournamentFilterDto
   ): Promise<{
     tournaments: Tournament[];
@@ -96,31 +121,31 @@ export class TournamentService {
       hasPrevPage: boolean;
     };
   }> {
-    const { skip = 0, limit, userId, createdBy, ...contentFilters } = filters;
+    const { skip = 0, limit, userId, createdBy, ...categoryFilters } = filters;
 
     // Build where clause for TournamentCategory
-    const contentWhere: WhereOptions<any> = {};
-    if (contentFilters.minAge !== undefined) {
-      contentWhere.minAge = { [Op.lte]: contentFilters.minAge };
+    const categoryWhere: WhereOptions<any> = {};
+    if (categoryFilters.minAge !== undefined) {
+      categoryWhere.minAge = { [Op.lte]: categoryFilters.minAge };
     }
-    if (contentFilters.maxAge !== undefined) {
-      contentWhere.maxAge = { [Op.gte]: contentFilters.maxAge };
+    if (categoryFilters.maxAge !== undefined) {
+      categoryWhere.maxAge = { [Op.gte]: categoryFilters.maxAge };
     }
-    if (contentFilters.minElo !== undefined) {
-      contentWhere.minElo = { [Op.lte]: contentFilters.minElo };
+    if (categoryFilters.minElo !== undefined) {
+      categoryWhere.minElo = { [Op.lte]: categoryFilters.minElo };
     }
-    if (contentFilters.maxElo !== undefined) {
-      contentWhere.maxElo = { [Op.gte]: contentFilters.maxElo };
+    if (categoryFilters.maxElo !== undefined) {
+      categoryWhere.maxElo = { [Op.gte]: categoryFilters.maxElo };
     }
-    if (contentFilters.gender !== undefined) {
-      contentWhere.gender = contentFilters.gender;
+    if (categoryFilters.gender !== undefined) {
+      categoryWhere.gender = categoryFilters.gender;
     }
-    if (contentFilters.isGroupStage !== undefined) {
-      contentWhere.isGroupStage = contentFilters.isGroupStage;
+    if (categoryFilters.isGroupStage !== undefined) {
+      categoryWhere.isGroupStage = categoryFilters.isGroupStage;
     }
 
-    // Determine if we should filter by content or just include all
-    const hasContentFilters = Object.keys(contentWhere).length > 0;
+    // Determine if we should filter by category or just include all
+    const hasCategoryFilters = Object.keys(categoryWhere).length > 0;
     
     // Build tournament where clause
     const tournamentWhere: WhereOptions<any> = {};
@@ -130,19 +155,19 @@ export class TournamentService {
       tournamentWhere.createdBy = createdBy;
     }
     
-    // If we have content filters, find tournaments that have matching contents
-    if (hasContentFilters) {
-      const matchingContents = await TournamentCategory.findAll({
-        where: contentWhere,
+    // If we have category filters, find tournaments that have matching categories
+    if (hasCategoryFilters) {
+      const matchingCategories = await TournamentCategory.findAll({
+        where: categoryWhere,
         attributes: ['tournamentId'],
       });
       
-      const tournamentIdsWithMatchingContent = [
-        ...new Set(matchingContents.map((c) => c.tournamentId)),
+      const tournamentIdsWithMatchingCategory = [
+        ...new Set(matchingCategories.map((c) => c.tournamentId)),
       ];
       
-      if (tournamentIdsWithMatchingContent.length === 0) {
-        // No tournaments have content matching the filters
+      if (tournamentIdsWithMatchingCategory.length === 0) {
+        // No tournaments have category matching the filters
         return {
           tournaments: [],
           pagination: {
@@ -157,22 +182,22 @@ export class TournamentService {
       }
       
       // Add to tournament where clause
-      tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingContent };
+      tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingCategory };
     }
     
-    // Build include for all contents (no filter on include)
+    // Build include for all categories (no filter on include)
     const includeOptions: any[] = [
       {
         model: TournamentCategory,
-        as: "contents",
-        required: false, // Include all contents of the tournament
+        as: "categories",
+        required: false, // Include all categories of the tournament
       },
     ];
     
     // If userId is provided, filter tournaments where user has entries
     if (userId !== undefined) {
       // Find tournaments where user has entries
-      const userEntries = await Entries.findAll({
+      const userEntries = await Entry.findAll({
         include: [
           {
             model: EntryMember,
@@ -184,18 +209,18 @@ export class TournamentService {
       });
 
       const tournamentIds = [
-        ...new Set(userEntries.map((entry) => entry.contentId)),
+        ...new Set(userEntries.map((entry) => entry.categoryId)),
       ];
 
       if (tournamentIds.length > 0) {
-        // Get tournament IDs from content IDs
-        const contents = await TournamentCategory.findAll({
+        // Get tournament IDs from category IDs
+        const categories = await TournamentCategory.findAll({
           where: { id: { [Op.in]: tournamentIds } },
           attributes: ["tournamentId"],
         });
 
         const finalTournamentIds = [
-          ...new Set(contents.map((c) => c.tournamentId)),
+          ...new Set(categories.map((c) => c.tournamentId)),
         ];
 
         if (finalTournamentIds.length > 0) {
@@ -283,18 +308,18 @@ export class TournamentService {
       include: [
         {
           model: TournamentCategory,
-          as: "contents",
+          as: "categories",
         },
       ],
     });
   }
 
-  async findByIdWithContents(id: number): Promise<Tournament | null> {
+  async findByIdWithCategories(id: number): Promise<Tournament | null> {
     return await Tournament.findByPk(id, {
       include: [
         {
           model: TournamentCategory,
-          as: "contents",
+          as: "categories",
         },
       ],
     });
@@ -340,18 +365,18 @@ export class TournamentService {
         { transaction }
       );
 
-      // Update or create tournament contents if provided
-      if (data.contents !== undefined) {
-        // Delete existing contents
+      // Update or create tournament categories if provided
+      if (data.categories !== undefined) {
+        // Delete existing categories 
         await TournamentCategory.destroy({
           where: { tournamentId: id },
           transaction,
         });
 
-        // Create new contents if provided
-        if (data.contents.length > 0) {
+        // Create new categories if provided
+        if (data.categories.length > 0) {
           await TournamentCategory.bulkCreate(
-            data.contents.map(c => ({
+            data.categories.map(c => ({
               tournamentId: id,
               name: c.name,
               type: c.type,
@@ -371,12 +396,12 @@ export class TournamentService {
         }
       }
 
-      // Fetch updated tournament with contents within transaction
+      // Fetch updated tournament with categories within transaction
       const updatedTournament = await Tournament.findByPk(id, {
         include: [
           {
             model: TournamentCategory,
-            as: "contents",
+            as: "categories",
           },
         ],
         transaction,

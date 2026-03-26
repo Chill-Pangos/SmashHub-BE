@@ -10,7 +10,7 @@ import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import eloCalculationService from "./eloCalculation.service";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import TeamMember from "../models/teamMember.model";
 
@@ -419,7 +419,7 @@ export class MatchService {
    * Cập nhật groupStanding cho vòng bảng
    */
   private async updateGroupStanding(
-    contentId: number,
+    categoryId: number,
     groupName: string,
     entryAId: number,
     entryBId: number,
@@ -429,9 +429,9 @@ export class MatchService {
   ): Promise<void> {
     // Tìm hoặc tạo standing cho entry A
     const [standingA] = await GroupStanding.findOrCreate({
-      where: { contentId, groupName, entryId: entryAId },
+      where: { categoryId, groupName, entryId: entryAId },
       defaults: {
-        contentId,
+        categoryId,
         groupName,
         entryId: entryAId,
         matchesPlayed: 0,
@@ -445,9 +445,9 @@ export class MatchService {
 
     // Tìm hoặc tạo standing cho entry B
     const [standingB] = await GroupStanding.findOrCreate({
-      where: { contentId, groupName, entryId: entryBId },
+      where: { categoryId, groupName, entryId: entryBId },
       defaults: {
-        contentId,
+        categoryId,
         groupName,
         entryId: entryBId,
         matchesPlayed: 0,
@@ -596,7 +596,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryA",
           include: [
             {
@@ -613,7 +613,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryB",
           include: [
             {
@@ -693,7 +693,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryA",
           include: [
             {
@@ -710,7 +710,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryB",
           include: [
             {
@@ -727,7 +727,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "winnerEntry",
           include: [
             {
@@ -796,7 +796,7 @@ export class MatchService {
     }
 
     // Tìm tất cả các entry của các team này
-    const entries = await Entries.findAll({
+    const entries = await Entry.findAll({
       where: { teamId: { [Op.in]: teamIds } },
       attributes: ["id"],
     });
@@ -835,7 +835,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryA",
           include: [
             {
@@ -852,7 +852,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryB",
           include: [
             {
@@ -869,7 +869,7 @@ export class MatchService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "winnerEntry",
           include: [
             {

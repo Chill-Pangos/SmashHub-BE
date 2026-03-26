@@ -67,15 +67,11 @@ export class GroupStandingController {
     }
   }
 
-  async findByContentId(req: Request, res: Response): Promise<void> {
+  async findByCategoryId(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.params;
-      const skip = parseInt(req.query.skip as string) || 0;
-      const limit = parseInt(req.query.limit as string) || 100;
-      const result = await groupStandingService.findByContentId(
-        parseInt(contentId as string),
-        skip,
-        limit
+      const { categoryId } = req.params;
+      const result = await groupStandingService.findByCategoryId(
+        parseInt(categoryId as string)
       );
       res.status(200).json({
         success: true,
@@ -93,17 +89,19 @@ export class GroupStandingController {
     try {
       const { id } = req.params;
       const data: UpdateGroupStandingDto = req.body;
-      const [affectedCount] = await groupStandingService.update(
-        parseInt(id as string),
-        data
-      );
-      if (affectedCount === 0) {
+
+      // Check if record exists first
+      const existing = await groupStandingService.findById(parseInt(id as string));
+      if (!existing) {
         res.status(404).json({
           success: false,
           message: "Group standing not found",
         });
         return;
       }
+
+      await groupStandingService.update(parseInt(id as string), data);
+
       res.status(200).json({
         success: true,
         message: "Group standing updated successfully",
@@ -119,14 +117,19 @@ export class GroupStandingController {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const affectedCount = await groupStandingService.delete(parseInt(id as string));
-      if (affectedCount === 0) {
+
+      // Check if record exists first
+      const existing = await groupStandingService.findById(parseInt(id as string));
+      if (!existing) {
         res.status(404).json({
           success: false,
           message: "Group standing not found",
         });
         return;
       }
+
+      await groupStandingService.delete(parseInt(id as string));
+
       res.status(200).json({
         success: true,
         message: "Group standing deleted successfully",
@@ -142,14 +145,12 @@ export class GroupStandingController {
   /**
    * Tạo danh sách bảng đấu placeholder
    * POST /group-standings/generate-placeholders
-   * Body: { contentId: number }
+   * Body: { categoryId: number, numberOfGroups: number, maxEntriesPerGroup: number }
    */
   async generatePlaceholders(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId }: GenerateGroupPlaceholdersDto = req.body;
-      const result = await groupStandingService.generateGroupPlaceholders(
-        contentId
-      );
+      const data: GenerateGroupPlaceholdersDto = req.body;
+      const result = await groupStandingService.generateGroupPlaceholders(data);
       res.status(200).json({
         success: true,
         data: result,
@@ -166,12 +167,12 @@ export class GroupStandingController {
   /**
    * Bốc thăm ngẫu nhiên entries vào các bảng
    * POST /group-standings/random-draw
-   * Body: { contentId: number }
+   * Body: { categoryId: number, entries: number[], numberOfGroups: number }
    */
   async randomDraw(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId }: RandomDrawEntriesDto = req.body;
-      const result = await groupStandingService.randomDrawEntries(contentId);
+      const data: RandomDrawEntriesDto = req.body;
+      const result = await groupStandingService.randomDrawEntries(data);
       res.status(200).json({
         success: true,
         data: result,
@@ -188,15 +189,12 @@ export class GroupStandingController {
   /**
    * Lưu kết quả phân bổ entries vào các bảng
    * POST /group-standings/save-assignments
-   * Body: { contentId: number, groupAssignments: [{groupName: string, entryIds: number[]}] }
+   * Body: { categoryId: number, assignments: { [key: string]: number[] } }
    */
   async saveAssignments(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId, groupAssignments }: SaveGroupAssignmentsDto = req.body;
-      const result = await groupStandingService.saveGroupAssignments(
-        contentId,
-        groupAssignments
-      );
+      const data: SaveGroupAssignmentsDto = req.body;
+      const result = await groupStandingService.saveGroupAssignments(data);
       res.status(201).json({
         success: true,
         data: result,
@@ -211,41 +209,20 @@ export class GroupStandingController {
   }
 
   /**
-   * Bốc thăm và lưu luôn vào database
-   * POST /group-standings/random-draw-and-save
-   * Body: { contentId: number }
-   */
-  async randomDrawAndSave(req: Request, res: Response): Promise<void> {
-    try {
-      const { contentId }: RandomDrawAndSaveDto = req.body;
-      const result = await groupStandingService.randomDrawAndSave(contentId);
-      res.status(201).json({
-        success: true,
-        data: result,
-        message: "Bốc thăm và lưu thành công",
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  /**
    * Tính toán standings (placeholder method - needs implementation)
    */
   async calculateStandings(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId, groupName }: CalculateStandingsDto = req.body;
-      await groupStandingService.calculateGroupStandings(contentId, groupName);
-      
+      const { categoryId }: CalculateStandingsDto = req.body;
+      const calculationResult = await groupStandingService.calculateGroupStandings(categoryId);
+
       // Lấy standings đã được tính toán
-      const result = await groupStandingService.findByContentId(contentId, 0, 100);
-      
+      const result = await groupStandingService.findByCategoryId(categoryId);
+
       res.status(200).json({
         success: true,
         data: result,
+        calculation: calculationResult,
         message: "Đã tính toán standings thành công",
       });
     } catch (error: any) {
@@ -261,10 +238,10 @@ export class GroupStandingController {
    */
   async getStandings(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.params;
+      const { categoryId } = req.params;
       const groupName = req.query.groupName as string;
-      const result = await groupStandingService.findByContentId(
-        parseInt(contentId as string)
+      const result = await groupStandingService.findByCategoryId(
+        parseInt(categoryId as string)
       );
       res.status(200).json({
         success: true,
@@ -283,7 +260,7 @@ export class GroupStandingController {
    */
   async getQualifiedTeams(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.params;
+      const { categoryId } = req.params;
       const teamsPerGroup = parseInt(req.query.teamsPerGroup as string) || 2;
       // TODO: Implement get qualified teams logic
       res.status(200).json({

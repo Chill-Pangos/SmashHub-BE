@@ -57,11 +57,11 @@ export const PERMISSIONS = {
   NOTIFICATIONS_VIEW: 'notifications.view',
   NOTIFICATIONS_SEND: 'notifications.send',
 
-  // Content Management
-  CONTENT_VIEW: 'content.view',
-  CONTENT_CREATE: 'content.create',
-  CONTENT_UPDATE: 'content.update',
-  CONTENT_DELETE: 'content.delete',
+  // Category Management
+  CATEGORY_VIEW: 'category.view',
+  CATEGORY_CREATE: 'category.create',
+  CATEGORY_UPDATE: 'category.update',
+  CATEGORY_DELETE: 'category.delete',
 } as const;
 
 export const ROLES = {

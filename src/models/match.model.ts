@@ -9,9 +9,9 @@ import {
 } from "sequelize-typescript";
 import Schedule from "./schedule.model";
 import User from "./user.model";
-import MatchSet from "./matchSet.model";
 import EloHistory from "./eloHistory.model";
-import Entries from "./entry.model";
+import Entry from "./entry.model";
+import SubMatch from "./subMatch.model";
 
 @Table({
   tableName: "matches",
@@ -42,14 +42,14 @@ export default class Match extends Model {
   })
   declare scheduleId: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare entryAId: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -62,7 +62,7 @@ export default class Match extends Model {
   })
   declare status: string;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -100,14 +100,14 @@ export default class Match extends Model {
   @BelongsTo(() => Schedule, 'scheduleId')
   schedule?: Schedule;
 
-  @BelongsTo(() => Entries, "entryAId")
-  entryA?: Entries;
+  @BelongsTo(() => Entry, "entryAId")
+  entryA?: Entry;
 
-  @BelongsTo(() => Entries, "entryBId")
-  entryB?: Entries;
+  @BelongsTo(() => Entry, "entryBId")
+  entryB?: Entry;
 
-  @BelongsTo(() => Entries, "winnerEntryId")
-  winnerEntry?: Entries;
+  @BelongsTo(() => Entry, "winnerEntryId")
+  winnerEntry?: Entry;
 
   @BelongsTo(() => User, "umpire")
   umpireUser?: User;
@@ -117,4 +117,7 @@ export default class Match extends Model {
 
   @HasMany(() => EloHistory)
   eloHistories?: EloHistory[];
+
+  @HasMany(() =>SubMatch)
+  subMatches?: SubMatch[];
 }

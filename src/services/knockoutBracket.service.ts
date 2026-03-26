@@ -5,6 +5,7 @@ import {
   GenerateKnockoutBracketDto,
   BracketTreeDto,
   RoundDto,
+  AdvanceWinnerDto,
 } from "../dto/knockoutBracket.dto";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entries from "../models/entry.model";
@@ -26,9 +27,9 @@ export class KnockoutBracketService {
     return await KnockoutBracket.findByPk(id);
   }
 
-  async findByContentId(contentId: number): Promise<KnockoutBracket[]> {
+  async findByCategoryId(categoryId: number): Promise<KnockoutBracket[]> {
     return await KnockoutBracket.findAll({
-      where: { contentId },
+      where: { categoryId },
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
@@ -58,10 +59,10 @@ export class KnockoutBracketService {
    * 4. Cân bằng 2 nhánh đấu
    * 5. Tối thiểu 12 đội
    */
-  async generateKnockoutBracket(contentId: number): Promise<BracketTreeDto> {
+  async generateKnockoutBracket(categoryId: number): Promise<BracketTreeDto> {
     // Lấy tất cả entries
     const entries = await Entries.findAll({
-      where: { contentId },
+      where: { categoryId },
     });
 
     if (entries.length < 12) {
@@ -84,11 +85,11 @@ export class KnockoutBracketService {
     );
 
     // Xóa brackets cũ nếu có
-    await KnockoutBracket.destroy({ where: { contentId } });
+    await KnockoutBracket.destroy({ where: { categoryId } });
 
     // Tạo cấu trúc bracket tree
     const brackets = await this.createBracketTree(
-      contentId,
+      categoryId,
       bracketSize,
       topHalf,
       bottomHalf,
@@ -96,7 +97,7 @@ export class KnockoutBracketService {
     );
 
     // Trả về bracket tree
-    return this.formatBracketTree(contentId, brackets);
+    return this.formatBracketTree(categoryId, brackets);
   }
 
   /**
@@ -192,7 +193,7 @@ export class KnockoutBracketService {
    * Tạo cấu trúc cây bracket
    */
   private async createBracketTree(
-    contentId: number,
+    categoryId: number,
     bracketSize: number,
     topHalf: (Entries | null)[],
     bottomHalf: (Entries | null)[],
@@ -203,7 +204,7 @@ export class KnockoutBracketService {
 
     // Tạo brackets cho vòng đầu tiên (Round 1)
     const round1Brackets = await this.createRound1Brackets(
-      contentId,
+      categoryId,
       bracketSize,
       topHalf,
       bottomHalf,
@@ -216,7 +217,7 @@ export class KnockoutBracketService {
 
     for (let round = 2; round <= totalRounds; round++) {
       const roundBrackets = await this.createNextRoundBrackets(
-        contentId,
+        categoryId,
         bracketSize,
         round,
         previousRoundBrackets
@@ -232,7 +233,9 @@ export class KnockoutBracketService {
    * Tạo brackets cho vòng đầu tiên
    */
   private async createRound1Brackets(
-    contentId: number,    bracketSize: number,    topHalf: (Entries | null)[],
+    categoryId: number,
+    bracketSize: number,
+    topHalf: (Entries | null)[],
     bottomHalf: (Entries | null)[],
     numByes: number
   ): Promise<KnockoutBracket[]> {
@@ -260,7 +263,7 @@ export class KnockoutBracketService {
       }
 
       const bracket = await KnockoutBracket.create({
-        contentId,
+        categoryId  ,
         roundNumber: 1,
         bracketPosition: i,
         entryAId: entryA?.id,
@@ -298,7 +301,7 @@ export class KnockoutBracketService {
    * Tạo brackets cho các vòng tiếp theo
    */
   private async createNextRoundBrackets(
-    contentId: number,
+    categoryId: number,
     bracketSize: number,
     roundNumber: number,
     previousRoundBrackets: KnockoutBracket[]
@@ -311,7 +314,7 @@ export class KnockoutBracketService {
       const prevBracketB = previousRoundBrackets[i * 2 + 1]!;
 
       const bracket = await KnockoutBracket.create({
-        contentId,
+        categoryId,
         roundNumber,
         bracketPosition: i,
         previousBracketAId: prevBracketA.id,
@@ -362,7 +365,7 @@ export class KnockoutBracketService {
    * Format bracket tree để trả về client
    */
   private async formatBracketTree(
-    contentId: number,
+    categoryId: number,
     brackets: KnockoutBracket[]
   ): Promise<BracketTreeDto> {
     // Group by round
@@ -386,7 +389,7 @@ export class KnockoutBracketService {
     rounds.sort((a, b) => a.roundNumber - b.roundNumber);
 
     return {
-      contentId,
+      categoryId: categoryId,
       totalRounds: rounds.length,
       totalBrackets: brackets.length,
       rounds,
@@ -396,7 +399,8 @@ export class KnockoutBracketService {
   /**
    * Advance winner sang vòng tiếp theo
    */
-  async advanceWinner(bracketId: number, winnerEntryId: number): Promise<void> {
+  async advanceWinner(data: AdvanceWinnerDto): Promise<void> {
+    const { bracketId, winnerEntryId } = data;
     const bracket = await KnockoutBracket.findByPk(bracketId);
     if (!bracket) {
       throw new Error("Bracket not found");
@@ -438,10 +442,10 @@ export class KnockoutBracketService {
    * Tạo knockout bracket từ kết quả vòng bảng
    * Lấy top 2 mỗi bảng, phân bổ vào nhánh đấu
    */
-  async generateKnockoutBracketFromGroups(contentId: number): Promise<BracketTreeDto> {
+  async generateKnockoutBracketFromGroups(categoryId: number): Promise<BracketTreeDto> {
     // Lấy tất cả group standings với position
     const standings = await GroupStanding.findAll({
-      where: { contentId },
+      where: { categoryId },
       order: [
         ["groupName", "ASC"],
         ["position", "ASC"],
@@ -497,7 +501,7 @@ export class KnockoutBracketService {
 
     // Kiểm tra xem đã có brackets chưa
     const existingBrackets = await KnockoutBracket.findAll({
-      where: { contentId },
+      where: { categoryId },
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
@@ -570,7 +574,7 @@ export class KnockoutBracketService {
     if (shouldUpdate) {
       // Cập nhật vào brackets đã có
       brackets = await this.updateBracketTreeFromHalves(
-        contentId,
+        categoryId,
         existingBrackets,
         shuffledTop,
         shuffledBottom
@@ -578,21 +582,21 @@ export class KnockoutBracketService {
     } else {
       // Tạo bracket tree mới
       brackets = await this.createBracketTreeFromHalves(
-        contentId,
+        categoryId,
         bracketSize,
         shuffledTop,
         shuffledBottom
       );
     }
 
-    return this.formatBracketTree(contentId, brackets);
+    return this.formatBracketTree(categoryId, brackets);
   }
 
   /**
    * Tạo bracket tree từ 2 nửa đã có entries
    */
   private async createBracketTreeFromHalves(
-    contentId: number,
+    categoryId: number,
     bracketSize: number,
     topHalf: (number | null)[],
     bottomHalf: (number | null)[]
@@ -602,7 +606,7 @@ export class KnockoutBracketService {
 
     // Tạo brackets cho vòng đầu tiên
     const round1Brackets = await this.createRound1BracketsFromHalves(
-      contentId,
+      categoryId,
       bracketSize,
       topHalf,
       bottomHalf
@@ -614,7 +618,7 @@ export class KnockoutBracketService {
 
     for (let round = 2; round <= totalRounds; round++) {
       const roundBrackets = await this.createNextRoundBrackets(
-        contentId,
+        categoryId,
         bracketSize,
         round,
         previousRoundBrackets
@@ -630,7 +634,7 @@ export class KnockoutBracketService {
    * Tạo round 1 từ 2 nửa có sẵn entries
    */
   private async createRound1BracketsFromHalves(
-    contentId: number,
+    categoryId: number,
     bracketSize: number,
     topHalf: (number | null)[],
     bottomHalf: (number | null)[]
@@ -656,7 +660,7 @@ export class KnockoutBracketService {
       }
 
       const bracket = await KnockoutBracket.create({
-        contentId,
+        categoryId,
         roundNumber: 1,
         bracketPosition: i,
         entryAId: entryAId || undefined,
@@ -677,7 +681,7 @@ export class KnockoutBracketService {
    * Cập nhật entries vào bracket tree đã tồn tại
    */
   private async updateBracketTreeFromHalves(
-    contentId: number,
+    categoryId: number,
     existingBrackets: KnockoutBracket[],
     topHalf: (number | null)[],
     bottomHalf: (number | null)[]
@@ -749,7 +753,7 @@ export class KnockoutBracketService {
 
     // Trả về tất cả brackets sau khi cập nhật
     return await KnockoutBracket.findAll({
-      where: { contentId },
+      where: { categoryId },
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],

@@ -8,7 +8,7 @@ export interface CreateTournamentDto {
   status?: "upcoming" | "ongoing" | "completed";
   createdBy: number;
   numberOfTables?: number;
-  contents?: CreateTournamentCategoryDto[];
+  categories?: CreateTournamentCategoryDto[];
 }
 
 export interface CreateTournamentCategoryDto {
@@ -35,7 +35,7 @@ export interface UpdateTournamentDto {
   location?: string;
   status?: "upcoming" | "ongoing" | "completed";
   numberOfTables?: number;
-  contents?: UpdateTournamentCategoryDto[];
+  categories?: UpdateTournamentCategoryDto[];
 }
 
 export interface UpdateTournamentCategoryDto {

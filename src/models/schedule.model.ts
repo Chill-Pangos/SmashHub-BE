@@ -9,6 +9,7 @@ import {
 } from "sequelize-typescript";
 import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
+import GroupStanding from "./groupStanding.model";
 
 @Table({
   tableName: "schedules",
@@ -16,9 +17,9 @@ import Match from "./match.model";
   indexes: [
     { fields: ["scheduledAt"] },
     { fields: ["stage"] },
-    { fields: ["contentId", "stage"] },
-    { fields: ["contentId", "groupName"] },
-    { fields: ["contentId", "roundNumber"] },
+    { fields: ["categoryId", "stage"] },
+    { fields: ["categoryId", "groupName"] },
+    { fields: ["categoryId", "roundNumber"] },
   ],
 })
 export default class Schedule extends Model {
@@ -34,7 +35,7 @@ export default class Schedule extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare contentId: number;
+  declare categoryId: number;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -74,10 +75,13 @@ export default class Schedule extends Model {
   declare scheduledAt: Date;
 
   @BelongsTo(() => TournamentCategory, {
-    foreignKey: 'contentId',
+    foreignKey: 'categoryId',
   })
   TournamentCategory?: TournamentCategory;
 
   @HasMany(() => Match)
   matches?: Match[];
+
+  @HasMany(() => Match, "scheduledId")
+  scheduledMatches?: Match[];
 }

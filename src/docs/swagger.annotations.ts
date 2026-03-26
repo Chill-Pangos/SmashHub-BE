@@ -186,18 +186,18 @@
  *       properties:
  *         id:
  *           type: integer
- *           description: Content ID
+ *           description: Category ID
  *         tournamentId:
  *           type: integer
- *           description: ID of the tournament this content belongs to
+ *           description: ID of the tournament this category belongs to
  *         name:
  *           type: string
  *           maxLength: 100
- *           description: Name of the tournament content (e.g., Men's Singles, Women's Doubles)
+ *           description: Name of the tournament category (e.g., Men's Singles, Women's Doubles)
  *         type:
  *           type: string
  *           enum: [single, team, double]
- *           description: Type of tournament content
+ *           description: Type of tournament category
  *         maxEntries:
  *           type: integer
  *           description: Maximum number of entries allowed
@@ -228,7 +228,7 @@
  *           description: Gender requirement (male, female, or mixed)
  *         isGroupStage:
  *           type: boolean
- *           description: Whether this content has a group stage
+ *           description: Whether this category has a group stage
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -239,15 +239,15 @@
  *     Entry:
  *       type: object
  *       required:
- *         - contentId
+ *         - categoryId
  *         - teamId
  *       properties:
  *         id:
  *           type: integer
  *           description: Entry ID
- *         contentId:
+ *         categoryId:
  *           type: integer
- *           description: ID of the tournament content this entry belongs to
+ *           description: ID of the tournament category this entry belongs to
  *         teamId:
  *           type: integer
  *           description: ID of the team this entry belongs to
@@ -328,13 +328,13 @@
  *     GroupStanding:
  *       type: object
  *       required:
- *         - contentId
+ *         - categoryId
  *         - groupName
  *         - entryId
  *       properties:
  *         id:
  *           type: integer
- *         contentId:
+ *         categoryId:
  *           type: integer
  *         groupName:
  *           type: string
@@ -397,13 +397,13 @@
  *     KnockoutBracket:
  *       type: object
  *       required:
- *         - contentId
+ *         - categoryId
  *         - roundNumber
  *         - bracketPosition
  *       properties:
  *         id:
  *           type: integer
- *         contentId:
+ *         categoryId:
  *           type: integer
  *         roundNumber:
  *           type: integer
@@ -496,12 +496,12 @@
  *     Schedule:
  *       type: object
  *       required:
- *         - contentId
+ *         - categoryId
  *         - scheduledAt
  *       properties:
  *         id:
  *           type: integer
- *         contentId:
+ *         categoryId:
  *           type: integer
  *         roundNumber:
  *           type: integer

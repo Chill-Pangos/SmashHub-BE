@@ -10,7 +10,9 @@ import {
 
 import Match from "./match.model";
 import MatchSet from "./matchSet.model";
-import SubMatchPlayer from './subMatchPlayer.model';
+import User from "./user.model";
+import subMatchPlayerService from "../services/subMatchPlayer.service";
+import SubMatchPlayer from "./subMatchPlayer.model";
 
 @Table({
     tableName: "sub_matches",
@@ -55,12 +57,11 @@ export default class SubMatch extends Model {
     declare winnerTeam?: string;
 
     @BelongsTo(() => Match)
-    match?: Match;  
+    match?: Match;
 
     @HasMany(() => MatchSet)
     matchSets?: MatchSet[];
 
     @HasMany(() => SubMatchPlayer)
     subMatchPlayers?: SubMatchPlayer[];
-
 }

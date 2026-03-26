@@ -7,7 +7,7 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import User from "./user.model";
-import Entries from "./entry.model";
+import Entry from "./entry.model";
 
 @Table({
   tableName: "entry_members",
@@ -25,7 +25,7 @@ export default class EntryMember extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -45,8 +45,20 @@ export default class EntryMember extends Model {
   })
   declare eloAtEntry: number;
 
-  @BelongsTo(() => Entries)
-  entry?: Entries;
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare position?: string;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare teamId?: number;
+
+  @BelongsTo(() => Entry)
+  entry?: Entry;
 
   @BelongsTo(() => User)
   user?: User;

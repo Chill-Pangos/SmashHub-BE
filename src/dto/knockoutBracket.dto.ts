@@ -2,7 +2,7 @@
 
 // Create/Update DTOs
 export interface CreateKnockoutBracketDto {
-  contentId: number;
+  categoryId: number;
   roundNumber: number;
   bracketPosition: number;
   entryAId?: number;
@@ -31,7 +31,7 @@ export interface UpdateKnockoutBracketDto {
 // Response DTOs
 export interface KnockoutBracketDto {
   id: number;
-  contentId: number;
+  categoryId: number;
   roundNumber: number;
   bracketPosition: number;
   scheduleId?: number;
@@ -51,12 +51,12 @@ export interface KnockoutBracketDto {
 
 // Generate bracket DTOs
 export interface GenerateKnockoutBracketDto {
-  contentId: number;
+  categoryId: number;
   entries: number[]; // Array of entry IDs in seeded order
 }
 
 export interface BracketTreeDto {
-  contentId: number;
+  categoryId: number;
   totalRounds: number;
   totalBrackets: number;
   rounds: RoundDto[];
@@ -69,8 +69,8 @@ export interface RoundDto {
 }
 
 // Query DTOs
-export interface GetBracketsByContentDto {
-  contentId: number;
+export interface GetBracketsByCategoryDto {
+  categoryId: number;
   roundNumber?: number;
 }
 

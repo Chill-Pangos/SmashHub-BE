@@ -10,7 +10,7 @@ export class TournamentCategoryService {
    */
   private validateGender(type: string, gender?: string): void {
     if (gender === 'mixed' && type !== 'double') {
-      throw new Error('Only double type content can have mixed gender');
+      throw new Error('Only double type category can have mixed gender');
     }
   }
 
@@ -51,14 +51,14 @@ export class TournamentCategoryService {
   ): Promise<[number, TournamentCategory[]]> {
     // If updating gender or type, validate the combination
     if (data.gender || data.type) {
-      // Get current content to check existing values
-      const currentContent = await TournamentCategory.findByPk(id);
-      if (!currentContent) {
-        throw new Error('Content not found');
+      // Get current category to check existing values
+      const currentCategory = await TournamentCategory.findByPk(id);
+      if (!currentCategory) {
+        throw new Error('Category not found');
       }
 
-      const finalType = data.type || currentContent.type;
-      const finalGender = data.gender !== undefined ? data.gender : currentContent.gender;
+      const finalType = data.type || currentCategory.type;
+      const finalGender = data.gender !== undefined ? data.gender : currentCategory.gender;
 
       if (finalGender) {
         this.validateGender(finalType, finalGender);

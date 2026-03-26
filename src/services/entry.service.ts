@@ -1,4 +1,4 @@
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import Team from "../models/team.model";
 import TournamentCategory from "../models/tournamentCategory.model";
@@ -11,35 +11,35 @@ import { ValidationHelper } from "../utils/validation.helper";
 import { QueryHelper } from "../utils/query.helper";
 
 export class EntryService {
-  async create(data: CreateEntryDto): Promise<Entries> {
-    return await Entries.create(data as any);
+  async create(data: CreateEntryDto): Promise<Entry> {
+    return await Entry.create(data as any);
   }
 
-  async registerEntry(data: RegisterEntryDto, userId: number): Promise<Entries> {
+  async registerEntry(data: RegisterEntryDto, userId: number): Promise<Entry> {
     return withTransaction(async (transaction) => {
       // Verify user is team_manager of the team
       await ValidationHelper.verifyTeamManager(userId, data.teamId, transaction);
 
-      // Verify team belongs to the tournament of the content
-      const content = await TournamentCategory.findByPk(data.contentId, { transaction });
-      if (!content) {
-        throw new Error('Content not found');
+      // Verify team belongs to the tournament of the category
+      const category = await TournamentCategory.findByPk(data.categoryId, { transaction });
+      if (!category) {
+        throw new Error('Category not found');
       }
 
       const { team } = await ValidationHelper.verifyTeamBelongsToTournament(
         data.teamId,
-        content.tournamentId,
+        category.tournamentId,
         transaction
       );
 
       // Check if entries limit has been reached
-      const existingEntriesCount = await Entries.count({
-        where: { contentId: data.contentId },
+      const existingEntriesCount = await Entry.count({
+        where: { categoryId: data.categoryId },
         transaction,
       });
 
-      await ValidationHelper.verifyContentCapacity(
-        data.contentId,
+      await ValidationHelper.verifyCategoryCapacity(
+        data.categoryId,
         existingEntriesCount,
         transaction
       );
@@ -48,12 +48,12 @@ export class EntryService {
       await ValidationHelper.verifyTeamMembers(data.teamId, data.memberIds, transaction);
 
       // Validate gender requirements
-      await this.validateMembersGender(data.memberIds, content, transaction);
+      await this.validateMembersGender(data.memberIds, category, transaction);
 
       // Create entry
-      const entry = await Entries.create(
+      const entry = await Entry.create(
         {
-          contentId: data.contentId,
+          categoryId: data.categoryId,
           teamId: data.teamId,
         } as any,
         { transaction }
@@ -69,7 +69,7 @@ export class EntryService {
       await EntryMember.bulkCreate(entryMembersData, { transaction });
 
       // Fetch the created entry with all related data within the same transaction
-      const entryWithRelations = await Entries.findByPk(entry.id, {
+      const entryWithRelations = await Entry.findByPk(entry.id, {
         include: QueryHelper.entryWithRelations(),
         transaction,
       });
@@ -104,15 +104,15 @@ export class EntryService {
   }
 
   /**
-   * Validate members gender against content requirements
+   * Validate members gender against category requirements
    */
   private async validateMembersGender(
     memberIds: number[],
-    content: TournamentCategory,
+    category: TournamentCategory,
     transaction: any
   ): Promise<void> {
-    // If content doesn't have gender requirement, skip validation
-    if (!content.gender) {
+    // If category doesn't have gender requirement, skip validation
+    if (!category.gender) {
       return;
     }
 
@@ -127,50 +127,50 @@ export class EntryService {
     for (const user of users) {
       if (!user.gender) {
         invalidUsers.push(`${user.username} (gender not set)`);
-      } else if (user.gender !== content.gender) {
+      } else if (user.gender !== category.gender) {
         invalidUsers.push(`${user.username} (${user.gender})`);
       }
     }
 
     if (invalidUsers.length > 0) {
       throw new Error(
-        `Gender mismatch: Content requires "${content.gender}" but found: ${invalidUsers.join(', ')}`
+        `Gender mismatch: Category requires "${category.gender}" but found: ${invalidUsers.join(', ')}`
       );
     }
   }
 
-  async findAll(skip = 0, limit = 10): Promise<Entries[]> {
-    return await Entries.findAll({
+  async findAll(skip = 0, limit = 10): Promise<Entry[]> {
+    return await Entry.findAll({
       offset: skip,
       limit,
     });
   }
 
   async findById(id: number): Promise<Entries | null> {
-    return await Entries.findByPk(id);
+    return await Entry.findByPk(id);
   }
 
-  async findByContentId(
-    contentId: number,
+  async findByCategoryId(
+    categoryId: number,
     skip = 0,
     limit = 10
-  ): Promise<Entries[]> {
-    return await Entries.findAll({
-      where: { contentId },
+  ): Promise<Entry[]> {
+    return await Entry.findAll({
+      where: { categoryId },
       offset: skip,
       limit,
     });
   }
 
-  async update(id: number, data: UpdateEntryDto): Promise<[number, Entries[]]> {
-    return await Entries.update(data, {
+  async update(id: number, data: UpdateEntryDto): Promise<[number, Entry[]]> {
+    return await Entry.update(data, {
       where: { id },
       returning: true,
     });
   }
 
   async delete(id: number): Promise<number> {
-    return await Entries.destroy({ where: { id } });
+    return await Entry.destroy({ where: { id } });
   }
 }
 

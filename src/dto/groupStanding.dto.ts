@@ -1,7 +1,7 @@
 // Group Standing DTOs
 
 export interface CreateGroupStandingDto {
-  contentId: number;
+  categoryId: number;
   groupName: string;
   entryId: number;
 }
@@ -19,7 +19,7 @@ export interface UpdateGroupStandingDto {
 
 export interface GroupStandingDto {
   id: number;
-  contentId: number;
+  categoryId: number;
   groupName: string;
   entryId: number;
   matchesPlayed: number;
@@ -32,7 +32,7 @@ export interface GroupStandingDto {
 }
 
 export interface CalculateStandingsDto {
-  contentId: number;
+  categoryId: number;
   groupName?: string; // Calculate for specific group or all groups if not provided
 }
 
@@ -54,7 +54,9 @@ export interface CalculateOptimalGroupsDto {
 
 // Group Placeholder DTOs
 export interface GenerateGroupPlaceholdersDto {
-  contentId: number;
+  categoryId: number;
+  numberOfGroups: number;
+  maxEntriesPerGroup: number;
 }
 
 export interface GroupPlaceholderDto {
@@ -71,17 +73,21 @@ export interface GroupAssignmentDto {
 }
 
 export interface SaveGroupAssignmentsDto {
-  contentId: number;
-  groupAssignments: GroupAssignmentDto[];
+  categoryId: number;
+  groupAssignments: Array<{ groupName: string; entryIds: number[] }>;
 }
 
 // Random Draw DTOs
 export interface RandomDrawEntriesDto {
-  contentId: number;
+  categoryId: number;
+  entries: number[];
+  numberOfGroups: number;
 }
 
 export interface RandomDrawAndSaveDto {
-  contentId: number;
+  categoryId: number;
+  entries: number[];
+  numberOfGroups: number;
 }
 
 export interface RandomDrawResultDto {
@@ -90,14 +96,14 @@ export interface RandomDrawResultDto {
 }
 
 // Query DTOs
-export interface GetGroupStandingsByContentDto {
-  contentId: number;
+export interface GetGroupStandingsByCategoryDto {
+  categoryId: number;
   skip?: number;
   limit?: number;
 }
 
 export interface GetGroupStandingsByGroupDto {
-  contentId: number;
+  categoryId: number;
   groupName: string;
   skip?: number;
   limit?: number;

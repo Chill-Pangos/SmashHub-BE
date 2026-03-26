@@ -11,16 +11,20 @@ import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
 import Team from "./team.model";
 import EntryMember from "./entryMember.model";
+import User from "./user.model";
+import EntryJoinRequest from "./entryJoinRequest.model";
 
 @Table({
   tableName: "entries",
   timestamps: true,
   indexes: [
-    { fields: ["contentId"] },
+    { fields: ["categoryId"] },
     { fields: ["teamId"] },
+    { fields: ["isAcceptingMembers", "currentMemberCount", "requiredMemberCount"] },
+    { fields: ["teamCaptainId"] },
   ],
 })
-export default class Entries extends Model {
+export default class Entry extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
@@ -33,7 +37,7 @@ export default class Entries extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare contentId: number;
+  declare categoryId: number;
 
   @ForeignKey(() => Team)
   @Column({
@@ -42,11 +46,40 @@ export default class Entries extends Model {
   })
   declare teamId: number;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare isAcceptingMembers: boolean;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare requiredMemberCount?: number;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare currentMemberCount?: number;
+
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare teamCaptainId?: number;
+
   @BelongsTo(() => TournamentCategory)
-  content?: TournamentCategory;
+  category?: TournamentCategory;
 
   @BelongsTo(() => Team)
   team?: Team;
+
+  @BelongsTo(() => User)
+  teamCaptain?: User;
 
   @HasMany(() => EntryMember)
   members?: EntryMember[];
@@ -59,4 +92,7 @@ export default class Entries extends Model {
 
   @HasMany(() => Match, "winnerEntryId")
   wonMatches?: Match[];
+
+  @HasMany(() => EntryJoinRequest)
+  joinRequests? : EntryJoinRequest[];
 }

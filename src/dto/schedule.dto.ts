@@ -1,6 +1,6 @@
 // Schedule DTOs
 export interface CreateScheduleDto {
-  contentId: number;
+  categoryId: number;
   roundNumber?: number;
   groupName?: string;
   stage?: 'group' | 'knockout';
@@ -20,7 +20,7 @@ export interface UpdateScheduleDto {
 
 export interface ScheduleResponseDto {
   id: number;
-  contentId: number;
+  categoryId: number;
   roundNumber?: number;
   groupName?: string;
   stage?: 'group' | 'knockout';
@@ -32,7 +32,7 @@ export interface ScheduleResponseDto {
 }
 
 export interface GenerateScheduleDto {
-  contentId: number;
+  categoryId: number;
   startDate: Date;
   startTime?: string; // HH:MM format, default "08:00"
   endTime?: string; // HH:MM format, default "22:00"

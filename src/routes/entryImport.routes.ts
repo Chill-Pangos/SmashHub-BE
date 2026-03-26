@@ -23,15 +23,15 @@ const router = Router();
  *             type: object
  *             required:
  *               - file
- *               - contentId
+ *               - categoryId
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
  *                 description: Excel file (.xlsx or .xls) containing entries data
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: ID of the tournament content (must be type 'single')
+ *                 description: ID of the tournament category (must be type 'single')
  *                 example: 1
  *     responses:
  *       200:
@@ -133,10 +133,10 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - entries
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: number
  *                 example: 1
  *               entries:
@@ -212,15 +212,15 @@ router.post(
  *             type: object
  *             required:
  *               - file
- *               - contentId
+ *               - categoryId
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
  *                 description: Excel file (.xlsx or .xls) with double entries (5 columns STT, Player1 Name, Email, Player2 Name, Email)
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: ID of the tournament content (must be type 'double')
+ *                 description: ID of the tournament category (must be type 'double')
  *                 example: 2
  *     responses:
  *       200:
@@ -253,10 +253,10 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - entries
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: number
  *                 example: 2
  *               entries:
@@ -324,15 +324,15 @@ router.post(
  *             type: object
  *             required:
  *               - file
- *               - contentId
+ *               - categoryId
  *             properties:
  *               file:
  *                 type: string
  *                 format: binary
  *                 description: Excel file (.xlsx or .xls) containing team entries data
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: ID of the tournament content (must be type 'team')
+ *                 description: ID of the tournament category (must be type 'team')
  *                 example: 3
  *     responses:
  *       200:
@@ -433,10 +433,10 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - entries
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: number
  *                 example: 3
  *               entries:

@@ -6,7 +6,6 @@ import {
   ForeignKey,
   BelongsTo,
 } from "sequelize-typescript";
-import Match from "./match.model";
 import SubMatch from './subMatch.model';
 
 @Table({

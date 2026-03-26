@@ -7,15 +7,15 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import TournamentCategory from "./tournamentCategory.model";
-import Entries from "./entry.model";
+import Entry from "./entry.model";
 
 @Table({
   tableName: "group_standings",
   timestamps: true,
   indexes: [
     { fields: ["entryId"] },
-    { fields: ["contentId", "groupName"] },
-    { fields: ["contentId", "position"] },
+    { fields: ["categoryId", "groupName"] },
+    { fields: ["categoryId", "position"] },
   ],
 })
 export default class GroupStanding extends Model {
@@ -31,7 +31,7 @@ export default class GroupStanding extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare contentId: number;
+  declare categoryId: number;
 
   @Column({
     type: DataType.STRING(50),
@@ -39,7 +39,7 @@ export default class GroupStanding extends Model {
   })
   declare groupName: string;
 
-  @ForeignKey(() => Entries)
+  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -98,8 +98,8 @@ export default class GroupStanding extends Model {
   declare position?: number;
 
   @BelongsTo(() => TournamentCategory)
-  content?: TournamentCategory;
+  category?: TournamentCategory;
 
-  @BelongsTo(() => Entries)
-  entry?: Entries;
+  @BelongsTo(() => Entry)
+  entry?: Entry;
 }

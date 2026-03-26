@@ -7,7 +7,8 @@
 
 CREATE TABLE IF NOT EXISTS `users` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `username` VARCHAR(50) NOT NULL UNIQUE,
+  `firstName` VARCHAR(50) NOT NULL,
+  `lastName` VARCHAR(50) NOT NULL,
   `email` VARCHAR(100) NOT NULL UNIQUE,
   `password` VARCHAR(255) NOT NULL,
   `isEmailVerified` BOOLEAN NOT NULL DEFAULT FALSE,
@@ -240,14 +241,14 @@ CREATE TABLE IF NOT EXISTS `team_members` (
 
 CREATE TABLE IF NOT EXISTS `entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `contentId` INT UNSIGNED NOT NULL,
+  `categoryId` INT UNSIGNED NOT NULL,
   `teamId` INT UNSIGNED NOT NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_contentId` (`contentId`),
+  KEY `idx_categoryId` (`categoryId`),
   KEY `idx_teamId` (`teamId`),
-  CONSTRAINT `fk_entries_contentId` FOREIGN KEY (`contentId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_entries_categoryId` FOREIGN KEY (`categoryId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_entries_teamId` FOREIGN KEY (`teamId`) REFERENCES `teams` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -267,7 +268,7 @@ CREATE TABLE IF NOT EXISTS `entry_members` (
 
 CREATE TABLE IF NOT EXISTS `group_standings` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `contentId` INT UNSIGNED NOT NULL,
+  `categoryId` INT UNSIGNED NOT NULL,
   `groupName` VARCHAR(50) NOT NULL,
   `entryId` INT UNSIGNED NOT NULL,
   `matchesPlayed` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -281,9 +282,9 @@ CREATE TABLE IF NOT EXISTS `group_standings` (
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_entryId` (`entryId`),
-  KEY `idx_contentId_groupName` (`contentId`, `groupName`),
-  KEY `idx_contentId_position` (`contentId`, `position`),
-  CONSTRAINT `fk_group_standings_contentId` FOREIGN KEY (`contentId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  KEY `idx_categoryId_groupName` (`categoryId`, `groupName`),
+  KEY `idx_categoryId_position` (`categoryId`, `position`),
+  CONSTRAINT `fk_group_standings_categoryId` FOREIGN KEY (`categoryId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_group_standings_entryId` FOREIGN KEY (`entryId`) REFERENCES `entries` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -293,7 +294,7 @@ CREATE TABLE IF NOT EXISTS `group_standings` (
 
 CREATE TABLE IF NOT EXISTS `schedules` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `contentId` INT UNSIGNED NOT NULL,
+  `categoryId` INT UNSIGNED NOT NULL,
   `roundNumber` INT UNSIGNED DEFAULT NULL,
   `groupName` VARCHAR(50) DEFAULT NULL,
   `stage` ENUM('group', 'knockout') DEFAULT 'group',
@@ -305,10 +306,10 @@ CREATE TABLE IF NOT EXISTS `schedules` (
   PRIMARY KEY (`id`),
   KEY `idx_scheduledAt` (`scheduledAt`),
   KEY `idx_stage` (`stage`),
-  KEY `idx_contentId_stage` (`contentId`, `stage`),
-  KEY `idx_contentId_groupName` (`contentId`, `groupName`),
-  KEY `idx_contentId_roundNumber` (`contentId`, `roundNumber`),
-  CONSTRAINT `fk_schedules_contentId` FOREIGN KEY (`contentId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `idx_categoryId_stage` (`categoryId`, `stage`),
+  KEY `idx_categoryId_groupName` (`categoryId`, `groupName`),
+  KEY `idx_categoryId_roundNumber` (`categoryId`, `roundNumber`),
+  CONSTRAINT `fk_schedules_categoryId` FOREIGN KEY (`categoryId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `matches` (
@@ -343,7 +344,7 @@ CREATE TABLE IF NOT EXISTS `matches` (
 
 CREATE TABLE IF NOT EXISTS `knockout_brackets` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `contentId` INT UNSIGNED NOT NULL,
+  `categoryId` INT UNSIGNED NOT NULL,
   `roundNumber` INT UNSIGNED NOT NULL,
   `bracketPosition` INT UNSIGNED NOT NULL,
   `scheduleId` INT UNSIGNED DEFAULT NULL,
@@ -368,9 +369,9 @@ CREATE TABLE IF NOT EXISTS `knockout_brackets` (
   KEY `idx_nextBracketId` (`nextBracketId`),
   KEY `idx_previousBracketAId` (`previousBracketAId`),
   KEY `idx_previousBracketBId` (`previousBracketBId`),
-  KEY `idx_contentId_roundNumber_bracketPosition` (`contentId`, `roundNumber`, `bracketPosition`),
+  KEY `idx_categoryId_roundNumber_bracketPosition` (`categoryId`, `roundNumber`, `bracketPosition`),
   KEY `idx_status` (`status`),
-  CONSTRAINT `fk_knockout_brackets_contentId` FOREIGN KEY (`contentId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_knockout_brackets_categoryId` FOREIGN KEY (`categoryId`) REFERENCES `tournament_category` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_knockout_brackets_scheduleId` FOREIGN KEY (`scheduleId`) REFERENCES `schedules` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_knockout_brackets_matchId` FOREIGN KEY (`matchId`) REFERENCES `matches` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_knockout_brackets_entryAId` FOREIGN KEY (`entryAId`) REFERENCES `entries` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,

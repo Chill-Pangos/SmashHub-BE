@@ -50,12 +50,12 @@ export class EntryController {
     }
   }
 
-  async findByContentId(req: Request, res: Response): Promise<void> {
+  async findByCategoryId(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const entries = await entryService.findByContentId(
-        Number(req.params.contentId),
+      const entries = await entryService.findByCategoryId(
+        Number(req.params.categoryId),
         skip,
         limit
       );

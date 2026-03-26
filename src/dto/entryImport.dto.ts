@@ -110,7 +110,7 @@ export interface EntryImportPreviewDto {
  * Request to confirm and save import
  */
 export interface ConfirmEntryImportDto {
-  contentId: number;
+  categoryId: number;
   entries: ValidatedSingleEntryDto[] | ValidatedDoubleEntryDto[] | ValidatedTeamEntryDto[];
 }
 

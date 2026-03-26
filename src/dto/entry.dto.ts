@@ -1,11 +1,11 @@
 // Entries DTOs
 export interface CreateEntryDto {
-  contentId: number;
+  categoryId: number;
   teamId: number;
 }
 
 export interface RegisterEntryDto {
-  contentId: number;
+  categoryId: number;
   teamId: number;
   memberIds: number[]; // Array of userId to register for this entry
 }
@@ -16,7 +16,7 @@ export interface UpdateEntryDto {
 
 export interface EntryResponseDto {
   id: number;
-  contentId: number;
+  categoryId: number;
   teamId: number;
   createdAt: Date;
   updatedAt: Date;

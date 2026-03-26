@@ -40,7 +40,7 @@ INSERT IGNORE INTO `permissions` (`id`, `name`, `createdAt`, `updatedAt`) VALUES
 (16, 'tournament.create', NOW(), NOW()),
 (17, 'tournament.update', NOW(), NOW()),
 (18, 'tournament.delete', NOW(), NOW()),
-(19, 'tournament.manage_content', NOW(), NOW()),
+(19, 'tournament.manage_category', NOW(), NOW()),
 (20, 'tournament.manage_referees', NOW(), NOW()),
 
 -- Team Management
@@ -83,7 +83,7 @@ INSERT IGNORE INTO `role_permissions` (`roleId`, `permissionId`, `createdAt`, `u
 (2, 15, NOW(), NOW()), -- tournament.view
 (2, 16, NOW(), NOW()), -- tournament.create
 (2, 17, NOW(), NOW()), -- tournament.update
-(2, 19, NOW(), NOW()), -- tournament.manage_content
+(2, 19, NOW(), NOW()), -- tournament.manage_category
 (2, 20, NOW(), NOW()), -- tournament.manage_referees
 (2, 21, NOW(), NOW()), -- team.list
 (2, 23, NOW(), NOW()), -- team.create

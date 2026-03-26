@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
-import TournamentCategoryService from "../services/TournamentCategory.service";
+import TournamentCategoryService from "../services/tournamentCategory.service";
 
 export class TournamentCategoryController {
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const content = await TournamentCategoryService.create(req.body);
-      res.status(201).json(content);
+      const category = await TournamentCategoryService.create(req.body);
+      res.status(201).json(category);
     } catch (error) {
       res
         .status(400)
-        .json({ message: "Error creating tournament content", error });
+        .json({ message: "Error creating tournament category", error });
     }
   }
 
@@ -17,29 +17,29 @@ export class TournamentCategoryController {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const contents = await TournamentCategoryService.findAll(skip, limit);
-      res.status(200).json(contents);
+      const categories = await TournamentCategoryService.findAll(skip, limit);
+      res.status(200).json(categories);
     } catch (error) {
       res
         .status(500)
-        .json({ message: "Error fetching tournament contents", error });
+        .json({ message: "Error fetching tournament categories", error });
     }
   }
 
   async findById(req: Request, res: Response): Promise<void> {
     try {
-      const content = await TournamentCategoryService.findById(
+      const category = await TournamentCategoryService.findById(
         Number(req.params.id)
       );
-      if (!content) {
-        res.status(404).json({ message: "Tournament content not found" });
+      if (!category) {
+        res.status(404).json({ message: "Tournament category not found" });
         return;
       }
-      res.status(200).json(content);
+      res.status(200).json(category);
     } catch (error) {
       res
         .status(500)
-        .json({ message: "Error fetching tournament content", error });
+        .json({ message: "Error fetching tournament category", error });
     }
   }
 
@@ -47,34 +47,34 @@ export class TournamentCategoryController {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const contents = await TournamentCategoryService.findByTournamentId(
+      const categories = await TournamentCategoryService.findByTournamentId(
         Number(req.params.tournamentId),
         skip,
         limit
       );
-      res.status(200).json(contents);
+      res.status(200).json(categories);
     } catch (error) {
       res
         .status(500)
-        .json({ message: "Error fetching tournament contents", error });
+        .json({ message: "Error fetching tournament categorys", error });
     }
   }
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const content = await TournamentCategoryService.update(
+      const category = await TournamentCategoryService.update(
         Number(req.params.id),
         req.body
       );
-      if (!content) {
-        res.status(404).json({ message: "Tournament content not found" });
+      if (!category) {
+        res.status(404).json({ message: "Tournament category not found" });
         return;
       }
-      res.status(200).json(content);
+      res.status(200).json(category);
     } catch (error) {
       res
         .status(400)
-        .json({ message: "Error updating tournament content", error });
+        .json({ message: "Error updating tournament category", error });
     }
   }
 
@@ -84,14 +84,14 @@ export class TournamentCategoryController {
         Number(req.params.id)
       );
       if (!deleted) {
-        res.status(404).json({ message: "Tournament content not found" });
+        res.status(404).json({ message: "Tournament category not found" });
         return;
       }
       res.status(204).send();
     } catch (error) {
       res
         .status(500)
-        .json({ message: "Error deleting tournament content", error });
+        .json({ message: "Error deleting tournament category", error });
     }
   }
 }

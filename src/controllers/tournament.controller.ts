@@ -34,7 +34,7 @@ export class TournamentController {
     }
   }
 
-  async findAllWithContentsFiltered(req: Request, res: Response): Promise<void> {
+  async findAllWithCategoriesFiltered(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
@@ -47,7 +47,7 @@ export class TournamentController {
       const gender = req.query.gender as 'male' | 'female' | 'mixed' | undefined;
       const isGroupStage = req.query.isGroupStage === 'true' ? true : req.query.isGroupStage === 'false' ? false : undefined;
 
-      const result = await tournamentService.findAllWithContentsFiltered({
+      const result = await tournamentService.findAllWithCategoriesFiltered({
         skip,
         limit,
         userId,
@@ -81,9 +81,9 @@ export class TournamentController {
     }
   }
 
-  async findByIdWithContents(req: Request, res: Response): Promise<void> {
+  async findByIdWithCategories(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.findByIdWithContents(
+      const tournament = await tournamentService.findByIdWithCategories(
         Number(req.params.id)
       );
       if (!tournament) {
@@ -92,7 +92,7 @@ export class TournamentController {
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching tournament with contents", error });
+      res.status(500).json({ message: "Error fetching tournament with categories", error });
     }
   }
 
@@ -144,7 +144,7 @@ export class TournamentController {
     }
   }
 
-  async updateWithContents(req: Request, res: Response): Promise<void> {
+  async updateWithCategories(req: Request, res: Response): Promise<void> {
     try {
       const tournament = await tournamentService.update(
         Number(req.params.id),
@@ -156,7 +156,7 @@ export class TournamentController {
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Error updating tournament with contents", error });
+      res.status(400).json({ message: "Error updating tournament with categories", error });
     }
   }
 

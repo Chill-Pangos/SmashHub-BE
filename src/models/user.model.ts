@@ -13,7 +13,6 @@ import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
 import Role from "./role.model";
 import EntryMember from "./entryMember.model";
-import Tournament from "./tournament.model";
 
 @Table({
   tableName: "users",
@@ -33,9 +32,14 @@ export default class User extends Model {
   @Column({
     type: DataType.STRING(50),
     allowNull: false,
-    unique: true,
   })
-  declare username: string;
+  declare firstName: string;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: false,
+  })
+  declare lastName: string;
 
   @Column({
     type: DataType.STRING(100),

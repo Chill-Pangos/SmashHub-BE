@@ -44,7 +44,7 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  *     tags: [Schedules]
  *     summary: Generate tournament schedules automatically
  *     description: |
- *       Automatically generates schedules for all matches in a tournament content.
+ *       Automatically generates schedules for all matches in a tournament category.
  *       - Singles and Doubles matches: 20 minutes each
  *       - Team matches: 60 minutes each
  *       - Includes lunch break from 12:00 to 14:00 by default
@@ -57,10 +57,10 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - startDate
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID
  *                 example: 1
@@ -168,10 +168,10 @@ router.post("/generate",
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - groupResults
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID
  *                 example: 1
@@ -223,10 +223,10 @@ router.post("/update-knockout",
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - startDate
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID
  *                 example: 1
@@ -254,7 +254,7 @@ router.post("/generate-group-stage",
  *     tags: [Schedules]
  *     summary: Generate complete tournament schedule (group + knockout)
  *     description: |
- *       Tạo lịch thi đấu hoàn chỉnh cho tournament content bao gồm:
+ *       Tạo lịch thi đấu hoàn chỉnh cho tournament category bao gồm:
  *       1. Chia entries thành bảng đấu (nếu chưa có)
  *       2. Tạo knockout brackets từ top 2 mỗi bảng
  *       3. Tạo schedules cho vòng bảng (max 2 trận/ngày)
@@ -276,9 +276,9 @@ router.post("/generate-group-stage",
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID (startDate và endDate sẽ được lấy từ tournament table)
  *                 example: 1
@@ -325,7 +325,7 @@ router.post("/generate-complete",
  *     tags: [Schedules]
  *     summary: Generate knockout-only tournament schedule (no group stage)
  *     description: |
- *       Tạo lịch thi đấu cho tournament content chỉ có knockout stage (không qua vòng bảng):
+ *       Tạo lịch thi đấu cho tournament category chỉ có knockout stage (không qua vòng bảng):
  *       1. Tạo knockout brackets trực tiếp từ entries (nếu chưa có)
  *       2. Tạo schedules cho tất cả các vòng knockout
  *       3. Hỗ trợ placeholder cho các vòng sau
@@ -346,9 +346,9 @@ router.post("/generate-complete",
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID (phải có isGroupStage = false)
  *                 example: 2
@@ -406,10 +406,10 @@ router.post("/generate-knockout-only",
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - startDate
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
  *                 description: Tournament content ID (phải có knockout brackets đã tạo)
  *                 example: 1
@@ -492,18 +492,18 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
 
 /**
  * @swagger
- * /schedules/content/{contentId}:
+ * /schedules/category/{categoryId}:
  *   get:
  *     tags: [Schedules]
- *     summary: Get schedules by tournament content ID
- *     description: Retrieve all schedules for a specific tournament content, with optional filtering by stage
+ *     summary: Get schedules by tournament category ID
+ *     description: Retrieve all schedules for a specific tournament category, with optional filtering by stage
  *     parameters:
  *       - in: path
- *         name: contentId
+ *         name: categoryId
  *         required: true
  *         schema:
  *           type: number
- *         description: ID of the tournament content
+ *         description: ID of the tournament category
  *       - in: query
  *         name: stage
  *         required: false
@@ -515,7 +515,7 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of schedules for the tournament content
+ *         description: List of schedules for the tournament category
  *         content:
  *           application/json:
  *             schema:
@@ -539,6 +539,6 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.get("/content/:contentId", scheduleController.getSchedulesByContentId.bind(scheduleController));
+router.get("/content/:categoryId", scheduleController.getSchedulesByCategoryId.bind(scheduleController));
 
 export default router;

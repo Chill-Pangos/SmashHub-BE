@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import User from '../models/user.model';
 import TournamentCategory from '../models/tournamentCategory.model';
-import Entries from '../models/entry.model';
+import Entry from '../models/entry.model';
 import EntryMember from '../models/entryMember.model';
 import Team from '../models/team.model';
 import TeamMember from '../models/teamMember.model';
@@ -22,21 +22,21 @@ export class EntryImportService {
    */
   async parseAndValidateSingleEntries(
     fileBuffer: Buffer,
-    contentId: number
+    categoryId: number
   ): Promise<EntryImportPreviewDto> {
-    // Validate content exists and is single type
-    const content = await TournamentCategory.findByPk(contentId);
-    if (!content) {
-      throw new Error('Content not found');
+    // Validate category exists and is single type
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      throw new Error('Category not found');
     }
 
-    if (content.type !== 'single') {
-      throw new Error('This endpoint is only for single type content');
+    if (category.type !== 'single') {
+      throw new Error('This endpoint is only for single type category');
     }
 
     // Get current entries count
-    const currentEntries = await Entries.count({ where: { contentId } });
-    const availableSlots = content.maxEntries - currentEntries;
+    const currentEntries = await Entry.count({ where: { categoryId } });
+    const availableSlots = category.maxEntries - currentEntries;
 
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
@@ -47,24 +47,24 @@ export class EntryImportService {
     const parsedEntries = this.parseEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntries.length > availableSlots) {
+    if (parsedEntry.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${content.maxEntries} filled)`
+        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
     // Validate entries and resolve user IDs
     const { validatedEntries, errors } = await this.validateEntries(
       parsedEntries,
-      contentId
+      categoryId
     );
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntries.length,
+      totalEntries: parsedEntry.length,
       entriesWithErrors: errors.length,
-      contentType: content.type,
-      maxEntries: content.maxEntries,
+      categoryType: category.type,
+      maxEntries: category.maxEntries,
       currentEntries,
       availableSlots,
     };
@@ -148,7 +148,7 @@ export class EntryImportService {
    */
   private async validateEntries(
     parsedEntries: ParsedSingleEntryDto[],
-    contentId: number
+    categoryId: number
   ): Promise<{
     validatedEntries: ValidatedSingleEntryDto[];
     errors: EntryImportValidationError[];
@@ -156,9 +156,9 @@ export class EntryImportService {
     const validatedEntries: ValidatedSingleEntryDto[] = [];
     const errors: EntryImportValidationError[] = [];
 
-    // Get all existing entries for this content
-    const existingEntries = await Entries.findAll({
-      where: { contentId },
+    // Get all existing entries for this category
+    const existingEntries = await Entry.findAll({
+      where: { categoryId },
       include: [
         {
           model: EntryMember,
@@ -168,7 +168,7 @@ export class EntryImportService {
     });
 
     const existingUserIds = new Set(
-      existingEntries.flatMap(entry => {
+      existingEntry.flatMap(entry => {
         const members = (entry as any).members as EntryMember[] | undefined;
         return members?.map((em: EntryMember) => em.userId) || [];
       })
@@ -237,13 +237,13 @@ export class EntryImportService {
           }
 
           // Get tournament ID from content
-          const content = await TournamentCategory.findByPk(contentId);
-          if (!content) {
+          const category = await TournamentCategory.findByPk(categoryId);
+          if (!category) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: 'content',
-              message: 'Content not found',
-              value: contentId,
+              message: 'Category not found',
+              value: categoryId,
             });
           } else {
             // Validate user's gender against content requirements
@@ -288,7 +288,7 @@ export class EntryImportService {
       if (entryErrors.length > 0) {
         errors.push(...entryErrors);
       } else if (userId !== null) {
-        validatedEntries.push({
+        validatedEntry.push({
           name: entry.name,
           userId,
           email: entry.email,
@@ -307,21 +307,21 @@ export class EntryImportService {
    */
   async parseAndValidateDoubleEntries(
     fileBuffer: Buffer,
-    contentId: number
+    categoryId: number
   ): Promise<EntryImportPreviewDto> {
     // Validate content exists and is double type
-    const content = await TournamentCategory.findByPk(contentId);
-    if (!content) {
-      throw new Error('Content not found');
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      throw new Error('Category not found');
     }
 
-    if (content.type !== 'double') {
+    if (category.type !== 'double') {
       throw new Error('This endpoint is only for double type content');
     }
 
     // Get current entries count
-    const currentEntries = await Entries.count({ where: { contentId } });
-    const availableSlots = content.maxEntries - currentEntries;
+    const currentEntries = await Entry.count({ where: { categoryId } });
+    const availableSlots = category.maxEntries - currentEntries;
 
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
@@ -332,24 +332,24 @@ export class EntryImportService {
     const parsedEntries = this.parseDoubleEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntries.length > availableSlots) {
+    if (parsedEntry.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${content.maxEntries} filled)`
+        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
     // Validate double entries and resolve user IDs
     const { validatedEntries, errors } = await this.validateDoubleEntries(
       parsedEntries,
-      contentId
+      categoryId
     );
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntries.length,
+      totalEntries: parsedEntry.length,
       entriesWithErrors: errors.length,
-      contentType: content.type,
-      maxEntries: content.maxEntries,
+      categoryType: category.type,
+      maxEntries: category.maxEntries,
       currentEntries,
       availableSlots,
     };
@@ -436,7 +436,7 @@ export class EntryImportService {
    */
   private async validateDoubleEntries(
     parsedEntries: ParsedDoubleEntryDto[],
-    contentId: number
+    categoryId: number
   ): Promise<{
     validatedEntries: ValidatedDoubleEntryDto[];
     errors: EntryImportValidationError[];
@@ -444,9 +444,9 @@ export class EntryImportService {
     const validatedEntries: ValidatedDoubleEntryDto[] = [];
     const errors: EntryImportValidationError[] = [];
 
-    // Get all existing entries for this content
-    const existingEntries = await Entries.findAll({
-      where: { contentId },
+    // Get all existing entries for this category
+    const existingEntries = await Entry.findAll({
+      where: { categoryId },
       include: [
         {
           model: EntryMember,
@@ -457,7 +457,7 @@ export class EntryImportService {
 
     // Track existing users who already registered (each user can only register once)
     const existingUserIds = new Set<number>();
-    existingEntries.forEach(entry => {
+    existingEntry.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members) {
         members.forEach(member => {
@@ -468,7 +468,7 @@ export class EntryImportService {
 
     // Track existing pairs (both directions)
     const existingPairs = new Set<string>();
-    existingEntries.forEach(entry => {
+    existingEntry.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members && members.length === 2) {
         const sorted = members.sort((a, b) => a.userId - b.userId);
@@ -545,13 +545,13 @@ export class EntryImportService {
       let user1: User | null = null;
       let user2: User | null = null;
 
-      const content = await TournamentCategory.findByPk(contentId);
-      if (!content) {
+      const category = await TournamentCategory.findByPk(categoryId);
+      if (!category) {
         entryErrors.push({
           rowNumber: entry.rowNumber,
           field: 'content',
-          message: 'Content not found',
-          value: contentId,
+          message: 'Category not found',
+          value: categoryId,
         });
       } else {
         // Resolve player 1
@@ -793,7 +793,7 @@ export class EntryImportService {
       if (entryErrors.length > 0) {
         errors.push(...entryErrors);
       } else if (player1UserId !== null && player2UserId !== null) {
-        validatedEntries.push({
+        validatedEntry.push({
           player1Name: entry.player1Name,
           player1UserId,
           player1Email: entry.player1Email,
@@ -815,21 +815,21 @@ export class EntryImportService {
    */
   async parseAndValidateTeamEntries(
     fileBuffer: Buffer,
-    contentId: number
+    categoryId: number
   ): Promise<EntryImportPreviewDto> {
     // Validate content exists and is team type
-    const content = await TournamentCategory.findByPk(contentId);
-    if (!content) {
-      throw new Error('Content not found');
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      throw new Error('Category not found');
     }
 
-    if (content.type !== 'team') {
+    if (category.type !== 'team') {
       throw new Error('This endpoint is only for team type content');
     }
 
     // Get current entries count
-    const currentEntries = await Entries.count({ where: { contentId } });
-    const availableSlots = content.maxEntries - currentEntries;
+    const currentEntries = await Entry.count({ where: { categoryId } });
+    const availableSlots = category.maxEntries - currentEntries;
 
     const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
 
@@ -840,24 +840,24 @@ export class EntryImportService {
     const parsedEntries = this.parseTeamEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntries.length > availableSlots) {
+    if (parsedEntry.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${content.maxEntries} filled)`
+        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
     // Validate team entries and resolve user IDs
     const { validatedEntries, errors } = await this.validateTeamEntries(
       parsedEntries,
-      contentId
+      categoryId
     );
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntries.length,
+      totalEntries: parsedEntry.length,
       entriesWithErrors: errors.length,
-      contentType: content.type,
-      maxEntries: content.maxEntries,
+      categoryType: category.type,
+      maxEntries: category.maxEntries,
       currentEntries,
       availableSlots,
     };
@@ -953,7 +953,7 @@ export class EntryImportService {
    */
   private async validateTeamEntries(
     parsedEntries: ParsedTeamEntryDto[],
-    contentId: number
+    categoryId: number
   ): Promise<{
     validatedEntries: ValidatedTeamEntryDto[];
     errors: EntryImportValidationError[];
@@ -961,9 +961,9 @@ export class EntryImportService {
     const validatedEntries: ValidatedTeamEntryDto[] = [];
     const errors: EntryImportValidationError[] = [];
 
-    // Get all existing entries for this content
-    const existingEntries = await Entries.findAll({
-      where: { contentId },
+    // Get all existing entries for this category
+    const existingEntries = await Entry.findAll({
+      where: { categoryId },
       include: [
         {
           model: EntryMember,
@@ -974,7 +974,7 @@ export class EntryImportService {
 
     // Track existing users who already registered
     const existingUserIds = new Set<number>();
-    existingEntries.forEach(entry => {
+    existingEntry.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members) {
         members.forEach(member => {
@@ -986,9 +986,9 @@ export class EntryImportService {
     const processedUserIds = new Set<number>();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    const content = await TournamentCategory.findByPk(contentId);
-    if (!content) {
-      throw new Error('Content not found');
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      throw new Error('Category not found');
     }
 
     for (const entry of parsedEntries) {
@@ -1172,7 +1172,7 @@ export class EntryImportService {
         // Add all player IDs to processed set
         playerUserIds.forEach(id => processedUserIds.add(id));
         
-        validatedEntries.push({
+        validatedEntry.push({
           players,
           teamId: playerTeamIds[0]!,
           rowNumber: entry.rowNumber,

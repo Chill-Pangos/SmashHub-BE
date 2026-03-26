@@ -34,19 +34,19 @@ export class QueryHelper {
       },
       {
         model: TournamentCategory,
-        as: 'content',
+        as: 'category',
       },
     ];
   }
 
   /**
-   * Include options for Tournament with contents
+   * Include options for Tournament with categories
    */
-  static tournamentWithContents() {
+  static tournamentWithCategories() {
     return [
       {
         model: TournamentCategory,
-        as: "contents",
+        as: "categories",
       },
     ];
   }

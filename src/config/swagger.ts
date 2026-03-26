@@ -203,10 +203,10 @@ const swaggerDefinition = {
       },
       Entry: {
         type: "object",
-        required: ["contentId", "teamId"],
+        required: ["categoryId", "teamId"],
         properties: {
           id: { type: "integer" },
-          contentId: { type: "integer" },
+          categoryId: { type: "integer" },
           teamId: { type: "integer" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
@@ -214,10 +214,10 @@ const swaggerDefinition = {
       },
       Schedule: {
         type: "object",
-        required: ["contentId", "scheduledAt"],
+        required: ["categoryId", "scheduledAt"],
         properties: {
           id: { type: "integer" },
-          contentId: { type: "integer" },
+          categoryId: { type: "integer" },
           roundNumber: { type: "integer" },
           groupName: { type: "string", maxLength: 50 },
           stage: { type: "string", enum: ["group", "knockout"], default: "group" },
@@ -332,10 +332,10 @@ const swaggerDefinition = {
       },
       GroupStanding: {
         type: "object",
-        required: ["contentId", "groupName", "entryId"],
+        required: ["categoryId", "groupName", "entryId"],
         properties: {
           id: { type: "integer" },
-          contentId: { type: "integer" },
+          categoryId: { type: "integer" },
           groupName: { type: "string", maxLength: 50 },
           entryId: { type: "integer" },
           matchesPlayed: { type: "integer", default: 0 },
@@ -364,10 +364,10 @@ const swaggerDefinition = {
       },
       KnockoutBracket: {
         type: "object",
-        required: ["contentId", "roundNumber", "bracketPosition"],
+        required: ["categoryId", "roundNumber", "bracketPosition"],
         properties: {
           id: { type: "integer" },
-          contentId: { type: "integer" },
+          categoryId: { type: "integer" },
           roundNumber: { type: "integer" },
           bracketPosition: { type: "integer" },
           scheduleId: { type: "integer" },
