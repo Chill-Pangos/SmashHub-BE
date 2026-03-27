@@ -209,6 +209,28 @@ export class GroupStandingController {
   }
 
   /**
+   * Bốc thăm ngẫu nhiên và lưu kết quả
+   * POST /group-standings/random-draw-and-save
+   * Body: { categoryId: number }
+   */
+  async randomDrawAndSave(req: Request, res: Response): Promise<void> {
+    try {
+      const data: RandomDrawAndSaveDto = req.body;
+      const result = await groupStandingService.randomDrawAndSave(data);
+      res.status(201).json({
+        success: true,
+        data: result,
+        message: "Bốc thăm và lưu thành công",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
    * Tính toán standings (placeholder method - needs implementation)
    */
   async calculateStandings(req: Request, res: Response): Promise<void> {

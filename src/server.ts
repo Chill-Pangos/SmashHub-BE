@@ -5,7 +5,6 @@ import config from "./config/config";
 import sequelize from "./config/database";
 import { startCleanupCrons } from "./crons/cleanup.cron";
 import NotificationService from "./services/notification.service";
-import { TournamentScheduler } from "./jobs/tournamentScheduler";
 
 const checkConnection = async () => {
   try {
@@ -23,7 +22,6 @@ checkConnection().then(() => {
   NotificationService.initialize(httpServer);
 
   // Initialize Tournament Scheduler
-  const tournamentScheduler = new TournamentScheduler();
 
   httpServer.listen(config.port, () => {
     console.log(`Server is running on port ${config.port}`);
@@ -33,19 +31,16 @@ checkConnection().then(() => {
     startCleanupCrons();
 
     // Start tournament scheduler
-    tournamentScheduler.startScheduler();
   });
 
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
-    tournamentScheduler.stopScheduler();
     process.exit(0);
   });
 
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully');
-    tournamentScheduler.stopScheduler();
     process.exit(0);
   });
 });

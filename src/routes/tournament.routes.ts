@@ -11,8 +11,8 @@ const router = Router();
  * /tournaments:
  *   post:
  *     tags: [Tournaments]
- *     summary: Create a new tournament with contents
- *     description: Create a tournament along with its tournament contents in a single transaction. Creator ID is automatically taken from authenticated user.
+ *     summary: Create a new tournament with categories
+ *     description: Create a tournament along with its tournament categories in a single transaction. Creator ID is automatically taken from authenticated user.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -53,9 +53,9 @@ const router = Router();
  *                 type: integer
  *                 description: Number of tables available for concurrent matches (default is 1)
  *                 example: 4
- *               contents:
+ *               categories:
  *                 type: array
- *                 description: Array of tournament contents
+ *                 description: Array of tournament categories
  *                 items:
  *                   type: object
  *                   required:
@@ -66,12 +66,12 @@ const router = Router();
  *                   properties:
  *                     name:
  *                       type: string
- *                       description: Name of the tournament content (e.g., Men's Singles, Women's Doubles)
+ *                       description: Name of the tournament category (e.g., Men's Singles, Women's Doubles)
  *                       example: "Men's Singles"
  *                     type:
  *                       type: string
  *                       enum: [single, team, double]
- *                       description: Type of tournament content
+ *                       description: Type of tournament category
  *                       example: "single"
  *                     maxEntries:
  *                       type: integer
@@ -92,15 +92,15 @@ const router = Router();
  *                     gender:
  *                       type: string
  *                       enum: [male, female, mixed]
- *                       description: Gender requirement for the tournament content
+ *                       description: Gender requirement for the tournament category
  *                       example: "male"
  *                     isGroupStage:
  *                       type: boolean
- *                       description: Whether this content has a group stage (optional)
+ *                       description: Whether this category has a group stage (optional)
  *                       example: false
  *           examples:
  *             full:
- *               summary: Full tournament with multiple contents
+ *               summary: Full tournament with multiple categories
  *               value:
  *                 name: "Spring Championship 2026"
  *                 startDate: "2026-03-15T09:00:00Z"
@@ -108,7 +108,7 @@ const router = Router();
  *                 location: "National Stadium"
  *                 status: "upcoming"
  *                 numberOfTables: 4
- *                 contents:
+ *                 categories:
  *                   - name: "Men's Singles"
  *                     type: "single"
  *                     maxEntries: 32
@@ -122,14 +122,14 @@ const router = Router();
  *                     gender: "female"
  *                     isGroupStage: false
  *             minimal:
- *               summary: Minimal tournament without contents
+ *               summary: Minimal tournament without categories
  *               value:
  *                 name: "Local Tournament 2026"
  *                 startDate: "2026-04-01T10:00:00Z"
  *                 location: "Community Center"
  *     responses:
  *       201:
- *         description: Tournament created successfully with all related contents
+ *         description: Tournament created successfully with all related categories
  *         content:
  *           application/json:
  *             schema:
@@ -249,8 +249,8 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  * /tournaments/search:
  *   get:
  *     tags: [Tournaments]
- *     summary: Search tournaments with content filters and pagination
- *     description: Get all tournaments with their contents filtered by various criteria including user participation, age, ELO, gender, and other content properties
+ *     summary: Search tournaments with category filters and pagination
+ *     description: Get all tournaments with their categories filtered by various criteria including user participation, age, ELO, gender, and other category properties
  *     parameters:
  *       - in: query
  *         name: skip
@@ -280,25 +280,25 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *         name: minAge
  *         schema:
  *           type: integer
- *         description: Filter by minimum age requirement (content.minAge <= this value)
+ *         description: Filter by minimum age requirement (category.minAge <= this value)
  *         example: 18
  *       - in: query
  *         name: maxAge
  *         schema:
  *           type: integer
- *         description: Filter by maximum age requirement (content.maxAge >= this value)
+ *         description: Filter by maximum age requirement (category.maxAge >= this value)
  *         example: 35
  *       - in: query
  *         name: minElo
  *         schema:
  *           type: integer
- *         description: Filter by minimum ELO requirement (content.minElo <= this value)
+ *         description: Filter by minimum ELO requirement (category.minElo <= this value)
  *         example: 1000
  *       - in: query
  *         name: maxElo
  *         schema:
  *           type: integer
- *         description: Filter by maximum ELO requirement (content.maxElo >= this value)
+ *         description: Filter by maximum ELO requirement (category.maxElo >= this value)
  *         example: 2000
  *       - in: query
  *         name: gender
@@ -343,7 +343,7 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *                         type: string
  *                       createdBy:
  *                         type: integer
- *                       contents:
+ *                       categories:
  *                         type: array
  *                         items:
  *                           type: object
@@ -395,20 +395,20 @@ router.get("/", tournamentController.findAll.bind(tournamentController));
  *       500:
  *         description: Internal server error
  */
-router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tournamentController));
+router.get("/search", tournamentController.findAllWithCategoriesFiltered.bind(tournamentController));
 
 /**
  * @swagger
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]
- *     summary: Get tournament by ID with contents
- *     description: Retrieve a tournament by ID including all tournament contents
+ *     summary: Get tournament by ID with categories
+ *     description: Retrieve a tournament by ID including all tournament categories
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
  *       200:
- *         description: Tournament details with contents
+ *         description: Tournament details with categories
  *         content:
  *           application/json:
  *             schema:
@@ -442,7 +442,7 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                 updatedAt:
  *                   type: string
  *                   format: date-time
- *                 contents:
+ *                 categories:
  *                   type: array
  *                   items:
  *                     type: object
@@ -473,8 +473,8 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *         $ref: '#/components/responses/NotFound'
  *   put:
  *     tags: [Tournaments]
- *     summary: Update tournament with contents
- *     description: Update a tournament and optionally its contents. If contents are provided, all existing contents will be replaced.
+ *     summary: Update tournament with categories
+ *     description: Update a tournament and optionally its categories. If categories are provided, all existing categories will be replaced.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -508,9 +508,9 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *                 type: integer
  *                 description: Number of tables available for concurrent matches
  *                 example: 6
- *               contents:
+ *               categories:
  *                 type: array
- *                 description: Array of tournament contents (optional). If provided, replaces all existing contents.
+ *                 description: Array of tournament categories (optional). If provided, replaces all existing categories.
  *                 items:
  *                   type: object
  *                   required:
@@ -567,11 +567,11 @@ router.get("/search", tournamentController.findAllWithContentsFiltered.bind(tour
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", tournamentController.findById.bind(tournamentController));
+router.get("/:id", tournamentController.findByIdWithCategories.bind(tournamentController));
 router.put("/:id", 
   authenticate, 
   checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
-  tournamentController.updateWithContents.bind(tournamentController)
+  tournamentController.updateWithCategories.bind(tournamentController)
 );
 router.delete("/:id", 
   authenticate, 

@@ -10,9 +10,8 @@ import {
 import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
 import Team from "./team.model";
-import EntryMember from "./entryMember.model";
 import User from "./user.model";
-import EntryJoinRequest from "./entryJoinRequest.model";
+import EntryMember from "./entryMember.model";
 
 @Table({
   tableName: "entries",
@@ -92,7 +91,4 @@ export default class Entry extends Model {
 
   @HasMany(() => Match, "winnerEntryId")
   wonMatches?: Match[];
-
-  @HasMany(() => EntryJoinRequest)
-  joinRequests? : EntryJoinRequest[];
 }

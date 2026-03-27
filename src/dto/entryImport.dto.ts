@@ -99,7 +99,7 @@ export interface EntryImportPreviewDto {
   summary: {
     totalEntries: number;
     entriesWithErrors: number;
-    contentType: string;
+    categoryType: string;
     maxEntries: number;
     currentEntries: number;
     availableSlots: number;

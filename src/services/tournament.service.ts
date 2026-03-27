@@ -9,17 +9,8 @@ import {
 } from "../dto/tournament.dto";
 import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
-import { RegistrationPeriodService } from "./registrationPeriod.service";
-import { TournamentEstimationService } from "./tournamentEstimation.service";
 
 export class TournamentService {
-  private registrationService: RegistrationPeriodService;
-  private estimationService: TournamentEstimationService;
-
-  constructor() {
-    this.registrationService = new RegistrationPeriodService();
-    this.estimationService = new TournamentEstimationService();
-  }
   async create(data: CreateTournamentDto): Promise<Tournament> {
     const transaction = await sequelize.transaction();
 
@@ -75,22 +66,6 @@ export class TournamentService {
 
       if (!createdTournament) {
         throw new Error('Tournament not found after creation');
-      }
-
-      // Initialize registration periods after tournament creation
-      try {
-        await this.registrationService.initializeRegistrationPeriod(createdTournament.id);
-
-        // Calculate initial duration estimate if categories exist
-        if (createdTournament.category && createdTournament.category.length > 0) {
-          await this.estimationService.calculateEstimate({
-            tournamentId: createdTournament.id,
-            userId: createdTournament.createdBy
-          });
-        }
-      } catch (error) {
-        console.warn('Failed to initialize registration period or calculate estimate:', error);
-        // Don't throw error as tournament is already created successfully
       }
 
       return createdTournament;

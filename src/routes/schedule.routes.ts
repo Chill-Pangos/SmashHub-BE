@@ -62,7 +62,7 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *               startDate:
  *                 type: string
@@ -173,7 +173,7 @@ router.post("/generate",
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *               groupResults:
  *                 type: array
@@ -228,7 +228,7 @@ router.post("/update-knockout",
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *               startDate:
  *                 type: string
@@ -280,7 +280,7 @@ router.post("/generate-group-stage",
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID (startDate và endDate sẽ được lấy từ tournament table)
+ *                 description: Tournament category ID (startDate và endDate sẽ được lấy từ tournament table)
  *                 example: 1
  *     responses:
  *       201:
@@ -350,7 +350,7 @@ router.post("/generate-complete",
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID (phải có isGroupStage = false)
+ *                 description: Tournament category ID (phải có isGroupStage = false)
  *                 example: 2
  *     responses:
  *       201:
@@ -411,7 +411,7 @@ router.post("/generate-knockout-only",
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID (phải có knockout brackets đã tạo)
+ *                 description: Tournament category ID (phải có knockout brackets đã tạo)
  *                 example: 1
  *               startDate:
  *                 type: string
@@ -539,6 +539,6 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
-router.get("/content/:categoryId", scheduleController.getSchedulesByCategoryId.bind(scheduleController));
+router.get("/category/:categoryId", scheduleController.getSchedulesByCategoryId.bind(scheduleController));
 
 export default router;

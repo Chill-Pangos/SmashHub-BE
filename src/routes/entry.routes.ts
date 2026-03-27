@@ -92,7 +92,7 @@ router.delete("/:id",
 
 /**
  * @swagger
- * /entries/content/{categoryId}:
+ * /entries/category/{categoryId}:
  *   get:
  *     tags: [Entries]
  *     summary: Get entries by category ID
@@ -109,8 +109,8 @@ router.delete("/:id",
  *         description: List of entries for category
  */
 router.get(
-  "/content/:categoryId",
-  entryController.findByContentId.bind(entryController)
+  "/category/:categoryId",
+  entryController.findByCategoryId.bind(entryController)
 );
 
 export default router;

@@ -2,8 +2,6 @@ import { Table, Column, Model, DataType, HasMany, ForeignKey } from "sequelize-t
 import TournamentCategory from "./tournamentCategory.model";
 import User from "./user.model";
 import TournamentReferee from "./tournamentReferee.model";
-import TournamentEstimate from "./tournamentEstimate.model";
-import TableStatus from "./tableStatus.model";
 
 @Table({
   tableName: "tournaments",
@@ -117,10 +115,4 @@ export default class Tournament extends Model {
 
   @HasMany(() => TournamentReferee)
   referees?: TournamentReferee[];
-
-  @HasMany(() => TournamentEstimate)
-  estimates?: TournamentEstimate[];
-
-  @HasMany(() => TableStatus)
-  tableStatus?: TableStatus[];
 }

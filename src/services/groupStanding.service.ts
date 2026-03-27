@@ -1,5 +1,5 @@
 import GroupStanding from "../models/groupStanding.model";
-import { CreateGroupStandingDto, GenerateGroupPlaceholdersDto, RandomDrawEntriesDto, SaveGroupAssignmentsDto, UpdateGroupStandingDto } from "../dto/groupStanding.dto";
+import { CreateGroupStandingDto, GenerateGroupPlaceholdersDto, RandomDrawEntriesDto, SaveGroupAssignmentsDto, UpdateGroupStandingDto, RandomDrawAndSaveDto } from "../dto/groupStanding.dto";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entries from "../models/entry.model";
 import Match from "../models/match.model";
@@ -211,14 +211,14 @@ export class GroupStandingService {
   async randomDrawEntries(data: RandomDrawEntriesDto): Promise<Array<{ groupName: string; entryIds: number[] }>> {
     // Lấy tất cả entries
     const entries = await Entries.findAll({ where: { categoryId: data.categoryId } });
-    
+
     if (entries.length < 12) {
       throw new Error(`Không đủ entries để bốc thăm. Cần tối thiểu 12, hiện có ${entries.length}`);
     }
 
     // Tính toán bảng tối ưu
     const groupConfig = this.calculateOptimalGroups(entries.length);
-    
+
     // Group entries theo teamId
     const entriesByTeam = new Map<number, typeof entries>();
     for (const entry of entries) {
@@ -231,7 +231,7 @@ export class GroupStandingService {
     // Khởi tạo các bảng
     const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
     const groups: Array<{ groupName: string; entryIds: number[]; capacity: number }> = [];
-    
+
     for (let i = 0; i < groupConfig.numGroups; i++) {
       groups.push({
         groupName: `Group ${groupNames[i]}`,
@@ -259,12 +259,12 @@ export class GroupStandingService {
     for (const teamEntries of teamsNeedSeparation) {
       // Sắp xếp các bảng theo số lượng entries hiện tại (ưu tiên bảng ít entries)
       const sortedGroups = [...groups].sort((a, b) => a.entryIds.length - b.entryIds.length);
-      
+
       // Phân bổ từng entry của team vào các bảng khác nhau
       for (let i = 0; i < teamEntries.length; i++) {
         const entry = teamEntries[i]!;
         const targetGroup = sortedGroups[i % sortedGroups.length]!;
-        
+
         // Kiểm tra capacity
         if (targetGroup.entryIds.length < targetGroup.capacity) {
           targetGroup.entryIds.push(entry.id);
@@ -283,7 +283,7 @@ export class GroupStandingService {
     for (const teamEntries of normalTeams) {
       remainingEntries.push(...teamEntries);
     }
-    
+
     // Fisher-Yates shuffle
     for (let i = remainingEntries.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -304,6 +304,29 @@ export class GroupStandingService {
       groupName: g.groupName,
       entryIds: g.entryIds,
     }));
+  }
+
+  /**
+   * Bốc thăm ngẫu nhiên và lưu kết quả vào database
+   * @param data - Dữ liệu bốc thăm
+   * @returns Danh sách GroupStanding đã được lưu
+   */
+  async randomDrawAndSave(data: RandomDrawAndSaveDto): Promise<GroupStanding[]> {
+    // Thực hiện bốc thăm
+    const drawResult = await this.randomDrawEntries({
+      categoryId: data.categoryId,
+      entries: data.entries,
+      numberOfGroups: data.numberOfGroups,
+    });
+
+    // Chuyển đổi kết quả để lưu vào database
+    const saveData: SaveGroupAssignmentsDto = {
+      categoryId: data.categoryId,
+      groupAssignments: drawResult,
+    };
+
+    // Lưu vào database
+    return await this.saveGroupAssignments(saveData);
   }
 
 

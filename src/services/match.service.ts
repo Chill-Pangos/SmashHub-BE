@@ -248,10 +248,10 @@ export class MatchService {
     }
 
     if (!match.schedule || !match.schedule.TournamentCategory) {
-      throw new Error("Match schedule or content not found");
+      throw new Error("Match schedule or category not found");
     }
 
-    const content = match.schedule.TournamentCategory;
+    const category = match.schedule.TournamentCategory;
     const matchSets = match.matchSets || [];
 
     if (matchSets.length === 0) {
@@ -271,7 +271,7 @@ export class MatchService {
     });
 
     // Tính số set cần thắng: maxSets / 2 + 1
-    const setsToWin = Math.floor(content.maxSets / 2) + 1;
+    const setsToWin = Math.floor(category.maxSets / 2) + 1;
 
     // Kiểm tra đã có người thắng chưa
     if (entryASetsWon < setsToWin && entryBSetsWon < setsToWin) {
@@ -332,10 +332,10 @@ export class MatchService {
     }
 
     if (!match.schedule || !match.schedule.TournamentCategory) {
-      throw new Error("Match schedule or content not found");
+      throw new Error("Match schedule or category not found");
     }
 
-    const content = match.schedule.TournamentCategory;
+    const category = match.schedule.TournamentCategory;
     const matchSets = match.matchSets || [];
 
     // Tính lại số set để cập nhật standings
@@ -357,9 +357,9 @@ export class MatchService {
     });
 
     // Cập nhật groupStanding hoặc knockoutBracket
-    if (match.schedule.stage === "group" && content.isGroupStage) {
+    if (match.schedule.stage === "group" && category.isGroupStage) {
       await this.updateGroupStanding(
-        content.id,
+        category.id,
         match.schedule.groupName!,
         match.entryAId,
         match.entryBId,

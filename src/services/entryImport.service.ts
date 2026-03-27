@@ -47,9 +47,9 @@ export class EntryImportService {
     const parsedEntries = this.parseEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntry.length > availableSlots) {
+    if (parsedEntries.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
+        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
@@ -61,7 +61,7 @@ export class EntryImportService {
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntry.length,
+      totalEntries: parsedEntries.length,
       entriesWithErrors: errors.length,
       categoryType: category.type,
       maxEntries: category.maxEntries,
@@ -168,7 +168,7 @@ export class EntryImportService {
     });
 
     const existingUserIds = new Set(
-      existingEntry.flatMap(entry => {
+      existingEntries.flatMap(entry => {
         const members = (entry as any).members as EntryMember[] | undefined;
         return members?.map((em: EntryMember) => em.userId) || [];
       })
@@ -226,40 +226,40 @@ export class EntryImportService {
         } else {
           userId = user.id;
 
-          // Check if user already registered for this content
+          // Check if user already registered for this category
           if (existingUserIds.has(userId)) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: 'email',
-              message: 'User already registered for this content',
+              message: 'User already registered for this category',
               value: entry.email,
             });
           }
 
-          // Get tournament ID from content
+          // Get tournament ID from category
           const category = await TournamentCategory.findByPk(categoryId);
           if (!category) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
-              field: 'content',
+              field: 'category',
               message: 'Category not found',
               value: categoryId,
             });
           } else {
-            // Validate user's gender against content requirements
-            if (content.gender) {
+            // Validate user's gender against category requirements
+            if (category.gender) {
               if (!user.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'gender',
-                  message: `User's gender is not set. Content requires "${content.gender}"`,
+                  message: `User's gender is not set. Category requires "${category.gender}"`,
                   value: user.email,
                 });
-              } else if (user.gender !== content.gender) {
+              } else if (user.gender !== category.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'gender',
-                  message: `User's gender (${user.gender}) does not match content requirement (${content.gender})`,
+                  message: `User's gender (${user.gender}) does not match category requirement (${category.gender})`,
                   value: user.email,
                 });
               }
@@ -267,7 +267,7 @@ export class EntryImportService {
 
             // Check if user belongs to a team in this tournament
             const userTeam = await Team.findOne({
-              where: { tournamentId: content.tournamentId },
+              where: { tournamentId: category.tournamentId },
               include: [
                 {
                   model: TeamMember,
@@ -288,7 +288,7 @@ export class EntryImportService {
       if (entryErrors.length > 0) {
         errors.push(...entryErrors);
       } else if (userId !== null) {
-        validatedEntry.push({
+        validatedEntries.push({
           name: entry.name,
           userId,
           email: entry.email,
@@ -309,14 +309,14 @@ export class EntryImportService {
     fileBuffer: Buffer,
     categoryId: number
   ): Promise<EntryImportPreviewDto> {
-    // Validate content exists and is double type
+    // Validate category exists and is double type
     const category = await TournamentCategory.findByPk(categoryId);
     if (!category) {
       throw new Error('Category not found');
     }
 
     if (category.type !== 'double') {
-      throw new Error('This endpoint is only for double type content');
+      throw new Error('This endpoint is only for double type category');
     }
 
     // Get current entries count
@@ -332,9 +332,9 @@ export class EntryImportService {
     const parsedEntries = this.parseDoubleEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntry.length > availableSlots) {
+    if (parsedEntries.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
+        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
@@ -346,7 +346,7 @@ export class EntryImportService {
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntry.length,
+      totalEntries: parsedEntries.length,
       entriesWithErrors: errors.length,
       categoryType: category.type,
       maxEntries: category.maxEntries,
@@ -457,7 +457,7 @@ export class EntryImportService {
 
     // Track existing users who already registered (each user can only register once)
     const existingUserIds = new Set<number>();
-    existingEntry.forEach(entry => {
+    existingEntries.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members) {
         members.forEach(member => {
@@ -468,7 +468,7 @@ export class EntryImportService {
 
     // Track existing pairs (both directions)
     const existingPairs = new Set<string>();
-    existingEntry.forEach(entry => {
+    existingEntries.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members && members.length === 2) {
         const sorted = members.sort((a, b) => a.userId - b.userId);
@@ -549,7 +549,7 @@ export class EntryImportService {
       if (!category) {
         entryErrors.push({
           rowNumber: entry.rowNumber,
-          field: 'content',
+          field: 'category',
           message: 'Category not found',
           value: categoryId,
         });
@@ -568,34 +568,34 @@ export class EntryImportService {
             player1UserId = user1.id;
 
             // Validate player 1 gender
-            if (content.gender && content.gender !== 'mixed') {
+            if (category.gender && category.gender !== 'mixed') {
               if (!user1.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'player1Gender',
-                  message: `Player 1's gender is not set. Content requires "${content.gender}"`,
+                  message: `Player 1's gender is not set. Category requires "${category.gender}"`,
                   value: user1.email,
                 });
-              } else if (user1.gender !== content.gender) {
+              } else if (user1.gender !== category.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'player1Gender',
-                  message: `Player 1's gender (${user1.gender}) does not match content requirement (${content.gender})`,
+                  message: `Player 1's gender (${user1.gender}) does not match category requirement (${category.gender})`,
                   value: user1.email,
                 });
               }
-            } else if (content.gender === 'mixed' && !user1.gender) {
+            } else if (category.gender === 'mixed' && !user1.gender) {
               entryErrors.push({
                 rowNumber: entry.rowNumber,
                 field: 'player1Gender',
-                message: `Player 1's gender is not set. Content requires mixed (1 male + 1 female)`,
+                message: `Player 1's gender is not set. Category requires mixed (1 male + 1 female)`,
                 value: user1.email,
               });
             }
 
             // Check player 1 team - find team first, then check if user is member
             const team1 = await Team.findOne({
-              where: { tournamentId: content.tournamentId },
+              where: { tournamentId: category.tournamentId },
               include: [
                 {
                   model: TeamMember,
@@ -626,34 +626,34 @@ export class EntryImportService {
             player2UserId = user2.id;
 
             // Validate player 2 gender
-            if (content.gender && content.gender !== 'mixed') {
+            if (category.gender && category.gender !== 'mixed') {
               if (!user2.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'player2Gender',
-                  message: `Player 2's gender is not set. Content requires "${content.gender}"`,
+                  message: `Player 2's gender is not set. Category requires "${category.gender}"`,
                   value: user2.email,
                 });
-              } else if (user2.gender !== content.gender) {
+              } else if (user2.gender !== category.gender) {
                 entryErrors.push({
                   rowNumber: entry.rowNumber,
                   field: 'player2Gender',
-                  message: `Player 2's gender (${user2.gender}) does not match content requirement (${content.gender})`,
+                  message: `Player 2's gender (${user2.gender}) does not match category requirement (${category.gender})`,
                   value: user2.email,
                 });
               }
-            } else if (content.gender === 'mixed' && !user2.gender) {
+            } else if (category.gender === 'mixed' && !user2.gender) {
               entryErrors.push({
                 rowNumber: entry.rowNumber,
                 field: 'player2Gender',
-                message: `Player 2's gender is not set. Content requires mixed (1 male + 1 female)`,
+                message: `Player 2's gender is not set. Category requires mixed (1 male + 1 female)`,
                 value: user2.email,
               });
             }
 
             // Check player 2 team - find team first, then check if user is member
             const team2 = await Team.findOne({
-              where: { tournamentId: content.tournamentId },
+              where: { tournamentId: category.tournamentId },
               include: [
                 {
                   model: TeamMember,
@@ -672,22 +672,22 @@ export class EntryImportService {
 
         // Check both players must be in the same team
         if (player1UserId && player2UserId && user1 && user2) {
-          // Check if player 1 already registered in this content
+          // Check if player 1 already registered in this category
           if (existingUserIds.has(player1UserId)) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: 'player1',
-              message: 'Player 1 is already registered in this content (each user can only register once)',
+              message: 'Player 1 is already registered in this category (each user can only register once)',
               value: entry.player1Email,
             });
           }
 
-          // Check if player 2 already registered in this content
+          // Check if player 2 already registered in this category
           if (existingUserIds.has(player2UserId)) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: 'player2',
-              message: 'Player 2 is already registered in this content (each user can only register once)',
+              message: 'Player 2 is already registered in this category (each user can only register once)',
               value: entry.player2Email,
             });
           }
@@ -713,7 +713,7 @@ export class EntryImportService {
           }
 
           // Validate mixed gender requirement (1 male + 1 female) - check this FIRST before team checks
-          if (content.gender === 'mixed') {
+          if (category.gender === 'mixed') {
             if (!user1.gender || !user2.gender) {
               // Already handled in individual validation above
             } else if (user1.gender === user2.gender) {
@@ -721,7 +721,7 @@ export class EntryImportService {
               entryErrors.push({
                 rowNumber: entry.rowNumber,
                 field: 'mixedGender',
-                message: `Mixed gender content requires 1 male and 1 female. Both players are ${user1.gender}`,
+                message: `Mixed gender category requires 1 male and 1 female. Both players are ${user1.gender}`,
                 value: `${entry.player1Email} & ${entry.player2Email}`,
               });
             }
@@ -767,7 +767,7 @@ export class EntryImportService {
               entryErrors.push({
                 rowNumber: entry.rowNumber,
                 field: 'pair',
-                message: 'This pair is already registered for this content',
+                message: 'This pair is already registered for this category',
                 value: `${entry.player1Email} & ${entry.player2Email}`,
               });
             }
@@ -793,7 +793,7 @@ export class EntryImportService {
       if (entryErrors.length > 0) {
         errors.push(...entryErrors);
       } else if (player1UserId !== null && player2UserId !== null) {
-        validatedEntry.push({
+        validatedEntries.push({
           player1Name: entry.player1Name,
           player1UserId,
           player1Email: entry.player1Email,
@@ -817,14 +817,14 @@ export class EntryImportService {
     fileBuffer: Buffer,
     categoryId: number
   ): Promise<EntryImportPreviewDto> {
-    // Validate content exists and is team type
+    // Validate category exists and is team type
     const category = await TournamentCategory.findByPk(categoryId);
     if (!category) {
       throw new Error('Category not found');
     }
 
     if (category.type !== 'team') {
-      throw new Error('This endpoint is only for team type content');
+      throw new Error('This endpoint is only for team type category');
     }
 
     // Get current entries count
@@ -840,9 +840,9 @@ export class EntryImportService {
     const parsedEntries = this.parseTeamEntriesSheet(workbook);
 
     // Check if exceeds available slots
-    if (parsedEntry.length > availableSlots) {
+    if (parsedEntries.length > availableSlots) {
       throw new Error(
-        `Cannot import ${parsedEntry.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
+        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
       );
     }
 
@@ -854,7 +854,7 @@ export class EntryImportService {
 
     // Calculate summary
     const summary = {
-      totalEntries: parsedEntry.length,
+      totalEntries: parsedEntries.length,
       entriesWithErrors: errors.length,
       categoryType: category.type,
       maxEntries: category.maxEntries,
@@ -974,7 +974,7 @@ export class EntryImportService {
 
     // Track existing users who already registered
     const existingUserIds = new Set<number>();
-    existingEntry.forEach(entry => {
+    existingEntries.forEach(entry => {
       const members = (entry as any).members as EntryMember[] | undefined;
       if (members) {
         members.forEach(member => {
@@ -1059,31 +1059,31 @@ export class EntryImportService {
           continue;
         }
 
-        // Validate gender if content requires specific gender
-        if (content.gender && content.gender !== 'mixed') {
+        // Validate gender if category requires specific gender
+        if (category.gender && category.gender !== 'mixed') {
           if (!user.gender) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: `player${player.index}Gender`,
-              message: `Player ${player.index}'s gender is not set. Content requires "${content.gender}"`,
+              message: `Player ${player.index}'s gender is not set. Category requires "${category.gender}"`,
               value: user.email,
             });
-          } else if (user.gender !== content.gender) {
+          } else if (user.gender !== category.gender) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
               field: `player${player.index}Gender`,
-              message: `Player ${player.index}'s gender (${user.gender}) does not match content requirement (${content.gender})`,
+              message: `Player ${player.index}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
               value: user.email,
             });
           }
         }
 
-        // Check if user already registered in this content
+        // Check if user already registered in this category
         if (existingUserIds.has(user.id)) {
           entryErrors.push({
             rowNumber: entry.rowNumber,
             field: `player${player.index}`,
-            message: `Player ${player.index} is already registered in this content`,
+            message: `Player ${player.index} is already registered in this category`,
             value: player.email,
           });
           continue;
@@ -1102,7 +1102,7 @@ export class EntryImportService {
 
         // Check player team
         const team = await Team.findOne({
-          where: { tournamentId: content.tournamentId },
+          where: { tournamentId: category.tournamentId },
           include: [
             {
               model: TeamMember,
@@ -1172,7 +1172,7 @@ export class EntryImportService {
         // Add all player IDs to processed set
         playerUserIds.forEach(id => processedUserIds.add(id));
         
-        validatedEntry.push({
+        validatedEntries.push({
           players,
           teamId: playerTeamIds[0]!,
           rowNumber: entry.rowNumber,

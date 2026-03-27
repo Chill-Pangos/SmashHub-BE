@@ -149,8 +149,8 @@ router.post(
  *         description: Internal server error
  */
 router.get(
-  "/content/:categoryId",
-  knockoutBracketController.findByContentId.bind(knockoutBracketController)
+  "/category/:categoryId",
+  knockoutBracketController.findByCategoryId.bind(knockoutBracketController)
 );
 
 /**
