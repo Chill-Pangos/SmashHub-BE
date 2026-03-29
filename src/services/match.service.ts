@@ -12,7 +12,6 @@ import TournamentReferee from "../models/tournamentReferee.model";
 import eloCalculationService from "./eloCalculation.service";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
-import TeamMember from "../models/teamMember.model";
 
 export class MatchService {
   async create(data: CreateMatchDto): Promise<Match> {
@@ -606,7 +605,7 @@ export class MatchService {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
+                  attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
                 },
               ],
             },
@@ -623,7 +622,7 @@ export class MatchService {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
+                  attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
                 },
               ],
             },
@@ -632,12 +631,12 @@ export class MatchService {
         {
           model: User,
           as: "umpireUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
+          attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
         },
         {
           model: User,
           as: "assistantUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
+          attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
         },
       ],
       order: [["schedule", "scheduledAt", "ASC"]],
@@ -703,7 +702,7 @@ export class MatchService {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
+                  attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
                 },
               ],
             },
@@ -720,7 +719,7 @@ export class MatchService {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
+                  attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
                 },
               ],
             },
@@ -737,7 +736,7 @@ export class MatchService {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
+                  attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
                 },
               ],
             },
@@ -750,157 +749,15 @@ export class MatchService {
         {
           model: User,
           as: "umpireUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
+          attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
         },
         {
           model: User,
           as: "assistantUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
+          attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
         },
       ],
       order: [["updatedAt", "DESC"]],
-      offset: skip,
-      limit,
-    });
-
-    return { matches, count };
-  }
-
-  /**
-    
-   * @param userId - ID của user (team manager)
-   * @param skip - Số lượng bản ghi bỏ qua
-   * @param limit - Số lượng bản ghi trả về
-   * @param status - Lọc theo status (optional)
-   * @returns Danh sách các trận đấu của đội
-   */
-  async findMatchesByTeam(
-    userId: number,
-    skip = 0,
-    limit = 10,
-    status?: string
-  ): Promise<{ matches: Match[]; count: number }> {
-    // Tìm tất cả các team mà user này là thành viên (team_manager)
-    const teamMembers = await TeamMember.findAll({
-      where: { 
-        userId,
-        role: { [Op.in]: ["team_manager"] }
-      },
-      attributes: ["teamId"],
-    });
-
-    const teamIds = teamMembers.map((tm) => tm.teamId);
-
-    if (teamIds.length === 0) {
-      return { matches: [], count: 0 };
-    }
-
-    // Tìm tất cả các entry của các team này
-    const entries = await Entry.findAll({
-      where: { teamId: { [Op.in]: teamIds } },
-      attributes: ["id"],
-    });
-
-    const entryIds = entries.map((e) => e.id);
-
-    if (entryIds.length === 0) {
-      return { matches: [], count: 0 };
-    }
-
-    // Xây dựng điều kiện where
-    const whereCondition: any = {
-      [Op.or]: [
-        { entryAId: { [Op.in]: entryIds } },
-        { entryBId: { [Op.in]: entryIds } },
-      ],
-    };
-
-    // Nếu có filter theo status
-    if (status) {
-      whereCondition.status = status;
-    }
-
-    // Tìm các trận đấu của đội này
-    const { rows: matches, count } = await Match.findAndCountAll({
-      where: whereCondition,
-      include: [
-        {
-          model: Schedule,
-          as: "schedule",
-          include: [
-            {
-              model: TournamentCategory,
-              as: "TournamentCategory",
-            },
-          ],
-        },
-        {
-          model: Entry,
-          as: "entryA",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-              include: [
-                {
-                  model: User,
-                  as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          model: Entry,
-          as: "entryB",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-              include: [
-                {
-                  model: User,
-                  as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          model: Entry,
-          as: "winnerEntry",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-              include: [
-                {
-                  model: User,
-                  as: "user",
-                  attributes: ["id", "username", "email", "avatarUrl"],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          model: MatchSet,
-          as: "matchSets",
-        },
-        {
-          model: User,
-          as: "umpireUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
-        },
-        {
-          model: User,
-          as: "assistantUser",
-          attributes: ["id", "username", "email", "avatarUrl"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
       offset: skip,
       limit,
     });

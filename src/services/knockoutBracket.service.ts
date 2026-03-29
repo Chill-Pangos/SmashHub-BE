@@ -79,7 +79,7 @@ export class KnockoutBracketService {
     const shuffledEntries = this.shuffleArray([...entries]);
 
     // Phân chia entries vào 2 nửa bracket, đảm bảo cùng team ở khác nửa
-    const { topHalf, bottomHalf } = this.splitEntriesByTeam(
+    const { topHalf, bottomHalf } = this.splitEntriesIntoHalves(
       shuffledEntries,
       bracketSize
     );
@@ -129,9 +129,8 @@ export class KnockoutBracketService {
 
   /**
    * Phân chia entries vào 2 nửa bracket
-   * Đảm bảo entries cùng team ở khác nửa
    */
-  private splitEntriesByTeam(
+  private splitEntriesIntoHalves(
     entries: Entries[],
     bracketSize: number
   ): { topHalf: (Entries | null)[]; bottomHalf: (Entries | null)[] } {
@@ -139,46 +138,18 @@ export class KnockoutBracketService {
     const topHalf: (Entries | null)[] = new Array(halfSize).fill(null);
     const bottomHalf: (Entries | null)[] = new Array(halfSize).fill(null);
 
-    // Group entries by teamId
-    const entriesByTeam = new Map<number, Entries[]>();
-    for (const entry of entries) {
-      if (!entriesByTeam.has(entry.teamId)) {
-        entriesByTeam.set(entry.teamId, []);
-      }
-      entriesByTeam.get(entry.teamId)!.push(entry);
+    // Shuffle entries ngẫu nhiên
+    const shuffled = [...entries];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
     }
 
-    // Teams có nhiều entries cần phân chia vào 2 nửa
-    const teamsNeedSplit: Array<Entries[]> = [];
-    const singleEntries: Entries[] = [];
-
-    for (const [teamId, teamEntries] of entriesByTeam) {
-      if (teamEntries.length > 1) {
-        teamsNeedSplit.push(teamEntries);
-      } else {
-        singleEntries.push(...teamEntries);
-      }
-    }
-
-    // Phân chia các teams có nhiều entries
+    // Phân chia vào 2 nửa
     let topIndex = 0;
     let bottomIndex = 0;
 
-    for (const teamEntries of teamsNeedSplit) {
-      const half = Math.ceil(teamEntries.length / 2);
-
-      // Nửa vào top, nửa vào bottom
-      for (let i = 0; i < half && topIndex < halfSize; i++) {
-        topHalf[topIndex++] = teamEntries[i]!;
-      }
-
-      for (let i = half; i < teamEntries.length && bottomIndex < halfSize; i++) {
-        bottomHalf[bottomIndex++] = teamEntries[i]!;
-      }
-    }
-
-    // Phân chia các single entries
-    for (const entry of singleEntries) {
+    for (const entry of shuffled) {
       if (topIndex < halfSize) {
         topHalf[topIndex++] = entry;
       } else if (bottomIndex < halfSize) {

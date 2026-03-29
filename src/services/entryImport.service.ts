@@ -3,15 +3,11 @@ import User from '../models/user.model';
 import TournamentCategory from '../models/tournamentCategory.model';
 import Entry from '../models/entry.model';
 import EntryMember from '../models/entryMember.model';
-import Team from '../models/team.model';
-import TeamMember from '../models/teamMember.model';
 import {
   ParsedSingleEntryDto,
   ParsedDoubleEntryDto,
-  ParsedTeamEntryDto,
   ValidatedSingleEntryDto,
   ValidatedDoubleEntryDto,
-  ValidatedTeamEntryDto,
   EntryImportValidationError,
   EntryImportPreviewDto,
 } from '../dto/entryImport.dto';
@@ -212,7 +208,6 @@ export class EntryImportService {
 
       // Try to resolve user ID from email
       let userId: number | null = null;
-      let teamId: number | null = null;
       
       if (entry.email && emailRegex.test(entry.email)) {
         const user = await User.findOne({ where: { email: entry.email } });
@@ -264,23 +259,6 @@ export class EntryImportService {
                 });
               }
             }
-
-            // Check if user belongs to a team in this tournament
-            const userTeam = await Team.findOne({
-              where: { tournamentId: category.tournamentId },
-              include: [
-                {
-                  model: TeamMember,
-                  as: 'members',
-                  where: { userId: user.id },
-                  required: true,
-                },
-              ],
-            });
-
-            if (userTeam && userTeam.id) {
-              teamId = userTeam.id;
-            }
           }
         }
       }
@@ -292,7 +270,6 @@ export class EntryImportService {
           name: entry.name,
           userId,
           email: entry.email,
-          teamId,
           rowNumber: entry.rowNumber,
         });
         processedEmails.add(entry.email);
@@ -539,9 +516,7 @@ export class EntryImportService {
 
       // Try to resolve user IDs from emails
       let player1UserId: number | null = null;
-      let player1TeamId: number | null = null;
       let player2UserId: number | null = null;
-      let player2TeamId: number | null = null;
       let user1: User | null = null;
       let user2: User | null = null;
 
@@ -594,21 +569,7 @@ export class EntryImportService {
             }
 
             // Check player 1 team - find team first, then check if user is member
-            const team1 = await Team.findOne({
-              where: { tournamentId: category.tournamentId },
-              include: [
-                {
-                  model: TeamMember,
-                  as: 'members',
-                  where: { userId: user1.id },
-                  required: true,
-                },
-              ],
-            });
-
-            if (team1 && team1.id) {
-              player1TeamId = team1.id;
-            }
+            // Note: Team validation removed - not requiring team membership
           }
         }
 
@@ -650,27 +611,10 @@ export class EntryImportService {
                 value: user2.email,
               });
             }
-
-            // Check player 2 team - find team first, then check if user is member
-            const team2 = await Team.findOne({
-              where: { tournamentId: category.tournamentId },
-              include: [
-                {
-                  model: TeamMember,
-                  as: 'members',
-                  where: { userId: user2.id },
-                  required: true,
-                },
-              ],
-            });
-
-            if (team2 && team2.id) {
-              player2TeamId = team2.id;
-            }
           }
         }
 
-        // Check both players must be in the same team
+        // Check both players validation
         if (player1UserId && player2UserId && user1 && user2) {
           // Check if player 1 already registered in this category
           if (existingUserIds.has(player1UserId)) {
@@ -712,7 +656,7 @@ export class EntryImportService {
             });
           }
 
-          // Validate mixed gender requirement (1 male + 1 female) - check this FIRST before team checks
+          // Validate mixed gender requirement (1 male + 1 female)
           if (category.gender === 'mixed') {
             if (!user1.gender || !user2.gender) {
               // Already handled in individual validation above
@@ -727,65 +671,33 @@ export class EntryImportService {
             }
           }
 
-          // Check if player 1 has team
-          if (!player1TeamId) {
+          // Check duplicate pairs
+          const sortedIds = [player1UserId, player2UserId].sort((a, b) => a - b);
+          const pairKey = `${sortedIds[0]}-${sortedIds[1]}`;
+
+          // Check if pair already exists in database
+          if (existingPairs.has(pairKey)) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
-              field: 'player1Team',
-              message: 'Player 1 does not belong to any team in this tournament',
-              value: entry.player1Email,
+              field: 'pair',
+              message: 'This pair is already registered for this category',
+              value: `${entry.player1Email} & ${entry.player2Email}`,
             });
           }
 
-          // Check if player 2 has team
-          if (!player2TeamId) {
+          // Check if pair already in current import
+          if (processedPairs.has(pairKey)) {
             entryErrors.push({
               rowNumber: entry.rowNumber,
-              field: 'player2Team',
-              message: 'Player 2 does not belong to any team in this tournament',
-              value: entry.player2Email,
+              field: 'pair',
+              message: 'Duplicate pair in this import',
+              value: `${entry.player1Email} & ${entry.player2Email}`,
             });
-          }
-
-          // Check if both players are in the same team
-          if (player1TeamId && player2TeamId && player1TeamId !== player2TeamId) {
-            entryErrors.push({
-              rowNumber: entry.rowNumber,
-              field: 'team',
-              message: 'Both players must be in the same team',
-              value: `${entry.player1Email} (team ${player1TeamId}) & ${entry.player2Email} (team ${player2TeamId})`,
-            });
-          }
-
-          // Check duplicate pairs only if validation passes
-          if (player1TeamId && player2TeamId && player1TeamId === player2TeamId) {
-            const sortedIds = [player1UserId, player2UserId].sort((a, b) => a - b);
-            const pairKey = `${sortedIds[0]}-${sortedIds[1]}`;
-
-            // Check if pair already exists in database
-            if (existingPairs.has(pairKey)) {
-              entryErrors.push({
-                rowNumber: entry.rowNumber,
-                field: 'pair',
-                message: 'This pair is already registered for this category',
-                value: `${entry.player1Email} & ${entry.player2Email}`,
-              });
-            }
-
-            // Check if pair already in current import
-            if (processedPairs.has(pairKey)) {
-              entryErrors.push({
-                rowNumber: entry.rowNumber,
-                field: 'pair',
-                message: 'Duplicate pair in this import',
-                value: `${entry.player1Email} & ${entry.player2Email}`,
-              });
-            } else {
-              processedPairs.add(pairKey);
-              // Add both users to processed set
-              processedUserIds.add(player1UserId);
-              processedUserIds.add(player2UserId);
-            }
+          } else {
+            processedPairs.add(pairKey);
+            // Add both users to processed set
+            processedUserIds.add(player1UserId);
+            processedUserIds.add(player2UserId);
           }
         }
       }
@@ -797,384 +709,9 @@ export class EntryImportService {
           player1Name: entry.player1Name,
           player1UserId,
           player1Email: entry.player1Email,
-          player1TeamId,
           player2Name: entry.player2Name,
           player2UserId,
           player2Email: entry.player2Email,
-          player2TeamId,
-          rowNumber: entry.rowNumber,
-        });
-      }
-    }
-
-    return { validatedEntries, errors };
-  }
-
-  /**
-   * Parse Excel file and validate team entries (3-5 players)
-   */
-  async parseAndValidateTeamEntries(
-    fileBuffer: Buffer,
-    categoryId: number
-  ): Promise<EntryImportPreviewDto> {
-    // Validate category exists and is team type
-    const category = await TournamentCategory.findByPk(categoryId);
-    if (!category) {
-      throw new Error('Category not found');
-    }
-
-    if (category.type !== 'team') {
-      throw new Error('This endpoint is only for team type category');
-    }
-
-    // Get current entries count
-    const currentEntries = await Entry.count({ where: { categoryId } });
-    const availableSlots = category.maxEntries - currentEntries;
-
-    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-
-    // Validate file structure for team entries
-    this.validateTeamExcelStructure(workbook);
-
-    // Parse team entries sheet
-    const parsedEntries = this.parseTeamEntriesSheet(workbook);
-
-    // Check if exceeds available slots
-    if (parsedEntries.length > availableSlots) {
-      throw new Error(
-        `Cannot import ${parsedEntries.length} entries. Only ${availableSlots} slots available (${currentEntries}/${category.maxEntries} filled)`
-      );
-    }
-
-    // Validate team entries and resolve user IDs
-    const { validatedEntries, errors } = await this.validateTeamEntries(
-      parsedEntries,
-      categoryId
-    );
-
-    // Calculate summary
-    const summary = {
-      totalEntries: parsedEntries.length,
-      entriesWithErrors: errors.length,
-      categoryType: category.type,
-      maxEntries: category.maxEntries,
-      currentEntries,
-      availableSlots,
-    };
-
-    return {
-      valid: errors.length === 0,
-      entries: validatedEntries,
-      errors,
-      summary,
-    };
-  }
-
-  /**
-   * Validate Excel file structure for team entries
-   */
-  private validateTeamExcelStructure(workbook: XLSX.WorkBook): void {
-    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
-      throw new Error('Excel file has no sheets');
-    }
-
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      throw new Error('No sheet found');
-    }
-
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) {
-      throw new Error('Sheet has no data');
-    }
-
-    const data: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-    if (data.length === 0) {
-      throw new Error('Sheet is empty');
-    }
-
-    // Check header (row 0) - expect at least 7 columns (STT + 3 players x 2)
-    const header = data[0];
-    if (!header || header.length < 7) {
-      throw new Error('Invalid sheet format. Expected columns: STT, Họ tên VĐV 1, Email, Họ tên VĐV 2, Email, Họ tên VĐV 3, Email, [Họ tên VĐV 4, Email], [Họ tên VĐV 5, Email]');
-    }
-  }
-
-  /**
-   * Parse team entries sheet (3-5 players)
-   */
-  private parseTeamEntriesSheet(workbook: XLSX.WorkBook): ParsedTeamEntryDto[] {
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      throw new Error('No sheet found');
-    }
-
-    const worksheet = workbook.Sheets[sheetName];
-
-    if (!worksheet) {
-      throw new Error('Sheet has no data');
-    }
-
-    const data: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-    const entries: ParsedTeamEntryDto[] = [];
-
-    // Skip header row (row 0)
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-
-      // Skip empty rows (check first 3 players)
-      const hasData = (row[1] && row[1].toString().trim() !== '') ||
-                      (row[3] && row[3].toString().trim() !== '') ||
-                      (row[5] && row[5].toString().trim() !== '');
-      
-      if (!hasData) continue;
-
-      entries.push({
-        stt: row[0] || i,
-        player1Name: row[1]?.toString().trim(),
-        player1Email: row[2]?.toString().trim().toLowerCase(),
-        player2Name: row[3]?.toString().trim(),
-        player2Email: row[4]?.toString().trim().toLowerCase(),
-        player3Name: row[5]?.toString().trim(),
-        player3Email: row[6]?.toString().trim().toLowerCase(),
-        player4Name: row[7]?.toString().trim(),
-        player4Email: row[8]?.toString().trim().toLowerCase(),
-        player5Name: row[9]?.toString().trim(),
-        player5Email: row[10]?.toString().trim().toLowerCase(),
-        rowNumber: i + 1,
-      });
-    }
-
-    return entries;
-  }
-
-  /**
-   * Validate team entries and resolve user IDs
-   */
-  private async validateTeamEntries(
-    parsedEntries: ParsedTeamEntryDto[],
-    categoryId: number
-  ): Promise<{
-    validatedEntries: ValidatedTeamEntryDto[];
-    errors: EntryImportValidationError[];
-  }> {
-    const validatedEntries: ValidatedTeamEntryDto[] = [];
-    const errors: EntryImportValidationError[] = [];
-
-    // Get all existing entries for this category
-    const existingEntries = await Entry.findAll({
-      where: { categoryId },
-      include: [
-        {
-          model: EntryMember,
-          as: 'members',
-        },
-      ],
-    });
-
-    // Track existing users who already registered
-    const existingUserIds = new Set<number>();
-    existingEntries.forEach(entry => {
-      const members = (entry as any).members as EntryMember[] | undefined;
-      if (members) {
-        members.forEach(member => {
-          existingUserIds.add(member.userId);
-        });
-      }
-    });
-
-    const processedUserIds = new Set<number>();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    const category = await TournamentCategory.findByPk(categoryId);
-    if (!category) {
-      throw new Error('Category not found');
-    }
-
-    for (const entry of parsedEntries) {
-      const entryErrors: EntryImportValidationError[] = [];
-      const players: Array<{ name: string; email: string; userId: number }> = [];
-      const playerUserIds: number[] = [];
-      const playerTeamIds: number[] = [];
-
-      // Collect all players from the entry
-      const playerData = [
-        { name: entry.player1Name, email: entry.player1Email, index: 1 },
-        { name: entry.player2Name, email: entry.player2Email, index: 2 },
-        { name: entry.player3Name, email: entry.player3Email, index: 3 },
-        { name: entry.player4Name, email: entry.player4Email, index: 4 },
-        { name: entry.player5Name, email: entry.player5Email, index: 5 },
-      ];
-
-      // Validate each player
-      for (const player of playerData) {
-        // Skip empty players (4 and 5 are optional)
-        if (!player.name && !player.email) {
-          continue;
-        }
-
-        // Validate name
-        if (!player.name || player.name === '') {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}Name`,
-            message: `Player ${player.index} name is required`,
-            value: player.name,
-          });
-          continue;
-        }
-
-        // Validate email format
-        if (!player.email || !emailRegex.test(player.email)) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}Email`,
-            message: `Invalid player ${player.index} email format`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        // Check for duplicate emails within this entry
-        const duplicateInEntry = players.find(p => p.email === player.email);
-        if (duplicateInEntry) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}Email`,
-            message: `Duplicate email in this entry (same as another player)`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        // Resolve user ID
-        const user = await User.findOne({ where: { email: player.email } });
-        if (!user) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}Email`,
-            message: `Player ${player.index} not found with this email`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        // Validate gender if category requires specific gender
-        if (category.gender && category.gender !== 'mixed') {
-          if (!user.gender) {
-            entryErrors.push({
-              rowNumber: entry.rowNumber,
-              field: `player${player.index}Gender`,
-              message: `Player ${player.index}'s gender is not set. Category requires "${category.gender}"`,
-              value: user.email,
-            });
-          } else if (user.gender !== category.gender) {
-            entryErrors.push({
-              rowNumber: entry.rowNumber,
-              field: `player${player.index}Gender`,
-              message: `Player ${player.index}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
-              value: user.email,
-            });
-          }
-        }
-
-        // Check if user already registered in this category
-        if (existingUserIds.has(user.id)) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}`,
-            message: `Player ${player.index} is already registered in this category`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        // Check if user already in current import batch
-        if (processedUserIds.has(user.id)) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}`,
-            message: `Player ${player.index} is already registered in this import batch`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        // Check player team
-        const team = await Team.findOne({
-          where: { tournamentId: category.tournamentId },
-          include: [
-            {
-              model: TeamMember,
-              as: 'members',
-              where: { userId: user.id },
-              required: true,
-            },
-          ],
-        });
-
-        if (!team) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: `player${player.index}Team`,
-            message: `Player ${player.index} does not belong to any team in this tournament`,
-            value: player.email,
-          });
-          continue;
-        }
-
-        playerUserIds.push(user.id);
-        playerTeamIds.push(team.id);
-        players.push({
-          name: player.name,
-          email: player.email,
-          userId: user.id,
-        });
-      }
-
-      // Check minimum and maximum players
-      if (players.length < 3) {
-        entryErrors.push({
-          rowNumber: entry.rowNumber,
-          field: 'players',
-          message: `Team entries require at least 3 players. Found ${players.length} player(s)`,
-          value: players.length,
-        });
-      }
-
-      if (players.length > 5) {
-        entryErrors.push({
-          rowNumber: entry.rowNumber,
-          field: 'players',
-          message: `Team entries allow maximum 5 players. Found ${players.length} player(s)`,
-          value: players.length,
-        });
-      }
-
-      // Check all players are in the same team
-      if (playerTeamIds.length > 0) {
-        const firstTeamId = playerTeamIds[0];
-        const allSameTeam = playerTeamIds.every(teamId => teamId === firstTeamId);
-        
-        if (!allSameTeam) {
-          entryErrors.push({
-            rowNumber: entry.rowNumber,
-            field: 'team',
-            message: 'All players must be in the same team',
-            value: `Team IDs: ${playerTeamIds.join(', ')}`,
-          });
-        }
-      }
-
-      if (entryErrors.length > 0) {
-        errors.push(...entryErrors);
-      } else if (players.length >= 3 && players.length <= 5 && playerTeamIds.length > 0) {
-        // Add all player IDs to processed set
-        playerUserIds.forEach(id => processedUserIds.add(id));
-        
-        validatedEntries.push({
-          players,
-          teamId: playerTeamIds[0]!,
           rowNumber: entry.rowNumber,
         });
       }

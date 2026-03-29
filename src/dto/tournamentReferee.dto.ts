@@ -20,7 +20,8 @@ export interface TournamentRefereeResponseDto {
   updatedAt: Date;
   referee?: {
     id: number;
-    username: string;
+    firstName: string;
+    lastName: string;
     email: string;
   };
 }

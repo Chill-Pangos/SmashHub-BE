@@ -1,5 +1,3 @@
-import TeamMember from "../models/teamMember.model";
-import Team from "../models/team.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import EntryMember from "../models/entryMember.model";
 
@@ -8,18 +6,6 @@ import EntryMember from "../models/entryMember.model";
  */
 export class QueryHelper {
   /**
-   * Include options for Team with members
-   */
-  static teamWithMembers() {
-    return [
-      {
-        model: TeamMember,
-        as: "members",
-      },
-    ];
-  }
-
-  /**
    * Include options for Entry with related data
    */
   static entryWithRelations() {
@@ -27,10 +13,6 @@ export class QueryHelper {
       {
         model: EntryMember,
         as: 'members',
-      },
-      {
-        model: Team,
-        as: 'team',
       },
       {
         model: TournamentCategory,

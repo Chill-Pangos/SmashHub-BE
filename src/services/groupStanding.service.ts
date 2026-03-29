@@ -204,7 +204,6 @@ export class GroupStandingService {
 
   /**
    * Bốc thăm ngẫu nhiên các entries vào các bảng
-   * Đảm bảo các entry cùng team không vào cùng bảng (nếu số entry của team < số bảng)
    * @param data - Dữ liệu bốc thăm
    * @returns Danh sách phân bổ entries vào các bảng
    */
@@ -219,15 +218,6 @@ export class GroupStandingService {
     // Tính toán bảng tối ưu
     const groupConfig = this.calculateOptimalGroups(entries.length);
 
-    // Group entries theo teamId
-    const entriesByTeam = new Map<number, typeof entries>();
-    for (const entry of entries) {
-      if (!entriesByTeam.has(entry.teamId)) {
-        entriesByTeam.set(entry.teamId, []);
-      }
-      entriesByTeam.get(entry.teamId)!.push(entry);
-    }
-
     // Khởi tạo các bảng
     const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
     const groups: Array<{ groupName: string; entryIds: number[]; capacity: number }> = [];
@@ -240,61 +230,18 @@ export class GroupStandingService {
       });
     }
 
-    // Phân loại teams
-    const teamsNeedSeparation: Array<typeof entries> = []; // Teams có entries < số bảng
-    const normalTeams: Array<typeof entries> = []; // Teams có entries >= số bảng hoặc chỉ có 1 entry
-
-    for (const [teamId, teamEntries] of entriesByTeam) {
-      if (teamEntries.length > 1 && teamEntries.length < groupConfig.numGroups) {
-        teamsNeedSeparation.push(teamEntries);
-      } else {
-        normalTeams.push(teamEntries);
-      }
-    }
-
-    // Sắp xếp teams cần tách biệt theo số lượng entries giảm dần
-    teamsNeedSeparation.sort((a, b) => b.length - a.length);
-
-    // Bước 1: Phân bổ các teams cần tách biệt trước
-    for (const teamEntries of teamsNeedSeparation) {
-      // Sắp xếp các bảng theo số lượng entries hiện tại (ưu tiên bảng ít entries)
-      const sortedGroups = [...groups].sort((a, b) => a.entryIds.length - b.entryIds.length);
-
-      // Phân bổ từng entry của team vào các bảng khác nhau
-      for (let i = 0; i < teamEntries.length; i++) {
-        const entry = teamEntries[i]!;
-        const targetGroup = sortedGroups[i % sortedGroups.length]!;
-
-        // Kiểm tra capacity
-        if (targetGroup.entryIds.length < targetGroup.capacity) {
-          targetGroup.entryIds.push(entry.id);
-        } else {
-          // Nếu bảng đầu tiên đã đầy, tìm bảng còn chỗ
-          const availableGroup = groups.find(g => g.entryIds.length < g.capacity);
-          if (availableGroup) {
-            availableGroup.entryIds.push(entry.id);
-          }
-        }
-      }
-    }
-
-    // Bước 2: Shuffle các entries còn lại
-    const remainingEntries: typeof entries = [];
-    for (const teamEntries of normalTeams) {
-      remainingEntries.push(...teamEntries);
-    }
-
-    // Fisher-Yates shuffle
-    for (let i = remainingEntries.length - 1; i > 0; i--) {
+    // Shuffle tất cả entries (Fisher-Yates shuffle)
+    const shuffledEntries = [...entries];
+    for (let i = shuffledEntries.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [remainingEntries[i], remainingEntries[j]] = [remainingEntries[j]!, remainingEntries[i]!];
+      [shuffledEntries[i], shuffledEntries[j]] = [shuffledEntries[j]!, shuffledEntries[i]!];
     }
 
-    // Bước 3: Phân bổ các entries còn lại vào các bảng theo thứ tự
+    // Phân bổ các entries vào các bảng theo thứ tự
     let entryIndex = 0;
     for (const group of groups) {
-      while (group.entryIds.length < group.capacity && entryIndex < remainingEntries.length) {
-        group.entryIds.push(remainingEntries[entryIndex]!.id);
+      while (group.entryIds.length < group.capacity && entryIndex < shuffledEntries.length) {
+        group.entryIds.push(shuffledEntries[entryIndex]!.id);
         entryIndex++;
       }
     }

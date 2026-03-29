@@ -30,7 +30,7 @@ export class TournamentRefereeService {
         {
           model: User,
           as: "referee",
-          attributes: ["id", "username", "email"],
+          attributes: ["id", "firstName", "lastName", "email"],
         },
       ],
     });
@@ -42,7 +42,7 @@ export class TournamentRefereeService {
         {
           model: User,
           as: "referee",
-          attributes: ["id", "username", "email"],
+          attributes: ["id", "firstName", "lastName", "email"],
         },
       ],
     });
@@ -61,7 +61,7 @@ export class TournamentRefereeService {
         {
           model: User,
           as: "referee",
-          attributes: ["id", "username", "email"],
+          attributes: ["id", "firstName", "lastName", "email"],
         },
       ],
     });
@@ -123,7 +123,7 @@ export class TournamentRefereeService {
         {
           model: User,
           as: "referee",
-          attributes: ["id", "username", "email"],
+          attributes: ["id", "firstName", "lastName", "email"],
         },
       ],
       limit: 2,

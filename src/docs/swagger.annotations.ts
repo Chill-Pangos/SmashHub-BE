@@ -5,17 +5,22 @@
  *     User:
  *       type: object
  *       required:
- *         - username
+ *         - firstName
+ *         - lastName
  *         - email
  *         - password
  *       properties:
  *         id:
  *           type: integer
  *           description: User ID
- *         username:
+ *         firstName:
  *           type: string
  *           maxLength: 50
- *           description: Username for the account
+ *           description: User first name
+ *         lastName:
+ *           type: string
+ *           maxLength: 50
+ *           description: User last name
  *         email:
  *           type: string
  *           maxLength: 100
@@ -240,7 +245,6 @@
  *       type: object
  *       required:
  *         - categoryId
- *         - teamId
  *       properties:
  *         id:
  *           type: integer
@@ -248,9 +252,18 @@
  *         categoryId:
  *           type: integer
  *           description: ID of the tournament category this entry belongs to
- *         teamId:
+ *         captainId:
  *           type: integer
- *           description: ID of the team this entry belongs to
+ *           description: ID of the team captain
+ *         isAcceptingMembers:
+ *           type: boolean
+ *           description: Whether the entry is accepting new members
+ *         requiredMemberCount:
+ *           type: integer
+ *           description: Number of members required
+ *         currentMemberCount:
+ *           type: integer
+ *           description: Current number of members
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -274,50 +287,6 @@
  *         eloAtEntry:
  *           type: integer
  *           description: Player ELO snapshot at registration time
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
- *     Team:
- *       type: object
- *       required:
- *         - tournamentId
- *         - name
- *       properties:
- *         id:
- *           type: integer
- *         tournamentId:
- *           type: integer
- *         name:
- *           type: string
- *           maxLength: 100
- *         description:
- *           type: string
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *
- *     TeamMember:
- *       type: object
- *       required:
- *         - teamId
- *         - userId
- *       properties:
- *         id:
- *           type: integer
- *         teamId:
- *           type: integer
- *         userId:
- *           type: integer
- *         role:
- *           type: string
- *           enum: [member, captain]
  *         createdAt:
  *           type: string
  *           format: date-time

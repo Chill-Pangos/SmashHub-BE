@@ -18,14 +18,19 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - username
+ *               - firstName
+ *               - lastName
  *               - email
  *               - password
  *             properties:
- *               username:
+ *               firstName:
  *                 type: string
- *                 example: test
- *                 description: Username for the account
+ *                 example: Nguyen
+ *                 description: User first name
+ *               lastName:
+ *                 type: string
+ *                 example: Van A
+ *                 description: User last name
  *               email:
  *                 type: string
  *                 format: email
@@ -64,9 +69,12 @@ const router = Router();
  *                         id:
  *                           type: integer
  *                           example: 1
- *                         username:
+ *                         firstName:
  *                           type: string
- *                           example: test
+ *                           example: Nguyen
+ *                         lastName:
+ *                           type: string
+ *                           example: Van A
  *                         email:
  *                           type: string
  *                           example: user@test.com
@@ -156,9 +164,12 @@ router.post("/register", authController.register);
  *                         id:
  *                           type: integer
  *                           example: 1
- *                         username:
+ *                         firstName:
  *                           type: string
- *                           example: test
+ *                           example: Nguyen
+ *                         lastName:
+ *                           type: string
+ *                           example: Van A
  *                         email:
  *                           type: string
  *                           example: user@test.com

@@ -1,5 +1,6 @@
 export interface CreateUserDto {
-  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   avatarUrl?: string;
@@ -9,7 +10,8 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
-  username?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   password?: string;
   avatarUrl?: string;
@@ -21,7 +23,8 @@ export interface UpdateUserDto {
 
 export interface UserResponseDto {
   id: number;
-  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   avatarUrl?: string;
   dob?: Date;

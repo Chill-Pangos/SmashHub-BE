@@ -1,8 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/user.model";
-import RefreshToken from "../models/refreshToken.model";
-import AccessToken from "../models/accessToken.model";
+import Token, { TokenType } from "../models/token.model";
 import Otp from "../models/otp.model";
 import config from "../config/config";
 import emailService from "./email.service";
@@ -27,6 +26,10 @@ export class AuthService {
   private readonly JWT_EXPIRES_IN = config.jwt.expiresIn;
   private readonly JWT_REFRESH_SECRET = config.jwt.refreshSecret;
   private readonly JWT_REFRESH_EXPIRES_IN = config.jwt.refreshExpiresIn;
+
+  private getFullName(user: Pick<User, "firstName" | "lastName">): string {
+    return `${user.firstName} ${user.lastName}`.trim();
+  }
 
   /**
    * Generate access token
@@ -78,34 +81,20 @@ export class AuthService {
   }
 
   /**
-   * Save access token to database
+   * Save token to database
    */
-  private async saveAccessToken(
+  private async saveToken(
     userId: number,
-    token: string
-  ): Promise<AccessToken> {
-    const expiresAt = this.calculateExpirationDate(this.JWT_EXPIRES_IN);
+    token: string,
+    type: TokenType
+  ): Promise<Token> {
+    const expiresIn = type === "access" ? this.JWT_EXPIRES_IN : this.JWT_REFRESH_EXPIRES_IN;
+    const expiresAt = this.calculateExpirationDate(expiresIn);
 
-    return await AccessToken.create({
+    return await Token.create({
       userId,
       token,
-      expiresAt,
-      isBlacklisted: false,
-    } as any);
-  }
-
-  /**
-   * Save refresh token to database
-   */
-  private async saveRefreshToken(
-    userId: number,
-    token: string
-  ): Promise<RefreshToken> {
-    const expiresAt = this.calculateExpirationDate(this.JWT_REFRESH_EXPIRES_IN);
-
-    return await RefreshToken.create({
-      userId,
-      token,
+      type,
       expiresAt,
       isBlacklisted: false,
     } as any);
@@ -115,23 +104,11 @@ export class AuthService {
    * Check if token is blacklisted
    */
   async isTokenBlacklisted(token: string): Promise<boolean> {
-    const accessToken = await AccessToken.findOne({
+    const tokenRecord = await Token.findOne({
       where: { token },
     });
 
-    if (accessToken && accessToken.isBlacklisted) {
-      return true;
-    }
-
-    const refreshToken = await RefreshToken.findOne({
-      where: { token },
-    });
-
-    if (refreshToken && refreshToken.isBlacklisted) {
-      return true;
-    }
-
-    return false;
+    return tokenRecord?.isBlacklisted ?? false;
   }
 
   /**
@@ -156,7 +133,7 @@ export class AuthService {
    * Register new user
    */
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { username, email, password, role } = registerDto;
+    const { firstName, lastName, email, password, role } = registerDto;
 
     // Validate email format
     validateEmail(email);
@@ -175,23 +152,13 @@ export class AuthService {
       throw AuthErrors.EmailAlreadyExists();
     }
 
-    // Check if username already exists
-    const existingUsername = await User.findOne({
-      where: {
-        username,
-      },
-    });
-
-    if (existingUsername) {
-      throw AuthErrors.UsernameAlreadyExists();
-    }
-
     // Hash password
     const hashedPassword = await this.hashPassword(password);
 
     // Create user
     const user = await User.create({
-      username,
+      firstName,
+      lastName,
       email,
       password: hashedPassword,
       isEmailVerified: false,
@@ -214,13 +181,14 @@ export class AuthService {
     const refreshToken = this.generateRefreshToken(user.id);
 
     // Save tokens to database
-    await this.saveAccessToken(user.id, accessToken);
-    await this.saveRefreshToken(user.id, refreshToken);
+    await this.saveToken(user.id, accessToken, "access");
+    await this.saveToken(user.id, refreshToken, "refresh");
 
     return {
       user: {
         id: user.id,
-        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         roles: [foundRole.id],
         isEmailVerified: user.isEmailVerified,
@@ -257,25 +225,19 @@ export class AuthService {
       throw AuthErrors.InvalidCredentials();
     }
 
-    await AccessToken.update({
-      isBlacklisted: true, blacklistedAt: new Date(),
-    }, {
-      where: { userId: user.id, isBlacklisted: false },
-    });
-
-    await RefreshToken.update({
-      isBlacklisted: true, blacklistedAt: new Date(),
-    }, {
-      where: { userId: user.id, isBlacklisted: false },
-    });
+    // Blacklist all existing tokens for this user
+    await Token.update(
+      { isBlacklisted: true, blacklistedAt: new Date() },
+      { where: { userId: user.id, isBlacklisted: false } }
+    );
 
     // Generate tokens
     const accessToken = this.generateAccessToken(user.id);
     const refreshToken = this.generateRefreshToken(user.id);
 
     // Save tokens to database
-    await this.saveAccessToken(user.id, accessToken);
-    await this.saveRefreshToken(user.id, refreshToken);
+    await this.saveToken(user.id, accessToken, "access");
+    await this.saveToken(user.id, refreshToken, "refresh");
 
     // Get user roles
     const userRoles = await UserRole.findAll({
@@ -285,7 +247,8 @@ export class AuthService {
     return {
       user: {
         id: user.id,
-        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         roles: userRoles.map((ur) => ur.roleId),
         isEmailVerified: user.isEmailVerified,
@@ -324,13 +287,13 @@ export class AuthService {
       }
 
       // Blacklist old refresh token
-      await RefreshToken.update(
+      await Token.update(
         {
           isBlacklisted: true,
           blacklistedAt: new Date(),
         },
         {
-          where: { token: refreshToken },
+          where: { token: refreshToken, type: "refresh" },
         }
       );
 
@@ -339,8 +302,8 @@ export class AuthService {
       const newRefreshToken = this.generateRefreshToken(user.id);
 
       // Save new tokens to database
-      await this.saveAccessToken(user.id, newAccessToken);
-      await this.saveRefreshToken(user.id, newRefreshToken);
+      await this.saveToken(user.id, newAccessToken, "access");
+      await this.saveToken(user.id, newRefreshToken, "refresh");
 
       return {
         accessToken: newAccessToken,
@@ -421,20 +384,7 @@ export class AuthService {
   async logout(logoutDto: LogoutDto): Promise<void> {
     const { userId } = logoutDto;
     // Blacklist all active tokens for this user
-    await AccessToken.update(
-      {
-        isBlacklisted: true,
-        blacklistedAt: new Date(),
-      },
-      {
-        where: {
-          userId,
-          isBlacklisted: false,
-        },
-      }
-    );
-
-    await RefreshToken.update(
+    await Token.update(
       {
         isBlacklisted: true,
         blacklistedAt: new Date(),
@@ -462,13 +412,13 @@ export class AuthService {
     email: string,
     otp: string,
     type: "password_reset" | "email_verification",
-    userName: string
+    fullName: string
   ): Promise<void> {
     try {
       if (type === "password_reset") {
-        await emailService.sendPasswordResetOTP(email, otp, userName);
+        await emailService.sendPasswordResetOTP(email, otp, fullName);
       } else if (type === "email_verification") {
-        await emailService.sendEmailVerificationOTP(email, otp, userName);
+        await emailService.sendEmailVerificationOTP(email, otp, fullName);
       }
     } catch (error) {
       console.error("Error sending OTP email:", error);
@@ -517,7 +467,7 @@ export class AuthService {
     });
 
     // Send OTP via email
-    await this.sendOtpEmail(email, otpCode, "password_reset", user.username);
+    await this.sendOtpEmail(email, otpCode, "password_reset", this.getFullName(user));
   }
 
   /**
@@ -611,17 +561,13 @@ export class AuthService {
     });
 
     // Blacklist all existing tokens for security
-    await AccessToken.update(
-      { isBlacklisted: true, blacklistedAt: new Date() },
-      { where: { userId: user.id, isBlacklisted: false } }
-    );
-    await RefreshToken.update(
+    await Token.update(
       { isBlacklisted: true, blacklistedAt: new Date() },
       { where: { userId: user.id, isBlacklisted: false } }
     );
 
     // Send password changed notification
-    await emailService.sendPasswordChangedNotification(email, user.username);
+    await emailService.sendPasswordChangedNotification(email, this.getFullName(user));
   }
 
   /**
@@ -665,7 +611,7 @@ export class AuthService {
     });
 
     // Send OTP via email
-    await this.sendOtpEmail(email, otpCode, "email_verification", user.username);
+    await this.sendOtpEmail(email, otpCode, "email_verification", this.getFullName(user));
   }
 
   /**

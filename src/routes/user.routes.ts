@@ -21,11 +21,14 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - username
+ *               - firstName
+ *               - lastName
  *               - email
  *               - password
  *             properties:
- *               username:
+ *               firstName:
+ *                 type: string
+ *               lastName:
  *                 type: string
  *               email:
  *                 type: string
@@ -89,7 +92,9 @@ router.get("/", userController.findAll.bind(userController));
  *           schema:
  *             type: object
  *             properties:
- *               username:
+ *               firstName:
+ *                 type: string
+ *               lastName:
  *                 type: string
  *               email:
  *                 type: string

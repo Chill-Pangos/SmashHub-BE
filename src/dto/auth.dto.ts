@@ -8,16 +8,18 @@ export interface LogoutDto {
 }
 
 export interface RegisterDto {
-  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
-  role: string;
+  role?: string;
 }
 
 export interface AuthResponseDto {
   user: {
     id: number;
-    username: string;
+    firstName: string;
+    lastName: string;
     email: string;
     roles: number[];
     isEmailVerified: boolean;
