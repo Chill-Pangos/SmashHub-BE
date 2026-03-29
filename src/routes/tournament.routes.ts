@@ -242,7 +242,7 @@ router.post("/",
   checkPermission(PERMISSIONS.TOURNAMENTS_CREATE),
   tournamentController.create.bind(tournamentController)
 );
-router.get("/", tournamentController.findAll.bind(tournamentController));
+router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tournamentController));
 
 /**
  * @swagger
@@ -579,28 +579,167 @@ router.delete("/:id",
   tournamentController.delete.bind(tournamentController)
 );
 
+
 /**
  * @swagger
- * /tournaments/status/{status}:
- *   get:
+ * /tournaments/update-statuses:
+ *   post:
  *     tags: [Tournaments]
- *     summary: Get tournaments by status
- *     parameters:
- *       - in: path
- *         name: status
- *         required: true
- *         schema:
- *           type: string
- *           enum: [upcoming, ongoing, completed]
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
+ *     summary: Manually trigger tournament status updates
+ *     description: |
+ *       Manually update tournament statuses based on registration and bracket dates.
+ *       This endpoint is useful for admins to force status updates outside the cron schedule.
+ *       Status transitions:
+ *       - draft → registration_open (when registrationStartDate is reached)
+ *       - registration_open → registration_closed (when registrationEndDate is reached)
+ *       - registration_closed → brackets_generated (when bracketGenerationDate is reached)
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of tournaments with specified status
+ *         description: Status update completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Tournament statuses updated successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     openedCount:
+ *                       type: integer
+ *                       description: Number of tournaments that opened registration
+ *                       example: 2
+ *                     closedCount:
+ *                       type: integer
+ *                       description: Number of tournaments that closed registration
+ *                       example: 1
+ *                     bracketsGeneratedCount:
+ *                       type: integer
+ *                       description: Number of tournaments that generated brackets
+ *                       example: 0
+ *                     totalUpdated:
+ *                       type: integer
+ *                       description: Total number of tournaments updated
+ *                       example: 3
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         description: Internal server error
+ */
+router.post(
+  "/update-statuses",
+  authenticate,
+  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
+  tournamentController.updateStatuses.bind(tournamentController)
+);
+
+/**
+ * @swagger
+ * /tournaments/upcoming-changes:
+ *   get:
+ *     tags: [Tournaments]
+ *     summary: Get upcoming tournament status changes
+ *     description: |
+ *       Get a list of tournaments that will change status within the specified time period.
+ *       Useful for monitoring and preparing for upcoming tournament phases.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: hours
+ *         schema:
+ *           type: integer
+ *           default: 24
+ *         description: Number of hours to look ahead (default is 24 hours)
+ *         example: 48
+ *     responses:
+ *       200:
+ *         description: List of upcoming status changes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     openingSoon:
+ *                       type: array
+ *                       description: Tournaments that will open registration soon
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           registrationStartDate:
+ *                             type: string
+ *                             format: date-time
+ *                           status:
+ *                             type: string
+ *                             example: "draft"
+ *                     closingSoon:
+ *                       type: array
+ *                       description: Tournaments that will close registration soon
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           registrationEndDate:
+ *                             type: string
+ *                             format: date-time
+ *                           status:
+ *                             type: string
+ *                             example: "registration_open"
+ *                     bracketsSoon:
+ *                       type: array
+ *                       description: Tournaments that will generate brackets soon
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           bracketGenerationDate:
+ *                             type: string
+ *                             format: date-time
+ *                           status:
+ *                             type: string
+ *                             example: "registration_closed"
+ *                 metadata:
+ *                   type: object
+ *                   properties:
+ *                     lookAheadHours:
+ *                       type: integer
+ *                       example: 24
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       500:
+ *         description: Internal server error
  */
 router.get(
-  "/status/:status",
-  tournamentController.findByStatus.bind(tournamentController)
+  "/upcoming-changes",
+  authenticate,
+  checkAnyPermission([PERMISSIONS.TOURNAMENTS_VIEW, PERMISSIONS.TOURNAMENTS_UPDATE]),
+  tournamentController.getUpcomingChanges.bind(tournamentController)
 );
 
 export default router;

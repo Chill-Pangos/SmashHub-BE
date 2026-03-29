@@ -19,8 +19,12 @@ export class TournamentService {
       const tournament = await Tournament.create(
         {
           name: data.name,
+          tier: data.tier,
           startDate: data.startDate,
           endDate: data.endDate ? data.endDate : null,
+          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
+          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
+          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
           location: data.location,
           status: data.status || "upcoming",
           numberOfTables: data.numberOfTables || 1,
@@ -75,14 +79,6 @@ export class TournamentService {
     }
   }
 
-  async findAll(skip = 0, limit = 10): Promise<Tournament[]> {
-    return await Tournament.findAll({
-      offset: skip,
-      limit,
-      order: [["startDate", "DESC"]],
-    });
-  }
-
   async findAllWithCategoriesFiltered(
     filters: TournamentFilterDto
   ): Promise<{
@@ -114,6 +110,9 @@ export class TournamentService {
     }
     if (categoryFilters.gender !== undefined) {
       categoryWhere.gender = categoryFilters.gender;
+    }
+    if(categoryFilters.status !== undefined) {
+      categoryWhere.status = categoryFilters.status;
     }
     if (categoryFilters.isGroupStage !== undefined) {
       categoryWhere.isGroupStage = categoryFilters.isGroupStage;
@@ -300,19 +299,6 @@ export class TournamentService {
     });
   }
 
-  async findByStatus(
-    status: string,
-    skip = 0,
-    limit = 10
-  ): Promise<Tournament[]> {
-    return await Tournament.findAll({
-      where: { status },
-      offset: skip,
-      limit,
-      order: [["startDate", "DESC"]],
-    });
-  }
-
   async update(
     id: number,
     data: UpdateTournamentDto
@@ -333,6 +319,9 @@ export class TournamentService {
           name: data.name,
           startDate: data.startDate,
           endDate: data.endDate,
+          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
+          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
+          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
           location: data.location,
           numberOfTables: data.numberOfTables ?? 1,
           status: data.status,
@@ -393,6 +382,119 @@ export class TournamentService {
 
   async delete(id: number): Promise<number> {
     return await Tournament.destroy({ where: { id } });
+  }
+
+  /**
+   * Manually trigger tournament status update based on dates
+   * This can be called by admin endpoint or used for testing
+   * @returns Object containing counts of updated tournaments
+   */
+  async updateTournamentStatuses(): Promise<{
+    openedCount: number;
+    closedCount: number;
+    bracketsGeneratedCount: number;
+    totalUpdated: number;
+  }> {
+    const now = new Date();
+
+    // 1. Open registration: draft -> registration_open
+    const openedResult = await Tournament.update(
+      { status: "registration_open" },
+      {
+        where: {
+          status: "draft",
+          registrationStartDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    // 2. Close registration: registration_open -> registration_closed
+    const closedResult = await Tournament.update(
+      { status: "registration_closed" },
+      {
+        where: {
+          status: "registration_open",
+          registrationEndDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    // 3. Generate brackets: registration_closed -> brackets_generated
+    const bracketsResult = await Tournament.update(
+      { status: "brackets_generated" },
+      {
+        where: {
+          status: "registration_closed",
+          bracketGenerationDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    return {
+      openedCount: openedResult[0],
+      closedCount: closedResult[0],
+      bracketsGeneratedCount: bracketsResult[0],
+      totalUpdated: openedResult[0] + closedResult[0] + bracketsResult[0],
+    };
+  }
+
+  /**
+   * Get tournaments that will change status within the next specified hours
+   * Useful for notifications and monitoring
+   * @param hours - Number of hours to look ahead (default: 24)
+   */
+  async getUpcomingStatusChanges(hours: number = 24): Promise<{
+    openingSoon: Tournament[];
+    closingSoon: Tournament[];
+    bracketsSoon: Tournament[];
+  }> {
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + hours * 60 * 60 * 1000);
+
+    const openingSoon = await Tournament.findAll({
+      where: {
+        status: "draft",
+        registrationStartDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "registrationStartDate", "status"],
+    });
+
+    const closingSoon = await Tournament.findAll({
+      where: {
+        status: "registration_open",
+        registrationEndDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "registrationEndDate", "status"],
+    });
+
+    const bracketsSoon = await Tournament.findAll({
+      where: {
+        status: "registration_closed",
+        bracketGenerationDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "bracketGenerationDate", "status"],
+    });
+
+    return {
+      openingSoon,
+      closingSoon,
+      bracketsSoon,
+    };
   }
 }
 

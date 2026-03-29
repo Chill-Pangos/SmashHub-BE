@@ -1,3 +1,4 @@
+// match.model.ts
 import {
   Table,
   Column,
@@ -6,12 +7,30 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  BeforeValidate,
 } from "sequelize-typescript";
 import Schedule from "./schedule.model";
-import User from "./user.model";
 import EloHistory from "./eloHistory.model";
 import Entry from "./entry.model";
 import SubMatch from "./subMatch.model";
+import MatchReferee from "./matchReferee.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const REVIEW_NOTES_MAX_LENGTH = 1000;
+
+export const MATCH_STATUSES = [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+] as const;
+export type MatchStatus = (typeof MATCH_STATUSES)[number];
+
+export const RESULT_STATUSES = ["pending", "approved", "rejected"] as const;
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "matches",
@@ -20,8 +39,6 @@ import SubMatch from "./subMatch.model";
     { fields: ["entryAId"] },
     { fields: ["entryBId"] },
     { fields: ["winnerEntryId"] },
-    { fields: ["umpire"] },
-    { fields: ["assistantUmpire"] },
     { fields: ["status"] },
     { fields: ["resultStatus"] },
     { fields: ["scheduleId", "status"] },
@@ -57,10 +74,11 @@ export default class Match extends Model {
   declare entryBId: number;
 
   @Column({
-    type: DataType.ENUM("scheduled", "in_progress", "completed", "cancelled"),
+    type: DataType.ENUM(...MATCH_STATUSES),
     allowNull: false,
+    defaultValue: "scheduled" satisfies MatchStatus,
   })
-  declare status: string;
+  declare status: MatchStatus;
 
   @ForeignKey(() => Entry)
   @Column({
@@ -69,26 +87,12 @@ export default class Match extends Model {
   })
   declare winnerEntryId?: number;
 
-  @ForeignKey(() => User)
   @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare umpire?: number;
-
-  @ForeignKey(() => User)
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare assistantUmpire?: number;
-
-  @Column({
-    type: DataType.ENUM("pending", "approved", "rejected"),
+    type: DataType.ENUM(...RESULT_STATUSES),
     allowNull: true,
     comment: "Status of match result approval by chief referee",
   })
-  declare resultStatus?: "pending" | "approved" | "rejected";
+  declare resultStatus?: ResultStatus;
 
   @Column({
     type: DataType.TEXT,
@@ -97,27 +101,78 @@ export default class Match extends Model {
   })
   declare reviewNotes?: string;
 
-  @BelongsTo(() => Schedule, 'scheduleId')
-  schedule?: Schedule;
+  // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Entry, "entryAId")
-  entryA?: Entry;
+  @BelongsTo(() => Schedule, { foreignKey: "scheduleId" })
+  declare schedule?: Schedule;
 
-  @BelongsTo(() => Entry, "entryBId")
-  entryB?: Entry;
+  @BelongsTo(() => Entry, { foreignKey: "entryAId" })
+  declare entryA?: Entry;
 
-  @BelongsTo(() => Entry, "winnerEntryId")
-  winnerEntry?: Entry;
+  @BelongsTo(() => Entry, { foreignKey: "entryBId" })
+  declare entryB?: Entry;
 
-  @BelongsTo(() => User, "umpire")
-  umpireUser?: User;
+  @BelongsTo(() => Entry, { foreignKey: "winnerEntryId" })
+  declare winnerEntry?: Entry;
 
-  @BelongsTo(() => User, "assistantUmpire")
-  assistantUser?: User;
+  @HasMany(() => EloHistory, { foreignKey: "matchId" })
+  declare eloHistories?: EloHistory[];
 
-  @HasMany(() => EloHistory)
-  eloHistories?: EloHistory[];
+  @HasMany(() => SubMatch, { foreignKey: "matchId" })
+  declare subMatches?: SubMatch[];
 
-  @HasMany(() =>SubMatch)
-  subMatches?: SubMatch[];
+  @HasMany(() => MatchReferee, { foreignKey: "matchId" })
+  declare matchReferees?: MatchReferee[];
+
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateEntries(instance: Match): void {
+    if (instance.entryAId === instance.entryBId) {
+      throw new Error("Entry A and Entry B must be different");
+    }
+  }
+
+  @BeforeValidate
+  static validateWinner(instance: Match): void {
+    const { winnerEntryId, entryAId, entryBId, status } = instance;
+
+    if (winnerEntryId == null) return;
+
+    if (winnerEntryId !== entryAId && winnerEntryId !== entryBId) {
+      throw new Error("Winner must be either Entry A or Entry B");
+    }
+    if (status !== "completed") {
+      throw new Error("Winner can only be set when match status is completed");
+    }
+  }
+
+  @BeforeValidate
+  static validateResultStatus(instance: Match): void {
+    const { resultStatus, status } = instance;
+
+    if (resultStatus == null) return;
+
+    if (status !== "completed") {
+      throw new Error(
+        "Result status can only be set when match status is completed"
+      );
+    }
+  }
+
+  @BeforeValidate
+  static validateReviewNotes(instance: Match): void {
+    const { reviewNotes } = instance;
+
+    if (reviewNotes == null) return;
+
+    if (reviewNotes.trim().length === 0) {
+      throw new Error("Review notes must not be empty or whitespace only");
+    }
+    if (reviewNotes.length > REVIEW_NOTES_MAX_LENGTH) {
+      throw new Error(
+        `Review notes must not exceed ${REVIEW_NOTES_MAX_LENGTH} characters`
+      );
+    }
+  }
 }

@@ -4,8 +4,11 @@ export interface CreateTournamentDto {
   tier: number;
   startDate: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location: string;
-  status?: "upcoming" | "ongoing" | "completed";
+  status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
   createdBy: number;
   numberOfTables?: number;
   categories?: CreateTournamentCategoryDto[];
@@ -22,7 +25,6 @@ export interface CreateTournamentCategoryDto {
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
-
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -32,8 +34,11 @@ export interface UpdateTournamentDto {
   tier?: number;
   startDate?: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location?: string;
-  status?: "upcoming" | "ongoing" | "completed";
+  status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
   numberOfTables?: number;
   categories?: UpdateTournamentCategoryDto[];
 }
@@ -57,9 +62,12 @@ export interface TournamentResponseDto {
   id: number;
   name: string;
   tier: number;
-  status: string;
+  status: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled";
   startDate: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location: string;
   numberOfTables: number;
   createdAt: Date;
@@ -74,6 +82,7 @@ export interface TournamentFilterDto {
   minElo?: number | undefined;
   maxElo?: number | undefined;
   gender?: 'male' | 'female' | 'mixed' | undefined;
+  status?: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled" | undefined;
   isGroupStage?: boolean | undefined;
   skip?: number;
   limit?: number;

@@ -1,10 +1,8 @@
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
-import Team from "../models/team.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
-import TeamMember from "../models/teamMember.model";
 import { CreateEntryDto, UpdateEntryDto, RegisterEntryDto } from "../dto/entry.dto";
 import { withTransaction } from "../utils/transaction.helper";
 import { ValidationHelper } from "../utils/validation.helper";

@@ -6,10 +6,33 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  BeforeValidate,
 } from "sequelize-typescript";
 import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
-import GroupStanding from "./groupStanding.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const GROUP_NAME_MAX_LENGTH = 50;
+const MIN_TABLE_NUMBER = 1;
+const MAX_TABLE_NUMBER = 100;
+const GROUP_NAME_REGEX = /^[\p{L}\p{N}\s\-]+$/u;
+
+export const STAGES = ["group", "knockout"] as const;
+export type Stage = (typeof STAGES)[number];
+
+export const KNOCKOUT_ROUNDS = [
+  "Round of 64",
+  "Round of 32",
+  "Round of 16",
+  "Quarter-final",
+  "Semi-final",
+  "Third-place",
+  "Final",
+] as const;
+export type KnockoutRound = (typeof KNOCKOUT_ROUNDS)[number];
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "schedules",
@@ -19,7 +42,7 @@ import GroupStanding from "./groupStanding.model";
     { fields: ["stage"] },
     { fields: ["categoryId", "stage"] },
     { fields: ["categoryId", "groupName"] },
-    { fields: ["categoryId", "roundNumber"] },
+    { fields: ["categoryId", "knockoutRound"] },
   ],
 })
 export default class Schedule extends Model {
@@ -38,50 +61,127 @@ export default class Schedule extends Model {
   declare categoryId: number;
 
   @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare roundNumber?: number;
-
-  @Column({
-    type: DataType.STRING(50),
-    allowNull: true,
-  })
-  declare groupName?: string;
-
-  @Column({
-    type: DataType.ENUM('group', 'knockout'),
-    allowNull: true,
-    defaultValue: 'group',
-  })
-  declare stage?: 'group' | 'knockout';
-
-  @Column({
-    type: DataType.STRING(50),
-    allowNull: true,
-  })
-  declare knockoutRound?: string; // e.g., 'Round of 16', 'Quarter-final', 'Semi-final', 'Final'
-
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: true,
-  })
-  declare tableNumber?: number; // Số bàn thi đấu (1-N)
-
-  @Column({
     type: DataType.DATE,
     allowNull: false,
   })
   declare scheduledAt: Date;
 
-  @BelongsTo(() => TournamentCategory, {
-    foreignKey: 'categoryId',
+  @Column({
+    type: DataType.ENUM(...STAGES),
+    allowNull: false,
+    defaultValue: "group" satisfies Stage,
   })
-  TournamentCategory?: TournamentCategory;
+  declare stage: Stage;
 
-  @HasMany(() => Match)
-  matches?: Match[];
+  // ── Group Stage Fields ────────────────────────────────────────────────────
 
-  @HasMany(() => Match, "scheduledId")
-  scheduledMatches?: Match[];
+  @Column({
+    type: DataType.STRING(GROUP_NAME_MAX_LENGTH),
+    allowNull: true,
+  })
+  declare groupName?: string;
+
+  // ── Knockout Stage Fields ─────────────────────────────────────────────────
+
+  @Column({
+    type: DataType.ENUM(...KNOCKOUT_ROUNDS),
+    allowNull: true,
+  })
+  declare knockoutRound?: KnockoutRound;
+
+  // ── Venue ─────────────────────────────────────────────────────────────────
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare tableNumber?: number;
+
+  // ─── Associations ─────────────────────────────────────────────────────────
+
+  @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
+  declare tournamentCategory?: TournamentCategory;
+
+  @HasMany(() => Match, { foreignKey: "scheduledId" })
+  declare scheduledMatches?: Match[];
+
+  // ─── Validators ───────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateScheduledAt(instance: Schedule): void {
+    const { scheduledAt } = instance;
+
+    if (!scheduledAt) {
+      throw new Error("Scheduled time is required");
+    }
+
+    const oneMinuteAgo = new Date(Date.now() - 60_000);
+    if (new Date(scheduledAt) < oneMinuteAgo) {
+      throw new Error("Scheduled time must not be in the past");
+    }
+  }
+
+  @BeforeValidate
+  static validateStageConsistency(instance: Schedule): void {
+    const { stage, groupName, knockoutRound } = instance;
+
+    if (stage === "group") {
+      if (!groupName?.trim()) {
+        throw new Error("Group stage requires groupName");
+      }
+      if (knockoutRound) {
+        throw new Error("knockoutRound must not be set for group stage");
+      }
+      return;
+    }
+
+    if (stage === "knockout") {
+      if (!knockoutRound) {
+        throw new Error("Knockout stage requires knockoutRound");
+      }
+      if (groupName?.trim()) {
+        throw new Error("groupName must not be set for knockout stage");
+      }
+    }
+  }
+
+  @BeforeValidate
+  static validateTableNumber(instance: Schedule): void {
+    const { tableNumber } = instance;
+
+    if (tableNumber == null) return;
+
+    if (
+      !Number.isInteger(tableNumber) ||
+      tableNumber < MIN_TABLE_NUMBER ||
+      tableNumber > MAX_TABLE_NUMBER
+    ) {
+      throw new Error(
+        `Table number must be an integer between ${MIN_TABLE_NUMBER} and ${MAX_TABLE_NUMBER}`
+      );
+    }
+  }
+
+  @BeforeValidate
+  static validateGroupName(instance: Schedule): void {
+    const { groupName } = instance;
+
+    if (groupName == null) return;
+
+    const trimmed = groupName.trim();
+
+    if (trimmed.length === 0) {
+      throw new Error("Group name must not be empty or whitespace only");
+    }
+    if (trimmed.length > GROUP_NAME_MAX_LENGTH) {
+      throw new Error(
+        `Group name must not exceed ${GROUP_NAME_MAX_LENGTH} characters`
+      );
+    }
+    if (!GROUP_NAME_REGEX.test(trimmed)) {
+      throw new Error(
+        "Group name must only contain letters, numbers, spaces, or hyphens"
+      );
+    }
+  }
 }

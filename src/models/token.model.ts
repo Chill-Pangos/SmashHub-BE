@@ -1,4 +1,4 @@
-// otp.model.ts
+// token.model.ts
 import {
   Table,
   Column,
@@ -12,22 +12,24 @@ import User from "./user.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const OTP_CODE_LENGTH = 6;
-
-export const OTP_TYPES = ["password_reset", "email_verification"] as const;
-export type OtpType = (typeof OTP_TYPES)[number];
+export const TOKEN_TYPES = ["access", "refresh"] as const;
+export type TokenType = (typeof TOKEN_TYPES)[number];
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
-  tableName: "otps",
+  tableName: "tokens",
   timestamps: true,
   indexes: [
+    { fields: ["userId"] },
     { fields: ["expiresAt"] },
-    { fields: ["userId", "type", "isUsed"] },
+    { fields: ["type"] },
+    { fields: ["userId", "type"] },
+    { fields: ["isBlacklisted", "expiresAt"] },
+    { unique: true, fields: ["token"] }, // token phải là duy nhất
   ],
 })
-export default class Otp extends Model {
+export default class Token extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
@@ -43,16 +45,16 @@ export default class Otp extends Model {
   declare userId: number;
 
   @Column({
-    type: DataType.STRING(OTP_CODE_LENGTH),
+    type: DataType.ENUM(...TOKEN_TYPES),
     allowNull: false,
   })
-  declare code: string;
+  declare type: TokenType;
 
   @Column({
-    type: DataType.ENUM(...OTP_TYPES),
+    type: DataType.TEXT,
     allowNull: false,
   })
-  declare type: OtpType;
+  declare token: string;
 
   @Column({
     type: DataType.DATE,
@@ -65,13 +67,13 @@ export default class Otp extends Model {
     allowNull: false,
     defaultValue: false,
   })
-  declare isUsed: boolean;
+  declare isBlacklisted: boolean;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  declare usedAt?: Date;
+  declare blacklistedAt?: Date;
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
@@ -81,42 +83,33 @@ export default class Otp extends Model {
   // ─── Validators ────────────────────────────────────────────────────────────
 
   @BeforeValidate
-  static validateCode(instance: Otp): void {
-    const { code } = instance;
-
-    if (!code) {
-      throw new Error("OTP code is required");
-    }
-    if (!/^\d+$/.test(code)) {
-      throw new Error("OTP code must contain only digits");
-    }
-    if (code.length !== OTP_CODE_LENGTH) {
-      throw new Error(`OTP code must be exactly ${OTP_CODE_LENGTH} digits`);
+  static validateToken(instance: Token): void {
+    if (!instance.token?.trim()) {
+      throw new Error("Token value is required");
     }
   }
 
   @BeforeValidate
-  static validateExpiresAt(instance: Otp): void {
+  static validateExpiresAt(instance: Token): void {
     const { expiresAt } = instance;
 
     if (!expiresAt) {
       throw new Error("Expiry time is required");
     }
-
     if (new Date(expiresAt) <= new Date()) {
       throw new Error("Expiry time must be in the future");
     }
   }
 
   @BeforeValidate
-  static validateUsedAt(instance: Otp): void {
-    const { isUsed, usedAt } = instance;
+  static validateBlacklistedAt(instance: Token): void {
+    const { isBlacklisted, blacklistedAt } = instance;
 
-    if (usedAt != null && !isUsed) {
-      throw new Error("usedAt can only be set when isUsed is true");
+    if (blacklistedAt != null && !isBlacklisted) {
+      throw new Error("blacklistedAt can only be set when isBlacklisted is true");
     }
-    if (isUsed && usedAt == null) {
-      throw new Error("usedAt must be set when isUsed is true");
+    if (isBlacklisted && blacklistedAt == null) {
+      throw new Error("blacklistedAt must be set when isBlacklisted is true");
     }
   }
 }

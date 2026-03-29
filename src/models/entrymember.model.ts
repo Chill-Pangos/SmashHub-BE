@@ -5,16 +5,28 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  BeforeValidate,
 } from "sequelize-typescript";
 import User from "./user.model";
 import Entry from "./entry.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MIN_ELO = 0;
+const MAX_ELO = 10000;
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "entry_members",
   timestamps: true,
   indexes: [
     { fields: ["userId"] },
-    { fields: ["entryId", "userId"] },
+    { fields: ["entryId"] },
+    {
+      unique: true,
+      fields: ["entryId", "userId"],
+    },
   ],
 })
 export default class EntryMember extends Model {
@@ -45,21 +57,24 @@ export default class EntryMember extends Model {
   })
   declare eloAtEntry: number;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare position?: string;
+  // ─── Associations ──────────────────────────────────────────────────────────
 
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-  })
-  declare teamId?: number;
+  @BelongsTo(() => Entry, { foreignKey: "entryId" })
+  declare entry?: Entry;
 
-  @BelongsTo(() => Entry)
-  entry?: Entry;
+  @BelongsTo(() => User, { foreignKey: "userId" })
+  declare user?: User;
 
-  @BelongsTo(() => User)
-  user?: User;
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateEloAtEntry(instance: EntryMember): void {
+    const { eloAtEntry } = instance;
+
+    if (!Number.isInteger(eloAtEntry) || eloAtEntry < MIN_ELO || eloAtEntry > MAX_ELO) {
+      throw new Error(
+        `ELO at entry must be an integer between ${MIN_ELO} and ${MAX_ELO}`
+      );
+    }
+  }
 }
