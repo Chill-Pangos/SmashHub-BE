@@ -1,32 +1,35 @@
 export interface CreateUserDto {
-  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
 }
 
 export interface UpdateUserDto {
-  username?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   password?: string;
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
   isEmailVerified?: boolean;
 }
 
 export interface UserResponseDto {
   id: number;
-  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
   isEmailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;

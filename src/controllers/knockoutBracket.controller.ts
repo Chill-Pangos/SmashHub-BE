@@ -63,11 +63,11 @@ export class KnockoutBracketController {
     }
   }
 
-  async findByContentId(req: Request, res: Response): Promise<void> {
+  async findByCategoryId(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.params;
-      const result = await knockoutBracketService.findByContentId(
-        parseInt(contentId as string)
+      const { categoryId } = req.params;
+      const result = await knockoutBracketService.findByCategoryId(
+        parseInt(categoryId as string)
       );
       res.status(200).json({
         success: true,
@@ -85,20 +85,23 @@ export class KnockoutBracketController {
     try {
       const { id } = req.params;
       const data: UpdateKnockoutBracketDto = req.body;
-      const [affectedCount] = await knockoutBracketService.update(
+      const updatedBracket = await knockoutBracketService.update(
         parseInt(id as string),
         data
       );
-      if (affectedCount === 0) {
+
+      if (!updatedBracket) {
         res.status(404).json({
           success: false,
           message: "Knockout bracket not found",
         });
         return;
       }
+
       res.status(200).json({
         success: true,
         message: "Knockout bracket updated successfully",
+        data: updatedBracket
       });
     } catch (error: any) {
       res.status(400).json({
@@ -111,14 +114,20 @@ export class KnockoutBracketController {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const affectedCount = await knockoutBracketService.delete(parseInt(id as string));
-      if (affectedCount === 0) {
+      const recordId = parseInt(id as string);
+
+      // Check if record exists first
+      const existing = await knockoutBracketService.findById(recordId);
+      if (!existing) {
         res.status(404).json({
           success: false,
           message: "Knockout bracket not found",
         });
         return;
       }
+
+      await knockoutBracketService.delete(recordId);
+
       res.status(200).json({
         success: true,
         message: "Knockout bracket deleted successfully",
@@ -134,12 +143,12 @@ export class KnockoutBracketController {
   /**
    * Tạo cấu trúc nhánh đấu knockout
    * POST /knockout-brackets/generate
-   * Body: { contentId: number }
+   * Body: { categoryId: number }
    */
   async generateBracket(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.body;
-      const result = await knockoutBracketService.generateKnockoutBracket(contentId);
+      const { categoryId } = req.body;
+      const result = await knockoutBracketService.generateKnockoutBracket(categoryId);
       res.status(201).json({
         success: true,
         data: result,
@@ -160,11 +169,13 @@ export class KnockoutBracketController {
    */
   async advanceWinner(req: Request, res: Response): Promise<void> {
     try {
-      const { bracketId, winnerEntryId }: AdvanceWinnerDto = req.body;
-      await knockoutBracketService.advanceWinner(bracketId, winnerEntryId);
+      const data: AdvanceWinnerDto = req.body;
+      const result = await knockoutBracketService.advanceWinner(data);
+
       res.status(200).json({
         success: true,
         message: "Winner updated and advanced to the next round successfully",
+        data: result
       });
     } catch (error: any) {
       res.status(400).json({
@@ -177,12 +188,12 @@ export class KnockoutBracketController {
   /**
    * Tạo knockout bracket từ kết quả vòng bảng
    * POST /knockout-brackets/generate-from-groups
-   * Body: { contentId: number }
+   * Body: { categoryId: number }
    */
   async generateFromGroups(req: Request, res: Response): Promise<void> {
     try {
-      const { contentId } = req.body;
-      const result = await knockoutBracketService.generateKnockoutBracketFromGroups(contentId);
+      const { categoryId } = req.body;
+      const result = await knockoutBracketService.generateKnockoutBracketFromGroups(categoryId);
       res.status(201).json({
         success: true,
         data: result,

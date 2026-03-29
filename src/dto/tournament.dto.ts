@@ -4,11 +4,14 @@ export interface CreateTournamentDto {
   tier: number;
   startDate: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location: string;
-  status?: "upcoming" | "ongoing" | "completed";
+  status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
   createdBy: number;
   numberOfTables?: number;
-  contents?: CreateTournamentCategoryDto[];
+  categories?: CreateTournamentCategoryDto[];
 }
 
 export interface CreateTournamentCategoryDto {
@@ -16,13 +19,12 @@ export interface CreateTournamentCategoryDto {
   type: 'single' | 'team' | 'double';
   maxEntries: number;
   maxSets: number;
-  numberOfSingles?: number;
-  numberOfDoubles?: number;
+  teamFormat?: string;
   minAge?: number;
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
-
+  maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -32,10 +34,13 @@ export interface UpdateTournamentDto {
   tier?: number;
   startDate?: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location?: string;
-  status?: "upcoming" | "ongoing" | "completed";
+  status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
   numberOfTables?: number;
-  contents?: UpdateTournamentCategoryDto[];
+  categories?: UpdateTournamentCategoryDto[];
 }
 
 export interface UpdateTournamentCategoryDto {
@@ -43,12 +48,12 @@ export interface UpdateTournamentCategoryDto {
   type: 'single' | 'team' | 'double';
   maxEntries: number;
   maxSets: number;
-  numberOfSingles?: number;
-  numberOfDoubles?: number;
+  teamFormat?: string;
   minAge?: number;
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
+  maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -57,9 +62,12 @@ export interface TournamentResponseDto {
   id: number;
   name: string;
   tier: number;
-  status: string;
+  status: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled";
   startDate: Date;
   endDate?: Date;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
   location: string;
   numberOfTables: number;
   createdAt: Date;
@@ -74,6 +82,7 @@ export interface TournamentFilterDto {
   minElo?: number | undefined;
   maxElo?: number | undefined;
   gender?: 'male' | 'female' | 'mixed' | undefined;
+  status?: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled" | undefined;
   isGroupStage?: boolean | undefined;
   skip?: number;
   limit?: number;

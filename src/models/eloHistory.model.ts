@@ -1,3 +1,4 @@
+// eloHistory.model.ts
 import {
   Table,
   Column,
@@ -5,9 +6,18 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  BeforeValidate,
 } from "sequelize-typescript";
 import Match from "./match.model";
 import User from "./user.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CHANGE_REASON_MAX_LENGTH = 255;
+const MIN_ELO = 0;
+const MAX_ELO = 10000;
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "elo_histories",
@@ -52,14 +62,60 @@ export default class EloHistory extends Model {
   declare newElo: number;
 
   @Column({
-    type: DataType.STRING(255),
+    type: DataType.INTEGER,
+    allowNull: false,
+    comment: "newElo - previousElo",
+  })
+  declare eloDelta: number;
+
+  @Column({
+    type: DataType.STRING(CHANGE_REASON_MAX_LENGTH),
     allowNull: false,
   })
   declare changeReason: string;
 
-  @BelongsTo(() => Match)
-  match?: Match;
+  // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => User)
-  user?: User;
+  @BelongsTo(() => Match, { foreignKey: "matchId" })
+  declare match?: Match;
+
+  @BelongsTo(() => User, { foreignKey: "userId" })
+  declare user?: User;
+
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateEloValues(instance: EloHistory): void {
+    const { previousElo, newElo } = instance;
+
+    if (!Number.isInteger(previousElo) || previousElo < MIN_ELO || previousElo > MAX_ELO) {
+      throw new Error(`Previous ELO must be an integer between ${MIN_ELO} and ${MAX_ELO}`);
+    }
+    if (!Number.isInteger(newElo) || newElo < MIN_ELO || newElo > MAX_ELO) {
+      throw new Error(`New ELO must be an integer between ${MIN_ELO} and ${MAX_ELO}`);
+    }
+  }
+
+  @BeforeValidate
+  static validateEloDelta(instance: EloHistory): void {
+    const { previousElo, newElo, eloDelta } = instance;
+
+    if (eloDelta !== newElo - previousElo) {
+      throw new Error("ELO delta must equal newElo minus previousElo");
+    }
+  }
+
+  @BeforeValidate
+  static validateChangeReason(instance: EloHistory): void {
+    const trimmed = instance.changeReason?.trim();
+
+    if (!trimmed) {
+      throw new Error("Change reason is required");
+    }
+    if (trimmed.length > CHANGE_REASON_MAX_LENGTH) {
+      throw new Error(
+        `Change reason must not exceed ${CHANGE_REASON_MAX_LENGTH} characters`
+      );
+    }
+  }
 }

@@ -99,10 +99,6 @@ export class AuthErrors {
     return new ConflictError("Email already exists", "EMAIL_ALREADY_EXISTS");
   }
 
-  static UsernameAlreadyExists() {
-    return new ConflictError("Username already exists", "USERNAME_ALREADY_EXISTS");
-  }
-
   static UserNotFound() {
     return new NotFoundError("User not found", "USER_NOT_FOUND");
   }

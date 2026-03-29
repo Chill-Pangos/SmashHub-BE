@@ -1,3 +1,4 @@
+// subMatchPlayer.model.ts
 import {
   Table,
   Column,
@@ -5,9 +6,13 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
-  HasMany,
+  BeforeValidate,
 } from "sequelize-typescript";
 import SubMatch from "./subMatch.model";
+import EntryMember from "./entryMember.model";
+import { TEAMS, Team } from "./subMatch.model";
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "sub_match_players",
@@ -16,6 +21,11 @@ import SubMatch from "./subMatch.model";
     { fields: ["subMatchId"] },
     { fields: ["entryMemberId"] },
     { fields: ["subMatchId", "team"] },
+    {
+      // Mỗi entryMember chỉ xuất hiện 1 lần trong 1 sub-match
+      unique: true,
+      fields: ["subMatchId", "entryMemberId"],
+    },
   ],
 })
 export default class SubMatchPlayer extends Model {
@@ -33,6 +43,7 @@ export default class SubMatchPlayer extends Model {
   })
   declare subMatchId: number;
 
+  @ForeignKey(() => EntryMember)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -40,11 +51,16 @@ export default class SubMatchPlayer extends Model {
   declare entryMemberId: number;
 
   @Column({
-    type: DataType.ENUM("A", "B"),
+    type: DataType.ENUM(...TEAMS),
     allowNull: false,
   })
-  declare team: "A" | "B";
+  declare team: Team;
 
-  @BelongsTo(() => SubMatch)
-  subMatch?: SubMatch;
+  // ─── Associations ──────────────────────────────────────────────────────────
+
+  @BelongsTo(() => SubMatch, { foreignKey: "subMatchId" })
+  declare subMatch?: SubMatch;
+
+  @BelongsTo(() => EntryMember, { foreignKey: "entryMemberId" })
+  declare entryMember?: EntryMember;
 }

@@ -28,11 +28,11 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *     responses:
  *       201:
@@ -109,11 +109,11 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *     responses:
  *       201:
@@ -130,18 +130,18 @@ router.post(
 
 /**
  * @swagger
- * /knockout-brackets/content/{contentId}:
+ * /knockout-brackets/category/{categoryId}:
  *   get:
  *     tags: [Knockout Brackets]
- *     summary: Get all brackets by content ID
- *     description: Lấy toàn bộ cấu trúc nhánh đấu theo tournament content
+ *     summary: Get all brackets by category ID
+ *     description: Lấy toàn bộ cấu trúc nhánh đấu theo tournament category
  *     parameters:
- *       - name: contentId
+ *       - name: categoryId
  *         in: path
  *         required: true
  *         schema:
  *           type: integer
- *         description: Tournament content ID
+ *         description: Tournament category ID
  *     responses:
  *       200:
  *         description: Brackets retrieved successfully
@@ -149,8 +149,8 @@ router.post(
  *         description: Internal server error
  */
 router.get(
-  "/content/:contentId",
-  knockoutBracketController.findByContentId.bind(knockoutBracketController)
+  "/category/:categoryId",
+  knockoutBracketController.findByCategoryId.bind(knockoutBracketController)
 );
 
 /**

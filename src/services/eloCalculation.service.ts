@@ -1,6 +1,6 @@
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";
@@ -104,7 +104,7 @@ export class EloCalculationService {
           order: [["setNumber", "ASC"]],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryA",
           include: [
             {
@@ -114,7 +114,7 @@ export class EloCalculationService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryB",
           include: [
             {
@@ -256,7 +256,7 @@ export class EloCalculationService {
           order: [["setNumber", "ASC"]],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryA",
           include: [
             {
@@ -266,7 +266,7 @@ export class EloCalculationService {
           ],
         },
         {
-          model: Entries,
+          model: Entry,
           as: "entryB",
           include: [
             {

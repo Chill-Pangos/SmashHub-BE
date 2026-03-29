@@ -1,8 +1,7 @@
 import cron from "node-cron";
 import { Op } from "sequelize";
 import Otp from "../models/otp.model";
-import AccessToken from "../models/accessToken.model";
-import RefreshToken from "../models/refreshToken.model";
+import Token from "../models/token.model";
 
 /**
  * Cron job: Cleanup expired OTPs every 5 minutes
@@ -43,8 +42,9 @@ export const cleanupExpiredAccessTokens = cron.schedule(
   "*/30 * * * *",
   async () => {
     try {
-      const deleted = await AccessToken.destroy({
+      const deleted = await Token.destroy({
         where: {
+          type: "access",
           [Op.or]: [
             {
               expiresAt: {
@@ -77,8 +77,9 @@ export const cleanupExpiredRefreshTokens = cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      const deleted = await RefreshToken.destroy({
+      const deleted = await Token.destroy({
         where: {
+          type: "refresh",
           [Op.or]: [
             {
               expiresAt: {

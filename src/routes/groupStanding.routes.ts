@@ -13,7 +13,7 @@ const router = Router();
  *     tags: [Group Standings]
  *     summary: Generate group placeholders
  *     description: |
- *       Tạo danh sách bảng đấu placeholder cho tournament content.
+ *       Tạo danh sách bảng đấu placeholder cho tournament category.
  *       Số lượng bảng phải là lũy thừa của 2 (4, 8, 16, 32, 64) và tối thiểu là 4.
  *       Mỗi bảng có 3-5 đội.
  *     security:
@@ -25,11 +25,11 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *     responses:
  *       200:
@@ -62,11 +62,11 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *     responses:
  *       200:
@@ -97,12 +97,12 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *               - groupAssignments
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *               groupAssignments:
  *                 type: array
@@ -146,11 +146,11 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *     responses:
  *       201:
@@ -190,11 +190,11 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - contentId
+ *               - categoryId
  *             properties:
- *               contentId:
+ *               categoryId:
  *                 type: integer
- *                 description: Tournament content ID
+ *                 description: Tournament category ID
  *                 example: 1
  *               groupName:
  *                 type: string
@@ -215,18 +215,18 @@ router.post(
 
 /**
  * @swagger
- * /group-standings/{contentId}:
+ * /group-standings/{categoryId}:
  *   get:
  *     tags: [Group Standings]
  *     summary: Get group standings
  *     description: Retrieve current standings for all groups or a specific group
  *     parameters:
- *       - name: contentId
+ *       - name: categoryId
  *         in: path
  *         required: true
  *         schema:
  *           type: integer
- *         description: Tournament content ID
+ *         description: Tournament category ID
  *       - name: groupName
  *         in: query
  *         required: false
@@ -240,24 +240,24 @@ router.post(
  *         $ref: '#/components/responses/InternalServerError'
  */
 router.get(
-  "/:contentId",
+  "/:categoryId",
   groupStandingController.getStandings.bind(groupStandingController)
 );
 
 /**
  * @swagger
- * /group-standings/{contentId}/qualified:
+ * /group-standings/{categoryId}/qualified:
  *   get:
  *     tags: [Group Standings]
  *     summary: Get qualified teams from group stage
  *     description: Returns top N teams from each group based on standings
  *     parameters:
- *       - name: contentId
+ *       - name: categoryId
  *         in: path
  *         required: true
  *         schema:
  *           type: integer
- *         description: Tournament content ID
+ *         description: Tournament category ID
  *       - name: teamsPerGroup
  *         in: query
  *         required: false
@@ -272,7 +272,7 @@ router.get(
  *         $ref: '#/components/responses/InternalServerError'
  */
 router.get(
-  "/:contentId/qualified",
+  "/:categoryId/qualified",
   groupStandingController.getQualifiedTeams.bind(groupStandingController)
 );
 

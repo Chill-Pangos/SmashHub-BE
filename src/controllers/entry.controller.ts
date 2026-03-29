@@ -11,21 +11,6 @@ export class EntryController {
     }
   }
 
-  async registerEntry(req: Request, res: Response): Promise<void> {
-    try {
-      const userId = (req as any).user?.id;
-      if (!userId) {
-        res.status(401).json({ message: "Unauthorized - User not authenticated" });
-        return;
-      }
-
-      const entry = await entryService.registerEntry(req.body, userId);
-      res.status(201).json(entry);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message || "Error registering entry", error });
-    }
-  }
-
   async findAll(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
@@ -50,12 +35,12 @@ export class EntryController {
     }
   }
 
-  async findByContentId(req: Request, res: Response): Promise<void> {
+  async findByCategoryId(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const entries = await entryService.findByContentId(
-        Number(req.params.contentId),
+      const entries = await entryService.findByCategoryId(
+        Number(req.params.categoryId),
         skip,
         limit
       );

@@ -1,5 +1,3 @@
-import TeamMember from "../models/teamMember.model";
-import Team from "../models/team.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import EntryMember from "../models/entryMember.model";
 
@@ -7,18 +5,6 @@ import EntryMember from "../models/entryMember.model";
  * Common include options for queries
  */
 export class QueryHelper {
-  /**
-   * Include options for Team with members
-   */
-  static teamWithMembers() {
-    return [
-      {
-        model: TeamMember,
-        as: "members",
-      },
-    ];
-  }
-
   /**
    * Include options for Entry with related data
    */
@@ -29,24 +15,20 @@ export class QueryHelper {
         as: 'members',
       },
       {
-        model: Team,
-        as: 'team',
-      },
-      {
         model: TournamentCategory,
-        as: 'content',
+        as: 'category',
       },
     ];
   }
 
   /**
-   * Include options for Tournament with contents
+   * Include options for Tournament with categories
    */
-  static tournamentWithContents() {
+  static tournamentWithCategories() {
     return [
       {
         model: TournamentCategory,
-        as: "contents",
+        as: "categories",
       },
     ];
   }

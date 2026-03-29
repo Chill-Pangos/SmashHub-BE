@@ -1,6 +1,6 @@
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import {
   CreateTournamentDto,
@@ -19,8 +19,12 @@ export class TournamentService {
       const tournament = await Tournament.create(
         {
           name: data.name,
+          tier: data.tier,
           startDate: data.startDate,
           endDate: data.endDate ? data.endDate : null,
+          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
+          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
+          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
           location: data.location,
           status: data.status || "upcoming",
           numberOfTables: data.numberOfTables || 1,
@@ -29,23 +33,23 @@ export class TournamentService {
         { transaction }
       );
 
-      // Create tournament contents if provided
-      if (data.contents && data.contents.length > 0) {
+      // Create tournament categories if provided
+      if (data.categories && data.categories.length > 0) {
         await TournamentCategory.bulkCreate(
-          data.contents.map(contentData => ({
+          data.categories.map(categoryData => ({
             tournamentId: tournament.id,
-            name: contentData.name,
-            type: contentData.type,
-            maxEntries: contentData.maxEntries,
-            maxSets: contentData.maxSets,
-            numberOfSingles: contentData.numberOfSingles ?? null,
-            numberOfDoubles: contentData.numberOfDoubles ?? null,
-            minAge: contentData.minAge ?? null,
-            maxAge: contentData.maxAge ?? null,
-            minElo: contentData.minElo ?? null,
-            maxElo: contentData.maxElo ?? null,
-            gender: contentData.gender ?? null,
-            isGroupStage: contentData.isGroupStage,
+            name: categoryData.name,
+            type: categoryData.type,
+            maxEntries: categoryData.maxEntries,
+            maxSets: categoryData.maxSets,
+            teamFormat: categoryData.teamFormat ?? null,
+            minAge: categoryData.minAge ?? null,
+            maxAge: categoryData.maxAge ?? null,
+            minElo: categoryData.minElo ?? null,
+            maxElo: categoryData.maxElo ?? null,
+            maxMembersPerEntry: categoryData.maxMembersPerEntry ?? null,
+            gender: categoryData.gender ?? null,
+            isGroupStage: categoryData.isGroupStage,
           })),
           { transaction }
         );
@@ -56,7 +60,7 @@ export class TournamentService {
         include: [
           {
             model: TournamentCategory,
-            as: "contents",
+            as: "categories",
           },
         ],
         transaction,
@@ -75,15 +79,7 @@ export class TournamentService {
     }
   }
 
-  async findAll(skip = 0, limit = 10): Promise<Tournament[]> {
-    return await Tournament.findAll({
-      offset: skip,
-      limit,
-      order: [["startDate", "DESC"]],
-    });
-  }
-
-  async findAllWithContentsFiltered(
+  async findAllWithCategoriesFiltered(
     filters: TournamentFilterDto
   ): Promise<{
     tournaments: Tournament[];
@@ -96,31 +92,34 @@ export class TournamentService {
       hasPrevPage: boolean;
     };
   }> {
-    const { skip = 0, limit, userId, createdBy, ...contentFilters } = filters;
+    const { skip = 0, limit, userId, createdBy, ...categoryFilters } = filters;
 
     // Build where clause for TournamentCategory
-    const contentWhere: WhereOptions<any> = {};
-    if (contentFilters.minAge !== undefined) {
-      contentWhere.minAge = { [Op.lte]: contentFilters.minAge };
+    const categoryWhere: WhereOptions<any> = {};
+    if (categoryFilters.minAge !== undefined) {
+      categoryWhere.minAge = { [Op.lte]: categoryFilters.minAge };
     }
-    if (contentFilters.maxAge !== undefined) {
-      contentWhere.maxAge = { [Op.gte]: contentFilters.maxAge };
+    if (categoryFilters.maxAge !== undefined) {
+      categoryWhere.maxAge = { [Op.gte]: categoryFilters.maxAge };
     }
-    if (contentFilters.minElo !== undefined) {
-      contentWhere.minElo = { [Op.lte]: contentFilters.minElo };
+    if (categoryFilters.minElo !== undefined) {
+      categoryWhere.minElo = { [Op.lte]: categoryFilters.minElo };
     }
-    if (contentFilters.maxElo !== undefined) {
-      contentWhere.maxElo = { [Op.gte]: contentFilters.maxElo };
+    if (categoryFilters.maxElo !== undefined) {
+      categoryWhere.maxElo = { [Op.gte]: categoryFilters.maxElo };
     }
-    if (contentFilters.gender !== undefined) {
-      contentWhere.gender = contentFilters.gender;
+    if (categoryFilters.gender !== undefined) {
+      categoryWhere.gender = categoryFilters.gender;
     }
-    if (contentFilters.isGroupStage !== undefined) {
-      contentWhere.isGroupStage = contentFilters.isGroupStage;
+    if(categoryFilters.status !== undefined) {
+      categoryWhere.status = categoryFilters.status;
+    }
+    if (categoryFilters.isGroupStage !== undefined) {
+      categoryWhere.isGroupStage = categoryFilters.isGroupStage;
     }
 
-    // Determine if we should filter by content or just include all
-    const hasContentFilters = Object.keys(contentWhere).length > 0;
+    // Determine if we should filter by category or just include all
+    const hasCategoryFilters = Object.keys(categoryWhere).length > 0;
     
     // Build tournament where clause
     const tournamentWhere: WhereOptions<any> = {};
@@ -130,19 +129,19 @@ export class TournamentService {
       tournamentWhere.createdBy = createdBy;
     }
     
-    // If we have content filters, find tournaments that have matching contents
-    if (hasContentFilters) {
-      const matchingContents = await TournamentCategory.findAll({
-        where: contentWhere,
+    // If we have category filters, find tournaments that have matching categories
+    if (hasCategoryFilters) {
+      const matchingCategories = await TournamentCategory.findAll({
+        where: categoryWhere,
         attributes: ['tournamentId'],
       });
       
-      const tournamentIdsWithMatchingContent = [
-        ...new Set(matchingContents.map((c) => c.tournamentId)),
+      const tournamentIdsWithMatchingCategory = [
+        ...new Set(matchingCategories.map((c) => c.tournamentId)),
       ];
       
-      if (tournamentIdsWithMatchingContent.length === 0) {
-        // No tournaments have content matching the filters
+      if (tournamentIdsWithMatchingCategory.length === 0) {
+        // No tournaments have category matching the filters
         return {
           tournaments: [],
           pagination: {
@@ -157,22 +156,22 @@ export class TournamentService {
       }
       
       // Add to tournament where clause
-      tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingContent };
+      tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingCategory };
     }
     
-    // Build include for all contents (no filter on include)
+    // Build include for all categories (no filter on include)
     const includeOptions: any[] = [
       {
         model: TournamentCategory,
-        as: "contents",
-        required: false, // Include all contents of the tournament
+        as: "categories",
+        required: false, // Include all categories of the tournament
       },
     ];
     
     // If userId is provided, filter tournaments where user has entries
     if (userId !== undefined) {
       // Find tournaments where user has entries
-      const userEntries = await Entries.findAll({
+      const userEntries = await Entry.findAll({
         include: [
           {
             model: EntryMember,
@@ -184,18 +183,18 @@ export class TournamentService {
       });
 
       const tournamentIds = [
-        ...new Set(userEntries.map((entry) => entry.contentId)),
+        ...new Set(userEntries.map((entry) => entry.categoryId)),
       ];
 
       if (tournamentIds.length > 0) {
-        // Get tournament IDs from content IDs
-        const contents = await TournamentCategory.findAll({
+        // Get tournament IDs from category IDs
+        const categories = await TournamentCategory.findAll({
           where: { id: { [Op.in]: tournamentIds } },
           attributes: ["tournamentId"],
         });
 
         const finalTournamentIds = [
-          ...new Set(contents.map((c) => c.tournamentId)),
+          ...new Set(categories.map((c) => c.tournamentId)),
         ];
 
         if (finalTournamentIds.length > 0) {
@@ -283,33 +282,20 @@ export class TournamentService {
       include: [
         {
           model: TournamentCategory,
-          as: "contents",
+          as: "categories",
         },
       ],
     });
   }
 
-  async findByIdWithContents(id: number): Promise<Tournament | null> {
+  async findByIdWithCategories(id: number): Promise<Tournament | null> {
     return await Tournament.findByPk(id, {
       include: [
         {
           model: TournamentCategory,
-          as: "contents",
+          as: "categories",
         },
       ],
-    });
-  }
-
-  async findByStatus(
-    status: string,
-    skip = 0,
-    limit = 10
-  ): Promise<Tournament[]> {
-    return await Tournament.findAll({
-      where: { status },
-      offset: skip,
-      limit,
-      order: [["startDate", "DESC"]],
     });
   }
 
@@ -333,6 +319,9 @@ export class TournamentService {
           name: data.name,
           startDate: data.startDate,
           endDate: data.endDate,
+          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
+          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
+          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
           location: data.location,
           numberOfTables: data.numberOfTables ?? 1,
           status: data.status,
@@ -340,29 +329,29 @@ export class TournamentService {
         { transaction }
       );
 
-      // Update or create tournament contents if provided
-      if (data.contents !== undefined) {
-        // Delete existing contents
+      // Update or create tournament categories if provided
+      if (data.categories !== undefined) {
+        // Delete existing categories 
         await TournamentCategory.destroy({
           where: { tournamentId: id },
           transaction,
         });
 
-        // Create new contents if provided
-        if (data.contents.length > 0) {
+        // Create new categories if provided
+        if (data.categories.length > 0) {
           await TournamentCategory.bulkCreate(
-            data.contents.map(c => ({
+            data.categories.map(c => ({
               tournamentId: id,
               name: c.name,
               type: c.type,
               maxEntries: c.maxEntries,
               maxSets: c.maxSets,
-              numberOfSingles: c.numberOfSingles ?? null,
-              numberOfDoubles: c.numberOfDoubles ?? null,
+              teamFormat: c.teamFormat ?? null,
               minAge: c.minAge ?? null,
               maxAge: c.maxAge ?? null,
               minElo: c.minElo ?? null,
               maxElo: c.maxElo ?? null,
+              maxMembersPerEntry: c.maxMembersPerEntry ?? null,
               gender: c.gender ?? null,
               isGroupStage: c.isGroupStage,
             })),
@@ -371,12 +360,12 @@ export class TournamentService {
         }
       }
 
-      // Fetch updated tournament with contents within transaction
+      // Fetch updated tournament with categories within transaction
       const updatedTournament = await Tournament.findByPk(id, {
         include: [
           {
             model: TournamentCategory,
-            as: "contents",
+            as: "categories",
           },
         ],
         transaction,
@@ -393,6 +382,119 @@ export class TournamentService {
 
   async delete(id: number): Promise<number> {
     return await Tournament.destroy({ where: { id } });
+  }
+
+  /**
+   * Manually trigger tournament status update based on dates
+   * This can be called by admin endpoint or used for testing
+   * @returns Object containing counts of updated tournaments
+   */
+  async updateTournamentStatuses(): Promise<{
+    openedCount: number;
+    closedCount: number;
+    bracketsGeneratedCount: number;
+    totalUpdated: number;
+  }> {
+    const now = new Date();
+
+    // 1. Open registration: draft -> registration_open
+    const openedResult = await Tournament.update(
+      { status: "registration_open" },
+      {
+        where: {
+          status: "draft",
+          registrationStartDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    // 2. Close registration: registration_open -> registration_closed
+    const closedResult = await Tournament.update(
+      { status: "registration_closed" },
+      {
+        where: {
+          status: "registration_open",
+          registrationEndDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    // 3. Generate brackets: registration_closed -> brackets_generated
+    const bracketsResult = await Tournament.update(
+      { status: "brackets_generated" },
+      {
+        where: {
+          status: "registration_closed",
+          bracketGenerationDate: {
+            [Op.lte]: now,
+            [Op.not]: null,
+          },
+        },
+      }
+    );
+
+    return {
+      openedCount: openedResult[0],
+      closedCount: closedResult[0],
+      bracketsGeneratedCount: bracketsResult[0],
+      totalUpdated: openedResult[0] + closedResult[0] + bracketsResult[0],
+    };
+  }
+
+  /**
+   * Get tournaments that will change status within the next specified hours
+   * Useful for notifications and monitoring
+   * @param hours - Number of hours to look ahead (default: 24)
+   */
+  async getUpcomingStatusChanges(hours: number = 24): Promise<{
+    openingSoon: Tournament[];
+    closingSoon: Tournament[];
+    bracketsSoon: Tournament[];
+  }> {
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + hours * 60 * 60 * 1000);
+
+    const openingSoon = await Tournament.findAll({
+      where: {
+        status: "draft",
+        registrationStartDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "registrationStartDate", "status"],
+    });
+
+    const closingSoon = await Tournament.findAll({
+      where: {
+        status: "registration_open",
+        registrationEndDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "registrationEndDate", "status"],
+    });
+
+    const bracketsSoon = await Tournament.findAll({
+      where: {
+        status: "registration_closed",
+        bracketGenerationDate: {
+          [Op.between]: [now, futureTime],
+        },
+      },
+      attributes: ["id", "name", "bracketGenerationDate", "status"],
+    });
+
+    return {
+      openingSoon,
+      closingSoon,
+      bracketsSoon,
+    };
   }
 }
 

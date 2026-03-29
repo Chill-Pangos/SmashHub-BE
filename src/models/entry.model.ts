@@ -1,3 +1,4 @@
+// entry.model.ts
 import {
   Table,
   Column,
@@ -6,21 +7,30 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  BeforeValidate,
 } from "sequelize-typescript";
 import TournamentCategory from "./tournamentCategory.model";
 import Match from "./match.model";
-import Team from "./team.model";
+import User from "./user.model";
 import EntryMember from "./entryMember.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MIN_REQUIRED_MEMBERS = 1;
+const MAX_REQUIRED_MEMBERS = 100;
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "entries",
   timestamps: true,
   indexes: [
-    { fields: ["contentId"] },
-    { fields: ["teamId"] },
+    { fields: ["categoryId"] },
+    { fields: ["captainId"] },
+    { fields: ["isAcceptingMembers"] },
   ],
 })
-export default class Entries extends Model {
+export default class Entry extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     autoIncrement: true,
@@ -33,30 +43,106 @@ export default class Entries extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
-  declare contentId: number;
+  declare categoryId: number;
 
-  @ForeignKey(() => Team)
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare captainId?: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare name: string;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare isAcceptingMembers: boolean;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+  })
+  declare requiredMemberCount?: number;
+
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
+    defaultValue: 0,
   })
-  declare teamId: number;
+  declare currentMemberCount: number;
 
-  @BelongsTo(() => TournamentCategory)
-  content?: TournamentCategory;
+  // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Team)
-  team?: Team;
+  @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
+  declare category?: TournamentCategory;
 
-  @HasMany(() => EntryMember)
-  members?: EntryMember[];
+  @BelongsTo(() => User, { foreignKey: "captainId" })
+  declare captain?: User;
 
-  @HasMany(() => Match, "entryAId")
-  matchesAsA?: Match[];
+  @HasMany(() => EntryMember, { foreignKey: "entryId" })
+  declare members?: EntryMember[];
 
-  @HasMany(() => Match, "entryBId")
-  matchesAsB?: Match[];
+  @HasMany(() => Match, { foreignKey: "entryAId" })
+  declare matchesAsA?: Match[];
 
-  @HasMany(() => Match, "winnerEntryId")
-  wonMatches?: Match[];
+  @HasMany(() => Match, { foreignKey: "entryBId" })
+  declare matchesAsB?: Match[];
+
+  @HasMany(() => Match, { foreignKey: "winnerEntryId" })
+  declare wonMatches?: Match[];
+
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateRequiredMemberCount(instance: Entry): void {
+    const { requiredMemberCount } = instance;
+
+    if (requiredMemberCount == null) return;
+
+    if (
+      !Number.isInteger(requiredMemberCount) ||
+      requiredMemberCount < MIN_REQUIRED_MEMBERS ||
+      requiredMemberCount > MAX_REQUIRED_MEMBERS
+    ) {
+      throw new Error(
+        `Required member count must be an integer between ${MIN_REQUIRED_MEMBERS} and ${MAX_REQUIRED_MEMBERS}`
+      );
+    }
+  }
+
+  @BeforeValidate
+  static validateCurrentMemberCount(instance: Entry): void {
+    const { currentMemberCount, requiredMemberCount } = instance;
+
+    if (!Number.isInteger(currentMemberCount) || currentMemberCount < 0) {
+      throw new Error("Current member count must be a non-negative integer");
+    }
+
+    if (
+      requiredMemberCount != null &&
+      currentMemberCount > requiredMemberCount
+    ) {
+      throw new Error(
+        "Current member count must not exceed required member count"
+      );
+    }
+  }
+
+  @BeforeValidate
+  static validateAcceptingMembers(instance: Entry): void {
+    const { isAcceptingMembers, requiredMemberCount } = instance;
+
+    if (isAcceptingMembers && requiredMemberCount == null) {
+      throw new Error(
+        "requiredMemberCount must be set when entry is accepting members"
+      );
+    }
+  }
 }

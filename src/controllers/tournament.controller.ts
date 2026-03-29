@@ -23,18 +23,7 @@ export class TournamentController {
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
-    try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const tournaments = await tournamentService.findAll(skip, limit);
-      res.status(200).json(tournaments);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching tournaments", error });
-    }
-  }
-
-  async findAllWithContentsFiltered(req: Request, res: Response): Promise<void> {
+  async findAllWithCategoriesFiltered(req: Request, res: Response): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
@@ -47,7 +36,7 @@ export class TournamentController {
       const gender = req.query.gender as 'male' | 'female' | 'mixed' | undefined;
       const isGroupStage = req.query.isGroupStage === 'true' ? true : req.query.isGroupStage === 'false' ? false : undefined;
 
-      const result = await tournamentService.findAllWithContentsFiltered({
+      const result = await tournamentService.findAllWithCategoriesFiltered({
         skip,
         limit,
         userId,
@@ -81,9 +70,9 @@ export class TournamentController {
     }
   }
 
-  async findByIdWithContents(req: Request, res: Response): Promise<void> {
+  async findByIdWithCategories(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.findByIdWithContents(
+      const tournament = await tournamentService.findByIdWithCategories(
         Number(req.params.id)
       );
       if (!tournament) {
@@ -92,39 +81,7 @@ export class TournamentController {
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching tournament with contents", error });
-    }
-  }
-
-  async findByStatus(req: Request, res: Response): Promise<void> {
-    try {
-      const status = req.params.status;
-      if (!status || typeof status !== 'string') {
-        res.status(400).json({ message: "Status is required" });
-        return;
-      }
-      
-      // Validate status value
-      const validStatuses = ['upcoming', 'ongoing', 'completed'];
-      if (!validStatuses.includes(status)) {
-        res.status(400).json({ 
-          message: "Invalid status. Must be one of: upcoming, ongoing, completed" 
-        });
-        return;
-      }
-      
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const tournaments = await tournamentService.findByStatus(
-        status,
-        skip,
-        limit
-      );
-      res.status(200).json(tournaments);
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error fetching tournaments by status", error });
+      res.status(500).json({ message: "Error fetching tournament with categories", error });
     }
   }
 
@@ -144,7 +101,7 @@ export class TournamentController {
     }
   }
 
-  async updateWithContents(req: Request, res: Response): Promise<void> {
+  async updateWithCategories(req: Request, res: Response): Promise<void> {
     try {
       const tournament = await tournamentService.update(
         Number(req.params.id),
@@ -156,7 +113,7 @@ export class TournamentController {
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Error updating tournament with contents", error });
+      res.status(400).json({ message: "Error updating tournament with categories", error });
     }
   }
 
@@ -170,6 +127,52 @@ export class TournamentController {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Error deleting tournament", error });
+    }
+  }
+
+  /**
+   * Manually trigger tournament status update
+   * POST /tournaments/update-statuses
+   */
+  async updateStatuses(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await tournamentService.updateTournamentStatuses();
+      res.status(200).json({
+        success: true,
+        message: "Tournament statuses updated successfully",
+        data: result,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Error updating tournament statuses",
+        error,
+      });
+    }
+  }
+
+  /**
+   * Get upcoming tournament status changes
+   * GET /tournaments/upcoming-changes?hours=24
+   */
+  async getUpcomingChanges(req: Request, res: Response): Promise<void> {
+    try {
+      const hours = parseInt(req.query.hours as string) || 24;
+      const result = await tournamentService.getUpcomingStatusChanges(hours);
+      res.status(200).json({
+        success: true,
+        data: result,
+        metadata: {
+          lookAheadHours: hours,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Error getting upcoming status changes",
+        error,
+      });
     }
   }
 }

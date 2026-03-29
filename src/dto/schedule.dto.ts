@@ -1,30 +1,27 @@
 // Schedule DTOs
 export interface CreateScheduleDto {
-  contentId: number;
-  roundNumber?: number;
+  categoryId: number;
   groupName?: string;
   stage?: 'group' | 'knockout';
-  knockoutRound?: string;
+  knockoutRound?: 'Round of 64' | 'Round of 32' | 'Round of 16' | 'Quarter-final' | 'Semi-final' | 'Third-place' | 'Final';
   tableNumber?: number;
   scheduledAt: Date;
 }
 
 export interface UpdateScheduleDto {
-  roundNumber?: number;
   groupName?: string;
   stage?: 'group' | 'knockout';
-  knockoutRound?: string;
+  knockoutRound?: 'Round of 64' | 'Round of 32' | 'Round of 16' | 'Quarter-final' | 'Semi-final' | 'Third-place' | 'Final';
   tableNumber?: number;
   scheduledAt?: Date;
 }
 
 export interface ScheduleResponseDto {
   id: number;
-  contentId: number;
-  roundNumber?: number;
+  categoryId: number;
   groupName?: string;
   stage?: 'group' | 'knockout';
-  knockoutRound?: string;
+  knockoutRound?: 'Round of 64' | 'Round of 32' | 'Round of 16' | 'Quarter-final' | 'Semi-final' | 'Third-place' | 'Final';
   tableNumber?: number;
   scheduledAt: Date;
   createdAt: Date;
@@ -32,7 +29,7 @@ export interface ScheduleResponseDto {
 }
 
 export interface GenerateScheduleDto {
-  contentId: number;
+  categoryId: number;
   startDate: Date;
   startTime?: string; // HH:MM format, default "08:00"
   endTime?: string; // HH:MM format, default "22:00"

@@ -1,3 +1,4 @@
+// rolePermission.model.ts
 import {
   Table,
   Column,
@@ -14,21 +15,15 @@ import Permission from "./permission.model";
   timestamps: true,
   indexes: [
     { fields: ["permissionId"] },
-    { fields: ["roleId", "permissionId"] },
+    { unique: true, fields: ["roleId", "permissionId"] },
   ],
 })
 export default class RolePermission extends Model {
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    autoIncrement: true,
-    primaryKey: true,
-  })
-  declare id: number;
-
   @ForeignKey(() => Role)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
+    primaryKey: true,
   })
   declare roleId: number;
 
@@ -36,12 +31,15 @@ export default class RolePermission extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
+    primaryKey: true,
   })
   declare permissionId: number;
 
-  @BelongsTo(() => Role)
-  role?: Role;
+  // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Permission)
-  permission?: Permission;
+  @BelongsTo(() => Role, { foreignKey: "roleId" })
+  declare role?: Role;
+
+  @BelongsTo(() => Permission, { foreignKey: "permissionId" })
+  declare permission?: Permission;
 }

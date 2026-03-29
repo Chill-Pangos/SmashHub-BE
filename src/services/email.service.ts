@@ -20,7 +20,7 @@ export class EmailService {
   /**
    * Gửi email OTP để đặt lại mật khẩu
    */
-  async sendPasswordResetOTP(email: string, otp: string, userName: string): Promise<void> {
+  async sendPasswordResetOTP(email: string, otp: string, fullName: string): Promise<void> {
     const mailOptions = {
       from: `"${config.email.from.name}" <${config.email.from.email}>`,
       to: email,
@@ -28,7 +28,7 @@ export class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f8f9fa; border-radius: 10px; padding: 30px;">
-            <h2 style="color: #333; margin-bottom: 20px;">Xin chào ${userName}!</h2>
+            <h2 style="color: #333; margin-bottom: 20px;">Xin chào ${fullName}!</h2>
             <p style="color: #666; font-size: 16px; line-height: 1.5;">
               Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản SmashHub của mình.
             </p>
@@ -65,7 +65,7 @@ export class EmailService {
   /**
    * Gửi email OTP để xác thực email
    */
-  async sendEmailVerificationOTP(email: string, otp: string, userName: string): Promise<void> {
+  async sendEmailVerificationOTP(email: string, otp: string, fullName: string): Promise<void> {
     const mailOptions = {
       from: `"${config.email.from.name}" <${config.email.from.email}>`,
       to: email,
@@ -73,7 +73,7 @@ export class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f8f9fa; border-radius: 10px; padding: 30px;">
-            <h2 style="color: #333; margin-bottom: 20px;">Chào mừng ${userName} đến với SmashHub! 🎉</h2>
+            <h2 style="color: #333; margin-bottom: 20px;">Chào mừng ${fullName} đến với SmashHub! 🎉</h2>
             <p style="color: #666; font-size: 16px; line-height: 1.5;">
               Cảm ơn bạn đã đăng ký tài khoản. Vui lòng sử dụng mã OTP dưới đây để xác thực địa chỉ email của bạn.
             </p>
@@ -110,7 +110,7 @@ export class EmailService {
   /**
    * Gửi email thông báo thành công
    */
-  async sendPasswordChangedNotification(email: string, userName: string): Promise<void> {
+  async sendPasswordChangedNotification(email: string, fullName: string): Promise<void> {
     const mailOptions = {
       from: `"${config.email.from.name}" <${config.email.from.email}>`,
       to: email,
@@ -118,7 +118,7 @@ export class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f8f9fa; border-radius: 10px; padding: 30px;">
-            <h2 style="color: #333; margin-bottom: 20px;">Xin chào ${userName}!</h2>
+            <h2 style="color: #333; margin-bottom: 20px;">Xin chào ${fullName}!</h2>
             <div style="background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px;">
               <p style="color: #155724; margin: 0; font-size: 16px;">
                 ✅ Mật khẩu của bạn đã được thay đổi thành công!

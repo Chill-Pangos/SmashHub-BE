@@ -1,3 +1,4 @@
+// matchSet.model.ts
 import {
   Table,
   Column,
@@ -5,9 +6,17 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  BeforeValidate,
 } from "sequelize-typescript";
-import Match from "./match.model";
-import SubMatch from './subMatch.model';
+import SubMatch from "./subMatch.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MIN_SET_NUMBER = 1;
+const MAX_SET_NUMBER = 7;
+const MAX_SCORE = 30;     
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "match_sets",
@@ -54,6 +63,42 @@ export default class MatchSet extends Model {
   })
   declare entryBScore: number;
 
-  @BelongsTo(() => SubMatch)
-  subMatch?: SubMatch;
+  // ─── Associations ──────────────────────────────────────────────────────────
+
+  @BelongsTo(() => SubMatch, { foreignKey: "subMatchId" })
+  declare subMatch?: SubMatch;
+
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateSetNumber(instance: MatchSet): void {
+    const { setNumber } = instance;
+
+    if (
+      !Number.isInteger(setNumber) ||
+      setNumber < MIN_SET_NUMBER ||
+      setNumber > MAX_SET_NUMBER
+    ) {
+      throw new Error(
+        `Set number must be an integer between ${MIN_SET_NUMBER} and ${MAX_SET_NUMBER}`
+      );
+    }
+  }
+
+  @BeforeValidate
+  static validateScores(instance: MatchSet): void {
+    const { entryAScore, entryBScore } = instance;
+
+    if (!Number.isInteger(entryAScore) || entryAScore < 0 || entryAScore > MAX_SCORE) {
+      throw new Error(`Entry A score must be between 0 and ${MAX_SCORE}`);
+    }
+
+    if (!Number.isInteger(entryBScore) || entryBScore < 0 || entryBScore > MAX_SCORE) {
+      throw new Error(`Entry B score must be between 0 and ${MAX_SCORE}`);
+    }
+
+    if (entryAScore === entryBScore && entryAScore > 0) {
+      throw new Error("A set cannot end in a draw");
+    }
+  }
 }

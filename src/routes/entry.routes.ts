@@ -92,13 +92,13 @@ router.delete("/:id",
 
 /**
  * @swagger
- * /entries/content/{contentId}:
+ * /entries/category/{categoryId}:
  *   get:
  *     tags: [Entries]
- *     summary: Get entries by content ID
+ *     summary: Get entries by category ID
  *     parameters:
  *       - in: path
- *         name: contentId
+ *         name: categoryId
  *         required: true
  *         schema:
  *           type: integer
@@ -106,11 +106,11 @@ router.delete("/:id",
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of entries for content
+ *         description: List of entries for category
  */
 router.get(
-  "/content/:contentId",
-  entryController.findByContentId.bind(entryController)
+  "/category/:categoryId",
+  entryController.findByCategoryId.bind(entryController)
 );
 
 export default router;

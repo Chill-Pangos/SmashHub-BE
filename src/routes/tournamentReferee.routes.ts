@@ -153,9 +153,12 @@ router.get(
  *                   id:
  *                     type: integer
  *                     example: 1
- *                   username:
+ *                   firstName:
  *                     type: string
- *                     example: "referee_user"
+ *                     example: "Nguyen"
+ *                   lastName:
+ *                     type: string
+ *                     example: "Van A"
  *                   email:
  *                     type: string
  *                     example: "referee@example.com"

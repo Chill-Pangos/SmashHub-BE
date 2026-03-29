@@ -1,9 +1,10 @@
 import GroupStanding from "../models/groupStanding.model";
-import { CreateGroupStandingDto, UpdateGroupStandingDto } from "../dto/groupStanding.dto";
+import { CreateGroupStandingDto, GenerateGroupPlaceholdersDto, RandomDrawEntriesDto, SaveGroupAssignmentsDto, UpdateGroupStandingDto, RandomDrawAndSaveDto } from "../dto/groupStanding.dto";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entries from "../models/entry.model";
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
+import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
 import { Op } from "sequelize";
 
@@ -23,13 +24,13 @@ export class GroupStandingService {
     return await GroupStanding.findByPk(id);
   }
 
-  async findByContentId(
-    contentId: number,
+  async findByCategoryId(
+    categoryId: number,
     skip = 0,
     limit = 10
   ): Promise<GroupStanding[]> {
     return await GroupStanding.findAll({
-      where: { contentId },
+      where: { categoryId },
       offset: skip,
       limit,
     });
@@ -129,19 +130,21 @@ export class GroupStandingService {
   }
 
   /**
-   * Tạo các bảng đấu placeholder cho content
-   * @param contentId - ID của tournament content
+   * Tạo các bảng đấu placeholder cho category
+   * @param categoryId - ID của tournament category
    * @returns Danh sách các bảng với placeholder
    */
-  async generateGroupPlaceholders(contentId: number): Promise<any[]> {
-    // Lấy thông tin content
-    const content = await TournamentCategory.findByPk(contentId);
-    if (!content) {
-      throw new Error('Tournament content not found');
+  async generateGroupPlaceholders(data: GenerateGroupPlaceholdersDto): Promise<any[]> {
+    const { categoryId } = data;
+
+    // Lấy thông tin category
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      throw new Error('Tournament category not found');
     }
 
     // Đếm số entries
-    const entriesCount = await Entries.count({ where: { contentId } });
+    const entriesCount = await Entries.count({ where: { categoryId } });
     
     if (entriesCount < 12) {
       throw new Error(`Không đủ entries để tạo bảng đấu. Hiện có ${entriesCount}, cần tối thiểu 12 đội`);
@@ -171,19 +174,18 @@ export class GroupStandingService {
 
   /**
    * Lưu kết quả bốc thăm vào database
-   * @param contentId - ID của tournament content
+   * @param categoryId - ID của tournament category
    * @param groupAssignments - Danh sách phân bổ entries vào các bảng
    */
   async saveGroupAssignments(
-    contentId: number,
-    groupAssignments: Array<{ groupName: string; entryIds: number[] }>
+    data : SaveGroupAssignmentsDto
   ): Promise<GroupStanding[]> {
     const standings: GroupStanding[] = [];
 
-    for (const group of groupAssignments) {
+    for (const group of data.groupAssignments) {
       for (const entryId of group.entryIds) {
         const standing = await GroupStanding.create({
-          contentId,
+          categoryId: data.categoryId,
           entryId,
           groupName: group.groupName,
           matchesPlayed: 0,
@@ -202,34 +204,24 @@ export class GroupStandingService {
 
   /**
    * Bốc thăm ngẫu nhiên các entries vào các bảng
-   * Đảm bảo các entry cùng team không vào cùng bảng (nếu số entry của team < số bảng)
-   * @param contentId - ID của tournament content
+   * @param data - Dữ liệu bốc thăm
    * @returns Danh sách phân bổ entries vào các bảng
    */
-  async randomDrawEntries(contentId: number): Promise<Array<{ groupName: string; entryIds: number[] }>> {
+  async randomDrawEntries(data: RandomDrawEntriesDto): Promise<Array<{ groupName: string; entryIds: number[] }>> {
     // Lấy tất cả entries
-    const entries = await Entries.findAll({ where: { contentId } });
-    
+    const entries = await Entries.findAll({ where: { categoryId: data.categoryId } });
+
     if (entries.length < 12) {
       throw new Error(`Không đủ entries để bốc thăm. Cần tối thiểu 12, hiện có ${entries.length}`);
     }
 
     // Tính toán bảng tối ưu
     const groupConfig = this.calculateOptimalGroups(entries.length);
-    
-    // Group entries theo teamId
-    const entriesByTeam = new Map<number, typeof entries>();
-    for (const entry of entries) {
-      if (!entriesByTeam.has(entry.teamId)) {
-        entriesByTeam.set(entry.teamId, []);
-      }
-      entriesByTeam.get(entry.teamId)!.push(entry);
-    }
 
     // Khởi tạo các bảng
     const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
     const groups: Array<{ groupName: string; entryIds: number[]; capacity: number }> = [];
-    
+
     for (let i = 0; i < groupConfig.numGroups; i++) {
       groups.push({
         groupName: `Group ${groupNames[i]}`,
@@ -238,61 +230,18 @@ export class GroupStandingService {
       });
     }
 
-    // Phân loại teams
-    const teamsNeedSeparation: Array<typeof entries> = []; // Teams có entries < số bảng
-    const normalTeams: Array<typeof entries> = []; // Teams có entries >= số bảng hoặc chỉ có 1 entry
-
-    for (const [teamId, teamEntries] of entriesByTeam) {
-      if (teamEntries.length > 1 && teamEntries.length < groupConfig.numGroups) {
-        teamsNeedSeparation.push(teamEntries);
-      } else {
-        normalTeams.push(teamEntries);
-      }
-    }
-
-    // Sắp xếp teams cần tách biệt theo số lượng entries giảm dần
-    teamsNeedSeparation.sort((a, b) => b.length - a.length);
-
-    // Bước 1: Phân bổ các teams cần tách biệt trước
-    for (const teamEntries of teamsNeedSeparation) {
-      // Sắp xếp các bảng theo số lượng entries hiện tại (ưu tiên bảng ít entries)
-      const sortedGroups = [...groups].sort((a, b) => a.entryIds.length - b.entryIds.length);
-      
-      // Phân bổ từng entry của team vào các bảng khác nhau
-      for (let i = 0; i < teamEntries.length; i++) {
-        const entry = teamEntries[i]!;
-        const targetGroup = sortedGroups[i % sortedGroups.length]!;
-        
-        // Kiểm tra capacity
-        if (targetGroup.entryIds.length < targetGroup.capacity) {
-          targetGroup.entryIds.push(entry.id);
-        } else {
-          // Nếu bảng đầu tiên đã đầy, tìm bảng còn chỗ
-          const availableGroup = groups.find(g => g.entryIds.length < g.capacity);
-          if (availableGroup) {
-            availableGroup.entryIds.push(entry.id);
-          }
-        }
-      }
-    }
-
-    // Bước 2: Shuffle các entries còn lại
-    const remainingEntries: typeof entries = [];
-    for (const teamEntries of normalTeams) {
-      remainingEntries.push(...teamEntries);
-    }
-    
-    // Fisher-Yates shuffle
-    for (let i = remainingEntries.length - 1; i > 0; i--) {
+    // Shuffle tất cả entries (Fisher-Yates shuffle)
+    const shuffledEntries = [...entries];
+    for (let i = shuffledEntries.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [remainingEntries[i], remainingEntries[j]] = [remainingEntries[j]!, remainingEntries[i]!];
+      [shuffledEntries[i], shuffledEntries[j]] = [shuffledEntries[j]!, shuffledEntries[i]!];
     }
 
-    // Bước 3: Phân bổ các entries còn lại vào các bảng theo thứ tự
+    // Phân bổ các entries vào các bảng theo thứ tự
     let entryIndex = 0;
     for (const group of groups) {
-      while (group.entryIds.length < group.capacity && entryIndex < remainingEntries.length) {
-        group.entryIds.push(remainingEntries[entryIndex]!.id);
+      while (group.entryIds.length < group.capacity && entryIndex < shuffledEntries.length) {
+        group.entryIds.push(shuffledEntries[entryIndex]!.id);
         entryIndex++;
       }
     }
@@ -305,24 +254,38 @@ export class GroupStandingService {
   }
 
   /**
-   * Bốc thăm và lưu luôn vào database
-   * @param contentId - ID của tournament content
-   * @returns Danh sách group standings đã tạo
+   * Bốc thăm ngẫu nhiên và lưu kết quả vào database
+   * @param data - Dữ liệu bốc thăm
+   * @returns Danh sách GroupStanding đã được lưu
    */
-  async randomDrawAndSave(contentId: number): Promise<GroupStanding[]> {
-    const groupAssignments = await this.randomDrawEntries(contentId);
-    return await this.saveGroupAssignments(contentId, groupAssignments);
+  async randomDrawAndSave(data: RandomDrawAndSaveDto): Promise<GroupStanding[]> {
+    // Thực hiện bốc thăm
+    const drawResult = await this.randomDrawEntries({
+      categoryId: data.categoryId,
+      entries: data.entries,
+      numberOfGroups: data.numberOfGroups,
+    });
+
+    // Chuyển đổi kết quả để lưu vào database
+    const saveData: SaveGroupAssignmentsDto = {
+      categoryId: data.categoryId,
+      groupAssignments: drawResult,
+    };
+
+    // Lưu vào database
+    return await this.saveGroupAssignments(saveData);
   }
+
 
   /**
    * Tính toán và cập nhật position cho các đội trong bảng
    * Priority: 1. Win/Loss 2. SetDiff 3. Head-to-head
-   * @param contentId - ID của tournament content
+   * @param categoryId - ID của tournament category
    * @param groupName - Tên bảng cần tính (optional, tính tất cả nếu không có)
    */
-  async calculateGroupStandings(contentId: number, groupName?: string): Promise<void> {
+  async calculateGroupStandings(categoryId: number, groupName?: string): Promise<void> {
     // Lấy tất cả group standings
-    const whereClause: any = { contentId };
+    const whereClause: any = { categoryId };
     if (groupName) {
       whereClause.groupName = groupName;
     }
@@ -347,7 +310,7 @@ export class GroupStandingService {
 
     // Tính toán position cho từng bảng
     for (const [currentGroupName, groupStandings] of groupMap) {
-      await this.calculateSingleGroupStandings(contentId, currentGroupName, groupStandings);
+      await this.calculateSingleGroupStandings(categoryId, currentGroupName, groupStandings);
     }
   }
 
@@ -356,7 +319,7 @@ export class GroupStandingService {
    * Chỉ sắp xếp và cập nhật thứ hạng, không cập nhật thống kê (thống kê được cập nhật từ match.service khi finalize)
    */
   private async calculateSingleGroupStandings(
-    contentId: number,
+    categoryId: number,
     groupName: string,
     standings: GroupStanding[]
   ): Promise<void> {
@@ -376,13 +339,13 @@ export class GroupStandingService {
    * Cập nhật thống kê từ matches đã hoàn thành
    */
   private async updateStandingsFromMatches(
-    contentId: number,
+    categoryId: number,
     groupName: string,
     standings: GroupStanding[]
   ): Promise<void> {
     // Lấy tất cả matches trong bảng này
     const schedules = await Schedule.findAll({
-      where: { contentId, groupName, stage: 'group' },
+      where: { categoryId, groupName, stage: 'group' },
     });
 
     const scheduleIds = schedules.map(s => s.id);
@@ -394,7 +357,13 @@ export class GroupStandingService {
         scheduleId: { [Op.in]: scheduleIds },
         status: 'completed',
       },
-      include: [{ model: MatchSet, as: 'matchSets' }],
+      include: [
+        {
+          model: SubMatch,
+          as: 'subMatches',
+          include: [{ model: MatchSet, as: 'matchSets' }]
+        }
+      ],
     });
 
     // Reset statistics
@@ -421,16 +390,20 @@ export class GroupStandingService {
       const winnerId = match.winnerEntryId;
       const loserId = winnerId === entryAId ? entryBId : entryAId;
 
-      // Đếm sets won/lost
+      // Đếm sets won/lost từ subMatches
       let entryASets = 0;
       let entryBSets = 0;
-      
-      if (match.matchSets) {
-        for (const set of match.matchSets) {
-          if (set.entryAScore > set.entryBScore) {
-            entryASets++;
-          } else if (set.entryBScore > set.entryAScore) {
-            entryBSets++;
+
+      if (match && match.subMatches) {
+        for (const subMatch of match.subMatches) {
+          if (subMatch.matchSets) {
+            for (const set of subMatch.matchSets) {
+              if (set.entryAScore > set.entryBScore) {
+                entryASets++;
+              } else if (set.entryBScore > set.entryAScore) {
+                entryBSets++;
+              }
+            }
           }
         }
       }
@@ -512,7 +485,7 @@ export class GroupStandingService {
     }
 
     // 3. So sánh head-to-head
-    const headToHead = await this.getHeadToHeadResult(a.contentId, a.entryId, b.entryId);
+    const headToHead = await this.getHeadToHeadResult(a.categoryId, a.entryId, b.entryId);
     if (headToHead !== null) {
       return headToHead === a.entryId ? -1 : 1;
     }
@@ -526,13 +499,13 @@ export class GroupStandingService {
    * @returns entryId của đội thắng, hoặc null nếu chưa đấu hoặc hòa
    */
   private async getHeadToHeadResult(
-    contentId: number,
+    categoryId: number,
     entryAId: number,
     entryBId: number
   ): Promise<number | null> {
     // Tìm match giữa 2 entries này
     const schedules = await Schedule.findAll({
-      where: { contentId, stage: 'group' },
+      where: { categoryId, stage: 'group' },
     });
 
     const scheduleIds = schedules.map(s => s.id);

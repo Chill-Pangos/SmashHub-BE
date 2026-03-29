@@ -329,50 +329,6 @@ export class MatchController {
       });
     }
   }
-
-  async getMatchesByTeam(req: Request, res: Response): Promise<void> {
-    try {
-      const userId = Number(req.params.userId);
-      if (isNaN(userId)) {
-        res.status(400).json({ message: "Invalid user ID" });
-        return;
-      }
-
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const status = req.query.status as string | undefined;
-
-      // Validate status if provided
-      if (status) {
-        const validStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-        if (!validStatuses.includes(status)) {
-          res.status(400).json({ 
-            message: "Invalid status. Must be one of: scheduled, in_progress, completed, cancelled" 
-          });
-          return;
-        }
-      }
-
-      const result = await matchService.findMatchesByTeam(
-        userId,
-        skip,
-        limit,
-        status
-      );
-
-      res.status(200).json({
-        matches: result.matches,
-        count: result.count,
-        skip,
-        limit,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        message: error.message || "Error fetching team matches",
-        error,
-      });
-    }
-  }
 }
 
 export default new MatchController();

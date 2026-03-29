@@ -1,3 +1,4 @@
+// eloScore.model.ts
 import {
   Table,
   Column,
@@ -5,8 +6,17 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  BeforeValidate,
 } from "sequelize-typescript";
 import User from "./user.model";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DEFAULT_ELO = 1000;
+const MIN_ELO = 0;
+const MAX_ELO = 10000;
+
+// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "elo_scores",
@@ -33,10 +43,25 @@ export default class EloScore extends Model {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
-    defaultValue: 1000,
+    defaultValue: DEFAULT_ELO,
   })
   declare score: number;
 
-  @BelongsTo(() => User)
-  user?: User;
+  // ─── Associations ──────────────────────────────────────────────────────────
+
+  @BelongsTo(() => User, { foreignKey: "userId" })
+  declare user?: User;
+
+  // ─── Validators ────────────────────────────────────────────────────────────
+
+  @BeforeValidate
+  static validateScore(instance: EloScore): void {
+    const { score } = instance;
+
+    if (!Number.isInteger(score) || score < MIN_ELO || score > MAX_ELO) {
+      throw new Error(
+        `ELO score must be an integer between ${MIN_ELO} and ${MAX_ELO}`
+      );
+    }
+  }
 }

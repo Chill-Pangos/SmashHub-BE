@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
 import entryImportService from "../services/entryImport.service";
-import Entries from "../models/entry.model";
+import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
 import TournamentCategory from "../models/tournamentCategory.model";
-import { ConfirmEntryImportDto, ValidatedSingleEntryDto, ValidatedDoubleEntryDto, ValidatedTeamEntryDto } from "../dto/entryImport.dto";
+import { ConfirmEntryImportDto, ValidatedSingleEntryDto, ValidatedDoubleEntryDto } from "../dto/entryImport.dto";
 import { withTransaction } from "../utils/transaction.helper";
 
 export class EntryImportController {
@@ -31,18 +31,18 @@ export class EntryImportController {
         });
       }
 
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
+      const categoryId = Number(req.body.categoryId);
+      if (!categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
       // Parse and validate Excel file
       const previewData = await entryImportService.parseAndValidateSingleEntries(
         req.file.buffer,
-        contentId
+        categoryId
       );
 
       res.status(200).json({
@@ -74,10 +74,10 @@ export class EntryImportController {
         });
       }
 
-      if (!data.contentId) {
+      if (!data.categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
@@ -90,7 +90,7 @@ export class EntryImportController {
 
       // Type guard to check if entries are single entries
       const isSingleEntry = (entry: any): entry is ValidatedSingleEntryDto => {
-        return 'userId' in entry && 'teamId' in entry;
+        return 'userId' in entry && !('player1UserId' in entry);
       };
 
       const singleEntries = data.entries as ValidatedSingleEntryDto[];
@@ -103,18 +103,18 @@ export class EntryImportController {
         });
       }
 
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
+      // Validate category exists before creating entries
+      const category = await TournamentCategory.findByPk(data.categoryId);
+      if (!category) {
         return res.status(400).json({
           success: false,
-          message: "Tournament content not found",
+          message: "Tournament category not found",
         });
       }
 
       // Re-validate users and check for duplicates
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
+      const existingEntries = await Entry.findAll({
+        where: { categoryId: data.categoryId },
         include: [
           {
             model: EntryMember,
@@ -140,27 +140,27 @@ export class EntryImportController {
           });
         }
 
-        // Check if user already registered for this content
+        // Check if user already registered for this category
         if (existingUserIds.has(entryData.userId)) {
           return res.status(400).json({
             success: false,
-            message: `User ${user.email} is already registered for this content`,
+            message: `User ${user.email} is already registered for this category`,
           });
         }
 
         // Validate gender for single entries
-        if (content.gender) {
+        if (category.gender) {
           if (!user.gender) {
             return res.status(400).json({
               success: false,
-              message: `User ${user.email}'s gender is not set. Content requires "${content.gender}"`,
+              message: `User ${user.email}'s gender is not set. Category requires "${category.gender}"`,
             });
           }
 
-          if (user.gender !== content.gender) {
+          if (user.gender !== category.gender) {
             return res.status(400).json({
               success: false,
-              message: `User ${user.email}'s gender (${user.gender}) does not match content requirement (${content.gender})`,
+              message: `User ${user.email}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
             });
           }
         }
@@ -172,10 +172,9 @@ export class EntryImportController {
 
         for (const entryData of singleEntries) {
           // Create entry
-          const entry = await Entries.create(
+          const entry = await Entry.create(
             {
-              contentId: data.contentId,
-              teamId: entryData.teamId, // Use teamId from validated data (null if user has no team)
+              categoryId: data.categoryId,
             } as any,
             { transaction }
           );
@@ -242,18 +241,18 @@ export class EntryImportController {
         });
       }
 
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
+      const categoryId = Number(req.body.categoryId);
+      if (!categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
       // Parse and validate Excel file
       const previewData = await entryImportService.parseAndValidateDoubleEntries(
         req.file.buffer,
-        contentId
+        categoryId
       );
 
       res.status(200).json({
@@ -285,10 +284,10 @@ export class EntryImportController {
         });
       }
 
-      if (!data.contentId) {
+      if (!data.categoryId) {
         return res.status(400).json({
           success: false,
-          message: "Content ID is required",
+          message: "Category ID is required",
         });
       }
 
@@ -314,17 +313,17 @@ export class EntryImportController {
         });
       }
 
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
+      // Validate category exists before creating entries
+      const category = await TournamentCategory.findByPk(data.categoryId);
+      if (!category) {
         return res.status(400).json({
           success: false,
-          message: "Tournament content not found",
+          message: "Tournament category not found",
         });
       }
 
       // Re-validate mixed gender requirement for double entries
-      if (content.type === 'double' && content.gender === 'mixed') {
+      if (category.type === 'double' && category.gender === 'mixed') {
         for (const entryData of doubleEntries) {
           // Get both users to check gender
           const user1 = await User.findByPk(entryData.player1UserId);
@@ -340,22 +339,22 @@ export class EntryImportController {
           if (!user1.gender || !user2.gender) {
             return res.status(400).json({
               success: false,
-              message: `Mixed gender content requires both players to have gender set`,
+              message: `Mixed gender category requires both players to have gender set`,
             });
           }
 
           if (user1.gender === user2.gender) {
             return res.status(400).json({
               success: false,
-              message: `Mixed gender content requires 1 male and 1 female. Both players are ${user1.gender}`,
+              message: `Mixed gender category requires 1 male and 1 female. Both players are ${user1.gender}`,
             });
           }
         }
       }
 
       // Check for duplicate pairs in database
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
+      const existingEntries = await Entry.findAll({
+        where: { categoryId: data.categoryId },
         include: [
           {
             model: EntryMember,
@@ -394,7 +393,7 @@ export class EntryImportController {
         if (existingUserIds.has(entryData.player1UserId)) {
           return res.status(400).json({
             success: false,
-            message: `Player ${entryData.player1Email} is already registered in this content (each user can only register once)`,
+            message: `Player ${entryData.player1Email} is already registered in this category (each user can only register once)`,
           });
         }
 
@@ -402,7 +401,7 @@ export class EntryImportController {
         if (existingUserIds.has(entryData.player2UserId)) {
           return res.status(400).json({
             success: false,
-            message: `Player ${entryData.player2Email} is already registered in this content (each user can only register once)`,
+            message: `Player ${entryData.player2Email} is already registered in this category (each user can only register once)`,
           });
         }
 
@@ -412,7 +411,7 @@ export class EntryImportController {
         if (existingPairs.has(pairKey)) {
           return res.status(400).json({
             success: false,
-            message: `Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this content`,
+            message: `Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this category`,
           });
         }
       }
@@ -422,14 +421,10 @@ export class EntryImportController {
         const entryIds: number[] = [];
 
         for (const entryData of doubleEntries) {
-          // Both players must be in the same team (validated in service)
-          const teamId = entryData.player1TeamId;
-
           // Create entry
-          const entry = await Entries.create(
+          const entry = await Entry.create(
             {
-              contentId: data.contentId,
-              teamId,
+              categoryId: data.categoryId,
             } as any,
             { transaction }
           );
@@ -483,235 +478,6 @@ export class EntryImportController {
       res.status(400).json({
         success: false,
         message: error.message || "Failed to import double entries",
-        error: error.toString(),
-      });
-    }
-  }
-
-  /**
-   * Preview Excel import data for team entries (3-5 players)
-   * POST /entries/import/team/preview
-   */
-  async previewTeamEntries(req: Request, res: Response) {
-    try {
-      const userId = (req as any).user?.id;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: "No file uploaded",
-        });
-      }
-
-      const contentId = Number(req.body.contentId);
-      if (!contentId) {
-        return res.status(400).json({
-          success: false,
-          message: "Content ID is required",
-        });
-      }
-
-      // Parse and validate Excel file
-      const previewData = await entryImportService.parseAndValidateTeamEntries(
-        req.file.buffer,
-        contentId
-      );
-
-      res.status(200).json({
-        success: true,
-        data: previewData,
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to parse Excel file",
-        error: error.toString(),
-      });
-    }
-  }
-
-  /**
-   * Confirm and save import data for team entries (3-5 players)
-   * POST /entries/import/team/confirm
-   */
-  async confirmTeamEntries(req: Request, res: Response) {
-    try {
-      const data: ConfirmEntryImportDto = req.body;
-      const userId = (req as any).user?.id;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-      }
-
-      if (!data.contentId) {
-        return res.status(400).json({
-          success: false,
-          message: "Content ID is required",
-        });
-      }
-
-      if (!data.entries || data.entries.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No entries to import",
-        });
-      }
-
-      // Type guard to check if entries are team entries
-      const isTeamEntry = (entry: any): entry is ValidatedTeamEntryDto => {
-        return 'players' in entry && Array.isArray(entry.players) && 'teamId' in entry;
-      };
-
-      const teamEntries = data.entries as ValidatedTeamEntryDto[];
-      
-      // Validate all entries are team type
-      if (!teamEntries.every(isTeamEntry)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid entry format for team entries",
-        });
-      }
-
-      // Validate content exists before creating entries
-      const content = await TournamentCategory.findByPk(data.contentId);
-      if (!content) {
-        return res.status(400).json({
-          success: false,
-          message: "Tournament content not found",
-        });
-      }
-
-      // Check for duplicate users in database
-      const existingEntries = await Entries.findAll({
-        where: { contentId: data.contentId },
-        include: [
-          {
-            model: EntryMember,
-            as: 'members',
-          },
-        ],
-      });
-
-      // Track existing users
-      const existingUserIds = new Set<number>();
-      existingEntries.forEach(entry => {
-        const members = (entry as any).members as EntryMember[] | undefined;
-        if (members) {
-          members.forEach(member => {
-            existingUserIds.add(member.userId);
-          });
-        }
-      });
-
-      // Validate each team entry
-      for (const entryData of teamEntries) {
-        // Check minimum and maximum players
-        if (entryData.players.length < 3 || entryData.players.length > 5) {
-          return res.status(400).json({
-            success: false,
-            message: `Team entries require 3-5 players. Found ${entryData.players.length} player(s)`,
-          });
-        }
-
-        // Check each player
-        for (const player of entryData.players) {
-          // Validate user exists
-          const user = await User.findByPk(player.userId);
-          if (!user) {
-            return res.status(400).json({
-              success: false,
-              message: `User with ID ${player.userId} not found`,
-            });
-          }
-
-          // Check if user already registered
-          if (existingUserIds.has(player.userId)) {
-            return res.status(400).json({
-              success: false,
-              message: `Player ${user.email} is already registered in this content`,
-            });
-          }
-
-          // Validate gender if required
-          if (content.gender && content.gender !== 'mixed') {
-            if (!user.gender) {
-              return res.status(400).json({
-                success: false,
-                message: `Player ${user.email}'s gender is not set. Content requires "${content.gender}"`,
-              });
-            }
-
-            if (user.gender !== content.gender) {
-              return res.status(400).json({
-                success: false,
-                message: `Player ${user.email}'s gender (${user.gender}) does not match content requirement (${content.gender})`,
-              });
-            }
-          }
-        }
-      }
-
-      // Save all entries in a transaction
-      const result = await withTransaction(async (transaction) => {
-        const entryIds: number[] = [];
-
-        for (const entryData of teamEntries) {
-          // Create entry
-          const entry = await Entries.create(
-            {
-              contentId: data.contentId,
-              teamId: entryData.teamId,
-            } as any,
-            { transaction }
-          );
-
-          entryIds.push(entry.id);
-
-          // Create entry members for all players
-          for (const player of entryData.players) {
-            // Get ELO score for the player
-            const eloScore = await EloScore.findOne({
-              where: { userId: player.userId },
-              transaction,
-            });
-
-            await EntryMember.create(
-              {
-                entryId: entry.id,
-                userId: player.userId,
-                eloAtEntry: eloScore?.score || 1000,
-              } as any,
-              { transaction }
-            );
-          }
-        }
-
-        return {
-          success: true,
-          createdEntries: teamEntries.length,
-          entryIds,
-        };
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Team entries imported successfully",
-        data: result,
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to import team entries",
         error: error.toString(),
       });
     }
