@@ -1,7 +1,6 @@
 // MatchSet DTOs
 export interface CreateMatchSetDto {
-  subMatchId?: number;
-  matchId?: number;
+  subMatchId: number;
   setNumber: number;
   entryAScore?: number;
   entryBScore?: number;
@@ -13,15 +12,15 @@ export interface UpdateMatchSetDto {
 }
 
 export interface UpdateMatchSetScoreDto {
-  matchId: number;
+  subMatchId: number;
+  setNumber: number;
   entryAScore: number;
   entryBScore: number;
 }
 
 export interface MatchSetResponseDto {
   id: number;
-  subMatchId?: number;
-  matchId?: number;
+  subMatchId: number;
   setNumber: number;
   entryAScore: number;
   entryBScore: number;

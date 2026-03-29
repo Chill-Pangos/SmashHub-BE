@@ -9,7 +9,6 @@ export interface UpdateRolePermissionDto {
 }
 
 export interface RolePermissionResponseDto {
-  id: number;
   roleId: number;
   permissionId: number;
   createdAt: Date;

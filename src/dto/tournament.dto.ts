@@ -19,12 +19,12 @@ export interface CreateTournamentCategoryDto {
   type: 'single' | 'team' | 'double';
   maxEntries: number;
   maxSets: number;
-  numberOfSingles?: number;
-  numberOfDoubles?: number;
+  teamFormat?: string;
   minAge?: number;
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
+  maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }
@@ -48,12 +48,12 @@ export interface UpdateTournamentCategoryDto {
   type: 'single' | 'team' | 'double';
   maxEntries: number;
   maxSets: number;
-  numberOfSingles?: number;
-  numberOfDoubles?: number;
+  teamFormat?: string;
   minAge?: number;
   maxAge?: number;
   minElo?: number;
   maxElo?: number;
+  maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
 }

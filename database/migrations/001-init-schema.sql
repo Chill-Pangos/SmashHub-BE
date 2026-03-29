@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS `tournament_categories` (
   `maxAge` INT UNSIGNED NULL,
   `minElo` INT UNSIGNED NULL,
   `maxElo` INT UNSIGNED NULL,
+  `maxMembersPerEntry` INT UNSIGNED NULL COMMENT 'Only applicable for team type. Null = no upper limit',
   `gender` ENUM('male', 'female', 'mixed') NULL,
   `isGroupStage` TINYINT(1) NOT NULL DEFAULT 0,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -200,6 +201,7 @@ CREATE TABLE IF NOT EXISTS `entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `categoryId` INT UNSIGNED NOT NULL,
   `captainId` INT UNSIGNED NULL,
+  `name` VARCHAR(100) NOT NULL,
   `isAcceptingMembers` TINYINT(1) NOT NULL DEFAULT 0,
   `requiredMemberCount` INT UNSIGNED NULL,
   `currentMemberCount` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -211,6 +213,25 @@ CREATE TABLE IF NOT EXISTS `entries` (
   INDEX `entries_accepting_idx` (`isAcceptingMembers`),
   CONSTRAINT `fk_entries_category` FOREIGN KEY (`categoryId`) REFERENCES `tournament_categories` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_entries_captain` FOREIGN KEY (`captainId`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `join_requests` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `entryId` INT UNSIGNED NOT NULL,
+  `userId` INT UNSIGNED NOT NULL COMMENT 'User requesting to join',
+  `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  `rejectionReason` VARCHAR(255) NULL COMMENT 'Optional reason when captain rejects',
+  `respondedAt` DATE NULL COMMENT 'When captain approved or rejected',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `join_requests_entry_idx` (`entryId`),
+  INDEX `join_requests_user_idx` (`userId`),
+  INDEX `join_requests_status_idx` (`status`),
+  INDEX `join_requests_entry_status_idx` (`entryId`, `status`),
+  UNIQUE KEY `join_requests_entry_user_unique` (`entryId`, `userId`),
+  CONSTRAINT `fk_join_requests_entry` FOREIGN KEY (`entryId`) REFERENCES `entries` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_join_requests_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `entry_members` (

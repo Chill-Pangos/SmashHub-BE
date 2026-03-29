@@ -6,7 +6,7 @@ export interface CreateUserDto {
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
 }
 
 export interface UpdateUserDto {
@@ -17,7 +17,7 @@ export interface UpdateUserDto {
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
   isEmailVerified?: boolean;
 }
 
@@ -29,7 +29,7 @@ export interface UserResponseDto {
   avatarUrl?: string;
   dob?: Date;
   phoneNumber?: string;
-  gender?: "male" | "female" | "other";
+  gender?: "male" | "female";
   isEmailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;

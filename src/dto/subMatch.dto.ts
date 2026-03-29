@@ -4,11 +4,15 @@ export interface CreateSubMatchDto {
   subMatchNumber: number;
   status: "in_progress" | "completed";
   winnerTeam?: "A" | "B";
+  umpireId?: number;
+  assistantUmpireId?: number;
 }
 
 export interface UpdateSubMatchDto {
   status?: "in_progress" | "completed";
   winnerTeam?: "A" | "B";
+  umpireId?: number;
+  assistantUmpireId?: number;
 }
 
 export interface SubMatchResponseDto {
@@ -17,6 +21,8 @@ export interface SubMatchResponseDto {
   subMatchNumber: number;
   status: string;
   winnerTeam?: string;
+  umpireId?: number;
+  assistantUmpireId?: number;
   createdAt: Date;
   updatedAt: Date;
 }

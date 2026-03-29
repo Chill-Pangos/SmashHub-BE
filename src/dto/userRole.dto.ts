@@ -9,7 +9,6 @@ export interface UpdateUserRoleDto {
 }
 
 export interface UserRoleResponseDto {
-  id: number;
   userId: number;
   roleId: number;
   createdAt: Date;

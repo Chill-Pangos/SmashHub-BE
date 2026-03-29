@@ -18,6 +18,8 @@ const NAME_MAX_LENGTH = 100;
 const TEAM_FORMAT_REGEX = /^[SD](-[SD])+$/;
 const VALID_SETS_DEFAULT = new Set([5, 7]);
 const VALID_SETS_TEAM = new Set([5]);
+const MIN_MEMBERS_TEAM = 3;
+const MAX_MEMBERS_TEAM = 10;
 
 const MIN_ENTRIES = {
   groupStage: 16,
@@ -83,6 +85,13 @@ export default class TournamentCategory extends Model {
 
   @Column({ type: DataType.INTEGER.UNSIGNED, allowNull: true })
   declare maxElo?: number;
+
+  @Column({
+  type: DataType.INTEGER.UNSIGNED,
+  allowNull: true,
+  comment: "Only applicable for team type. Null = no upper limit",
+})
+declare maxMembersPerEntry?: number;
 
   @Column({
     type: DataType.ENUM(...CATEGORY_GENDERS),
@@ -206,6 +215,30 @@ export default class TournamentCategory extends Model {
   static validateEloRange(instance: TournamentCategory): void {
     TournamentCategory.assertRange("ELO", instance.minElo, instance.maxElo);
   }
+
+  @BeforeValidate
+static validateMaxMembersPerEntry(instance: TournamentCategory): void {
+  const { type, maxMembersPerEntry } = instance;
+
+  if (type !== "team") {
+    if (maxMembersPerEntry != null) {
+      throw new Error("maxMembersPerEntry is only applicable for team categories");
+    }
+    return;
+  }
+
+  // type === "team"
+  if (maxMembersPerEntry == null) return; // null = không giới hạn trên
+
+  if (
+    !Number.isInteger(maxMembersPerEntry) ||
+    maxMembersPerEntry < MIN_MEMBERS_TEAM
+  ) {
+    throw new Error(
+      `maxMembersPerEntry must be an integer of at least ${MIN_MEMBERS_TEAM} for team categories`
+    );
+  }
+}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 

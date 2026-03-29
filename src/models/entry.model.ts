@@ -53,6 +53,12 @@ export default class Entry extends Model {
   declare captainId?: number;
 
   @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  declare name: string;
+
+  @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: false,
