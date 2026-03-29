@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS `tokens` (
   INDEX `tokens_type_idx` (`type`),
   INDEX `tokens_user_type_idx` (`userId`, `type`),
   INDEX `tokens_blacklist_expires_idx` (`isBlacklisted`, `expiresAt`),
+  UNIQUE KEY `tokens_token_unique` (`token`(255)),
   CONSTRAINT `fk_tokens_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -221,7 +222,7 @@ CREATE TABLE IF NOT EXISTS `join_requests` (
   `userId` INT UNSIGNED NOT NULL COMMENT 'User requesting to join',
   `status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   `rejectionReason` VARCHAR(255) NULL COMMENT 'Optional reason when captain rejects',
-  `respondedAt` DATE NULL COMMENT 'When captain approved or rejected',
+  `respondedAt` DATETIME NULL COMMENT 'When captain approved or rejected',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

@@ -31,7 +31,7 @@ const swaggerDefinition = {
       name: "Tournament Categories",
       description: "Tournament category endpoints",
     },
-    { name: "Entries", description: "Tournament entry endpoints" },
+    { name: "Entries", description: "Entry management endpoints" },
     { name: "Schedules", description: "Schedule management endpoints" },
     { name: "Matches", description: "Match management endpoints" },
     { name: "Match Sets", description: "Match set endpoints" },
