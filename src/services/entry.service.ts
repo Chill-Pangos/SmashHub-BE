@@ -8,6 +8,7 @@ import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
 import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
+import notificationService, { NotificationTemplates } from "./notification.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -232,14 +233,17 @@ export class EntryService {
         );
       }
 
-      await JoinRequest.create({ entryId: targetEntryId, userId });
+      const joinRequest = await JoinRequest.create({ entryId: targetEntryId, userId });
 
-      // Gửi thông báo cho captain
-      // await notificationService.send(targetEntry.captainId, {
-      //   type: "join_request",
-      //   entryId: targetEntryId,
-      //   requesterId: userId,
-      // });
+      const requesterName = `${user.firstName} ${user.lastName}`.trim();
+
+      if (targetEntry.captainId) {
+        await notificationService.create(targetEntry.captainId, {
+          ...NotificationTemplates.joinRequest(requesterName, targetEntry.name),
+          referenceId: joinRequest.id,
+          referenceType: "join_request",
+        });
+      }
 
       return {
         entry: targetEntry,

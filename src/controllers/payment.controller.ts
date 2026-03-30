@@ -22,9 +22,16 @@ export class PaymentController {
       const { entryId, amount, method } = req.body;
 
       const payment = await paymentService.createPayment(entryId, amount, method);
-      res.status(201).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error creating payment", error });
+      res.status(201).json({
+        success: true,
+        data: payment,
+        message: "Payment created successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -42,12 +49,18 @@ export class PaymentController {
       const payment = await paymentService.confirmPayment(
         paymentId,
         organizerId,
-        proofImageUrl,
-        transactionRef
+        { proofImageUrl, transactionRef }
       );
-      res.status(200).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error confirming payment", error });
+      res.status(200).json({
+        success: true,
+        data: payment,
+        message: "Payment confirmed successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -62,9 +75,16 @@ export class PaymentController {
       const paymentId = Number(req.params.paymentId);
 
       const payment = await paymentService.rejectPayment(paymentId, organizerId);
-      res.status(200).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error rejecting payment", error });
+      res.status(200).json({
+        success: true,
+        data: payment,
+        message: "Payment rejected successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -79,9 +99,16 @@ export class PaymentController {
       const paymentId = Number(req.params.paymentId);
 
       const payment = await paymentService.refundPayment(paymentId, organizerId);
-      res.status(200).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error refunding payment", error });
+      res.status(200).json({
+        success: true,
+        data: payment,
+        message: "Payment refunded successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -93,9 +120,15 @@ export class PaymentController {
       const paymentId = Number(req.params.paymentId);
 
       const payment = await paymentService.getPaymentById(paymentId);
-      res.status(200).json(payment);
-    } catch (error) {
-      res.status(404).json({ message: "Payment not found", error });
+      res.status(200).json({
+        success: true,
+        data: payment,
+      });
+    } catch (error: any) {
+      res.status(404).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -128,9 +161,15 @@ export class PaymentController {
       }
 
       const result = await paymentService.getPaymentsByEntry(entryId, options);
-      res.status(200).json(result);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching payments", error });
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -180,9 +219,15 @@ export class PaymentController {
         userId,
         options
       );
-      res.status(200).json(result);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching payments", error });
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -197,9 +242,15 @@ export class PaymentController {
       const categoryId = Number(req.params.categoryId);
 
       const stats = await paymentService.getPaymentStats(categoryId, userId);
-      res.status(200).json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching payment stats", error });
+      res.status(200).json({
+        success: true,
+        data: stats,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
@@ -218,16 +269,23 @@ export class PaymentController {
         organizerId,
         amount
       );
-      res.status(201).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error recording cash payment", error });
+      res.status(201).json({
+        success: true,
+        data: payment,
+        message: "Cash payment recorded successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
   /**
    * 10. Record online payment (simulate webhook)
    */
-  async recordOnlinePayment(req: AuthRequest, res: Response): Promise<void> {
+  async recordOnlinePayment(req: Request, res: Response): Promise<void> {
     try {
       const { entryId, amount, transactionRef } = req.body;
 
@@ -236,17 +294,28 @@ export class PaymentController {
         amount,
         transactionRef
       );
-      res.status(201).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error recording online payment", error });
+      res.status(201).json({
+        success: true,
+        data: payment,
+        message: "Online payment recorded successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
   /**
-   * 11. Get pending payments
+   * 11. Get pending payments by category
    */
-  async getPendingPayments(req: Request, res: Response): Promise<void> {
+  async getPendingPayments(req: AuthRequest, res: Response): Promise<void> {
     try {
+      const organizerId = this.getAuthenticatedUserId(req, res);
+      if (organizerId == null) return;
+
+      const categoryId = Number(req.params.categoryId);
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const method = req.query.method as
@@ -268,17 +337,27 @@ export class PaymentController {
         options.method = method;
       }
 
-      const result = await paymentService.getPendingPayments(options);
-      res.status(200).json(result);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching pending payments", error });
+      const result = await paymentService.getPendingPayments(
+        organizerId,
+        categoryId,
+        options
+      );
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 
   /**
-   * 12. Update payment proof image
+   * 12. Upload payment proof image
    */
-  async updatePaymentProof(req: AuthRequest, res: Response): Promise<void> {
+  async uploadPaymentProof(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = this.getAuthenticatedUserId(req, res);
       if (userId == null) return;
@@ -286,13 +365,21 @@ export class PaymentController {
       const paymentId = Number(req.params.paymentId);
       const { proofImageUrl } = req.body;
 
-      const payment = await paymentService.updatePaymentProof(
+      const payment = await paymentService.uploadPaymentProof(
         paymentId,
+        userId,
         proofImageUrl
       );
-      res.status(200).json(payment);
-    } catch (error) {
-      res.status(400).json({ message: "Error updating payment proof", error });
+      res.status(200).json({
+        success: true,
+        data: payment,
+        message: "Payment proof uploaded successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 }

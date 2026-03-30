@@ -11,14 +11,10 @@ const router = Router();
  * /knockout-brackets/generate:
  *   post:
  *     tags: [Knockout Brackets]
- *     summary: Generate knockout bracket structure
+ *     summary: Generate knockout bracket from entries (no group stage)
  *     description: |
- *       Tạo cấu trúc nhánh đấu vòng loại trực tiếp với các điều kiện:
- *       1. Số nhánh phải là lũy thừa của 2 (16, 32, 64...)
- *       2. Entries cùng team không gặp nhau ở vòng đầu
- *       3. Bye matches được random ngẫu nhiên
- *       4. Cân bằng 2 nhánh đấu
- *       5. Tối thiểu 12 đội
+ *       Tạo cấu trúc nhánh đấu vòng loại trực tiếp từ danh sách entries.
+ *       Dùng cho giải đấu không có vòng bảng.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -44,7 +40,7 @@ router.post(
   "/generate",
   authenticate,
   checkPermission(PERMISSIONS.SCHEDULES_CREATE),
-  knockoutBracketController.generateBracket.bind(knockoutBracketController)
+  knockoutBracketController.generateFromEntries.bind(knockoutBracketController)
 );
 
 /**
@@ -89,7 +85,7 @@ router.post(
 
 /**
  * @swagger
- * /knockout-brackets/generate-from-groups:
+ * /knockout-brackets/generate-from-group-stage:
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Generate knockout bracket from group stage results
@@ -97,9 +93,51 @@ router.post(
  *       Tạo nhánh đấu knockout từ kết quả vòng bảng:
  *       1. Lấy top 2 mỗi bảng (nhất và nhì)
  *       2. Chia đều bye matches vào 2 nhánh
- *       3. Tất cả bye matches dành cho đội nhất bảng
- *       4. Đội nhì bảng gặp đội nhất bảng khác (không cùng bảng)
- *       5. Cân bằng 2 nhánh đấu
+ *       3. Cân bằng 2 nhánh đấu
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - categoryId
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 description: Tournament category ID
+ *                 example: 1
+ *               qualifiersPerGroup:
+ *                 type: integer
+ *                 description: Number of qualifiers per group (default 2)
+ *                 example: 2
+ *     responses:
+ *       201:
+ *         description: Bracket generated from groups successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ */
+router.post(
+  "/generate-from-group-stage",
+  authenticate,
+  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  knockoutBracketController.generateFromGroupStage.bind(knockoutBracketController)
+);
+
+/**
+ * @swagger
+ * /knockout-brackets/validate:
+ *   post:
+ *     tags: [Knockout Brackets]
+ *     summary: Validate bracket integrity
+ *     description: |
+ *       Kiểm tra bracket tree có hợp lệ:
+ *       - Tất cả bracket round 1 đã có đủ entries hoặc là bye
+ *       - Không có entry nào xuất hiện 2 lần
+ *       - Bracket tree liên kết đúng
+ *       - Số lượng brackets đúng với bracket size
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -116,24 +154,24 @@ router.post(
  *                 description: Tournament category ID
  *                 example: 1
  *     responses:
- *       201:
- *         description: Bracket generated from groups successfully
+ *       200:
+ *         description: Validation result
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
 router.post(
-  "/generate-from-groups",
+  "/validate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
-  knockoutBracketController.generateFromGroups.bind(knockoutBracketController)
+  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  knockoutBracketController.validateBracketIntegrity.bind(knockoutBracketController)
 );
 
 /**
  * @swagger
- * /knockout-brackets/category/{categoryId}:
+ * /knockout-brackets/category/{categoryId}/tree:
  *   get:
  *     tags: [Knockout Brackets]
- *     summary: Get all brackets by category ID
+ *     summary: Get full bracket tree structure
  *     description: Lấy toàn bộ cấu trúc nhánh đấu theo tournament category
  *     parameters:
  *       - name: categoryId
@@ -144,137 +182,77 @@ router.post(
  *         description: Tournament category ID
  *     responses:
  *       200:
- *         description: Brackets retrieved successfully
- *       500:
- *         description: Internal server error
+ *         description: Bracket tree retrieved successfully
+ *       400:
+ *         description: Bad request - no brackets found
  */
 router.get(
-  "/category/:categoryId",
-  knockoutBracketController.findByCategoryId.bind(knockoutBracketController)
+  "/category/:categoryId/tree",
+  knockoutBracketController.getBracketTree.bind(knockoutBracketController)
 );
 
 /**
  * @swagger
- * /knockout-brackets/{id}:
+ * /knockout-brackets/category/{categoryId}/standings:
  *   get:
  *     tags: [Knockout Brackets]
- *     summary: Get bracket by ID
+ *     summary: Get tournament standings
+ *     description: |
+ *       Lấy kết quả xếp hạng cuối giải knockout:
+ *       - Vô địch: winner của Final
+ *       - Á quân: loser của Final
+ *       - Hạng 3: loser của Semi-final (đồng hạng 3)
  *     parameters:
- *       - name: id
+ *       - name: categoryId
  *         in: path
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Tournament category ID
  *     responses:
  *       200:
- *         description: Bracket retrieved successfully
- *       404:
- *         description: Bracket not found
+ *         description: Standings retrieved successfully
+ *       400:
+ *         description: Tournament not completed yet
  */
 router.get(
-  "/:id",
-  knockoutBracketController.findById.bind(knockoutBracketController)
+  "/category/:categoryId/standings",
+  knockoutBracketController.getStandings.bind(knockoutBracketController)
 );
 
 /**
  * @swagger
- * /knockout-brackets:
+ * /knockout-brackets/category/{categoryId}/entry:
  *   get:
  *     tags: [Knockout Brackets]
- *     summary: Get all brackets
+ *     summary: Get brackets by entry ID or entry name
+ *     description: Lấy tất cả brackets liên quan đến 1 entry theo ID hoặc tên
  *     parameters:
- *       - name: skip
+ *       - name: categoryId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament category ID
+ *       - name: entryId
  *         in: query
  *         schema:
  *           type: integer
- *       - name: limit
+ *         description: Entry ID
+ *       - name: entryName
  *         in: query
  *         schema:
- *           type: integer
+ *           type: string
+ *         description: Entry name (team name)
  *     responses:
  *       200:
  *         description: Brackets retrieved successfully
+ *       400:
+ *         description: Bad request (missing entryId or entryName)
  */
 router.get(
-  "/",
-  knockoutBracketController.findAll.bind(knockoutBracketController)
-);
-
-/**
- * @swagger
- * /knockout-brackets:
- *   post:
- *     tags: [Knockout Brackets]
- *     summary: Create a new bracket
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *     responses:
- *       201:
- *         description: Bracket created successfully
- */
-router.post(
-  "/",
-  authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
-  knockoutBracketController.create.bind(knockoutBracketController)
-);
-
-/**
- * @swagger
- * /knockout-brackets/{id}:
- *   put:
- *     tags: [Knockout Brackets]
- *     summary: Update a bracket
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *     responses:
- *       200:
- *         description: Bracket updated successfully
- */
-router.put(
-  "/:id",
-  knockoutBracketController.update.bind(knockoutBracketController)
-);
-
-/**
- * @swagger
- * /knockout-brackets/{id}:
- *   delete:
- *     tags: [Knockout Brackets]
- *     summary: Delete a bracket
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Bracket deleted successfully
- */
-router.delete(
-  "/:id",
-  knockoutBracketController.delete.bind(knockoutBracketController)
+  "/category/:categoryId/entry",
+  knockoutBracketController.getBracketsByEntry.bind(knockoutBracketController)
 );
 
 export default router;

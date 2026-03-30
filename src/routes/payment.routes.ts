@@ -191,11 +191,19 @@ router.get(
 
 /**
  * @swagger
- * /payments/pending:
+ * /payments/pending/{categoryId}:
  *   get:
  *     tags: [Payments]
- *     summary: Get pending payments (admin)
+ *     summary: Get pending payments by category (organizer)
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament category ID
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
@@ -208,7 +216,8 @@ router.get(
  *         description: List of pending payments
  */
 router.get(
-  "/pending",
+  "/pending/:categoryId",
+  authenticate,
   checkPermission(PERMISSIONS.PAYMENTS_VIEW),
   paymentController.getPendingPayments.bind(paymentController)
 );
@@ -325,7 +334,7 @@ router.post(
  * /payments/{paymentId}/proof:
  *   put:
  *     tags: [Payments]
- *     summary: Update payment proof image
+ *     summary: Upload payment proof image (captain or organizer)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -343,14 +352,15 @@ router.post(
  *             properties:
  *               proofImageUrl:
  *                 type: string
+ *                 description: URL of the proof image for bank transfer
  *     responses:
  *       200:
- *         description: Proof image updated
+ *         description: Proof image uploaded successfully
  */
 router.put(
   "/:paymentId/proof",
   authenticate,
-  paymentController.updatePaymentProof.bind(paymentController)
+  paymentController.uploadPaymentProof.bind(paymentController)
 );
 
 export default router;

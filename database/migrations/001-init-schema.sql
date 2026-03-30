@@ -182,14 +182,13 @@ CREATE TABLE IF NOT EXISTS `tournament_referees` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `tournamentId` INT UNSIGNED NOT NULL,
   `refereeId` INT UNSIGNED NOT NULL,
-  `role` ENUM('main', 'assistant') NOT NULL DEFAULT 'assistant',
-  `isAvailable` TINYINT(1) NOT NULL DEFAULT 1,
+  `role` ENUM('chief', 'referee') NOT NULL DEFAULT 'referee',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   INDEX `tournament_referees_tournament_idx` (`tournamentId`),
   INDEX `tournament_referees_referee_idx` (`refereeId`),
-  INDEX `tournament_referees_tournament_role_avail_idx` (`tournamentId`, `role`, `isAvailable`),
+  INDEX `tournament_referees_tournament_role_idx` (`tournamentId`, `role`),
   UNIQUE KEY `tournament_referees_tournament_referee_unique` (`tournamentId`, `refereeId`),
   CONSTRAINT `fk_tournament_referees_tournament` FOREIGN KEY (`tournamentId`) REFERENCES `tournaments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_tournament_referees_referee` FOREIGN KEY (`refereeId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -274,6 +273,61 @@ CREATE TABLE IF NOT EXISTS `payments` (
   INDEX `payments_entry_status_idx` (`entryId`, `status`),
   CONSTRAINT `fk_payments_entry` FOREIGN KEY (`entryId`) REFERENCES `entries` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_payments_confirmed_by` FOREIGN KEY (`confirmedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- NOTIFICATIONS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `userId` INT UNSIGNED NOT NULL COMMENT 'Người nhận notification',
+  `type` ENUM('join_request', 'join_request_approved', 'join_request_rejected', 'payment_confirmed', 'payment_rejected', 'payment_refunded', 'match_scheduled', 'match_starting_soon', 'match_result', 'tournament_announcement', 'referee_invitation') NOT NULL,
+  `title` VARCHAR(100) NOT NULL,
+  `message` VARCHAR(500) NOT NULL,
+  `referenceId` INT UNSIGNED NULL COMMENT 'ID của entity liên quan (entryId, matchId, paymentId...)',
+  `referenceType` VARCHAR(50) NULL COMMENT 'Loại entity: entry, match, payment, tournament...',
+  `isRead` TINYINT(1) NOT NULL DEFAULT 0,
+  `readAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `notifications_user_idx` (`userId`),
+  INDEX `notifications_type_idx` (`type`),
+  INDEX `notifications_is_read_idx` (`isRead`),
+  INDEX `notifications_user_is_read_idx` (`userId`, `isRead`),
+  INDEX `notifications_user_created_idx` (`userId`, `createdAt`),
+  INDEX `notifications_reference_type_idx` (`referenceId`, `type`),
+  CONSTRAINT `fk_notifications_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- REFEREE INVITATIONS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `referee_invitations` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tournamentId` INT UNSIGNED NOT NULL,
+  `refereeId` INT UNSIGNED NOT NULL COMMENT 'Referee được mời',
+  `invitedBy` INT UNSIGNED NOT NULL COMMENT 'Organizer gửi lời mời',
+  `role` ENUM('chief', 'referee') NOT NULL DEFAULT 'referee',
+  `status` ENUM('pending', 'accepted', 'rejected', 'cancelled', 'expired') NOT NULL DEFAULT 'pending',
+  `expiresAt` DATETIME NOT NULL COMMENT 'Thời hạn phản hồi',
+  `respondedAt` DATETIME NULL COMMENT 'Khi referee accept/reject hoặc organizer cancel',
+  `rejectionReason` VARCHAR(255) NULL COMMENT 'Lý do từ chối (optional)',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `referee_invitations_tournament_idx` (`tournamentId`),
+  INDEX `referee_invitations_referee_idx` (`refereeId`),
+  INDEX `referee_invitations_invited_by_idx` (`invitedBy`),
+  INDEX `referee_invitations_status_idx` (`status`),
+  INDEX `referee_invitations_expires_at_idx` (`expiresAt`),
+  INDEX `referee_invitations_tournament_referee_status_idx` (`tournamentId`, `refereeId`, `status`),
+  UNIQUE KEY `referee_invitations_tournament_referee_unique` (`tournamentId`, `refereeId`),
+  CONSTRAINT `fk_referee_invitations_tournament` FOREIGN KEY (`tournamentId`) REFERENCES `tournaments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_referee_invitations_referee` FOREIGN KEY (`refereeId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_referee_invitations_inviter` FOREIGN KEY (`invitedBy`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────────────────────────────────────

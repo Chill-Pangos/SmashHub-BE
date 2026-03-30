@@ -1,162 +1,191 @@
 import { Request, Response } from "express";
+import { AuthRequest } from "../middlewares/auth.middleware";
 import tournamentRefereeService from "../services/tournamentReferee.service";
 
 export class TournamentRefereeController {
-  async create(req: Request, res: Response): Promise<void> {
-    try {
-      const tournamentReferee = await tournamentRefereeService.create(req.body);
-      res.status(201).json(tournamentReferee);
-    } catch (error) {
-      res
-        .status(400)
-        .json({ message: "Error creating tournament referee", error });
-    }
-  }
+  // ── 1. Organizer sends invitation ───────────────────────────────────────
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  async inviteReferee(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const tournamentId = req.query.tournamentId
-        ? Number(req.query.tournamentId)
-        : undefined;
+      const organizerId = (req as AuthRequest).userId!;
+      const { tournamentId, refereeId, role } = req.body;
 
-      const tournamentReferees = await tournamentRefereeService.findAll(
+      if (!tournamentId || !refereeId || !role) {
+        res.status(400).json({
+          message: "Missing required fields: tournamentId, refereeId, role"
+        });
+        return;
+      }
+
+      const invitation = await tournamentRefereeService.inviteReferee(
+        organizerId,
         tournamentId,
-        skip,
-        limit
+        refereeId,
+        role
       );
-      res.status(200).json(tournamentReferees);
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error fetching tournament referees", error });
+      res.status(201).json(invitation);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Error sending invitation" });
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  // ── 2. Referee accepts invitation ───────────────────────────────────────
+
+  async acceptInvitation(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const tournamentReferee = await tournamentRefereeService.findById(
-        Number(req.params.id)
-      );
-      if (!tournamentReferee) {
-        res.status(404).json({ message: "Tournament referee not found" });
+      const refereeId = (req as AuthRequest).userId!;
+      const { invitationId } = req.body;
+
+      if (!invitationId) {
+        res.status(400).json({ message: "Missing required field: invitationId" });
         return;
       }
-      res.status(200).json(tournamentReferee);
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error fetching tournament referee", error });
-    }
-  }
 
-  async findByTournamentId(req: Request, res: Response): Promise<void> {
-    try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const tournamentReferees =
-        await tournamentRefereeService.findByTournamentId(
-          Number(req.params.tournamentId),
-          skip,
-          limit
-        );
-      res.status(200).json(tournamentReferees);
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error fetching tournament referees", error });
-    }
-  }
-
-  async update(req: Request, res: Response): Promise<void> {
-    try {
-      const [affected, tournamentReferees] =
-        await tournamentRefereeService.update(Number(req.params.id), req.body);
-      if (affected === 0) {
-        res.status(404).json({ message: "Tournament referee not found" });
-        return;
-      }
-      res.status(200).json(tournamentReferees[0]);
-    } catch (error) {
-      res
-        .status(400)
-        .json({ message: "Error updating tournament referee", error });
-    }
-  }
-
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const deleted = await tournamentRefereeService.delete(
-        Number(req.params.id)
+      const referee = await tournamentRefereeService.acceptInvitation(
+        refereeId,
+        invitationId
       );
-      if (deleted === 0) {
-        res.status(404).json({ message: "Tournament referee not found" });
+      res.status(200).json(referee);
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error accepting invitation" });
+    }
+  }
+
+  // ── 3. Referee rejects invitation ───────────────────────────────────────
+
+  async rejectInvitation(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const refereeId = (req as AuthRequest).userId!;
+      const { invitationId, rejectionReason } = req.body;
+
+      if (!invitationId) {
+        res.status(400).json({ message: "Missing required field: invitationId" });
         return;
       }
+
+      const invitation = await tournamentRefereeService.rejectInvitation(
+        refereeId,
+        invitationId,
+        rejectionReason
+      );
+      res.status(200).json(invitation);
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error rejecting invitation" });
+    }
+  }
+
+  // ── 4. Organizer cancels invitation ────────────────────────────────────
+
+  async cancelInvitation(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const organizerId = (req as AuthRequest).userId!;
+      const { invitationId } = req.body;
+
+      if (!invitationId) {
+        res.status(400).json({ message: "Missing required field: invitationId" });
+        return;
+      }
+
+      const invitation = await tournamentRefereeService.cancelInvitation(
+        organizerId,
+        invitationId
+      );
+      res.status(200).json(invitation);
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error cancelling invitation" });
+    }
+  }
+
+  // ── 5. Organizer removes referee from tournament ────────────────────────
+
+  async removeReferee(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const organizerId = (req as AuthRequest).userId!;
+      const { tournamentId, refereeId } = req.body;
+
+      if (!tournamentId || !refereeId) {
+        res.status(400).json({
+          message: "Missing required fields: tournamentId, refereeId"
+        });
+        return;
+      }
+
+      await tournamentRefereeService.removeReferee(
+        organizerId,
+        tournamentId,
+        refereeId
+      );
       res.status(204).send();
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error deleting tournament referee", error });
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error removing referee" });
     }
   }
 
-  async assignReferees(req: Request, res: Response): Promise<void> {
+  // ── 6. Organizer updates referee role ──────────────────────────────────
+
+  async updateRole(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const tournamentReferees = await tournamentRefereeService.assignReferees(
-        req.body
+      const organizerId = (req as AuthRequest).userId!;
+      const { tournamentId, refereeId, newRole } = req.body;
+
+      if (!tournamentId || !refereeId || !newRole) {
+        res.status(400).json({
+          message: "Missing required fields: tournamentId, refereeId, newRole"
+        });
+        return;
+      }
+
+      const referee = await tournamentRefereeService.updateRole(
+        organizerId,
+        tournamentId,
+        refereeId,
+        newRole
       );
-      res.status(201).json(tournamentReferees);
-    } catch (error) {
-      res.status(400).json({ message: "Error assigning referees", error });
+      res.status(200).json(referee);
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error updating role" });
     }
   }
 
-  async getAvailableReferees(req: Request, res: Response): Promise<void> {
-    try {
-      const tournamentId = Number(req.params.tournamentId);
-      const excludeIds = req.query.excludeIds
-        ? (req.query.excludeIds as string).split(",").map(Number)
-        : [];
+  // ── 7. Get referees by tournament ──────────────────────────────────────
 
-      const availableReferees =
-        await tournamentRefereeService.getAvailableReferees(
-          tournamentId,
-          excludeIds
-        );
-      res.status(200).json(availableReferees);
-    } catch (error) {
-      res
-        .status(500)
-        .json({ message: "Error fetching available referees", error });
+  async getRefereesByTournament(req: Request, res: Response): Promise<void> {
+    try {
+      const { tournamentId } = req.params;
+      const role = req.query.role as string | undefined;
+
+      const referees = await tournamentRefereeService.getRefereesByTournament(
+        Number(tournamentId),
+        role as any
+      );
+      res.status(200).json(referees);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message || "Error fetching referees" });
     }
   }
 
-  async updateAvailability(req: Request, res: Response): Promise<void> {
+  // ── 8. Get invitations by tournament (organizer only) ───────────────────
+
+  async getInvitationsByTournament(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { isAvailable } = req.body;
-      if (typeof isAvailable !== "boolean") {
-        res.status(400).json({ message: "isAvailable must be a boolean" });
-        return;
-      }
+      const organizerId = (req as AuthRequest).userId!;
+      const { tournamentId } = req.params;
+      const status = req.query.status as string | undefined;
 
-      const [affected, tournamentReferees] =
-        await tournamentRefereeService.updateAvailability(
-          Number(req.params.id),
-          isAvailable
-        );
-
-      if (affected === 0) {
-        res.status(404).json({ message: "Tournament referee not found" });
-        return;
-      }
-
-      res.status(200).json(tournamentReferees[0]);
-    } catch (error) {
-      res
-        .status(400)
-        .json({ message: "Error updating availability", error });
+      const invitations = await tournamentRefereeService.getInvitationsByTournament(
+        organizerId,
+        Number(tournamentId),
+        status as any
+      );
+      res.status(200).json(invitations);
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found") ? 404 : 400;
+      res.status(statusCode).json({ message: error.message || "Error fetching invitations" });
     }
   }
 }

@@ -1,231 +1,384 @@
+// notification.service.ts
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
-import { SendNotificationDto } from "../dto/notification.dto";
+import Notification, { NotificationType } from "../models/notification.model";
+import { Op } from "sequelize";
 
-interface NotificationPayload {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface NotificationPayload {
   type: string;
   title: string;
   message: string;
-  data?: any;
+  data?: unknown;
   timestamp?: Date;
 }
 
-class NotificationService {
-  private static io: SocketIOServer;
-  private static connectedUsers: Map<string, string> = new Map(); // userId -> socketId
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-  /**
-   * Initialize Socket.IO server
-   */
-  static initialize(httpServer: HTTPServer): void {
+const CORS_ORIGIN = process.env.FRONTEND_URL ?? "*";
+const PING_TIMEOUT = 60_000;
+const PING_INTERVAL = 25_000;
+
+function userRoom(userId: string): string {
+  return `user:${userId}`;
+}
+
+function withTimestamp(payload: NotificationPayload): NotificationPayload {
+  return { ...payload, timestamp: payload.timestamp ?? new Date() };
+}
+
+function assertInitialized(io: SocketIOServer | null): asserts io is SocketIOServer {
+  if (!io) throw new Error("NotificationService is not initialized. Call initialize() first.");
+}
+
+// ─── Notification builders ────────────────────────────────────────────────────
+// Tập trung tất cả message template ở 1 chỗ
+
+export const NotificationTemplates = {
+  joinRequest: (requesterName: string, entryName: string) => ({
+    type: "join_request" as NotificationType,
+    title: "New Join Request",
+    message: `${requesterName} wants to join your team "${entryName}"`,
+  }),
+
+  joinRequestApproved: (entryName: string) => ({
+    type: "join_request_approved" as NotificationType,
+    title: "Join Request Approved",
+    message: `Your request to join "${entryName}" has been approved`,
+  }),
+
+  joinRequestRejected: (entryName: string) => ({
+    type: "join_request_rejected" as NotificationType,
+    title: "Join Request Rejected",
+    message: `Your request to join "${entryName}" has been rejected`,
+  }),
+
+  paymentConfirmed: (categoryName: string) => ({
+    type: "payment_confirmed" as NotificationType,
+    title: "Payment Confirmed",
+    message: `Your payment for "${categoryName}" has been confirmed`,
+  }),
+
+  paymentRejected: (categoryName: string) => ({
+    type: "payment_rejected" as NotificationType,
+    title: "Payment Rejected",
+    message: `Your payment for "${categoryName}" has been rejected`,
+  }),
+
+  paymentRefunded: (categoryName: string) => ({
+    type: "payment_refunded" as NotificationType,
+    title: "Payment Refunded",
+    message: `Your payment for "${categoryName}" has been refunded`,
+  }),
+
+  matchScheduled: (opponent: string, scheduledAt: Date) => ({
+    type: "match_scheduled" as NotificationType,
+    title: "Match Scheduled",
+    message: `Your match against "${opponent}" is scheduled for ${scheduledAt.toLocaleString()}`,
+  }),
+
+  matchStartingSoon: (opponent: string, minutesLeft: number) => ({
+    type: "match_starting_soon" as NotificationType,
+    title: "Match Starting Soon",
+    message: `Your match against "${opponent}" starts in ${minutesLeft} minutes`,
+  }),
+
+  matchResult: (opponent: string, won: boolean) => ({
+    type: "match_result" as NotificationType,
+    title: won ? "Match Won" : "Match Lost",
+    message: `You ${won ? "won" : "lost"} your match against "${opponent}"`,
+  }),
+
+  tournamentAnnouncement: (tournamentName: string, announcement: string) => ({
+    type: "tournament_announcement" as NotificationType,
+    title: `[${tournamentName}] Announcement`,
+    message: announcement,
+  }),
+
+  refereeInvitation: (tournamentName: string) => ({
+    type: "referee_invitation" as NotificationType,
+    title: "Referee Invitation",
+    message: `You have been invited to referee at "${tournamentName}"`,
+  }),
+};
+
+// ─── Service ──────────────────────────────────────────────────────────────────
+
+class NotificationService {
+  private io: SocketIOServer | null = null;
+
+  // socketId → userId (reverse map để disconnect lookup O(1))
+  private socketToUser = new Map<string, string>();
+
+  // userId → socketId
+  private userToSocket = new Map<string, string>();
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  initialize(httpServer: HTTPServer): void {
+    if (this.io) {
+      console.warn("NotificationService already initialized — skipping");
+      return;
+    }
+
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: "*", // Configure this based on your frontend URL
+        origin: CORS_ORIGIN,
         methods: ["GET", "POST"],
         credentials: true,
       },
-      pingTimeout: 60000,
-      pingInterval: 25000,
+      pingTimeout: PING_TIMEOUT,
+      pingInterval: PING_INTERVAL,
     });
 
     this.setupConnectionHandlers();
-    console.log("NotificationService initialized");
   }
 
-  /**
-   * Setup connection handlers for Socket.IO
-   */
-  private static setupConnectionHandlers(): void {
+  private setupConnectionHandlers(): void {
+    assertInitialized(this.io);
+
     this.io.on("connection", (socket: Socket) => {
-      console.log(`Client connected: ${socket.id}`);
-
-      // Handle user authentication/registration
       socket.on("register", (userId: string) => {
-        if (userId) {
-          this.connectedUsers.set(userId, socket.id);
-          socket.join(`user:${userId}`);
-          console.log(`User ${userId} registered with socket ${socket.id}`);
-          
-          // Send confirmation
-          socket.emit("registered", {
-            message: "Successfully registered for notifications",
-            userId,
-          });
+        if (!userId) return;
+
+        // Kick previous session nếu user đăng nhập từ thiết bị khác
+        const prevSocketId = this.userToSocket.get(userId);
+        if (prevSocketId && prevSocketId !== socket.id) {
+          this.userToSocket.delete(userId);
+          this.socketToUser.delete(prevSocketId);
         }
+
+        this.userToSocket.set(userId, socket.id);
+        this.socketToUser.set(socket.id, userId);
+        socket.join(userRoom(userId));
+
+        socket.emit("registered", { userId });
       });
 
-      // Handle user unregistration
       socket.on("unregister", (userId: string) => {
-        if (userId) {
-          this.connectedUsers.delete(userId);
-          socket.leave(`user:${userId}`);
-          console.log(`User ${userId} unregistered`);
-        }
+        if (!userId) return;
+        this.removeUser(userId);
+        socket.leave(userRoom(userId));
       });
 
-      // Handle join room (for group notifications)
       socket.on("join-room", (roomId: string) => {
-        socket.join(roomId);
-        console.log(`Socket ${socket.id} joined room ${roomId}`);
+        if (roomId) socket.join(roomId);
       });
 
-      // Handle leave room
       socket.on("leave-room", (roomId: string) => {
-        socket.leave(roomId);
-        console.log(`Socket ${socket.id} left room ${roomId}`);
+        if (roomId) socket.leave(roomId);
       });
 
-      // Handle disconnection
       socket.on("disconnect", () => {
-        // Remove user from connected users map
-        for (const [userId, socketId] of this.connectedUsers.entries()) {
-          if (socketId === socket.id) {
-            this.connectedUsers.delete(userId);
-            console.log(`User ${userId} disconnected`);
-            break;
-          }
+        const userId = this.socketToUser.get(socket.id);
+        if (userId) {
+          this.removeUser(userId);
         }
-        console.log(`Client disconnected: ${socket.id}`);
       });
     });
   }
 
-  /**
-   * Send notification to a specific user
-   */
-  static sendToUser(userId: string, notification: NotificationPayload): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
-    }
-
-    const payload = {
-      ...notification,
-      timestamp: notification.timestamp || new Date(),
-    };
-
-    this.io.to(`user:${userId}`).emit("notification", payload);
-    console.log(`Notification sent to user ${userId}:`, notification.type);
+  private removeUser(userId: string): void {
+    const socketId = this.userToSocket.get(userId);
+    if (socketId) this.socketToUser.delete(socketId);
+    this.userToSocket.delete(userId);
   }
 
-  /**
-   * Send notification to multiple users
-   */
-  static sendToUsers(userIds: string[], notification: NotificationPayload): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
-    }
+  // ── Send helpers ───────────────────────────────────────────────────────────
 
-    const payload = {
-      ...notification,
-      timestamp: notification.timestamp || new Date(),
-    };
-
-    userIds.forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("notification", payload);
-    });
-    
-    console.log(`Notification sent to ${userIds.length} users:`, notification.type);
+  sendToUser(userId: string, payload: NotificationPayload): void {
+    assertInitialized(this.io);
+    this.io.to(userRoom(userId)).emit("notification", withTimestamp(payload));
   }
 
-  /**
-   * Send notification to a room/group
-   */
-  static sendToRoom(roomId: string, notification: NotificationPayload): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
+  sendToUsers(userIds: string[], payload: NotificationPayload): void {
+    assertInitialized(this.io);
+    const stamped = withTimestamp(payload);
+    for (const userId of userIds) {
+      this.io.to(userRoom(userId)).emit("notification", stamped);
     }
-
-    const payload = {
-      ...notification,
-      timestamp: notification.timestamp || new Date(),
-    };
-
-    this.io.to(roomId).emit("notification", payload);
-    console.log(`Notification sent to room ${roomId}:`, notification.type);
   }
 
-  /**
-   * Broadcast notification to all connected clients
-   */
-  static broadcast(notification: NotificationPayload): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
-    }
-
-    const payload = {
-      ...notification,
-      timestamp: notification.timestamp || new Date(),
-    };
-
-    this.io.emit("notification", payload);
-    console.log(`Broadcast notification sent:`, notification.type);
+  sendToRoom(roomId: string, payload: NotificationPayload): void {
+    assertInitialized(this.io);
+    this.io.to(roomId).emit("notification", withTimestamp(payload));
   }
 
-  /**
-   * Send custom event to a specific user
-   */
-  static sendEventToUser(userId: string, event: string, data: any): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
-    }
-
-    this.io.to(`user:${userId}`).emit(event, data);
-    console.log(`Event ${event} sent to user ${userId}`);
+  broadcast(payload: NotificationPayload): void {
+    assertInitialized(this.io);
+    this.io.emit("notification", withTimestamp(payload));
   }
 
-  /**
-   * Send custom event to a room
-   */
-  static sendEventToRoom(roomId: string, event: string, data: any): void {
-    if (!this.io) {
-      console.error("Socket.IO not initialized");
-      return;
-    }
+  sendEventToUser(userId: string, event: string, data: unknown): void {
+    assertInitialized(this.io);
+    this.io.to(userRoom(userId)).emit(event, data);
+  }
 
+  sendEventToRoom(roomId: string, event: string, data: unknown): void {
+    assertInitialized(this.io);
     this.io.to(roomId).emit(event, data);
-    console.log(`Event ${event} sent to room ${roomId}`);
+  }
+
+  // ── User state ─────────────────────────────────────────────────────────────
+
+  isUserConnected(userId: string): boolean {
+    return this.userToSocket.has(userId);
+  }
+
+  getConnectedUsersCount(): number {
+    return this.userToSocket.size;
+  }
+
+  getConnectedUserIds(): string[] {
+    return Array.from(this.userToSocket.keys());
+  }
+
+  forceDisconnectUser(userId: string): void {
+    assertInitialized(this.io);
+    const socketId = this.userToSocket.get(userId);
+    if (!socketId) return;
+
+    const socket = this.io.sockets.sockets.get(socketId);
+    socket?.disconnect(true);
+    this.removeUser(userId);
   }
 
   /**
-   * Get connected users count
+   * Tạo notification và gửi realtime đồng thời
    */
-  static getConnectedUsersCount(): number {
-    return this.connectedUsers.size;
-  }
-
-  /**
-   * Check if user is connected
-   */
-  static isUserConnected(userId: string): boolean {
-    return this.connectedUsers.has(userId);
-  }
-
-  /**
-   * Get all connected user IDs
-   */
-  static getConnectedUserIds(): string[] {
-    return Array.from(this.connectedUsers.keys());
-  }
-
-  /**
-   * Disconnect a specific user
-   */
-  static disconnectUser(userId: string): void {
-    const socketId = this.connectedUsers.get(userId);
-    if (socketId && this.io) {
-      const socket = this.io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.disconnect(true);
-        this.connectedUsers.delete(userId);
-        console.log(`User ${userId} forcefully disconnected`);
-      }
+  async create(
+    userId: number,
+    payload: {
+      type: NotificationType;
+      title: string;
+      message: string;
+      referenceId?: number;
+      referenceType?: string;
     }
+  ): Promise<Notification> {
+    const notification = await Notification.create({
+      userId,
+      ...payload,
+      isRead: false,
+    });
+
+    // Gửi realtime nếu user đang online
+    this.sendToUser(String(userId), {
+      type: payload.type,
+      title: payload.title,
+      message: payload.message,
+      data: {
+        notificationId: notification.id,
+        referenceId: payload.referenceId,
+        referenceType: payload.referenceType,
+      },
+    });
+
+    return notification;
+  }
+
+  /**
+   * Gửi cho nhiều users cùng lúc
+   */
+  async createBulk(
+    userIds: number[],
+    payload: {
+      type: NotificationType;
+      title: string;
+      message: string;
+      referenceId?: number;
+      referenceType?: string;
+    }
+  ): Promise<void> {
+    await Notification.bulkCreate(
+      userIds.map((userId) => ({ userId, ...payload, isRead: false }))
+    );
+
+    this.sendToUsers(
+      userIds.map(String),
+      {
+        type: payload.type,
+        title: payload.title,
+        message: payload.message,
+        data: {
+          referenceId: payload.referenceId,
+          referenceType: payload.referenceType,
+        },
+      }
+    );
+  }
+
+  /**
+   * Đánh dấu đã đọc
+   */
+  async markAsRead(notificationId: number, userId: number): Promise<void> {
+    const notification = await Notification.findOne({
+      where: { id: notificationId, userId },
+    });
+    if (!notification) throw new Error("Notification not found");
+    if (notification.isRead) return; // idempotent
+
+    await notification.update({ isRead: true, readAt: new Date() });
+  }
+
+  /**
+   * Đánh dấu tất cả đã đọc
+   */
+  async markAllAsRead(userId: number): Promise<void> {
+    await Notification.update(
+      { isRead: true, readAt: new Date() },
+      { where: { userId, isRead: false } }
+    );
+  }
+
+  /**
+   * Lấy danh sách notifications của user
+   */
+  async getByUser(
+    userId: number,
+    options: {
+      skip?: number;
+      limit?: number;
+      isRead?: boolean;
+      type?: NotificationType;
+    } = {}
+  ): Promise<{ rows: Notification[]; count: number; unreadCount: number }> {
+    const { skip = 0, limit = 20, isRead, type } = options;
+
+    const where: Record<string, unknown> = { userId };
+    if (isRead !== undefined) where.isRead = isRead;
+    if (type) where.type = type;
+
+    const [{ rows, count }, unreadCount] = await Promise.all([
+      Notification.findAndCountAll({
+        where,
+        order: [["createdAt", "DESC"]],
+        offset: skip,
+        limit,
+        distinct: true,
+      }),
+      Notification.count({ where: { userId, isRead: false } }),
+    ]);
+
+    return { rows, count, unreadCount };
+  }
+
+  /**
+   * Xóa notifications cũ (cleanup job)
+   * Xóa notifications đã đọc sau 30 ngày
+   */
+  async cleanup(daysOld = 30): Promise<number> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - daysOld);
+
+    return await Notification.destroy({
+      where: {
+        isRead: true,
+        readAt: { [Op.lt]: cutoff },
+      },
+    });
   }
 }
 
-export default NotificationService;
+export default new NotificationService();
