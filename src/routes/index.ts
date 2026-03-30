@@ -16,6 +16,7 @@ import entryImportRoutes from "./entryImport.routes";
 import groupStandingRoutes from "./groupStanding.routes";
 import knockoutBracketRoutes from "./knockoutBracket.routes";
 import notificationRoutes from "./notification.routes";
+import paymentRoutes from "./payment.routes";
 
 const router = Router();
 
@@ -37,5 +38,6 @@ router.use("/elo-histories", eloHistoryRoutes);
 router.use("/group-standings", groupStandingRoutes);
 router.use("/knockout-brackets", knockoutBracketRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/payments", paymentRoutes);
 
 export default router;

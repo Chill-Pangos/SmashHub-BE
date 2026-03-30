@@ -388,4 +388,120 @@ router.post(
   entryController.respondToJoinRequest.bind(entryController)
 );
 
+/**
+ * @swagger
+ * /entries/{entryId}/confirm-lineup:
+ *   post:
+ *     tags: [Entries]
+ *     summary: Confirm lineup (captain only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lineup confirmed
+ */
+router.post(
+  "/:entryId/confirm-lineup",
+  authenticate,
+  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  entryController.confirmLineup.bind(entryController)
+);
+
+/**
+ * @swagger
+ * /entries/category/{categoryId}/eligible:
+ *   get:
+ *     tags: [Entries]
+ *     summary: Get eligible entries for competition
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Eligible and ineligible entries
+ */
+router.get(
+  "/category/:categoryId/eligible",
+  entryController.getEligibleEntries.bind(entryController)
+);
+
+/**
+ * @swagger
+ * /entries/category/{categoryId}/disqualify:
+ *   post:
+ *     tags: [Entries]
+ *     summary: Disqualify ineligible entries (organizer only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Ineligible entries disqualified
+ */
+router.post(
+  "/category/:categoryId/disqualify",
+  authenticate,
+  checkPermission(PERMISSIONS.ENTRIES_DELETE),
+  entryController.disqualifyIneligibleEntries.bind(entryController)
+);
+
+/**
+ * @swagger
+ * /entries/me:
+ *   get:
+ *     tags: [Entries]
+ *     summary: Get current user's entries with role (captain or member)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of user's entries with role information
+ */
+router.get(
+  "/me",
+  authenticate,
+  entryController.getUserEntries.bind(entryController)
+);
+
+/**
+ * @swagger
+ * /entries/{entryId}/my-role:
+ *   get:
+ *     tags: [Entries]
+ *     summary: Get current user's role in a specific entry
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: User's role (captain, member, or null)
+ */
+router.get(
+  "/:entryId/my-role",
+  authenticate,
+  entryController.getUserRoleInEntry.bind(entryController)
+);
+
 export default router;

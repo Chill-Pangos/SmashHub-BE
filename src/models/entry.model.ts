@@ -78,6 +78,20 @@ export default class Entry extends Model {
   })
   declare currentMemberCount: number;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: "Captain has confirmed the final lineup",
+  })
+  declare isConfirmed: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare confirmedAt?: Date;
+
   // ─── Associations ──────────────────────────────────────────────────────────
 
   @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
@@ -112,7 +126,7 @@ export default class Entry extends Model {
       requiredMemberCount > MAX_REQUIRED_MEMBERS
     ) {
       throw new Error(
-        `Required member count must be an integer between ${MIN_REQUIRED_MEMBERS} and ${MAX_REQUIRED_MEMBERS}`
+        `Required member count must be an integer between ${MIN_REQUIRED_MEMBERS} and ${MAX_REQUIRED_MEMBERS}`,
       );
     }
   }
@@ -130,7 +144,7 @@ export default class Entry extends Model {
       currentMemberCount > requiredMemberCount
     ) {
       throw new Error(
-        "Current member count must not exceed required member count"
+        "Current member count must not exceed required member count",
       );
     }
   }
@@ -141,8 +155,20 @@ export default class Entry extends Model {
 
     if (isAcceptingMembers && requiredMemberCount == null) {
       throw new Error(
-        "requiredMemberCount must be set when entry is accepting members"
+        "requiredMemberCount must be set when entry is accepting members",
       );
     }
   }
+
+  @BeforeValidate
+static validateConfirmedAt(instance: Entry): void {
+  const { isConfirmed, confirmedAt } = instance;
+
+  if (confirmedAt && !isConfirmed) {
+    throw new Error("confirmedAt can only be set when isConfirmed is true");
+  }
+  if (isConfirmed && !confirmedAt) {
+    throw new Error("confirmedAt must be set when isConfirmed is true");
+  }
+}
 }

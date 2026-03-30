@@ -290,6 +290,96 @@ export class EntryController {
       res.status(400).json({ message: "Error setting required member count", error });
     }
   }
+
+  /**
+   * 14. Confirm lineup (captain only)
+   */
+  async confirmLineup(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const captainId = this.getAuthenticatedUserId(req, res);
+      if (captainId == null) {
+        return;
+      }
+      const entryId = Number(req.params.entryId);
+
+      const entry = await entryService.confirmLineup(captainId, entryId);
+      res.status(200).json(entry);
+    } catch (error) {
+      res.status(400).json({ message: "Error confirming lineup", error });
+    }
+  }
+
+  /**
+   * 15. Get eligible entries for competition
+   */
+  async getEligibleEntries(req: Request, res: Response): Promise<void> {
+    try {
+      const categoryId = Number(req.params.categoryId);
+
+      const result = await entryService.getEligibleEntries(categoryId);
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching eligible entries", error });
+    }
+  }
+
+  /**
+   * 16. Disqualify ineligible entries (organizer only)
+   */
+  async disqualifyIneligibleEntries(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const organizerId = this.getAuthenticatedUserId(req, res);
+      if (organizerId == null) {
+        return;
+      }
+      const categoryId = Number(req.params.categoryId);
+
+      const result = await entryService.disqualifyIneligibleEntries(
+        organizerId,
+        categoryId
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(400).json({ message: "Error disqualifying entries", error });
+    }
+  }
+
+  /**
+   * 17. Get user's entries with role (member or captain)
+   */
+  async getUserEntries(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = this.getAuthenticatedUserId(req, res);
+      if (userId == null) {
+        return;
+      }
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+
+      const result = await entryService.getUserEntries(userId, { skip, limit });
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching user entries", error });
+    }
+  }
+
+  /**
+   * 18. Get user's role in a specific entry
+   */
+  async getUserRoleInEntry(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = this.getAuthenticatedUserId(req, res);
+      if (userId == null) {
+        return;
+      }
+      const entryId = Number(req.params.entryId);
+
+      const role = await entryService.getUserRoleInEntry(entryId, userId);
+      res.status(200).json({ entryId, userId, role });
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching user role in entry", error });
+    }
+  }
 }
 
 export default new EntryController();

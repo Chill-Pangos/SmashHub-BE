@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS `tournament_categories` (
   `maxMembersPerEntry` INT UNSIGNED NULL COMMENT 'Only applicable for team type. Null = no upper limit',
   `gender` ENUM('male', 'female', 'mixed') NULL,
   `isGroupStage` TINYINT(1) NOT NULL DEFAULT 0,
+  `entryFee` DECIMAL(10, 2) NULL DEFAULT 0 COMMENT 'Entry fee for this category. 0 or null = free',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -206,6 +207,8 @@ CREATE TABLE IF NOT EXISTS `entries` (
   `isAcceptingMembers` TINYINT(1) NOT NULL DEFAULT 0,
   `requiredMemberCount` INT UNSIGNED NULL,
   `currentMemberCount` INT UNSIGNED NOT NULL DEFAULT 0,
+  `isConfirmed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Captain has confirmed the final lineup',
+  `confirmedAt` DATETIME NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -248,6 +251,29 @@ CREATE TABLE IF NOT EXISTS `entry_members` (
   UNIQUE KEY `entry_members_entry_user_unique` (`entryId`, `userId`),
   CONSTRAINT `fk_entry_members_entry` FOREIGN KEY (`entryId`) REFERENCES `entries` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_entry_members_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `payments` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `entryId` INT UNSIGNED NOT NULL,
+  `amount` DECIMAL(10, 2) NOT NULL,
+  `method` ENUM('cash', 'bank_transfer', 'online') NOT NULL,
+  `status` ENUM('pending', 'completed', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
+  `proofImageUrl` VARCHAR(500) NULL COMMENT 'Required for bank_transfer method',
+  `confirmedBy` INT UNSIGNED NULL COMMENT 'Tournament organizer who confirmed the payment',
+  `confirmedAt` DATETIME NULL,
+  `transactionRef` VARCHAR(100) NULL COMMENT 'Transaction reference for online payments (Stripe/VNPay)',
+  `refundedAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `payments_entry_idx` (`entryId`),
+  INDEX `payments_status_idx` (`status`),
+  INDEX `payments_method_idx` (`method`),
+  INDEX `payments_confirmed_by_idx` (`confirmedBy`),
+  INDEX `payments_entry_status_idx` (`entryId`, `status`),
+  CONSTRAINT `fk_payments_entry` FOREIGN KEY (`entryId`) REFERENCES `entries` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_payments_confirmed_by` FOREIGN KEY (`confirmedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────────────────────────────────────

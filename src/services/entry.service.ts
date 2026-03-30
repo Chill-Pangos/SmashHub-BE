@@ -1,4 +1,4 @@
-import { Op, WhereOptions, Includeable } from "sequelize";
+import { Op, WhereOptions, Includeable, Transaction } from "sequelize";
 import { sequelize } from "../config/database";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
@@ -7,6 +7,7 @@ import Tournament from "../models/tournament.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
 import JoinRequest from "../models/joinRequest.model";
+import Payment from "../models/payment.model";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,12 @@ async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
     now > tournament.registrationEndDate
   ) {
     throw new Error("Registration is not open at this time");
+  }
+}
+
+async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
+  if (new Date() <= tournament.registrationEndDate) {
+    throw new Error("Registration must be closed before disqualifying entries");
   }
 }
 
@@ -365,72 +372,78 @@ export class EntryService {
    * 4. Lấy danh sách đội đã đăng ký (có filter)
    */
   async findByCategoryId(
-  categoryId: number,
-  options: {
-    skip?: number;
-    limit?: number;
-    isFull?: boolean;
-    isAcceptingMembers?: boolean;
-    captainName?: string;
-  } = {}
-): Promise<{ rows: Entry[]; count: number }> {
-  const { skip = 0, limit = 10, isFull, isAcceptingMembers, captainName } = options;
+    categoryId: number,
+    options: {
+      skip?: number;
+      limit?: number;
+      isFull?: boolean;
+      isAcceptingMembers?: boolean;
+      captainName?: string;
+    } = {},
+  ): Promise<{ rows: Entry[]; count: number }> {
+    const {
+      skip = 0,
+      limit = 10,
+      isFull,
+      isAcceptingMembers,
+      captainName,
+    } = options;
 
-  const where: WhereOptions = { categoryId };
+    const where: WhereOptions = { categoryId };
 
-  if (isAcceptingMembers !== undefined) {
-    where.isAcceptingMembers = isAcceptingMembers;
-  }
+    if (isAcceptingMembers !== undefined) {
+      where.isAcceptingMembers = isAcceptingMembers;
+    }
 
-  if (isFull === true) {
-    where.currentMemberCount = {
-      [Op.gte]: sequelize.col("requiredMemberCount"),
-    };
-  } else if (isFull === false) {
-    where.currentMemberCount = {
-      [Op.lt]: sequelize.col("requiredMemberCount"),
-    };
-  }
+    if (isFull === true) {
+      where.currentMemberCount = {
+        [Op.gte]: sequelize.col("requiredMemberCount"),
+      };
+    } else if (isFull === false) {
+      where.currentMemberCount = {
+        [Op.lt]: sequelize.col("requiredMemberCount"),
+      };
+    }
 
-  // Build captain include riêng để tránh where: undefined
-  const captainInclude: Includeable = captainName?.trim()
-    ? {
-        model: User,
-        as: "captain",
-        where: {
-          [Op.or]: [
-            { firstName: { [Op.like]: `%${captainName.trim()}%` } },
-            { lastName: { [Op.like]: `%${captainName.trim()}%` } },
+    // Build captain include riêng để tránh where: undefined
+    const captainInclude: Includeable = captainName?.trim()
+      ? {
+          model: User,
+          as: "captain",
+          where: {
+            [Op.or]: [
+              { firstName: { [Op.like]: `%${captainName.trim()}%` } },
+              { lastName: { [Op.like]: `%${captainName.trim()}%` } },
+            ],
+          },
+          attributes: ["id", "firstName", "lastName", "email"],
+        }
+      : {
+          model: User,
+          as: "captain",
+          attributes: ["id", "firstName", "lastName", "email"],
+        };
+
+    return await Entry.findAndCountAll({
+      where,
+      include: [
+        captainInclude,
+        {
+          model: EntryMember,
+          as: "members",
+          include: [
+            {
+              model: User,
+              attributes: ["id", "firstName", "lastName"],
+            },
           ],
         },
-        attributes: ["id", "firstName", "lastName", "email"],
-      }
-    : {
-        model: User,
-        as: "captain",
-        attributes: ["id", "firstName", "lastName", "email"],
-      };
-
-  return await Entry.findAndCountAll({
-    where,
-    include: [
-      captainInclude,
-      {
-        model: EntryMember,
-        as: "members",
-        include: [
-          {
-            model: User,
-            attributes: ["id", "firstName", "lastName"],
-          },
-        ],
-      },
-    ],
-    offset: skip,
-    limit,
-    distinct: true,
-  });
-}
+      ],
+      offset: skip,
+      limit,
+      distinct: true,
+    });
+  }
 
   /**
    * 5. Captain duyệt hoặc từ chối join request
@@ -581,7 +594,11 @@ export class EntryService {
     const entry = await Entry.findByPk(entryId, {
       include: [
         { model: TournamentCategory, include: [Tournament] },
-        { model: User, as: "captain", attributes: ["id", "firstName", "lastName", "email"] },
+        {
+          model: User,
+          as: "captain",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
         {
           model: EntryMember,
           as: "members",
@@ -624,7 +641,9 @@ export class EntryService {
     // Kiểm tra requiredMemberCount nếu thay đổi
     if (data.requiredMemberCount != null) {
       if (entry.category?.type === "single") {
-        throw new Error("Cannot change required member count for single entries");
+        throw new Error(
+          "Cannot change required member count for single entries",
+        );
       }
       if (data.requiredMemberCount < entry.currentMemberCount) {
         throw new Error(
@@ -786,9 +805,7 @@ export class EntryService {
     }
 
     if (entry.category?.type !== "team") {
-      throw new Error(
-        "Required member count can only be set for team entries",
-      );
+      throw new Error("Required member count can only be set for team entries");
     }
 
     const tournament = entry.category?.tournament!;
@@ -812,6 +829,269 @@ export class EntryService {
     }
 
     return await entry.update({ requiredMemberCount: count });
+  }
+
+  /**
+   * 14. Captain xác nhận đội hình lần cuối.
+   * Chỉ được confirm khi đã đủ thành viên và trong thời gian đăng ký.
+   */
+  async confirmLineup(captainId: number, entryId: number): Promise<Entry> {
+    const entry = await Entry.findByPk(entryId, {
+      include: [
+        { model: TournamentCategory, include: [{ model: Tournament }] },
+      ],
+    });
+    if (!entry) throw new Error("Entry not found");
+    if (entry.captainId !== captainId) {
+      throw new Error("Only the team captain can confirm the lineup");
+    }
+    if (entry.isConfirmed) {
+      throw new Error("Lineup has already been confirmed");
+    }
+
+    const tournament = entry.category?.tournament;
+    if (!tournament) throw new Error("Tournament not found");
+    await assertRegistrationOpen(tournament);
+
+    // Kiểm tra đủ thành viên
+    if (
+      entry.requiredMemberCount != null &&
+      entry.currentMemberCount < entry.requiredMemberCount
+    ) {
+      throw new Error(
+        `Cannot confirm lineup: need ${entry.requiredMemberCount} members, currently have ${entry.currentMemberCount}`,
+      );
+    }
+
+    await entry.update({ isConfirmed: true, confirmedAt: new Date() });
+    return entry;
+  }
+
+  /**
+   * 15. Lọc danh sách entry đủ điều kiện tham gia thi đấu:
+   * 1. Đủ số thành viên
+   * 2. Captain đã xác nhận đội hình
+   * 3. Đã thanh toán lệ phí (nếu category có lệ phí)
+   *
+   * Dùng bởi groupStanding.service trước khi chia bảng.
+   */
+  async getEligibleEntries(categoryId: number): Promise<{
+    eligible: Entry[];
+    ineligible: { entry: Entry; reasons: string[] }[];
+  }> {
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) throw new Error("Category not found");
+
+    const entries = await Entry.findAll({
+      where: { categoryId },
+      include: [{ model: EntryMember, as: "members" }],
+    });
+
+    const eligible: Entry[] = [];
+    const ineligible: { entry: Entry; reasons: string[] }[] = [];
+
+    for (const entry of entries) {
+      const reasons: string[] = [];
+
+      // 1. Đủ số thành viên
+      if (
+        entry.requiredMemberCount != null &&
+        entry.currentMemberCount < entry.requiredMemberCount
+      ) {
+        reasons.push(
+          `Insufficient members: ${entry.currentMemberCount}/${entry.requiredMemberCount}`,
+        );
+      }
+
+      // 2. Captain đã xác nhận đội hình
+      if (!entry.isConfirmed) {
+        reasons.push("Lineup not confirmed by captain");
+      }
+
+      // 3. Đã thanh toán lệ phí
+      if (category.entryFee && category.entryFee > 0) {
+        const payment = await Payment.findOne({
+          where: { entryId: entry.id, status: "completed" },
+        });
+        if (!payment) {
+          reasons.push("Entry fee not paid");
+        }
+      }
+
+      if (reasons.length === 0) {
+        eligible.push(entry);
+      } else {
+        ineligible.push({ entry, reasons });
+      }
+    }
+
+    return { eligible, ineligible };
+  }
+
+  /**
+   * 16. Xóa hàng loạt tất cả entry không đủ điều kiện khỏi DB.
+   * Chỉ người quản lý giải được thực hiện, sau khi đóng đăng ký.
+   * Trả về danh sách entryId đã xóa và lý do.
+   */
+  async disqualifyIneligibleEntries(
+    organizerId: number,
+    categoryId: number,
+  ): Promise<{
+    deletedCount: number;
+    deleted: { entryId: number; reasons: string[] }[];
+  }> {
+    // Kiểm tra organizer — người tạo giải hoặc có role organizer
+    const category = await getCategoryWithTournament(categoryId);
+    const tournament = category.tournament!;
+
+    if (tournament.createdBy !== organizerId) {
+      throw new Error("Only the tournament organizer can disqualify entries");
+    }
+
+    await assertRegistrationClosed(tournament);
+
+    // Lấy danh sách không đủ điều kiện
+    const { ineligible } = await this.getEligibleEntries(categoryId);
+
+    if (ineligible.length === 0) {
+      return { deletedCount: 0, deleted: [] };
+    }
+
+    const ineligibleEntryIds = ineligible.map((i) => i.entry.id);
+
+    await sequelize.transaction(async (t: Transaction) => {
+      // Xóa theo đúng thứ tự FK
+
+      // 1. JoinRequest
+      await JoinRequest.destroy({
+        where: { entryId: { [Op.in]: ineligibleEntryIds } },
+        transaction: t,
+      });
+
+      // 2. Payment
+      await Payment.destroy({
+        where: { entryId: { [Op.in]: ineligibleEntryIds } },
+        transaction: t,
+      });
+
+      // 3. EntryMember
+      await EntryMember.destroy({
+        where: { entryId: { [Op.in]: ineligibleEntryIds } },
+        transaction: t,
+      });
+
+      // 4. Entry
+      await Entry.destroy({
+        where: { id: { [Op.in]: ineligibleEntryIds } },
+        transaction: t,
+      });
+    });
+
+    return {
+      deletedCount: ineligible.length,
+      deleted: ineligible.map((i) => ({
+        entryId: i.entry.id,
+        reasons: i.reasons,
+      })),
+    };
+  }
+
+  /**
+   * 17. Lấy danh sách entries mà user tham gia (captain hoặc member) kèm role
+   */
+  async getUserEntries(
+    userId: number,
+    options: {
+      skip?: number;
+      limit?: number;
+    } = {},
+  ): Promise<{
+    rows: Array<Entry & { userRole: "captain" | "member" }>;
+    count: number;
+  }> {
+    const { skip = 0, limit = 10 } = options;
+
+    // Lấy tất cả unique entry IDs mà user tham gia
+    const userEntryIds = new Set<number>();
+
+    // 1. Entries mà user là captain
+    const captainEntries = await Entry.findAll({
+      where: { captainId: userId },
+      attributes: ["id"],
+      raw: true,
+    });
+
+    captainEntries.forEach((entry) => userEntryIds.add(entry.id));
+
+    // 2. Entries mà user là member
+    const memberEntries = await EntryMember.findAll({
+      where: { userId },
+      attributes: ["entryId"],
+      raw: true,
+    });
+
+    memberEntries.forEach((member) => userEntryIds.add(member.entryId));
+
+    const allEntryIds = Array.from(userEntryIds);
+    const count = allEntryIds.length;
+
+    if (count === 0) {
+      return { rows: [], count: 0 };
+    }
+
+    // Paginate results
+    const paginatedEntryIds = allEntryIds.slice(skip, skip + limit);
+
+    // Lấy entries với thông tin chi tiết kèm Tournament và TournamentCategory
+    const entries = await Entry.findAll({
+      where: { id: { [Op.in]: paginatedEntryIds } },
+      include: [
+        {
+          model: TournamentCategory,
+          include: [{ model: Tournament }],
+        },
+        { model: EntryMember, as: "members" },
+      ],
+    });
+
+    // Thêm role cho mỗi entry
+    const rowsWithRole = entries.map((entry) => ({
+      ...entry.toJSON(),
+      userRole: entry.captainId === userId ? ("captain" as const) : ("member" as const),
+    }));
+
+    return { rows: rowsWithRole, count };
+  }
+
+  /**
+   * 18. Lấy role của user trong một entry cụ thể
+   * Return: "captain" | "member" | null
+   */
+  async getUserRoleInEntry(entryId: number, userId: number): Promise<"captain" | "member" | null> {
+    const entry = await Entry.findByPk(entryId, {
+      attributes: ["id", "captainId"],
+    });
+
+    if (!entry) {
+      return null;
+    }
+
+    // Check if user is captain
+    if (entry.captainId === userId) {
+      return "captain";
+    }
+
+    // Check if user is member
+    const member = await EntryMember.findOne({
+      where: { entryId, userId },
+      attributes: ["id"],
+    });
+
+    if (member) {
+      return "member";
+    }
+
+    return null;
   }
 }
 
