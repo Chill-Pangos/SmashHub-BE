@@ -2,7 +2,6 @@ import { Router } from "express";
 import knockoutBracketController from "../controllers/knockoutBracket.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -39,7 +38,7 @@ const router = Router();
 router.post(
   "/generate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   knockoutBracketController.generateFromEntries.bind(knockoutBracketController)
 );
 
@@ -79,7 +78,7 @@ router.post(
 router.post(
   "/advance-winner",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  checkPermission('schedules:update'),
   knockoutBracketController.advanceWinner.bind(knockoutBracketController)
 );
 
@@ -122,7 +121,7 @@ router.post(
 router.post(
   "/generate-from-group-stage",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   knockoutBracketController.generateFromGroupStage.bind(knockoutBracketController)
 );
 
@@ -162,7 +161,7 @@ router.post(
 router.post(
   "/validate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  checkPermission('schedules:update'),
   knockoutBracketController.validateBracketIntegrity.bind(knockoutBracketController)
 );
 

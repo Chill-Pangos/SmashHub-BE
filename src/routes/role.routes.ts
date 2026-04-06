@@ -2,7 +2,6 @@ import { Router } from "express";
 import roleController from "../controllers/role.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -42,7 +41,7 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission(PERMISSIONS.ROLES_CREATE),
+  checkPermission('roles:create'),
   roleController.create.bind(roleController)
 );
 router.get("/", roleController.findAll.bind(roleController));
@@ -86,12 +85,12 @@ router.get("/", roleController.findAll.bind(roleController));
 router.get("/:id", roleController.findById.bind(roleController));
 router.put("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.ROLES_UPDATE),
+  checkPermission('roles:update'),
   roleController.update.bind(roleController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.ROLES_DELETE),
+  checkPermission('roles:delete'),
   roleController.delete.bind(roleController)
 );
 

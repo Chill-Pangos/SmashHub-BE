@@ -2,7 +2,6 @@ import { Router } from "express";
 import tournamentController from "../controllers/tournament.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -239,7 +238,7 @@ const router = Router();
  */
 router.post("/", 
   authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_CREATE),
+  checkPermission('tournaments:create'),
   tournamentController.create.bind(tournamentController)
 );
 router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tournamentController));
@@ -570,12 +569,12 @@ router.get("/search", tournamentController.findAllWithCategoriesFiltered.bind(to
 router.get("/:id", tournamentController.findByIdWithCategories.bind(tournamentController));
 router.put("/:id", 
   authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
+  checkPermission('tournaments:update'),
   tournamentController.updateWithCategories.bind(tournamentController)
 );
 router.delete("/:id", 
   authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_DELETE),
+  checkPermission('tournaments:delete'),
   tournamentController.delete.bind(tournamentController)
 );
 
@@ -636,7 +635,7 @@ router.delete("/:id",
 router.post(
   "/update-statuses",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
+  checkPermission('tournaments:update'),
   tournamentController.updateStatuses.bind(tournamentController)
 );
 
@@ -738,7 +737,7 @@ router.post(
 router.get(
   "/upcoming-changes",
   authenticate,
-  checkAnyPermission([PERMISSIONS.TOURNAMENTS_VIEW, PERMISSIONS.TOURNAMENTS_UPDATE]),
+  checkAnyPermission(['tournaments:view', 'tournaments:update']),
   tournamentController.getUpcomingChanges.bind(tournamentController)
 );
 

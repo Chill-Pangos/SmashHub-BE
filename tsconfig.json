@@ -8,8 +8,8 @@
     "declarationMap": true,
 
     // Module system
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "node16",
+    "moduleResolution": "node16",
 
     // Target & Environment
     "target": "esnext",

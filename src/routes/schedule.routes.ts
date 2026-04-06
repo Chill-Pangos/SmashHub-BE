@@ -3,7 +3,6 @@ import scheduleController from "../controllers/schedule.controller";
 import userController from "../controllers/user.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -146,7 +145,7 @@ router.get("/", scheduleController.findAll.bind(scheduleController));
  */
 router.post("/generate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   scheduleController.generateSchedule.bind(scheduleController)
 );
 
@@ -197,7 +196,7 @@ router.post("/generate",
  */
 router.post("/update-knockout",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  checkPermission('schedules:update'),
   scheduleController.updateKnockoutEntries.bind(scheduleController)
 );
 
@@ -243,7 +242,7 @@ router.post("/update-knockout",
  */
 router.post("/generate-group-stage",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   scheduleController.generateGroupStageSchedule.bind(scheduleController)
 );
 
@@ -314,7 +313,7 @@ router.post("/generate-group-stage",
  */
 router.post("/generate-complete",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   scheduleController.generateCompleteSchedule.bind(scheduleController)
 );
 
@@ -378,7 +377,7 @@ router.post("/generate-complete",
  */
 router.post("/generate-knockout-only",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   scheduleController.generateKnockoutOnlySchedule.bind(scheduleController)
 );
 
@@ -450,7 +449,7 @@ router.post("/generate-knockout-only",
  */
 router.post("/generate-knockout-stage",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   scheduleController.generateKnockoutStageSchedule.bind(scheduleController)
 );
 

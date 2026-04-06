@@ -2,7 +2,6 @@ import { Router } from "express";
 import groupStandingController from "../controllers/groupStanding.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -40,7 +39,7 @@ const router = Router();
 router.post(
   "/generate-placeholders",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
 );
 
@@ -77,7 +76,7 @@ router.post(
 router.post(
   "/random-draw",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.randomDraw.bind(groupStandingController)
 );
 
@@ -140,7 +139,7 @@ router.post(
 router.post(
   "/save-assignments",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.saveAssignments.bind(groupStandingController)
 );
 
@@ -185,7 +184,7 @@ router.post(
 router.post(
   "/calculate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  checkPermission('schedules:update'),
   groupStandingController.calculateStandings.bind(groupStandingController)
 );
 
@@ -216,7 +215,7 @@ router.post(
 router.post(
   "/matches/:matchId/sync",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  checkPermission('matches:approve_result'),
   groupStandingController.updateAfterMatch.bind(groupStandingController)
 );
 

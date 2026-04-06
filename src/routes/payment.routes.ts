@@ -2,7 +2,6 @@ import { Router } from "express";
 import paymentController from "../controllers/payment.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -64,7 +63,7 @@ router.post(
 router.post(
   "/cash",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_UPDATE),
+  checkPermission('payments:update'),
   paymentController.recordCashPayment.bind(paymentController)
 );
 
@@ -160,7 +159,7 @@ router.get(
 router.get(
   "/category/:categoryId",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_VIEW),
+  checkPermission('payments:view'),
   paymentController.getPaymentsByCategory.bind(paymentController)
 );
 
@@ -185,7 +184,7 @@ router.get(
 router.get(
   "/category/:categoryId/stats",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_VIEW),
+  checkPermission('payments:view'),
   paymentController.getPaymentStats.bind(paymentController)
 );
 
@@ -218,7 +217,7 @@ router.get(
 router.get(
   "/pending/:categoryId",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_VIEW),
+  checkPermission('payments:view'),
   paymentController.getPendingPayments.bind(paymentController)
 );
 
@@ -275,7 +274,7 @@ router.get(
 router.post(
   "/:paymentId/confirm",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_UPDATE),
+  checkPermission('payments:update'),
   paymentController.confirmPayment.bind(paymentController)
 );
 
@@ -300,7 +299,7 @@ router.post(
 router.post(
   "/:paymentId/reject",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_UPDATE),
+  checkPermission('payments:update'),
   paymentController.rejectPayment.bind(paymentController)
 );
 
@@ -325,7 +324,7 @@ router.post(
 router.post(
   "/:paymentId/refund",
   authenticate,
-  checkPermission(PERMISSIONS.PAYMENTS_UPDATE),
+  checkPermission('payments:update'),
   paymentController.refundPayment.bind(paymentController)
 );
 

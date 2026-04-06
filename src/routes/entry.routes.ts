@@ -2,7 +2,6 @@ import { Router } from "express";
 import entryController from "../controllers/entry.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -35,7 +34,7 @@ const router = Router();
 router.post(
   "/register",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  checkPermission('entries:create'),
   entryController.register.bind(entryController)
 );
 
@@ -130,13 +129,13 @@ router.get("/:entryId", entryController.getById.bind(entryController));
 router.put(
   "/:entryId",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.update.bind(entryController)
 );
 router.delete(
   "/:entryId",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_DELETE),
+  checkPermission('entries:delete'),
   entryController.delete.bind(entryController)
 );
 
@@ -170,7 +169,7 @@ router.delete(
 router.post(
   "/:entryId/add-member",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.addMember.bind(entryController)
 );
 
@@ -204,7 +203,7 @@ router.post(
 router.post(
   "/:entryId/remove-member",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.removeMember.bind(entryController)
 );
 
@@ -283,7 +282,7 @@ router.post(
 router.post(
   "/:entryId/set-required-members",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.setRequiredMemberCount.bind(entryController)
 );
 
@@ -317,7 +316,7 @@ router.post(
 router.post(
   "/:entryId/transfer-captaincy",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.transferCaptaincy.bind(entryController)
 );
 
@@ -347,7 +346,7 @@ router.post(
 router.get(
   "/:entryId/join-requests",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_VIEW),
+  checkPermission('entries:view'),
   entryController.getJoinRequests.bind(entryController)
 );
 
@@ -384,7 +383,7 @@ router.get(
 router.post(
   "/join-requests/:joinRequestId/respond",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.respondToJoinRequest.bind(entryController)
 );
 
@@ -409,7 +408,7 @@ router.post(
 router.post(
   "/:entryId/confirm-lineup",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_UPDATE),
+  checkPermission('entries:update'),
   entryController.confirmLineup.bind(entryController)
 );
 
@@ -455,7 +454,7 @@ router.get(
 router.post(
   "/category/:categoryId/disqualify",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_DELETE),
+  checkPermission('entries:delete'),
   entryController.disqualifyIneligibleEntries.bind(entryController)
 );
 

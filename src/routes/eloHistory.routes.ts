@@ -2,7 +2,6 @@ import { Router } from "express";
 import eloHistoryController from "../controllers/eloHistory.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -38,7 +37,7 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission(PERMISSIONS.ELO_MANAGE),
+  checkPermission('elo:manage'),
   eloHistoryController.create.bind(eloHistoryController)
 );
 router.get("/", eloHistoryController.findAll.bind(eloHistoryController));

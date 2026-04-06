@@ -2,7 +2,6 @@ import { Router } from "express";
 import tournamentRefereeController from "../controllers/tournamentReferee.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -45,7 +44,7 @@ const router = Router();
 router.post(
   "/invite",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  checkPermission('tournaments:manage'),
   tournamentRefereeController.inviteReferee.bind(tournamentRefereeController)
 );
 
@@ -154,7 +153,7 @@ router.post(
 router.post(
   "/cancel-invitation",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  checkPermission('tournaments:manage'),
   tournamentRefereeController.cancelInvitation.bind(tournamentRefereeController)
 );
 
@@ -194,7 +193,7 @@ router.post(
 router.post(
   "/remove",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  checkPermission('tournaments:manage'),
   tournamentRefereeController.removeReferee.bind(tournamentRefereeController)
 );
 
@@ -239,7 +238,7 @@ router.post(
 router.post(
   "/update-role",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  checkPermission('tournaments:manage'),
   tournamentRefereeController.updateRole.bind(tournamentRefereeController)
 );
 
@@ -307,7 +306,7 @@ router.get(
 router.get(
   "/tournament/:tournamentId/invitations",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
+  checkPermission('tournaments:manage'),
   tournamentRefereeController.getInvitationsByTournament.bind(tournamentRefereeController)
 );
 

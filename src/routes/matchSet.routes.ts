@@ -2,7 +2,6 @@ import { Router } from "express";
 import matchSetController from "../controllers/matchSet.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -11,7 +10,8 @@ const router = Router();
  * /match-sets:
  *   post:
  *     tags: [Match Sets]
- *     summary: Create a new match set
+ *     summary: Create a new match set with score
+ *     description: Create a new set with validated score following badminton/table tennis rules
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -20,27 +20,37 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - subMatchId
+ *               - entryAScore
+ *               - entryBScore
+ *             properties:
+ *               subMatchId:
+ *                 type: integer
+ *                 description: ID of the sub-match
+ *                 example: 1
+ *               entryAScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Final score of Entry A
+ *                 example: 11
+ *               entryBScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Final score of Entry B
+ *                 example: 9
  *     responses:
  *       201:
  *         description: Match set created successfully
  *       400:
  *         $ref: '#/components/responses/BadRequest'
- *   get:
- *     tags: [Match Sets]
- *     summary: Get all match sets
- *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of match sets
  */
-router.post("/",
+router.post(
+  "/",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_UPDATE),
-  matchSetController.create.bind(matchSetController)
+  checkPermission('matches:update'),
+  matchSetController.createSet.bind(matchSetController)
 );
-router.get("/", matchSetController.findAll.bind(matchSetController));
 
 /**
  * @swagger
@@ -57,11 +67,30 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *         $ref: '#/components/responses/NotFound'
  *   put:
  *     tags: [Match Sets]
- *     summary: Update match set
+ *     summary: Update match set score
+ *     description: Update scores for an existing set (only allowed during sub-match in progress)
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - entryAScore
+ *               - entryBScore
+ *             properties:
+ *               entryAScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 example: 11
+ *               entryBScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 example: 9
  *     responses:
  *       200:
  *         description: Match set updated
@@ -70,6 +99,7 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *   delete:
  *     tags: [Match Sets]
  *     summary: Delete match set
+ *     description: Delete the latest set (only allowed during sub-match in progress)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -78,84 +108,41 @@ router.get("/", matchSetController.findAll.bind(matchSetController));
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", matchSetController.findById.bind(matchSetController));
-router.put("/:id",
+router.get("/:id", matchSetController.getById.bind(matchSetController));
+router.put(
+  "/:id",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_UPDATE),
-  matchSetController.update.bind(matchSetController)
+  checkPermission('matches:update'),
+  matchSetController.updateSetScore.bind(matchSetController)
 );
-router.delete("/:id",
+router.delete(
+  "/:id",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_UPDATE),
-  matchSetController.delete.bind(matchSetController)
+  checkPermission('matches:update'),
+  matchSetController.deleteSet.bind(matchSetController)
 );
 
 /**
  * @swagger
- * /match-sets/match/{matchId}:
+ * /match-sets/sub-match/{subMatchId}:
  *   get:
  *     tags: [Match Sets]
- *     summary: Get match sets by match ID
+ *     summary: Get match sets by sub-match ID
+ *     description: Retrieve all sets for a specific sub-match ordered by set number
  *     parameters:
  *       - in: path
- *         name: matchId
+ *         name: subMatchId
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
+ *         description: ID of the sub-match
  *     responses:
  *       200:
  *         description: List of match sets ordered by set number
  */
 router.get(
-  "/match/:matchId",
-  matchSetController.findByMatchId.bind(matchSetController)
-);
-
-/**
- * @swagger
- * /match-sets/score:
- *   post:
- *     tags: [Match Sets]
- *     summary: Create a new match set with final score
- *     description: Create a new set with validated final score following badminton rules (must have winner - first to 11 points or win by 2 points from 10-10). Set number is automatically calculated.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - matchId
- *               - entryAScore
- *               - entryBScore
- *             properties:
- *               matchId:
- *                 type: integer
- *                 description: ID of the match
- *                 example: 1
- *               entryAScore:
- *                 type: integer
- *                 minimum: 0
- *                 description: Final score of Entry A
- *                 example: 11
- *               entryBScore:
- *                 type: integer
- *                 minimum: 0
- *                 description: Final score of Entry B
- *                 example: 9
- *     responses:
- *       201:
- *         description: Match set created successfully with validated score
- *       400:
- *         description: Invalid score (must have winner, follow badminton rules)
- */
-router.post(
-  "/score",
-  matchSetController.createSetWithScore.bind(matchSetController)
+  "/sub-match/:subMatchId",
+  matchSetController.getBySubMatchId.bind(matchSetController)
 );
 
 export default router;
