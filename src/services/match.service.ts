@@ -17,7 +17,6 @@ import User from "../models/user.model";
 import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
-import eloCalculationService from "./eloCalculation.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -238,13 +237,6 @@ export class MatchService {
       );
     }
 
-    // Update ELO
-    try {
-      await eloCalculationService.updateEloForMatch(matchId);
-    } catch (err) {
-      console.error(`ELO update failed for match ${matchId}:`, err);
-    }
-
     return instance;
   }
 
@@ -320,10 +312,10 @@ export class MatchService {
     return { matches, count };
   }
 
-  async getPendingMatchWithEloPreview(
+  async getPendingMatch(
     matchId: number,
     chiefRefereeId: number,
-  ): Promise<{ match: Match; eloPreview: unknown }> {
+  ): Promise<{ match: Match }> {
     const { instance, tournament } = await getMatchWithContext(matchId);
     await assertChiefReferee(chiefRefereeId, tournament.id);
 
@@ -333,8 +325,7 @@ export class MatchService {
       );
     }
 
-    const eloPreview = await eloCalculationService.previewEloChanges(matchId);
-    return { match: instance, eloPreview };
+    return { match: instance };
   }
 
   // ── 6. Upcoming & history cho athlete ────────────────────────────────────

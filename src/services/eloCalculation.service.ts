@@ -1,372 +1,396 @@
+// eloCalculation.service.ts
+import { Transaction } from "sequelize";
+import sequelize from "../config/database";
 import Match from "../models/match.model";
+import SubMatch from "../models/subMatch.model";
 import MatchSet from "../models/matchSet.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";
-import eloScoreService from "./eloScore.service";
-import eloHistoryService from "./eloHistory.service";
+import TournamentCategory from "../models/tournamentCategory.model";
+import Schedule from "../models/schedule.model";
+import Tournament from "../models/tournament.model";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface EloChangePreview {
+  userId: number;
+  currentElo: number;
+  expectedElo: number;
+  change: number;
+}
+
+export interface EloPreview {
+  entryA: { averageElo: number; expectedScore: number; actualScore: number };
+  entryB: { averageElo: number; expectedScore: number; actualScore: number };
+  marginMultiplier: number;
+  changes: EloChangePreview[];
+}
+
+export interface TournamentEloPreview {
+  tournamentId: number;
+  totalMatches: number;
+  changes: {
+    userId: number;
+    currentElo: number;
+    finalElo: number;
+    totalDelta: number;
+  }[];
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const K_FACTOR = 12;
+const DEFAULT_ELO = 1000;
+
+// ─── Pure ELO functions ───────────────────────────────────────────────────────
+
+function expectedScore(ratingA: number, ratingB: number): number {
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+function actualScore(winsA: number, total: number): number {
+  return total === 0 ? 0 : winsA / total;
+}
+
+function marginMultiplier(winsA: number, winsB: number): number {
+  const total = winsA + winsB;
+  return total === 0 ? 1 : 1 + Math.abs(winsA - winsB) / total;
+}
+
+function calcEloDelta(
+  current: number,
+  expected: number,
+  actual: number,
+  margin: number
+): number {
+  return Math.round(K_FACTOR * margin * (actual - expected));
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getOrCreateEloScore(
+  userId: number,
+  t?: Transaction
+): Promise<EloScore> {
+  const options: any = {
+    where: { userId },
+    defaults: { userId, score: DEFAULT_ELO },
+    transaction: t,
+  };
+  
+  // Only add lock if transaction exists
+  if (t && t.LOCK) {
+    options.lock = t.LOCK.UPDATE;
+  }
+  
+  const [score] = await EloScore.findOrCreate(options);
+  return score;
+}
+
+async function getMemberElos(
+  entryId: number,
+  t?: Transaction
+): Promise<{ userId: number; currentElo: number }[]> {
+  const options: any = {
+    where: { entryId },
+    attributes: ["userId"],
+    transaction: t,
+  };
+  
+  // Only add lock if transaction exists
+  if (t && t.LOCK) {
+    options.lock = t.LOCK.UPDATE;
+  }
+  
+  const members = await EntryMember.findAll(options);
+
+  return await Promise.all(
+    members.map(async (m) => {
+      const elo = await getOrCreateEloScore(m.userId, t);
+      return { userId: m.userId, currentElo: elo.score };
+    })
+  );
+}
+
+function averageElo(members: { currentElo: number }[]): number {
+  if (members.length === 0) return DEFAULT_ELO;
+  return members.reduce((sum, m) => sum + m.currentElo, 0) / members.length;
+}
+
+function countSubMatchResults(subMatches: SubMatch[]): {
+  entryAWins: number;
+  entryBWins: number;
+  total: number;
+} {
+  const entryAWins = subMatches.filter((s) => s.winnerTeam === "A").length;
+  const entryBWins = subMatches.filter((s) => s.winnerTeam === "B").length;
+  return { entryAWins, entryBWins, total: entryAWins + entryBWins };
+}
 
 /**
- * Service tính toán và cập nhật điểm Elo cho các vận động viên
- * Sử dụng công thức Elo cải tiến cho bóng bàn
+ * Tính delta ELO cho 1 trận — không ghi DB.
+ * currentElos là snapshot ELO tại thời điểm bắt đầu tính (trước giải).
  */
+function calcMatchDeltas(
+  match: Match,
+  entryAMemberElos: { userId: number; currentElo: number }[],
+  entryBMemberElos: { userId: number; currentElo: number }[]
+): Map<number, number> {
+  const deltas = new Map<number, number>();
+
+  const { entryAWins, entryBWins, total } = countSubMatchResults(
+    match.subMatches ?? []
+  );
+  if (total === 0) return deltas;
+
+  const avgA = averageElo(entryAMemberElos);
+  const avgB = averageElo(entryBMemberElos);
+  const margin = marginMultiplier(entryAWins, entryBWins);
+
+  const expectedA = expectedScore(avgA, avgB);
+  const expectedB = 1 - expectedA;
+  const actualA = actualScore(entryAWins, total);
+  const actualB = actualScore(entryBWins, total);
+
+  for (const { userId, currentElo } of entryAMemberElos) {
+    const delta = calcEloDelta(currentElo, expectedA, actualA, margin);
+    deltas.set(userId, (deltas.get(userId) ?? 0) + delta);
+  }
+
+  for (const { userId, currentElo } of entryBMemberElos) {
+    const delta = calcEloDelta(currentElo, expectedB, actualB, margin);
+    deltas.set(userId, (deltas.get(userId) ?? 0) + delta);
+  }
+
+  return deltas;
+}
+
+// ─── Service ──────────────────────────────────────────────────────────────────
+
 export class EloCalculationService {
-  private readonly K_FACTOR = 12; // Hệ số K theo yêu cầu
-
   /**
-   * Tính xác suất thắng theo công thức Elo chuẩn
-   * E_A = 1 / (1 + 10^((R_B - R_A) / 400))
+   * Cập nhật ELO sau khi tournament kết thúc.
+   * Tính delta từng trận, cộng dồn, ghi 1 lần per user.
    */
-  private calculateExpectedScore(ratingA: number, ratingB: number): number {
-    return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+  async updateEloForTournament(tournamentId: number): Promise<void> {
+    const matches = await this.getApprovedMatchesInTournament(tournamentId);
+
+    if (matches.length === 0) {
+      throw new Error("No approved matches found in this tournament");
+    }
+
+    // Lấy ELO snapshot trước khi tính (dùng ELO hiện tại — chưa bị giải này ảnh hưởng)
+    const userEloSnapshot = await this.buildUserEloSnapshot(matches);
+
+    // Tính tổng delta cho từng user
+    const totalDeltas = new Map<number, number>();
+
+    for (const match of matches) {
+      const entryAMembers = this.getMembersFromEntry(
+        match.entryA,
+        userEloSnapshot
+      );
+      const entryBMembers = this.getMembersFromEntry(
+        match.entryB,
+        userEloSnapshot
+      );
+
+      const deltas = calcMatchDeltas(match, entryAMembers, entryBMembers);
+
+      for (const [userId, delta] of deltas) {
+        totalDeltas.set(userId, (totalDeltas.get(userId) ?? 0) + delta);
+      }
+    }
+
+    // Ghi vào DB trong 1 transaction
+    await sequelize.transaction(async (t) => {
+      // Sử dụng matchId của trận cuối cùng trong giải làm reference
+      const referenceMatchId = matches[matches.length - 1]!.id;
+      
+      for (const [userId, totalDelta] of totalDeltas) {
+        const eloScore = await getOrCreateEloScore(userId, t);
+        const previousElo = eloScore.score;
+        const newEloValue = Math.max(0, previousElo + totalDelta);
+
+        await eloScore.update({ score: newEloValue }, { transaction: t });
+
+        await EloHistory.create(
+          {
+            userId,
+            matchId: referenceMatchId, // gắn với trận cuối cùng của giải
+            tournamentId,
+            previousElo,
+            newElo: newEloValue,
+            eloDelta: totalDelta,
+            changeReason: `Tournament ${tournamentId} completed (${matches.length} matches)`,
+          },
+          { transaction: t }
+        );
+      }
+    });
   }
 
   /**
-   * Tính kết quả thực tế theo bóng bàn (dựa trên số set)
-   * S_A = số set A thắng / tổng số set
+   * Preview thay đổi ELO của toàn giải — không ghi DB.
    */
-  private calculateActualScore(setsWon: number, totalSets: number): number {
-    if (totalSets === 0) return 0;
-    return setsWon / totalSets;
-  }
+  async previewTournamentEloChanges(
+    tournamentId: number
+  ): Promise<TournamentEloPreview> {
+    const matches = await this.getApprovedMatchesInTournament(tournamentId);
+    const userEloSnapshot = await this.buildUserEloSnapshot(matches);
 
-  /**
-   * Tính hệ số chênh lệch set (Margin Multiplier)
-   * M = 1 + |set thắng - set thua| / tổng set
-   */
-  private calculateMarginMultiplier(setsWon: number, setsLost: number): number {
-    const totalSets = setsWon + setsLost;
-    if (totalSets === 0) return 1;
-    return 1 + Math.abs(setsWon - setsLost) / totalSets;
-  }
+    const totalDeltas = new Map<number, number>();
 
-  /**
-   * Tính điểm Elo mới cho một vận động viên
-   * R'_A = R_A + K × M × (S_A - E_A)
-   */
-  private calculateNewElo(
-    currentElo: number,
-    expectedScore: number,
-    actualScore: number,
-    marginMultiplier: number
-  ): number {
-    const change = this.K_FACTOR * marginMultiplier * (actualScore - expectedScore);
-    return Math.round(currentElo + change);
-  }
+    for (const match of matches) {
+      const entryAMembers = this.getMembersFromEntry(match.entryA, userEloSnapshot);
+      const entryBMembers = this.getMembersFromEntry(match.entryB, userEloSnapshot);
+      const deltas = calcMatchDeltas(match, entryAMembers, entryBMembers);
 
-  /**
-   * Lấy điểm Elo hiện tại của một user, nếu chưa có thì tạo mới với điểm 1000
-   */
-  private async getOrCreateEloScore(userId: number): Promise<EloScore> {
-    let eloScore = await eloScoreService.findByUserId(userId);
-    
-    if (!eloScore) {
-      eloScore = await eloScoreService.create({
+      for (const [userId, delta] of deltas) {
+        totalDeltas.set(userId, (totalDeltas.get(userId) ?? 0) + delta);
+      }
+    }
+
+    const changes = Array.from(totalDeltas.entries()).map(([userId, totalDelta]) => {
+      const currentElo = userEloSnapshot.get(userId) ?? DEFAULT_ELO;
+      return {
         userId,
-        score: 1000, // Điểm Elo khởi tạo
-      });
-    }
-    
-    return eloScore;
-  }
-
-  /**
-   * Tính điểm Elo trung bình của một entry (team/đôi)
-   */
-  private async calculateEntryAverageElo(entryId: number): Promise<number> {
-    const entryMembers = await EntryMember.findAll({
-      where: { entryId },
+        currentElo,
+        finalElo: Math.max(0, currentElo + totalDelta),
+        totalDelta,
+      };
     });
-
-    if (entryMembers.length === 0) {
-      return 1000; // Điểm mặc định nếu không có thành viên
-    }
-
-    let totalElo = 0;
-    for (const member of entryMembers) {
-      const eloScore = await this.getOrCreateEloScore(member.userId);
-      totalElo += eloScore.score;
-    }
-
-    return totalElo / entryMembers.length;
-  }
-
-  /**
-   * Cập nhật điểm Elo cho tất cả các vận động viên trong một trận đấu
-   */
-  async updateEloForMatch(matchId: number): Promise<void> {
-    // Lấy thông tin trận đấu kèm theo các set
-    const match = await Match.findByPk(matchId, {
-      include: [
-        {
-          model: MatchSet,
-          order: [["setNumber", "ASC"]],
-        },
-        {
-          model: Entry,
-          as: "entryA",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-            },
-          ],
-        },
-        {
-          model: Entry,
-          as: "entryB",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!match) {
-      throw new Error("Match not found");
-    }
-
-    if (match.status !== "completed") {
-      throw new Error("Cannot update Elo for a match that is not completed");
-    }
-
-    const matchSets = match.matchSets || [];
-    if (matchSets.length === 0) {
-      throw new Error("No sets found for this match");
-    }
-
-    // Đếm số set thắng của mỗi entry
-    let entryASetsWon = 0;
-    let entryBSetsWon = 0;
-
-    matchSets.forEach((set) => {
-      if (set.entryAScore > set.entryBScore) {
-        entryASetsWon++;
-      } else if (set.entryBScore > set.entryAScore) {
-        entryBSetsWon++;
-      }
-    });
-
-    const totalSets = entryASetsWon + entryBSetsWon;
-
-    // Tính Elo trung bình của mỗi entry
-    const entryAElo = await this.calculateEntryAverageElo(match.entryAId);
-    const entryBElo = await this.calculateEntryAverageElo(match.entryBId);
-
-    // Tính các thông số chung cho trận đấu
-    const expectedScoreA = this.calculateExpectedScore(entryAElo, entryBElo);
-    const expectedScoreB = 1 - expectedScoreA; // E_B = 1 - E_A
-
-    const actualScoreA = this.calculateActualScore(entryASetsWon, totalSets);
-    const actualScoreB = this.calculateActualScore(entryBSetsWon, totalSets);
-
-    const marginMultiplier = this.calculateMarginMultiplier(
-      entryASetsWon,
-      entryBSetsWon
-    );
-
-    // Tạo change reason
-    const changeReason = `Match ${matchId}: ${entryASetsWon}-${entryBSetsWon}`;
-
-    // Cập nhật Elo cho từng thành viên của entry A
-    const entryAMembers = match.entryA?.members || [];
-    for (const member of entryAMembers) {
-      await this.updatePlayerElo(
-        member.userId,
-        matchId,
-        expectedScoreA,
-        actualScoreA,
-        marginMultiplier,
-        changeReason
-      );
-    }
-
-    // Cập nhật Elo cho từng thành viên của entry B
-    const entryBMembers = match.entryB?.members || [];
-    for (const member of entryBMembers) {
-      await this.updatePlayerElo(
-        member.userId,
-        matchId,
-        expectedScoreB,
-        actualScoreB,
-        marginMultiplier,
-        changeReason
-      );
-    }
-  }
-
-  /**
-   * Cập nhật điểm Elo cho một vận động viên cụ thể
-   */
-  private async updatePlayerElo(
-    userId: number,
-    matchId: number,
-    expectedScore: number,
-    actualScore: number,
-    marginMultiplier: number,
-    changeReason: string
-  ): Promise<void> {
-    // Lấy điểm Elo hiện tại
-    const eloScore = await this.getOrCreateEloScore(userId);
-    const previousElo = eloScore.score;
-
-    // Tính điểm Elo mới
-    const newElo = this.calculateNewElo(
-      previousElo,
-      expectedScore,
-      actualScore,
-      marginMultiplier
-    );
-
-    // Cập nhật điểm Elo
-    await eloScoreService.update(eloScore.id, { score: newElo });
-
-    // Tạo lịch sử thay đổi
-    await eloHistoryService.create({
-      matchId,
-      userId,
-      previousElo,
-      newElo,
-      changeReason,
-    });
-  }
-
-  /**
-   * Tính toán và trả về thông tin chi tiết về sự thay đổi Elo (để preview)
-   */
-  async previewEloChanges(matchId: number): Promise<{
-    entryA: { averageElo: number; expectedScore: number; actualScore: number };
-    entryB: { averageElo: number; expectedScore: number; actualScore: number };
-    marginMultiplier: number;
-    changes: Array<{
-      userId: number;
-      currentElo: number;
-      expectedElo: number;
-      change: number;
-    }>;
-  }> {
-    const match = await Match.findByPk(matchId, {
-      include: [
-        {
-          model: MatchSet,
-          order: [["setNumber", "ASC"]],
-        },
-        {
-          model: Entry,
-          as: "entryA",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-            },
-          ],
-        },
-        {
-          model: Entry,
-          as: "entryB",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-            },
-          ],
-        },
-      ],
-    });
-
-    if (!match) {
-      throw new Error("Match not found");
-    }
-
-    const matchSets = match.matchSets || [];
-    let entryASetsWon = 0;
-    let entryBSetsWon = 0;
-
-    matchSets.forEach((set) => {
-      if (set.entryAScore > set.entryBScore) {
-        entryASetsWon++;
-      } else if (set.entryBScore > set.entryAScore) {
-        entryBSetsWon++;
-      }
-    });
-
-    const totalSets = entryASetsWon + entryBSetsWon;
-
-    const entryAElo = await this.calculateEntryAverageElo(match.entryAId);
-    const entryBElo = await this.calculateEntryAverageElo(match.entryBId);
-
-    const expectedScoreA = this.calculateExpectedScore(entryAElo, entryBElo);
-    const expectedScoreB = 1 - expectedScoreA;
-
-    const actualScoreA = this.calculateActualScore(entryASetsWon, totalSets);
-    const actualScoreB = this.calculateActualScore(entryBSetsWon, totalSets);
-
-    const marginMultiplier = this.calculateMarginMultiplier(
-      entryASetsWon,
-      entryBSetsWon
-    );
-
-    const changes: Array<{
-      userId: number;
-      currentElo: number;
-      expectedElo: number;
-      change: number;
-    }> = [];
-
-    // Tính toán cho entry A
-    const entryAMembers = match.entryA?.members || [];
-    for (const member of entryAMembers) {
-      const eloScore = await this.getOrCreateEloScore(member.userId);
-      const newElo = this.calculateNewElo(
-        eloScore.score,
-        expectedScoreA,
-        actualScoreA,
-        marginMultiplier
-      );
-      changes.push({
-        userId: member.userId,
-        currentElo: eloScore.score,
-        expectedElo: newElo,
-        change: newElo - eloScore.score,
-      });
-    }
-
-    // Tính toán cho entry B
-    const entryBMembers = match.entryB?.members || [];
-    for (const member of entryBMembers) {
-      const eloScore = await this.getOrCreateEloScore(member.userId);
-      const newElo = this.calculateNewElo(
-        eloScore.score,
-        expectedScoreB,
-        actualScoreB,
-        marginMultiplier
-      );
-      changes.push({
-        userId: member.userId,
-        currentElo: eloScore.score,
-        expectedElo: newElo,
-        change: newElo - eloScore.score,
-      });
-    }
 
     return {
-      entryA: {
-        averageElo: entryAElo,
-        expectedScore: expectedScoreA,
-        actualScore: actualScoreA,
-      },
-      entryB: {
-        averageElo: entryBElo,
-        expectedScore: expectedScoreB,
-        actualScore: actualScoreB,
-      },
-      marginMultiplier,
-      changes,
+      tournamentId,
+      totalMatches: matches.length,
+      changes: changes.sort((a, b) => b.finalElo - a.finalElo),
     };
+  }
+
+  /**
+   * Preview ELO cho 1 trận cụ thể (dùng cho chief referee dashboard).
+   */
+  async previewMatchEloChanges(matchId: number): Promise<EloPreview> {
+    const match = await Match.findByPk(matchId, {
+      include: [
+        { model: SubMatch, as: "subMatches" },
+        { model: Entry, as: "entryA", include: [{ model: EntryMember, as: "members" }] },
+        { model: Entry, as: "entryB", include: [{ model: EntryMember, as: "members" }] },
+      ],
+    });
+    if (!match) throw new Error("Match not found");
+
+    const entryAMemberElos = await getMemberElos(match.entryAId);
+    const entryBMemberElos = await getMemberElos(match.entryBId);
+    const avgA = averageElo(entryAMemberElos);
+    const avgB = averageElo(entryBMemberElos);
+
+    const { entryAWins, entryBWins, total } = countSubMatchResults(
+      match.subMatches ?? []
+    );
+    const margin = marginMultiplier(entryAWins, entryBWins);
+    const expectedA = expectedScore(avgA, avgB);
+    const expectedB = 1 - expectedA;
+    const actualA = actualScore(entryAWins, total);
+    const actualB = actualScore(entryBWins, total);
+
+    const buildChanges = (
+      members: { userId: number; currentElo: number }[],
+      expected: number,
+      actual: number
+    ): EloChangePreview[] =>
+      members.map(({ userId, currentElo }) => {
+        const delta = calcEloDelta(currentElo, expected, actual, margin);
+        return {
+          userId,
+          currentElo,
+          expectedElo: currentElo + delta,
+          change: delta,
+        };
+      });
+
+    return {
+      entryA: { averageElo: avgA, expectedScore: expectedA, actualScore: actualA },
+      entryB: { averageElo: avgB, expectedScore: expectedB, actualScore: actualB },
+      marginMultiplier: margin,
+      changes: [
+        ...buildChanges(entryAMemberElos, expectedA, actualA),
+        ...buildChanges(entryBMemberElos, expectedB, actualB),
+      ],
+    };
+  }
+
+  // ── Helpers nội bộ ────────────────────────────────────────────────────────
+
+  private async getApprovedMatchesInTournament(
+    tournamentId: number
+  ): Promise<Match[]> {
+    return await Match.findAll({
+      where: { status: "completed", resultStatus: "approved" },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          required: true,
+          include: [{
+            model: TournamentCategory,
+            as: "tournamentCategory",
+            where: { tournamentId },
+            required: true,
+          }],
+        },
+        { model: SubMatch, as: "subMatches" },
+        {
+          model: Entry,
+          as: "entryA",
+          include: [{ model: EntryMember, as: "members" }],
+        },
+        {
+          model: Entry,
+          as: "entryB",
+          include: [{ model: EntryMember, as: "members" }],
+        },
+      ],
+    });
+  }
+
+  /**
+   * Build snapshot ELO hiện tại của tất cả users tham gia giải.
+   * Dùng ELO trước giải (không bị ảnh hưởng bởi các trận trong giải).
+   */
+  private async buildUserEloSnapshot(
+    matches: Match[]
+  ): Promise<Map<number, number>> {
+    const userIds = new Set<number>();
+
+    for (const match of matches) {
+      for (const m of match.entryA?.members ?? []) userIds.add(m.userId);
+      for (const m of match.entryB?.members ?? []) userIds.add(m.userId);
+    }
+
+    const snapshot = new Map<number, number>();
+
+    await Promise.all(
+      Array.from(userIds).map(async (userId) => {
+        const elo = await getOrCreateEloScore(userId);
+        snapshot.set(userId, elo.score);
+      })
+    );
+
+    return snapshot;
+  }
+
+  private getMembersFromEntry(
+    entry: Entry | undefined,
+    snapshot: Map<number, number>
+  ): { userId: number; currentElo: number }[] {
+    return (entry?.members ?? []).map((m) => ({
+      userId: m.userId,
+      currentElo: snapshot.get(m.userId) ?? DEFAULT_ELO,
+    }));
   }
 }
 

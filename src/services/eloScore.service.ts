@@ -1,46 +1,72 @@
+// eloScore.service.ts
+import { Op } from "sequelize";
 import EloScore from "../models/eloScore.model";
-import { CreateEloScoreDto, UpdateEloScoreDto } from "../dto/eloScore.dto";
+import User from "../models/user.model";
+
+const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
 
 export class EloScoreService {
-  async create(data: CreateEloScoreDto): Promise<EloScore> {
-    return await EloScore.create(data as any);
+  /**
+   * Lấy ELO của 1 user. Nếu chưa có → tạo mới với 1000 điểm.
+   * Dùng nội bộ bởi eloCalculation.service.
+   */
+  async getOrCreate(userId: number): Promise<EloScore> {
+    const [score] = await EloScore.findOrCreate({
+      where: { userId },
+      defaults: { userId, score: 1000 },
+    });
+    return score;
   }
 
-  async findAll(skip = 0, limit = 10): Promise<EloScore[]> {
-    return await EloScore.findAll({
+  async getByUserId(userId: number): Promise<EloScore> {
+    const score = await EloScore.findOne({
+      where: { userId },
+      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
+    });
+    if (!score) throw new Error("ELO score not found for this user");
+    return score;
+  }
+
+  /**
+   * Leaderboard toàn hệ thống.
+   */
+  async getLeaderboard(
+    options: { skip?: number; limit?: number } = {}
+  ): Promise<{ rows: EloScore[]; count: number }> {
+    const { skip = 0, limit = 20 } = options;
+
+    return await EloScore.findAndCountAll({
+      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
+      order: [["score", "DESC"]],
       offset: skip,
       limit,
-      order: [["score", "DESC"]],
+      distinct: true,
     });
   }
 
-  async findById(id: number): Promise<EloScore | null> {
-    return await EloScore.findByPk(id);
-  }
+  /**
+   * Leaderboard theo tournament (lấy ELO tại thời điểm đăng ký từ EntryMember).
+   */
+  async getLeaderboardByRange(
+    minScore?: number,
+    maxScore?: number,
+    options: { skip?: number; limit?: number } = {}
+  ): Promise<{ rows: EloScore[]; count: number }> {
+    const { skip = 0, limit = 20 } = options;
 
-  async findByUserId(userId: number): Promise<EloScore | null> {
-    return await EloScore.findOne({ where: { userId } });
-  }
+    const where: Record<string, unknown> = {};
+    if (minScore != null) where.score = { [Op.gte]: minScore };
+    if (maxScore != null) {
+      where.score = { ...(where.score as object), [Op.lte]: maxScore };
+    }
 
-  async update(
-    id: number,
-    data: UpdateEloScoreDto
-  ): Promise<[number, EloScore[]]> {
-    return await EloScore.update(data, {
-      where: { id },
-      returning: true,
-    });
-  }
-
-  async delete(id: number): Promise<number> {
-    return await EloScore.destroy({ where: { id } });
-  }
-
-  async getLeaderboard(skip = 0, limit = 10): Promise<EloScore[]> {
-    return await EloScore.findAll({
+    return await EloScore.findAndCountAll({
+      where,
+      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
+      order: [["score", "DESC"]],
       offset: skip,
       limit,
-      order: [["score", "DESC"]],
+      distinct: true,
     });
   }
 }
