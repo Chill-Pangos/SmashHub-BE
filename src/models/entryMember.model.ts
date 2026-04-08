@@ -69,6 +69,8 @@ export default class EntryMember extends Model {
 
   @BeforeValidate
   static validateEloAtEntry(instance: EntryMember): void {
+    if (instance.eloAtEntry === undefined) return;
+
     const { eloAtEntry } = instance;
 
     if (!Number.isInteger(eloAtEntry) || eloAtEntry < MIN_ELO || eloAtEntry > MAX_ELO) {

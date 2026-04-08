@@ -49,6 +49,8 @@ export default class Permission extends Model {
 
   @BeforeValidate
   static validateName(instance: Permission): void {
+    if (instance.name === undefined) return;
+
     const name = instance.name?.trim();
 
     if (!name) {

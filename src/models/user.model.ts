@@ -100,6 +100,9 @@ export default class User extends Model {
 
   @BeforeValidate
   static validateName(instance: User): void {
+    // Skip validation if name fields are not being updated
+    if (instance.firstName === undefined && instance.lastName === undefined) return;
+
     const firstName = instance.firstName?.trim();
     const lastName = instance.lastName?.trim();
 
@@ -119,6 +122,9 @@ export default class User extends Model {
 
   @BeforeValidate
   static validateEmail(instance: User): void {
+    // Skip validation if email is not being updated
+    if (instance.email === undefined) return;
+
     const email = instance.email?.trim();
 
     if (!email) {
@@ -134,12 +140,15 @@ export default class User extends Model {
 
   @BeforeValidate
   static validatePassword(instance: User): void {
+    // Skip validation if password is not being updated
+    if (instance.password === undefined) return;
+
     const { password } = instance;
 
     if (!password) {
       throw new Error("Password cannot be empty");
     }
-    
+
     if (password.length < 8) {
       throw new Error("Password must be at least 8 characters");
     }
@@ -147,6 +156,9 @@ export default class User extends Model {
 
   @BeforeValidate
   static validateDob(instance: User): void {
+    // Skip validation if dob is not being updated
+    if (instance.dob === undefined) return;
+
     const { dob } = instance;
 
     if (!dob) return;
@@ -175,6 +187,9 @@ export default class User extends Model {
 
   @BeforeValidate
   static validatePhoneNumber(instance: User): void {
+    // Skip validation if phoneNumber is not being updated
+    if (instance.phoneNumber === undefined) return;
+
     const { phoneNumber } = instance;
 
     if (!phoneNumber) return;

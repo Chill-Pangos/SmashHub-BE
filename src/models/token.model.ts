@@ -84,6 +84,8 @@ export default class Token extends Model {
 
   @BeforeValidate
   static validateToken(instance: Token): void {
+    if (instance.token === undefined) return;
+
     if (!instance.token?.trim()) {
       throw new Error("Token value is required");
     }
@@ -92,6 +94,8 @@ export default class Token extends Model {
   @BeforeValidate
   static validateExpiresAt(instance: Token): void {
     const { expiresAt } = instance;
+
+    if (expiresAt === undefined) return;
 
     if (!expiresAt) {
       throw new Error("Expiry time is required");
@@ -103,6 +107,8 @@ export default class Token extends Model {
 
   @BeforeValidate
   static validateBlacklistedAt(instance: Token): void {
+    if (instance.isBlacklisted === undefined && instance.blacklistedAt === undefined) return;
+
     const { isBlacklisted, blacklistedAt } = instance;
 
     if (blacklistedAt != null && !isBlacklisted) {

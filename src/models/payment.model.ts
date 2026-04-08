@@ -124,6 +124,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateAmount(instance: Payment): void {
+    if (instance.amount === undefined) return;
+
     if (instance.amount <= 0) {
       throw new Error("Payment amount must be greater than 0");
     }
@@ -131,6 +133,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateProofImage(instance: Payment): void {
+    if (instance.method === undefined && instance.proofImageUrl === undefined && instance.status === undefined) return;
+
     const { method, proofImageUrl, status } = instance;
 
     if (method === "bank_transfer" && status === "completed" && !proofImageUrl) {
@@ -146,6 +150,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateTransactionRef(instance: Payment): void {
+    if (instance.method === undefined && instance.transactionRef === undefined && instance.status === undefined) return;
+
     const { method, transactionRef } = instance;
 
     if (transactionRef && method !== "online") {
@@ -158,6 +164,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateConfirmedAt(instance: Payment): void {
+    if (instance.confirmedAt === undefined && instance.confirmedBy === undefined && instance.status === undefined) return;
+
     const { confirmedAt, confirmedBy, status } = instance;
 
     if (confirmedAt && status !== "completed") {
@@ -173,6 +181,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateRefundedAt(instance: Payment): void {
+    if (instance.refundedAt === undefined && instance.status === undefined) return;
+
     const { refundedAt, status } = instance;
 
     if (refundedAt && status !== "refunded") {
@@ -185,6 +195,8 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateManualConfirmation(instance: Payment): void {
+    if (instance.method === undefined && instance.confirmedBy === undefined) return;
+
     const { method, confirmedBy } = instance;
 
     // Online payments được xác nhận qua webhook, không cần confirmedBy

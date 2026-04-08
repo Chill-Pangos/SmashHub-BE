@@ -129,6 +129,8 @@ export default class TournamentCategory extends Model {
 
   @BeforeValidate
   static validateName(instance: TournamentCategory): void {
+    if (instance.name === undefined) return;
+
     const name = instance.name?.trim();
 
     if (!name) {
@@ -143,6 +145,8 @@ export default class TournamentCategory extends Model {
 
   @BeforeValidate
   static validateGender(instance: TournamentCategory): void {
+    if (instance.gender === undefined && instance.type === undefined) return;
+
     const { gender, type } = instance;
 
     if (gender === "mixed" && type !== "double") {
@@ -152,6 +156,8 @@ export default class TournamentCategory extends Model {
 
   @BeforeValidate
   static validateTeamFormat(instance: TournamentCategory): void {
+    if (instance.type === undefined && instance.teamFormat === undefined) return;
+
     const { type, teamFormat } = instance;
 
     if (type === "team" && !teamFormat) {
@@ -216,16 +222,22 @@ export default class TournamentCategory extends Model {
 
   @BeforeValidate
   static validateAgeRange(instance: TournamentCategory): void {
+    if (instance.minAge === undefined && instance.maxAge === undefined) return;
+
     TournamentCategory.assertRange("Age", instance.minAge, instance.maxAge);
   }
 
   @BeforeValidate
   static validateEloRange(instance: TournamentCategory): void {
+    if (instance.minElo === undefined && instance.maxElo === undefined) return;
+
     TournamentCategory.assertRange("ELO", instance.minElo, instance.maxElo);
   }
 
   @BeforeValidate
   static validateMaxMembersPerEntry(instance: TournamentCategory): void {
+    if (instance.type === undefined && instance.maxMembersPerEntry === undefined) return;
+
     const { type, maxMembersPerEntry } = instance;
 
     if (type !== "team") {

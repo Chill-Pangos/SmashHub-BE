@@ -71,6 +71,8 @@ export default class Role extends Model {
 
   @BeforeValidate
   static validateName(instance: Role): void {
+    if (instance.name === undefined) return;
+
     const name = instance.name?.trim();
 
     if (!name) {

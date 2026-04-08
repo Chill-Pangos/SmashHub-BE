@@ -133,6 +133,8 @@ export default class Entry extends Model {
 
   @BeforeValidate
   static validateCurrentMemberCount(instance: Entry): void {
+    if (instance.currentMemberCount === undefined && instance.requiredMemberCount === undefined) return;
+
     const { currentMemberCount, requiredMemberCount } = instance;
 
     if (!Number.isInteger(currentMemberCount) || currentMemberCount < 0) {
@@ -151,6 +153,8 @@ export default class Entry extends Model {
 
   @BeforeValidate
   static validateAcceptingMembers(instance: Entry): void {
+    if (instance.isAcceptingMembers === undefined && instance.requiredMemberCount === undefined) return;
+
     const { isAcceptingMembers, requiredMemberCount } = instance;
 
     if (isAcceptingMembers && requiredMemberCount == null) {
@@ -162,6 +166,8 @@ export default class Entry extends Model {
 
   @BeforeValidate
 static validateConfirmedAt(instance: Entry): void {
+  if (instance.isConfirmed === undefined && instance.confirmedAt === undefined) return;
+
   const { isConfirmed, confirmedAt } = instance;
 
   if (confirmedAt && !isConfirmed) {

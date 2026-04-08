@@ -57,9 +57,14 @@ export class TournamentController {
 
   async findById(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.findById(
-        Number(req.params.id)
-      );
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ message: "Invalid tournament ID" });
+        return;
+      }
+
+      const tournament = await tournamentService.findById(id);
       if (!tournament) {
         res.status(404).json({ message: "Tournament not found" });
         return;
@@ -72,9 +77,14 @@ export class TournamentController {
 
   async findByIdWithCategories(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.findByIdWithCategories(
-        Number(req.params.id)
-      );
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ message: "Invalid tournament ID" });
+        return;
+      }
+
+      const tournament = await tournamentService.findByIdWithCategories(id);
       if (!tournament) {
         res.status(404).json({ message: "Tournament not found" });
         return;
@@ -87,10 +97,14 @@ export class TournamentController {
 
   async update(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.update(
-        Number(req.params.id),
-        req.body
-      );
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ message: "Invalid tournament ID" });
+        return;
+      }
+
+      const tournament = await tournamentService.update(id, req.body);
       if (!tournament) {
         res.status(404).json({ message: "Tournament not found" });
         return;
@@ -103,10 +117,14 @@ export class TournamentController {
 
   async updateWithCategories(req: Request, res: Response): Promise<void> {
     try {
-      const tournament = await tournamentService.update(
-        Number(req.params.id),
-        req.body
-      );
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ message: "Invalid tournament ID" });
+        return;
+      }
+
+      const tournament = await tournamentService.update(id, req.body);
       if (!tournament) {
         res.status(404).json({ message: "Tournament not found" });
         return;
@@ -119,7 +137,14 @@ export class TournamentController {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      const deleted = await tournamentService.delete(Number(req.params.id));
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ message: "Invalid tournament ID" });
+        return;
+      }
+
+      const deleted = await tournamentService.delete(id);
       if (!deleted) {
         res.status(404).json({ message: "Tournament not found" });
         return;
@@ -142,11 +167,15 @@ export class TournamentController {
         message: "Tournament statuses updated successfully",
         data: result,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error updating tournament statuses:", error);
       res.status(500).json({
         success: false,
         message: "Error updating tournament statuses",
-        error,
+        error: {
+          message: error?.message || "Unknown error",
+          name: error?.name,
+        },
       });
     }
   }
@@ -167,11 +196,15 @@ export class TournamentController {
           timestamp: new Date().toISOString(),
         },
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error getting upcoming status changes:", error);
       res.status(500).json({
         success: false,
         message: "Error getting upcoming status changes",
-        error,
+        error: {
+          message: error?.message || "Unknown error",
+          name: error?.name,
+        },
       });
     }
   }

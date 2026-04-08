@@ -84,6 +84,8 @@ export default class Otp extends Model {
   static validateCode(instance: Otp): void {
     const { code } = instance;
 
+    if (code === undefined) return;
+
     if (!code) {
       throw new Error("OTP code is required");
     }
@@ -99,6 +101,8 @@ export default class Otp extends Model {
   static validateExpiresAt(instance: Otp): void {
     const { expiresAt } = instance;
 
+    if (expiresAt === undefined) return;
+
     if (!expiresAt) {
       throw new Error("Expiry time is required");
     }
@@ -110,6 +114,8 @@ export default class Otp extends Model {
 
   @BeforeValidate
   static validateUsedAt(instance: Otp): void {
+    if (instance.isUsed === undefined && instance.usedAt === undefined) return;
+
     const { isUsed, usedAt } = instance;
 
     if (usedAt != null && !isUsed) {

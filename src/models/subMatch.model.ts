@@ -115,6 +115,8 @@ export default class SubMatch extends Model {
 
   @BeforeValidate
   static validateSubMatchNumber(instance: SubMatch): void {
+    if (instance.subMatchNumber === undefined) return;
+
     const { subMatchNumber } = instance;
 
     if (
@@ -143,6 +145,8 @@ export default class SubMatch extends Model {
 
   @BeforeValidate
   static validateUmpire(instance: SubMatch): void {
+    if (instance.umpireId === undefined && instance.assistantUmpireId === undefined && instance.status === undefined) return;
+
     const { umpireId, assistantUmpireId, status } = instance;
 
     if (status === "in_progress" && umpireId == null) {

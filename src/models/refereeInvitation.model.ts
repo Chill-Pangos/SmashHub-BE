@@ -126,6 +126,8 @@ export default class RefereeInvitation extends Model {
 
   @BeforeValidate
   static validateExpiresAt(instance: RefereeInvitation): void {
+    if (instance.expiresAt === undefined) return;
+
     if (!instance.expiresAt) {
       throw new Error("Expiry time is required");
     }

@@ -199,6 +199,8 @@ export default class KnockoutBracket extends Model {
 
   @BeforeValidate
   static validateRoundNumber(instance: KnockoutBracket): void {
+    if (instance.roundNumber === undefined) return;
+
     const { roundNumber } = instance;
 
     if (
@@ -214,6 +216,8 @@ export default class KnockoutBracket extends Model {
 
   @BeforeValidate
   static validateBracketPosition(instance: KnockoutBracket): void {
+    if (instance.bracketPosition === undefined && instance.roundNumber === undefined) return;
+
     const { bracketPosition, roundNumber } = instance;
 
     if (!Number.isInteger(bracketPosition) || bracketPosition < MIN_BRACKET_POSITION) {
@@ -231,6 +235,8 @@ export default class KnockoutBracket extends Model {
 
   @BeforeValidate
   static validateEntries(instance: KnockoutBracket): void {
+    if (instance.entryAId === undefined && instance.entryBId === undefined) return;
+
     const { entryAId, entryBId } = instance;
 
     if (entryAId != null && entryBId != null && entryAId === entryBId) {

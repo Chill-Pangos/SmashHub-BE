@@ -95,6 +95,8 @@ export default class EloHistory extends Model {
 
   @BeforeValidate
   static validateEloValues(instance: EloHistory): void {
+    if (instance.previousElo === undefined && instance.newElo === undefined) return;
+
     const { previousElo, newElo } = instance;
 
     if (
@@ -115,6 +117,8 @@ export default class EloHistory extends Model {
 
   @BeforeValidate
   static validateEloDelta(instance: EloHistory): void {
+    if (instance.previousElo === undefined && instance.newElo === undefined && instance.eloDelta === undefined) return;
+
     const { previousElo, newElo, eloDelta } = instance;
 
     if (eloDelta !== newElo - previousElo) {
@@ -124,6 +128,8 @@ export default class EloHistory extends Model {
 
   @BeforeValidate
   static validateChangeReason(instance: EloHistory): void {
+    if (instance.changeReason === undefined) return;
+
     const trimmed = instance.changeReason?.trim();
 
     if (!trimmed) {

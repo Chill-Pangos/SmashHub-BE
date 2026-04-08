@@ -117,6 +117,8 @@ export default class Notification extends Model {
 
   @BeforeValidate
   static validateTitle(instance: Notification): void {
+    if (instance.title === undefined) return;
+
     const title = instance.title?.trim();
     if (!title) throw new Error("Notification title is required");
     if (title.length > TITLE_MAX_LENGTH) {
@@ -126,6 +128,8 @@ export default class Notification extends Model {
 
   @BeforeValidate
   static validateMessage(instance: Notification): void {
+    if (instance.message === undefined) return;
+
     const message = instance.message?.trim();
     if (!message) throw new Error("Notification message is required");
     if (message.length > MESSAGE_MAX_LENGTH) {
@@ -137,6 +141,8 @@ export default class Notification extends Model {
 
   @BeforeValidate
   static validateReadAt(instance: Notification): void {
+    if (instance.isRead === undefined && instance.readAt === undefined) return;
+
     const { isRead, readAt } = instance;
     if (readAt && !isRead) {
       throw new Error("readAt can only be set when isRead is true");

@@ -127,6 +127,8 @@ export default class GroupStanding extends Model {
 
   @BeforeValidate
   static validateGroupName(instance: GroupStanding): void {
+    if (instance.groupName === undefined) return;
+
     const trimmed = instance.groupName?.trim();
 
     if (!trimmed) {
@@ -146,6 +148,8 @@ export default class GroupStanding extends Model {
 
   @BeforeValidate
   static validateMatchStats(instance: GroupStanding): void {
+    if (instance.matchesPlayed === undefined && instance.matchesWon === undefined && instance.matchesLost === undefined) return;
+
     const { matchesPlayed, matchesWon, matchesLost } = instance;
 
     if (matchesWon + matchesLost > matchesPlayed) {
@@ -157,6 +161,8 @@ export default class GroupStanding extends Model {
 
   @BeforeValidate
   static validateSetsDiff(instance: GroupStanding): void {
+    if (instance.setsWon === undefined && instance.setsLost === undefined && instance.setsDiff === undefined) return;
+
     const { setsWon, setsLost, setsDiff } = instance;
 
     if (setsDiff !== setsWon - setsLost) {

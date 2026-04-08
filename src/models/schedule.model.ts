@@ -111,6 +111,8 @@ export default class Schedule extends Model {
   static validateScheduledAt(instance: Schedule): void {
     const { scheduledAt } = instance;
 
+    if (scheduledAt === undefined) return;
+
     if (!scheduledAt) {
       throw new Error("Scheduled time is required");
     }
@@ -124,6 +126,8 @@ export default class Schedule extends Model {
   @BeforeValidate
   static validateStageConsistency(instance: Schedule): void {
     const { stage, groupName, knockoutRound } = instance;
+
+    if (stage === undefined && groupName === undefined && knockoutRound === undefined) return;
 
     if (stage === "group") {
       if (!groupName?.trim()) {
