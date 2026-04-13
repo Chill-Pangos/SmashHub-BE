@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AppError } from "../utils/errors";
+import { AppError, formatErrorResponse } from "../utils/errors";
 
 /**
  * Global error handler middleware
@@ -8,46 +8,44 @@ export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   // Default error values
   let statusCode = 500;
   let errorCode = "INTERNAL_ERROR";
   let message = "Internal server error";
-  let errors: any[] | undefined;
 
   // Handle AppError instances
   if (err instanceof AppError) {
     statusCode = err.statusCode;
     errorCode = err.errorCode;
     message = err.message;
-
-    // Include validation errors if present
-    if ("errors" in err) {
-      errors = (err as any).errors;
-    }
   }
 
-  // Send error response
-  const errorResponse: any = {
+  // Format error response with details
+  const errorResponse = formatErrorResponse(err);
+
+  // Send error response with standardized format
+  const response: any = {
     success: false,
     error: {
+      statusCode: statusCode,
       code: errorCode,
-      message: message,
+      message: errorResponse.message,
     },
   };
 
-  // Include validation errors if present
-  if (errors && errors.length > 0) {
-    errorResponse.error.errors = errors;
+  // Include detailed information if available
+  if (errorResponse.details) {
+    response.error.details = errorResponse.details;
   }
 
   // Include stack trace in development mode
   if (process.env.NODE_ENV === "development") {
-    errorResponse.error.stack = err.stack;
+    response.error.stack = err.stack;
   }
 
-  res.status(statusCode).json(errorResponse);
+  res.status(statusCode).json(response);
 };
 
 /**
@@ -56,11 +54,12 @@ export const errorHandler = (
 export const notFoundHandler = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   res.status(404).json({
     success: false,
     error: {
+      statusCode: 404,
       code: "ROUTE_NOT_FOUND",
       message: `Route ${req.method} ${req.path} not found`,
     },

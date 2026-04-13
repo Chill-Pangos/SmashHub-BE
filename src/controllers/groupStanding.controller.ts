@@ -1,10 +1,11 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import groupStandingService, {
   GroupAssignment,
 } from "../services/groupStanding.service";
 import GroupStanding from "../models/groupStanding.model";
 import Entry from "../models/entry.model";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { UnauthorizedError, BadRequestError } from "../utils/errors";
 
 type CategoryBody = {
   categoryId?: unknown;
@@ -22,12 +23,9 @@ type CalculateStandingsBody = {
 };
 
 export class GroupStandingController {
-  private getAuthenticatedUserId(req: AuthRequest, res: Response): number | null {
+  private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
     if (req.userId == null) {
-      res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      next(new UnauthorizedError("Unauthorized"));
       return null;
     }
 
@@ -125,9 +123,9 @@ export class GroupStandingController {
   /**
    * Tạo preview phân bảng ngẫu nhiên (chưa lưu DB)
    */
-  async generatePlaceholders(req: AuthRequest, res: Response): Promise<void> {
+  async generatePlaceholders(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const chiefRefereeId = this.getAuthenticatedUserId(req, res);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) {
         return;
       }
@@ -135,11 +133,7 @@ export class GroupStandingController {
       const body = req.body as CategoryBody;
       const categoryId = this.parsePositiveInt(body.categoryId);
       if (categoryId == null) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("categoryId must be a positive integer");
       }
 
       const result = await groupStandingService.generateGroupPreview(
@@ -151,27 +145,24 @@ export class GroupStandingController {
         data: result,
         message: "Group preview generated successfully",
       });
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * Alias cho generatePlaceholders để giữ tương thích endpoint cũ
    */
-  async randomDraw(req: AuthRequest, res: Response): Promise<void> {
-    await this.generatePlaceholders(req, res);
+  async randomDraw(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    await this.generatePlaceholders(req, res, next);
   }
 
   /**
    * Lưu kết quả phân bảng vào DB
    */
-  async saveAssignments(req: AuthRequest, res: Response): Promise<void> {
+  async saveAssignments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const chiefRefereeId = this.getAuthenticatedUserId(req, res);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) {
         return;
       }
@@ -179,21 +170,13 @@ export class GroupStandingController {
       const body = req.body as SaveAssignmentsBody;
       const categoryId = this.parsePositiveInt(body.categoryId);
       if (categoryId == null) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("categoryId must be a positive integer");
       }
 
       const rawAssignments = body.groupAssignments ?? body.assignments;
       const assignments = this.normalizeAssignments(rawAssignments);
       if (assignments == null) {
-        res.status(400).json({
-          success: false,
-          message: "groupAssignments must be an array of { groupName, entryIds[] }",
-        });
-        return;
+        throw new BadRequestError("groupAssignments must be an array of { groupName, entryIds[] }");
       }
 
       const result = await groupStandingService.saveGroupAssignments(
@@ -207,31 +190,24 @@ export class GroupStandingController {
         data: result,
         message: "Group assignments saved successfully",
       });
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * Cập nhật standings sau khi 1 trận group stage hoàn thành
    */
-  async updateAfterMatch(req: AuthRequest, res: Response): Promise<void> {
+  async updateAfterMatch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const chiefRefereeId = this.getAuthenticatedUserId(req, res);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) {
         return;
       }
 
       const matchId = this.parsePositiveInt(req.params.matchId);
       if (matchId == null) {
-        res.status(400).json({
-          success: false,
-          message: "matchId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("matchId must be a positive integer");
       }
 
       await groupStandingService.updateStandingsAfterMatch(chiefRefereeId, matchId);
@@ -240,20 +216,17 @@ export class GroupStandingController {
         success: true,
         message: "Group standings updated successfully",
       });
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * Tính lại vị trí trong bảng
    */
-  async calculateStandings(req: AuthRequest, res: Response): Promise<void> {
+  async calculateStandings(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const chiefRefereeId = this.getAuthenticatedUserId(req, res);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) {
         return;
       }
@@ -261,11 +234,7 @@ export class GroupStandingController {
       const body = req.body as CalculateStandingsBody;
       const categoryId = this.parsePositiveInt(body.categoryId);
       if (categoryId == null) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("categoryId must be a positive integer");
       }
 
       const groupName =
@@ -278,11 +247,7 @@ export class GroupStandingController {
         : await this.getCategoryGroups(categoryId);
 
       if (groupsToRecalculate.length === 0) {
-        res.status(404).json({
-          success: false,
-          message: "No group standings found for this category",
-        });
-        return;
+        throw new BadRequestError("No group standings found for this category");
       }
 
       for (const currentGroupName of groupsToRecalculate) {
@@ -296,26 +261,19 @@ export class GroupStandingController {
         data: result,
         message: "Group standings recalculated successfully",
       });
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * Lấy standings của category
    */
-  async getStandings(req: Request, res: Response): Promise<void> {
+  async getStandings(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = this.parsePositiveInt(req.params.categoryId);
       if (categoryId == null) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("categoryId must be a positive integer");
       }
 
       const groupName =
@@ -329,26 +287,19 @@ export class GroupStandingController {
         success: true,
         data: result,
       });
-    } catch (error: unknown) {
-      res.status(500).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * Lấy danh sách đội vào vòng sau
    */
-  async getQualifiedTeams(req: Request, res: Response): Promise<void> {
+  async getQualifiedTeams(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = this.parsePositiveInt(req.params.categoryId);
       if (categoryId == null) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("categoryId must be a positive integer");
       }
 
       const rawQualifierCount =
@@ -357,11 +308,7 @@ export class GroupStandingController {
         rawQualifierCount == null ? 2 : Number(rawQualifierCount);
 
       if (!Number.isInteger(qualifiersPerGroup) || qualifiersPerGroup < 1) {
-        res.status(400).json({
-          success: false,
-          message: "qualifiersPerGroup must be a positive integer",
-        });
-        return;
+        throw new BadRequestError("qualifiersPerGroup must be a positive integer");
       }
 
       const result = await groupStandingService.getQualifiers(
@@ -373,11 +320,8 @@ export class GroupStandingController {
         success: true,
         data: result,
       });
-    } catch (error: unknown) {
-      res.status(400).json({
-        success: false,
-        message: this.getErrorMessage(error),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }

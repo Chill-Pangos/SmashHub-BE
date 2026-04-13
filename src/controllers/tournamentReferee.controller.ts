@@ -1,20 +1,18 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import tournamentRefereeService from "../services/tournamentReferee.service";
+import { BadRequestError } from "../utils/errors";
 
 export class TournamentRefereeController {
   // ── 1. Organizer sends invitation ───────────────────────────────────────
 
-  async inviteReferee(req: AuthRequest, res: Response): Promise<void> {
+  async inviteReferee(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId, refereeId, role } = req.body;
 
       if (!tournamentId || !refereeId || !role) {
-        res.status(400).json({
-          message: "Missing required fields: tournamentId, refereeId, role"
-        });
-        return;
+        throw new BadRequestError("Missing required fields: tournamentId, refereeId, role");
       }
 
       const invitation = await tournamentRefereeService.inviteReferee(
@@ -24,21 +22,20 @@ export class TournamentRefereeController {
         role
       );
       res.status(201).json(invitation);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message || "Error sending invitation" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 2. Referee accepts invitation ───────────────────────────────────────
 
-  async acceptInvitation(req: AuthRequest, res: Response): Promise<void> {
+  async acceptInvitation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = (req as AuthRequest).userId!;
       const { invitationId } = req.body;
 
       if (!invitationId) {
-        res.status(400).json({ message: "Missing required field: invitationId" });
-        return;
+        throw new BadRequestError("Missing required field: invitationId");
       }
 
       const referee = await tournamentRefereeService.acceptInvitation(
@@ -46,22 +43,20 @@ export class TournamentRefereeController {
         invitationId
       );
       res.status(200).json(referee);
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error accepting invitation" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 3. Referee rejects invitation ───────────────────────────────────────
 
-  async rejectInvitation(req: AuthRequest, res: Response): Promise<void> {
+  async rejectInvitation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = (req as AuthRequest).userId!;
       const { invitationId, rejectionReason } = req.body;
 
       if (!invitationId) {
-        res.status(400).json({ message: "Missing required field: invitationId" });
-        return;
+        throw new BadRequestError("Missing required field: invitationId");
       }
 
       const invitation = await tournamentRefereeService.rejectInvitation(
@@ -70,22 +65,20 @@ export class TournamentRefereeController {
         rejectionReason
       );
       res.status(200).json(invitation);
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error rejecting invitation" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 4. Organizer cancels invitation ────────────────────────────────────
 
-  async cancelInvitation(req: AuthRequest, res: Response): Promise<void> {
+  async cancelInvitation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { invitationId } = req.body;
 
       if (!invitationId) {
-        res.status(400).json({ message: "Missing required field: invitationId" });
-        return;
+        throw new BadRequestError("Missing required field: invitationId");
       }
 
       const invitation = await tournamentRefereeService.cancelInvitation(
@@ -93,24 +86,20 @@ export class TournamentRefereeController {
         invitationId
       );
       res.status(200).json(invitation);
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error cancelling invitation" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 5. Organizer removes referee from tournament ────────────────────────
 
-  async removeReferee(req: AuthRequest, res: Response): Promise<void> {
+  async removeReferee(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId, refereeId } = req.body;
 
       if (!tournamentId || !refereeId) {
-        res.status(400).json({
-          message: "Missing required fields: tournamentId, refereeId"
-        });
-        return;
+        throw new BadRequestError("Missing required fields: tournamentId, refereeId");
       }
 
       await tournamentRefereeService.removeReferee(
@@ -119,24 +108,20 @@ export class TournamentRefereeController {
         refereeId
       );
       res.status(204).send();
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error removing referee" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 6. Organizer updates referee role ──────────────────────────────────
 
-  async updateRole(req: AuthRequest, res: Response): Promise<void> {
+  async updateRole(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId, refereeId, newRole } = req.body;
 
       if (!tournamentId || !refereeId || !newRole) {
-        res.status(400).json({
-          message: "Missing required fields: tournamentId, refereeId, newRole"
-        });
-        return;
+        throw new BadRequestError("Missing required fields: tournamentId, refereeId, newRole");
       }
 
       const referee = await tournamentRefereeService.updateRole(
@@ -146,15 +131,14 @@ export class TournamentRefereeController {
         newRole
       );
       res.status(200).json(referee);
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error updating role" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 7. Get referees by tournament ──────────────────────────────────────
 
-  async getRefereesByTournament(req: Request, res: Response): Promise<void> {
+  async getRefereesByTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { tournamentId } = req.params;
       const role = req.query.role as string | undefined;
@@ -164,14 +148,14 @@ export class TournamentRefereeController {
         role as any
       );
       res.status(200).json(referees);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message || "Error fetching referees" });
+    } catch (error) {
+      next(error);
     }
   }
 
   // ── 8. Get invitations by tournament (organizer only) ───────────────────
 
-  async getInvitationsByTournament(req: AuthRequest, res: Response): Promise<void> {
+  async getInvitationsByTournament(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId } = req.params;
@@ -183,9 +167,8 @@ export class TournamentRefereeController {
         status as any
       );
       res.status(200).json(invitations);
-    } catch (error: any) {
-      const statusCode = error.message.includes("not found") ? 404 : 400;
-      res.status(statusCode).json({ message: error.message || "Error fetching invitations" });
+    } catch (error) {
+      next(error);
     }
   }
 }

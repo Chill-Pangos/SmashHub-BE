@@ -1,29 +1,29 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import tournamentService from "../services/tournament.service";
+import { BadRequestError, NotFoundError } from "../utils/errors";
 
 export class TournamentController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // Get user ID from authenticated request
       const userId = (req as any).user?.id;
       if (!userId) {
-        res.status(401).json({ message: "Unauthorized - User not authenticated" });
-        return;
+        throw new BadRequestError("Unauthorized - User not authenticated");
       }
-      
+
       const tournamentData = {
         ...req.body,
         createdBy: userId,
       };
-      
+
       const tournament = await tournamentService.create(tournamentData);
       res.status(201).json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Error creating tournament", error });
+      next(error);
     }
   }
 
-  async findAllWithCategoriesFiltered(req: Request, res: Response): Promise<void> {
+  async findAllWithCategoriesFiltered(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
@@ -51,107 +51,97 @@ export class TournamentController {
 
       res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching tournaments with filters", error });
+      next(error);
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
 
       if (isNaN(id) || id <= 0) {
-        res.status(400).json({ message: "Invalid tournament ID" });
-        return;
+        throw new BadRequestError("Invalid tournament ID");
       }
 
       const tournament = await tournamentService.findById(id);
       if (!tournament) {
-        res.status(404).json({ message: "Tournament not found" });
-        return;
+        throw new NotFoundError("Tournament not found");
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching tournament", error });
+      next(error);
     }
   }
 
-  async findByIdWithCategories(req: Request, res: Response): Promise<void> {
+  async findByIdWithCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
 
       if (isNaN(id) || id <= 0) {
-        res.status(400).json({ message: "Invalid tournament ID" });
-        return;
+        throw new BadRequestError("Invalid tournament ID");
       }
 
       const tournament = await tournamentService.findByIdWithCategories(id);
       if (!tournament) {
-        res.status(404).json({ message: "Tournament not found" });
-        return;
+        throw new NotFoundError("Tournament not found");
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching tournament with categories", error });
+      next(error);
     }
   }
 
-  async update(req: Request, res: Response): Promise<void> {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
 
       if (isNaN(id) || id <= 0) {
-        res.status(400).json({ message: "Invalid tournament ID" });
-        return;
+        throw new BadRequestError("Invalid tournament ID");
       }
 
       const tournament = await tournamentService.update(id, req.body);
       if (!tournament) {
-        res.status(404).json({ message: "Tournament not found" });
-        return;
+        throw new NotFoundError("Tournament not found");
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Error updating tournament", error });
+      next(error);
     }
   }
 
-  async updateWithCategories(req: Request, res: Response): Promise<void> {
+  async updateWithCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
 
       if (isNaN(id) || id <= 0) {
-        res.status(400).json({ message: "Invalid tournament ID" });
-        return;
+        throw new BadRequestError("Invalid tournament ID");
       }
 
       const tournament = await tournamentService.update(id, req.body);
       if (!tournament) {
-        res.status(404).json({ message: "Tournament not found" });
-        return;
+        throw new NotFoundError("Tournament not found");
       }
       res.status(200).json(tournament);
     } catch (error) {
-      res.status(400).json({ message: "Error updating tournament with categories", error });
+      next(error);
     }
   }
 
-  async delete(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
 
       if (isNaN(id) || id <= 0) {
-        res.status(400).json({ message: "Invalid tournament ID" });
-        return;
+        throw new BadRequestError("Invalid tournament ID");
       }
 
       const deleted = await tournamentService.delete(id);
       if (!deleted) {
-        res.status(404).json({ message: "Tournament not found" });
-        return;
+        throw new NotFoundError("Tournament not found");
       }
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting tournament", error });
+      next(error);
     }
   }
 
@@ -159,7 +149,7 @@ export class TournamentController {
    * Manually trigger tournament status update
    * POST /tournaments/update-statuses
    */
-  async updateStatuses(req: Request, res: Response): Promise<void> {
+  async updateStatuses(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await tournamentService.updateTournamentStatuses();
       res.status(200).json({
@@ -167,16 +157,8 @@ export class TournamentController {
         message: "Tournament statuses updated successfully",
         data: result,
       });
-    } catch (error: any) {
-      console.error("Error updating tournament statuses:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error updating tournament statuses",
-        error: {
-          message: error?.message || "Unknown error",
-          name: error?.name,
-        },
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -184,7 +166,7 @@ export class TournamentController {
    * Get upcoming tournament status changes
    * GET /tournaments/upcoming-changes?hours=24
    */
-  async getUpcomingChanges(req: Request, res: Response): Promise<void> {
+  async getUpcomingChanges(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const hours = parseInt(req.query.hours as string) || 24;
       const result = await tournamentService.getUpcomingStatusChanges(hours);
@@ -196,16 +178,8 @@ export class TournamentController {
           timestamp: new Date().toISOString(),
         },
       });
-    } catch (error: any) {
-      console.error("Error getting upcoming status changes:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error getting upcoming status changes",
-        error: {
-          message: error?.message || "Unknown error",
-          name: error?.name,
-        },
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }

@@ -1,8 +1,9 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import scheduleService from "../services/schedule.service";
+import { BadRequestError } from "../utils/errors";
 
 export class ScheduleController {
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
@@ -11,37 +12,26 @@ export class ScheduleController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
-  
-  async generateGroupStageSchedule(req: Request, res: Response): Promise<void> {
+
+  async generateGroupStageSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId, startDate } = req.body;
-      
+
       if (!categoryId || !startDate) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId and startDate are required",
-        });
-        return;
+        throw new BadRequestError("categoryId and startDate are required");
       }
 
       const start = new Date(startDate);
       if (isNaN(start.getTime())) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid startDate",
-        });
-        return;
+        throw new BadRequestError("Invalid startDate");
       }
 
       const result = await scheduleService.generateGroupStageSchedule(categoryId, start);
-      
+
       res.status(201).json({
         success: true,
         message: "Group stage schedule created successfully",
@@ -52,34 +42,23 @@ export class ScheduleController {
           matches: result.matches,
         },
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error creating schedule",
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
-  
-  async generateCompleteSchedule(req: Request, res: Response): Promise<void> {
+
+  async generateCompleteSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId, startDate } = req.body;
 
       if (!categoryId || !startDate) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId and startDate are required",
-        });
-        return;
+        throw new BadRequestError("categoryId and startDate are required");
       }
 
       const start = new Date(startDate);
       if (isNaN(start.getTime())) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid startDate",
-        });
-        return;
+        throw new BadRequestError("Invalid startDate");
       }
 
       const result = await scheduleService.generateCompleteSchedule(categoryId, start);
@@ -94,34 +73,23 @@ export class ScheduleController {
           matches: result.matches,
         },
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error generating complete schedule",
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
-  
-  async generateKnockoutOnlySchedule(req: Request, res: Response): Promise<void> {
+
+  async generateKnockoutOnlySchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId, startDate } = req.body;
 
       if (!categoryId || !startDate) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId and startDate are required",
-        });
-        return;
+        throw new BadRequestError("categoryId and startDate are required");
       }
 
       const start = new Date(startDate);
       if (isNaN(start.getTime())) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid startDate",
-        });
-        return;
+        throw new BadRequestError("Invalid startDate");
       }
 
       const result = await scheduleService.generateKnockoutOnlySchedule(categoryId, start);
@@ -136,38 +104,27 @@ export class ScheduleController {
           matches: result.matches,
         },
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error generating knockout-only schedule",
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
-  
-  async generateKnockoutStageSchedule(req: Request, res: Response): Promise<void> {
+
+  async generateKnockoutStageSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId, startDate } = req.body;
-      
+
       if (!categoryId || !startDate) {
-        res.status(400).json({
-          success: false,
-          message: "categoryId and startDate are required",
-        });
-        return;
+        throw new BadRequestError("categoryId and startDate are required");
       }
 
       const start = new Date(startDate);
       if (isNaN(start.getTime())) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid startDate",
-        });
-        return;
+        throw new BadRequestError("Invalid startDate");
       }
 
       const result = await scheduleService.generateKnockoutStageSchedule(categoryId, start);
-      
+
       res.status(201).json({
         success: true,
         message: "Knockout stage schedule created successfully",
@@ -178,11 +135,8 @@ export class ScheduleController {
           matches: result.matches,
         },
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Error creating knockout schedule",
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -240,15 +194,11 @@ export class ScheduleController {
    * Get schedules by tournament category ID
    * GET /schedules/category/:categoryId
    */
-  async getSchedulesByCategoryId(req: Request, res: Response): Promise<void> {
+  async getSchedulesByCategoryId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
       if (isNaN(categoryId)) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid category ID",
-        });
-        return;
+        throw new BadRequestError("Invalid category ID");
       }
 
       const skip = Number(req.query.skip) || 0;
@@ -257,11 +207,7 @@ export class ScheduleController {
 
       // Validate stage if provided
       if (stage && !['group', 'knockout'].includes(stage)) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid stage. Must be 'group' or 'knockout'",
-        });
-        return;
+        throw new BadRequestError("Invalid stage. Must be 'group' or 'knockout'");
       }
 
       // Note: The service currently doesn't support stage filtering
@@ -281,11 +227,8 @@ export class ScheduleController {
           limit,
         },
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Error fetching schedules",
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }

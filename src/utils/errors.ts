@@ -5,17 +5,22 @@ export class AppError extends Error {
   public readonly statusCode: number;
   public readonly errorCode: string;
   public readonly isOperational: boolean;
+  public readonly details?: string;
 
   constructor(
     message: string,
     statusCode: number,
     errorCode: string,
-    isOperational = true
+    isOperational = true,
+    details?: string
   ) {
     super(message);
     this.statusCode = statusCode;
     this.errorCode = errorCode;
     this.isOperational = isOperational;
+    if (details) {
+      this.details = details;
+    }
 
     Error.captureStackTrace(this, this.constructor);
   }
@@ -142,4 +147,157 @@ export class AuthErrors {
   static EmailSendError() {
     return new InternalServerError("Unable to send email. Please try again later.", "EMAIL_SEND_ERROR");
   }
+}
+
+/**
+ * Error response formatter
+ */
+export interface ErrorResponse {
+  message: string;
+  details?: string;
+  timestamp: string;
+  errorCode?: string;
+}
+
+/**
+ * Extract error details and format response
+ */
+export function formatErrorResponse(error: unknown, contextMessage?: string): ErrorResponse {
+  const timestamp = new Date().toISOString();
+
+  // If it's an AppError, use its properties
+  if (error instanceof AppError) {
+    const response: ErrorResponse = {
+      message: error.message,
+      timestamp,
+      errorCode: error.errorCode,
+    };
+
+    if (error.details) {
+      response.details = error.details;
+    }
+
+    return response;
+  }
+
+  // If it's a ValidationError with specific errors array
+  if (error instanceof ValidationError) {
+    const errorList = error.errors
+      .map((e: any) => `${e.path || e.field}: ${e.message}`)
+      .join("; ");
+
+    const response: ErrorResponse = {
+      message: error.message,
+      timestamp,
+      errorCode: error.errorCode,
+    };
+
+    if (errorList) {
+      response.details = errorList;
+    }
+
+    return response;
+  }
+
+  // Handle standard Error
+  if (error instanceof Error) {
+    let message = error.message || contextMessage || "An error occurred";
+    let details: string | undefined;
+
+    // Extract validation error details
+    if (error.message.includes("Validation error")) {
+      details = error.message.replace("Validation error: ", "");
+    } else {
+      details = error.message;
+    }
+
+    const response: ErrorResponse = {
+      message: contextMessage || message,
+      timestamp,
+    };
+
+    if (details && details !== message) {
+      response.details = details;
+    }
+
+    return response;
+  }
+
+  // Handle Sequelize validation errors
+  if (typeof error === "object" && error !== null) {
+    const errorObj = error as any;
+
+    if (errorObj.errors && Array.isArray(errorObj.errors)) {
+      const validationErrors = errorObj.errors
+        .map((e: any) => `${e.path}: ${e.message}`)
+        .join("; ");
+
+      const response: ErrorResponse = {
+        message: contextMessage || errorObj.message || "Validation error",
+        timestamp,
+      };
+
+      if (validationErrors) {
+        response.details = validationErrors;
+      }
+
+      return response;
+    }
+
+    if (errorObj.message) {
+      const response: ErrorResponse = {
+        message: contextMessage || errorObj.message,
+        timestamp,
+      };
+
+      if (errorObj.details) {
+        response.details = errorObj.details;
+      }
+
+      return response;
+    }
+  }
+
+  // Fallback
+  return {
+    message: contextMessage || "An unexpected error occurred",
+    timestamp,
+  };
+}
+
+/**
+ * Get HTTP status code from error
+ */
+export function getErrorStatusCode(error: unknown): number {
+  if (error instanceof AppError) {
+    return error.statusCode;
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+
+    // Validation errors
+    if (message.includes("validation") || message.includes("required")) {
+      return 400;
+    }
+    // Not found
+    if (message.includes("not found")) {
+      return 404;
+    }
+    // Conflict
+    if (message.includes("already exists") || message.includes("conflict")) {
+      return 409;
+    }
+    // Unauthorized
+    if (message.includes("unauthorized") || message.includes("not authenticated")) {
+      return 401;
+    }
+    // Forbidden
+    if (message.includes("forbidden") || message.includes("permission")) {
+      return 403;
+    }
+  }
+
+  // Default to internal server error
+  return 500;
 }

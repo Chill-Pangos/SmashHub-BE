@@ -1,11 +1,12 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import entryService from "../services/entry.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { UnauthorizedError } from "../utils/errors";
 
 export class EntryController {
-  private getAuthenticatedUserId(req: AuthRequest, res: Response): number | null {
+  private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
     if (req.userId == null) {
-      res.status(401).json({ message: "Unauthorized" });
+      next(new UnauthorizedError("Unauthorized"));
       return null;
     }
 
@@ -15,9 +16,9 @@ export class EntryController {
   /**
    * 1. Register for tournament (single/double/team)
    */
-  async register(req: AuthRequest, res: Response): Promise<void> {
+  async register(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) {
         return;
       }
@@ -31,16 +32,16 @@ export class EntryController {
       );
       res.status(201).json(result);
     } catch (error) {
-      res.status(400).json({ message: "Error registering for tournament", error });
+      next(error);
     }
   }
 
   /**
    * 2. Add member to entry (captain only)
    */
-  async addMember(req: AuthRequest, res: Response): Promise<void> {
+  async addMember(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -49,16 +50,16 @@ export class EntryController {
       const member = await entryService.addMember(captainId, entryId, newMemberId);
       res.status(201).json(member);
     } catch (error) {
-      res.status(400).json({ message: "Error adding member", error });
+      next(error);
     }
   }
 
   /**
    * 3. Remove member from entry (captain only)
    */
-  async removeMember(req: AuthRequest, res: Response): Promise<void> {
+  async removeMember(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -67,14 +68,14 @@ export class EntryController {
       await entryService.removeMember(captainId, entryId, memberId);
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ message: "Error removing member", error });
+      next(error);
     }
   }
 
   /**
    * 4. Get entries by category with filters
    */
-  async findByCategoryId(req: Request, res: Response): Promise<void> {
+  async findByCategoryId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
       const skip = Number(req.query.skip) || 0;
@@ -111,16 +112,16 @@ export class EntryController {
       const result = await entryService.findByCategoryId(categoryId, options);
       res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching entries", error });
+      next(error);
     }
   }
 
   /**
    * 5. Respond to join request (captain only)
    */
-  async respondToJoinRequest(req: AuthRequest, res: Response): Promise<void> {
+  async respondToJoinRequest(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -134,16 +135,16 @@ export class EntryController {
       );
       res.status(200).json(result);
     } catch (error) {
-      res.status(400).json({ message: "Error responding to join request", error });
+      next(error);
     }
   }
 
   /**
    * 6. Get join requests for entry (captain only)
    */
-  async getJoinRequests(req: AuthRequest, res: Response): Promise<void> {
+  async getJoinRequests(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -161,29 +162,29 @@ export class EntryController {
       );
       res.status(200).json(requests);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching join requests", error });
+      next(error);
     }
   }
 
   /**
    * 7. Get entry by ID
    */
-  async getById(req: Request, res: Response): Promise<void> {
+  async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
       const entry = await entryService.getById(entryId);
       res.status(200).json(entry);
     } catch (error) {
-      res.status(404).json({ message: "Entry not found", error });
+      next(error);
     }
   }
 
   /**
    * 8. Update entry (captain only)
    */
-  async update(req: AuthRequest, res: Response): Promise<void> {
+  async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -193,16 +194,16 @@ export class EntryController {
       const entry = await entryService.update(captainId, entryId, updateData);
       res.status(200).json(entry);
     } catch (error) {
-      res.status(400).json({ message: "Error updating entry", error });
+      next(error);
     }
   }
 
   /**
    * 9. Delete entry (captain only)
    */
-  async delete(req: AuthRequest, res: Response): Promise<void> {
+  async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -211,16 +212,16 @@ export class EntryController {
       await entryService.delete(captainId, entryId);
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ message: "Error deleting entry", error });
+      next(error);
     }
   }
 
   /**
    * 10. Transfer captaincy to another member
    */
-  async transferCaptaincy(req: AuthRequest, res: Response): Promise<void> {
+  async transferCaptaincy(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const currentCaptainId = this.getAuthenticatedUserId(req, res);
+      const currentCaptainId = this.getAuthenticatedUserId(req, next);
       if (currentCaptainId == null) {
         return;
       }
@@ -233,29 +234,29 @@ export class EntryController {
       );
       res.status(200).json(entry);
     } catch (error) {
-      res.status(400).json({ message: "Error transferring captaincy", error });
+      next(error);
     }
   }
 
   /**
    * 11. Get all members of entry
    */
-  async getAllMembers(req: Request, res: Response): Promise<void> {
+  async getAllMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
       const members = await entryService.getAllMembers(entryId);
       res.status(200).json(members);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching members", error });
+      next(error);
     }
   }
 
   /**
    * 12. Leave entry (member)
    */
-  async leaveEntry(req: AuthRequest, res: Response): Promise<void> {
+  async leaveEntry(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) {
         return;
       }
@@ -264,16 +265,16 @@ export class EntryController {
       await entryService.leaveEntry(userId, entryId);
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ message: "Error leaving entry", error });
+      next(error);
     }
   }
 
   /**
    * 13. Set required member count (captain only, team entries)
    */
-  async setRequiredMemberCount(req: AuthRequest, res: Response): Promise<void> {
+  async setRequiredMemberCount(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -287,16 +288,16 @@ export class EntryController {
       );
       res.status(200).json(entry);
     } catch (error) {
-      res.status(400).json({ message: "Error setting required member count", error });
+      next(error);
     }
   }
 
   /**
    * 14. Confirm lineup (captain only)
    */
-  async confirmLineup(req: AuthRequest, res: Response): Promise<void> {
+  async confirmLineup(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const captainId = this.getAuthenticatedUserId(req, res);
+      const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) {
         return;
       }
@@ -305,30 +306,30 @@ export class EntryController {
       const entry = await entryService.confirmLineup(captainId, entryId);
       res.status(200).json(entry);
     } catch (error) {
-      res.status(400).json({ message: "Error confirming lineup", error });
+      next(error);
     }
   }
 
   /**
    * 15. Get eligible entries for competition
    */
-  async getEligibleEntries(req: Request, res: Response): Promise<void> {
+  async getEligibleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
 
       const result = await entryService.getEligibleEntries(categoryId);
       res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching eligible entries", error });
+      next(error);
     }
   }
 
   /**
    * 16. Disqualify ineligible entries (organizer only)
    */
-  async disqualifyIneligibleEntries(req: AuthRequest, res: Response): Promise<void> {
+  async disqualifyIneligibleEntries(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) {
         return;
       }
@@ -340,16 +341,16 @@ export class EntryController {
       );
       res.status(200).json(result);
     } catch (error) {
-      res.status(400).json({ message: "Error disqualifying entries", error });
+      next(error);
     }
   }
 
   /**
    * 17. Get user's entries with role (member or captain)
    */
-  async getUserEntries(req: AuthRequest, res: Response): Promise<void> {
+  async getUserEntries(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) {
         return;
       }
@@ -359,16 +360,16 @@ export class EntryController {
       const result = await entryService.getUserEntries(userId, { skip, limit });
       res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching user entries", error });
+      next(error);
     }
   }
 
   /**
    * 18. Get user's role in a specific entry
    */
-  async getUserRoleInEntry(req: AuthRequest, res: Response): Promise<void> {
+  async getUserRoleInEntry(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) {
         return;
       }
@@ -377,7 +378,7 @@ export class EntryController {
       const role = await entryService.getUserRoleInEntry(entryId, userId);
       res.status(200).json({ entryId, userId, role });
     } catch (error) {
-      res.status(500).json({ message: "Error fetching user role in entry", error });
+      next(error);
     }
   }
 }

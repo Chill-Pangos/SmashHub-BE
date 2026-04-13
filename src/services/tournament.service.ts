@@ -10,6 +10,8 @@ import {
 import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
 
+const MAX_CATEGORIES_PER_TOURNAMENT = 1;
+
 export class TournamentService {
   async create(data: CreateTournamentDto): Promise<Tournament> {
     const transaction = await sequelize.transaction();
@@ -22,21 +24,33 @@ export class TournamentService {
           tier: data.tier,
           startDate: data.startDate,
           endDate: data.endDate ? data.endDate : null,
-          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
-          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
-          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
+          registrationStartDate: data.registrationStartDate
+            ? data.registrationStartDate
+            : null,
+          registrationEndDate: data.registrationEndDate
+            ? data.registrationEndDate
+            : null,
+          bracketGenerationDate: data.bracketGenerationDate
+            ? data.bracketGenerationDate
+            : null,
           location: data.location,
           status: data.status || "upcoming",
           numberOfTables: data.numberOfTables || 1,
           createdBy: data.createdBy,
         } as any,
-        { transaction }
+        { transaction },
       );
 
       // Create tournament categories if provided
       if (data.categories && data.categories.length > 0) {
+        if (data.categories.length > MAX_CATEGORIES_PER_TOURNAMENT) {
+          throw new Error(
+            `A tournament can have at most ${MAX_CATEGORIES_PER_TOURNAMENT} categories.`,
+          );
+        }
+
         await TournamentCategory.bulkCreate(
-          data.categories.map(categoryData => ({
+          data.categories.map((categoryData) => ({
             tournamentId: tournament.id,
             name: categoryData.name,
             type: categoryData.type,
@@ -51,7 +65,7 @@ export class TournamentService {
             gender: categoryData.gender ?? null,
             isGroupStage: categoryData.isGroupStage,
           })),
-          { transaction }
+          { transaction },
         );
       }
 
@@ -69,7 +83,7 @@ export class TournamentService {
       await transaction.commit();
 
       if (!createdTournament) {
-        throw new Error('Tournament not found after creation');
+        throw new Error("Tournament not found after creation");
       }
 
       return createdTournament;
@@ -79,9 +93,7 @@ export class TournamentService {
     }
   }
 
-  async findAllWithCategoriesFiltered(
-    filters: TournamentFilterDto
-  ): Promise<{
+  async findAllWithCategoriesFiltered(filters: TournamentFilterDto): Promise<{
     tournaments: Tournament[];
     pagination: {
       total: number;
@@ -111,7 +123,7 @@ export class TournamentService {
     if (categoryFilters.gender !== undefined) {
       categoryWhere.gender = categoryFilters.gender;
     }
-    if(categoryFilters.status !== undefined) {
+    if (categoryFilters.status !== undefined) {
       categoryWhere.status = categoryFilters.status;
     }
     if (categoryFilters.isGroupStage !== undefined) {
@@ -120,26 +132,26 @@ export class TournamentService {
 
     // Determine if we should filter by category or just include all
     const hasCategoryFilters = Object.keys(categoryWhere).length > 0;
-    
+
     // Build tournament where clause
     const tournamentWhere: WhereOptions<any> = {};
-    
+
     // Add createdBy filter if provided
     if (createdBy !== undefined) {
       tournamentWhere.createdBy = createdBy;
     }
-    
+
     // If we have category filters, find tournaments that have matching categories
     if (hasCategoryFilters) {
       const matchingCategories = await TournamentCategory.findAll({
         where: categoryWhere,
-        attributes: ['tournamentId'],
+        attributes: ["tournamentId"],
       });
-      
+
       const tournamentIdsWithMatchingCategory = [
         ...new Set(matchingCategories.map((c) => c.tournamentId)),
       ];
-      
+
       if (tournamentIdsWithMatchingCategory.length === 0) {
         // No tournaments have category matching the filters
         return {
@@ -154,11 +166,11 @@ export class TournamentService {
           },
         };
       }
-      
+
       // Add to tournament where clause
       tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingCategory };
     }
-    
+
     // Build include for all categories (no filter on include)
     const includeOptions: any[] = [
       {
@@ -167,7 +179,7 @@ export class TournamentService {
         required: false, // Include all categories of the tournament
       },
     ];
-    
+
     // If userId is provided, filter tournaments where user has entries
     if (userId !== undefined) {
       // Find tournaments where user has entries
@@ -201,7 +213,9 @@ export class TournamentService {
           // Merge with existing id filter if present
           if (tournamentWhere.id && tournamentWhere.id[Op.in]) {
             const existingIds = tournamentWhere.id[Op.in];
-            const intersection = finalTournamentIds.filter(id => existingIds.includes(id));
+            const intersection = finalTournamentIds.filter((id) =>
+              existingIds.includes(id),
+            );
             if (intersection.length === 0) {
               // No overlap between filters
               return {
@@ -251,7 +265,9 @@ export class TournamentService {
     }
 
     const { count, rows } = await Tournament.findAndCountAll({
-      ...(Object.keys(tournamentWhere).length > 0 && { where: tournamentWhere }),
+      ...(Object.keys(tournamentWhere).length > 0 && {
+        where: tournamentWhere,
+      }),
       include: includeOptions,
       offset: skip,
       ...(limit && limit > 0 && { limit }),
@@ -261,7 +277,8 @@ export class TournamentService {
 
     // Calculate pagination info
     const currentLimit = limit && limit > 0 ? limit : count;
-    const currentPage = currentLimit > 0 ? Math.floor(skip / currentLimit) + 1 : 1;
+    const currentPage =
+      currentLimit > 0 ? Math.floor(skip / currentLimit) + 1 : 1;
     const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
 
     return {
@@ -301,7 +318,7 @@ export class TournamentService {
 
   async update(
     id: number,
-    data: UpdateTournamentDto
+    data: UpdateTournamentDto,
   ): Promise<Tournament | null> {
     const transaction = await sequelize.transaction();
 
@@ -319,19 +336,34 @@ export class TournamentService {
           name: data.name,
           startDate: data.startDate,
           endDate: data.endDate,
-          registrationStartDate: data.registrationStartDate ? data.registrationStartDate : null,
-          registrationEndDate: data.registrationEndDate ? data.registrationEndDate : null,
-          bracketGenerationDate: data.bracketGenerationDate ? data.bracketGenerationDate : null,
+          registrationStartDate: data.registrationStartDate
+            ? data.registrationStartDate
+            : null,
+          registrationEndDate: data.registrationEndDate
+            ? data.registrationEndDate
+            : null,
+          bracketGenerationDate: data.bracketGenerationDate
+            ? data.bracketGenerationDate
+            : null,
           location: data.location,
           numberOfTables: data.numberOfTables ?? 1,
           status: data.status,
         },
-        { transaction }
+        { transaction },
       );
+
+      if (
+        data.categories !== undefined &&
+        data.categories.length > MAX_CATEGORIES_PER_TOURNAMENT
+      ) {
+        throw new Error(
+          `Currently only ${MAX_CATEGORIES_PER_TOURNAMENT} category per tournament is allowed`,
+        );
+      }
 
       // Update or create tournament categories if provided
       if (data.categories !== undefined) {
-        // Delete existing categories 
+        // Delete existing categories
         await TournamentCategory.destroy({
           where: { tournamentId: id },
           transaction,
@@ -340,7 +372,7 @@ export class TournamentService {
         // Create new categories if provided
         if (data.categories.length > 0) {
           await TournamentCategory.bulkCreate(
-            data.categories.map(c => ({
+            data.categories.map((c) => ({
               tournamentId: id,
               name: c.name,
               type: c.type,
@@ -355,7 +387,7 @@ export class TournamentService {
               gender: c.gender ?? null,
               isGroupStage: c.isGroupStage,
             })),
-            { transaction }
+            { transaction },
           );
         }
       }
@@ -420,7 +452,7 @@ export class TournamentService {
             [Op.not]: null,
           },
         },
-      }
+      },
     );
     statuses.openedCount += openedResult[0];
 
@@ -440,7 +472,7 @@ export class TournamentService {
             [Op.not]: null,
           },
         },
-      }
+      },
     );
     statuses.closedCount += closedResult[0];
 
@@ -456,7 +488,7 @@ export class TournamentService {
             [Op.not]: null,
           },
         },
-      }
+      },
     );
     statuses.bracketsGeneratedCount += bracketsResult[0];
 
@@ -475,7 +507,7 @@ export class TournamentService {
           registrationEndDate: { [Op.lte]: now, [Op.not]: null },
           bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
         },
-      }
+      },
     );
     statuses.closedCount += skippedClosedResult[0];
 
@@ -485,10 +517,12 @@ export class TournamentService {
       { status: "brackets_generated" },
       {
         where: {
-          status: { [Op.in]: ["upcoming", "registration_open", "registration_closed"] },
+          status: {
+            [Op.in]: ["upcoming", "registration_open", "registration_closed"],
+          },
           bracketGenerationDate: { [Op.lte]: now, [Op.not]: null },
         },
-      }
+      },
     );
     statuses.bracketsGeneratedCount += skippedBracketsResult[0];
 
@@ -496,7 +530,10 @@ export class TournamentService {
       openedCount: statuses.openedCount,
       closedCount: statuses.closedCount,
       bracketsGeneratedCount: statuses.bracketsGeneratedCount,
-      totalUpdated: statuses.openedCount + statuses.closedCount + statuses.bracketsGeneratedCount,
+      totalUpdated:
+        statuses.openedCount +
+        statuses.closedCount +
+        statuses.bracketsGeneratedCount,
     };
   }
 

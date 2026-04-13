@@ -27,7 +27,7 @@ export class AuthController {
         message: "User registered successfully",
         data: result,
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -45,7 +45,7 @@ export class AuthController {
         message: "Login successful",
         data: result,
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -63,7 +63,7 @@ export class AuthController {
         message: "Token refreshed successfully",
         data: result,
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -90,7 +90,7 @@ export class AuthController {
         success: true,
         message: "Password changed successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -116,7 +116,7 @@ export class AuthController {
         success: true,
         message: "Logout successful",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -133,7 +133,7 @@ export class AuthController {
         success: true,
         message: "OTP has been sent to your email",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -150,7 +150,7 @@ export class AuthController {
         success: true,
         message: "OTP verified successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -167,7 +167,7 @@ export class AuthController {
         success: true,
         message: "Password has been reset successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -184,7 +184,7 @@ export class AuthController {
         success: true,
         message: "Verification OTP has been sent to your email",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -201,7 +201,7 @@ export class AuthController {
         success: true,
         message: "Email has been verified successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }
@@ -218,7 +218,7 @@ export class AuthController {
         success: true,
         message: "A new OTP code has been sent to your email",
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   }

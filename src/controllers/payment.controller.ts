@@ -1,11 +1,12 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { UnauthorizedError } from "../utils/errors";
 
 export class PaymentController {
-  private getAuthenticatedUserId(req: AuthRequest, res: Response): number | null {
+  private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
     if (req.userId == null) {
-      res.status(401).json({ message: "Unauthorized" });
+      next(new UnauthorizedError("Unauthorized"));
       return null;
     }
     return req.userId;
@@ -14,9 +15,9 @@ export class PaymentController {
   /**
    * 1. Create payment for entry
    */
-  async createPayment(req: AuthRequest, res: Response): Promise<void> {
+  async createPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
       const { entryId, amount, method } = req.body;
@@ -27,20 +28,17 @@ export class PaymentController {
         data: payment,
         message: "Payment created successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 2. Confirm payment (organizer)
    */
-  async confirmPayment(req: AuthRequest, res: Response): Promise<void> {
+  async confirmPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
       const paymentId = Number(req.params.paymentId);
@@ -56,20 +54,17 @@ export class PaymentController {
         data: payment,
         message: "Payment confirmed successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 3. Reject payment (organizer)
    */
-  async rejectPayment(req: AuthRequest, res: Response): Promise<void> {
+  async rejectPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
       const paymentId = Number(req.params.paymentId);
@@ -80,20 +75,17 @@ export class PaymentController {
         data: payment,
         message: "Payment rejected successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 4. Refund payment (organizer)
    */
-  async refundPayment(req: AuthRequest, res: Response): Promise<void> {
+  async refundPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
       const paymentId = Number(req.params.paymentId);
@@ -104,18 +96,15 @@ export class PaymentController {
         data: payment,
         message: "Payment refunded successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 5. Get payment by ID
    */
-  async getPaymentById(req: Request, res: Response): Promise<void> {
+  async getPaymentById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const paymentId = Number(req.params.paymentId);
 
@@ -124,18 +113,15 @@ export class PaymentController {
         success: true,
         data: payment,
       });
-    } catch (error: any) {
-      res.status(404).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 6. Get payments by entry
    */
-  async getPaymentsByEntry(req: Request, res: Response): Promise<void> {
+  async getPaymentsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
       const skip = Number(req.query.skip) || 0;
@@ -165,20 +151,17 @@ export class PaymentController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 7. Get payments by category (admin/organizer)
    */
-  async getPaymentsByCategory(req: AuthRequest, res: Response): Promise<void> {
+  async getPaymentsByCategory(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
       const categoryId = Number(req.params.categoryId);
@@ -223,20 +206,17 @@ export class PaymentController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 8. Get payment stats for category (admin/organizer)
    */
-  async getPaymentStats(req: AuthRequest, res: Response): Promise<void> {
+  async getPaymentStats(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
       const categoryId = Number(req.params.categoryId);
@@ -246,20 +226,17 @@ export class PaymentController {
         success: true,
         data: stats,
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 9. Record cash payment
    */
-  async recordCashPayment(req: AuthRequest, res: Response): Promise<void> {
+  async recordCashPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
       const { entryId, amount } = req.body;
@@ -274,18 +251,15 @@ export class PaymentController {
         data: payment,
         message: "Cash payment recorded successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 10. Record online payment (simulate webhook)
    */
-  async recordOnlinePayment(req: Request, res: Response): Promise<void> {
+  async recordOnlinePayment(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { entryId, amount, transactionRef } = req.body;
 
@@ -299,20 +273,17 @@ export class PaymentController {
         data: payment,
         message: "Online payment recorded successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 11. Get pending payments by category
    */
-  async getPendingPayments(req: AuthRequest, res: Response): Promise<void> {
+  async getPendingPayments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = this.getAuthenticatedUserId(req, res);
+      const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
       const categoryId = Number(req.params.categoryId);
@@ -346,20 +317,17 @@ export class PaymentController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
    * 12. Upload payment proof image
    */
-  async uploadPaymentProof(req: AuthRequest, res: Response): Promise<void> {
+  async uploadPaymentProof(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = this.getAuthenticatedUserId(req, res);
+      const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
       const paymentId = Number(req.params.paymentId);
@@ -375,11 +343,8 @@ export class PaymentController {
         data: payment,
         message: "Payment proof uploaded successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }

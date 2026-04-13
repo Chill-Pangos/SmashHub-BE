@@ -1,86 +1,83 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import userService from "../services/user.service";
+import { NotFoundError } from "../utils/errors";
 
 export class UserController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.create(req.body);
       res.status(201).json(user);
     } catch (error) {
-      res.status(400).json({ message: "Error creating user", error });
+      next(error);
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const users = await userService.findAll();
       res.status(200).json(users);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching users", error });
+      next(error);
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.findById(Number(req.params.id));
       if (!user) {
-        res.status(404).json({ message: "User not found" });
-        return;
+        throw new NotFoundError("User not found");
       }
       res.status(200).json(user);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching user", error });
+      next(error);
     }
   }
 
-  async update(req: Request, res: Response): Promise<void> {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.update(Number(req.params.id), req.body);
       if (!user) {
-        res.status(404).json({ message: "User not found" });
-        return;
+        throw new NotFoundError("User not found");
       }
       res.status(200).json(user);
     } catch (error) {
-      res.status(400).json({ message: "Error updating user", error });
+      next(error);
     }
   }
 
-  async updateProfile(req: Request, res: Response): Promise<void> {
+  async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.updateProfile(
         Number(req.params.id),
         req.body
       );
       if (!user) {
-        res.status(404).json({ message: "User not found" });
-        return;
+        throw new NotFoundError("User not found");
       }
       res.status(200).json(user);
     } catch (error) {
-      res.status(400).json({ message: "Error updating user profile", error });
+      next(error);
     }
   }
 
-  async delete(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const deleted = await userService.delete(Number(req.params.id));
       if (!deleted) {
-        res.status(404).json({ message: "User not found" });
-        return;
+        throw new NotFoundError("User not found");
       }
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting user", error });
+      next(error);
     }
   }
 
-  async getAvailableChiefReferees(req: Request, res: Response): Promise<void> {
+  async getAvailableChiefReferees(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const referees = await userService.findAvailableChiefReferees();
       res.status(200).json(referees);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching available chief referees", error });
+      next(error);
     }
   }
 }

@@ -1,30 +1,25 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import knockoutBracketService from "../services/knockoutBracket.service";
 import {
   CreateKnockoutBracketDto,
   UpdateKnockoutBracketDto,
   AdvanceWinnerDto,
 } from "../dto/knockoutBracket.dto";
+import { UnauthorizedError } from "../utils/errors";
 
 export class KnockoutBracketController {
-  
-
   /**
    * Generate knockout bracket từ danh sách entries (không có vòng bảng)
    * POST /knockout-brackets/generate
    * Body: { categoryId: number }
    */
-  async generateFromEntries(req: Request, res: Response): Promise<void> {
+  async generateFromEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.body;
       const chiefRefereeId = (req as any).user?.id;
 
       if (!chiefRefereeId) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
       const result = await knockoutBracketService.generateFromEntries(
@@ -36,11 +31,8 @@ export class KnockoutBracketController {
         data: result,
         message: "Knockout bracket generated successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -49,17 +41,13 @@ export class KnockoutBracketController {
    * POST /knockout-brackets/advance-winner
    * Body: { bracketId: number, winnerEntryId: number }
    */
-  async advanceWinner(req: Request, res: Response): Promise<void> {
+  async advanceWinner(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { bracketId, winnerEntryId } = req.body;
       const chiefRefereeId = (req as any).user?.id;
 
       if (!chiefRefereeId) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
       const result = await knockoutBracketService.advanceWinner(
@@ -73,11 +61,8 @@ export class KnockoutBracketController {
         message: "Winner updated and advanced to the next round successfully",
         data: result
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -86,17 +71,13 @@ export class KnockoutBracketController {
    * POST /knockout-brackets/generate-from-group-stage
    * Body: { categoryId: number, qualifiersPerGroup?: number }
    */
-  async generateFromGroupStage(req: Request, res: Response): Promise<void> {
+  async generateFromGroupStage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId, qualifiersPerGroup } = req.body;
       const chiefRefereeId = (req as any).user?.id;
 
       if (!chiefRefereeId) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
       const result = await knockoutBracketService.generateFromGroupStage(
@@ -109,11 +90,8 @@ export class KnockoutBracketController {
         data: result,
         message: "Knockout bracket generated from group stage results successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -121,7 +99,7 @@ export class KnockoutBracketController {
    * Lấy brackets theo entry ID hoặc entry name
    * GET /knockout-brackets/category/:categoryId/entry?entryId=5 hoặc ?entryName=Team+Alpha
    */
-  async getBracketsByEntry(req: Request, res: Response): Promise<void> {
+  async getBracketsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.params;
       const { entryId, entryName } = req.query;
@@ -140,11 +118,8 @@ export class KnockoutBracketController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -152,7 +127,7 @@ export class KnockoutBracketController {
    * Lấy toàn bộ bracket tree của 1 category
    * GET /knockout-brackets/category/:categoryId/tree
    */
-  async getBracketTree(req: Request, res: Response): Promise<void> {
+  async getBracketTree(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.params;
       const result = await knockoutBracketService.getBracketTree(
@@ -163,11 +138,8 @@ export class KnockoutBracketController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -176,17 +148,13 @@ export class KnockoutBracketController {
    * POST /knockout-brackets/validate
    * Body: { categoryId: number }
    */
-  async validateBracketIntegrity(req: Request, res: Response): Promise<void> {
+  async validateBracketIntegrity(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.body;
       const chiefRefereeId = (req as any).user?.id;
 
       if (!chiefRefereeId) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
 
       const result = await knockoutBracketService.validateBracketIntegrity(
@@ -198,11 +166,8 @@ export class KnockoutBracketController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -210,7 +175,7 @@ export class KnockoutBracketController {
    * Lấy kết quả xếp hạng cuối giải knockout
    * GET /knockout-brackets/category/:categoryId/standings
    */
-  async getStandings(req: Request, res: Response): Promise<void> {
+  async getStandings(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.params;
       const result = await knockoutBracketService.getStandings(
@@ -221,11 +186,8 @@ export class KnockoutBracketController {
         success: true,
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }
