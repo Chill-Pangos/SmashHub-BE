@@ -8,6 +8,7 @@ import Entry from "../models/entry.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import User from "../models/user.model";
@@ -31,9 +32,6 @@ interface RefereeWorkload {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_MATCH_DURATION_MINUTES = 60;
-const BREAK_SINGLE_DAY_MINUTES = 10; // giải 1 ngày: nghỉ ít
-const BREAK_MULTI_DAY_MINUTES = 20; // giải nhiều ngày: nghỉ nhiều hơn
 const SINGLE_DAY_THRESHOLD_HOURS = 20; // startDate và endDate cách nhau < 20h → coi là giải 1 ngày
 
 const MATCH_INCLUDE = {
@@ -65,11 +63,11 @@ class SingleDayAllocator {
   private readonly startDate: Date;
   private readonly endDate: Date;
 
-  constructor(tournament: Tournament) {
+  constructor(tournament: Tournament, scheduleConfig: ScheduleConfig) {
     this.startDate = tournament.startDate;
     this.endDate = tournament.endDate;
     this.slotDuration =
-      DEFAULT_MATCH_DURATION_MINUTES + BREAK_SINGLE_DAY_MINUTES;
+      scheduleConfig.matchDurationMinutes + scheduleConfig.breakDurationMinutes;
   }
 
   getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
@@ -116,15 +114,15 @@ class MultiDayAllocator {
   private readonly dailyEndMinute: number;
   private readonly slotDuration: number;
 
-  constructor(tournament: Tournament) {
+  constructor(tournament: Tournament, scheduleConfig: ScheduleConfig) {
     this.startDate = tournament.startDate;
     this.endDate = tournament.endDate;
-    this.dailyStartHour = tournament.startDate.getHours();
-    this.dailyStartMinute = tournament.startDate.getMinutes();
-    this.dailyEndHour = tournament.endDate.getHours();
-    this.dailyEndMinute = tournament.endDate.getMinutes();
+    this.dailyStartHour = scheduleConfig.dailyStartHour;
+    this.dailyStartMinute = scheduleConfig.dailyStartMinute;
+    this.dailyEndHour = scheduleConfig.dailyEndHour;
+    this.dailyEndMinute = scheduleConfig.dailyEndMinute;
     this.slotDuration =
-      DEFAULT_MATCH_DURATION_MINUTES + BREAK_MULTI_DAY_MINUTES;
+      scheduleConfig.matchDurationMinutes + scheduleConfig.breakDurationMinutes;
   }
 
   getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
@@ -180,10 +178,11 @@ class MultiDayAllocator {
 
 function createAllocator(
   tournament: Tournament,
+  scheduleConfig: ScheduleConfig
 ): SingleDayAllocator | MultiDayAllocator {
   return isSingleDayTournament(tournament)
-    ? new SingleDayAllocator(tournament)
-    : new MultiDayAllocator(tournament);
+    ? new SingleDayAllocator(tournament, scheduleConfig)
+    : new MultiDayAllocator(tournament, scheduleConfig);
 }
 
 // ─── Referee Assignment ───────────────────────────────────────────────────────
@@ -289,6 +288,17 @@ export class ScheduleService {
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
 
+    // Lấy schedule config - PHẢI tồn tại
+    const scheduleConfig = await ScheduleConfig.findOne({
+      where: { tournamentId: tournament.id },
+    });
+
+    if (!scheduleConfig) {
+      throw new Error(
+        "Schedule config not found. Please create a schedule configuration first before generating the schedule."
+      );
+    }
+
     const standings = await GroupStanding.findAll({
       where: { categoryId },
       order: [["groupName", "ASC"]],
@@ -322,7 +332,7 @@ export class ScheduleService {
       }
     }
 
-    const allocator = createAllocator(tournament);
+    const allocator = createAllocator(tournament, scheduleConfig);
     const { fits, warning } = allocator.validate(
       matchPairs.length,
       tournament.numberOfTables,
@@ -393,6 +403,17 @@ export class ScheduleService {
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
 
+    // Lấy schedule config - PHẢI tồn tại
+    const scheduleConfig = await ScheduleConfig.findOne({
+      where: { tournamentId: tournament.id },
+    });
+
+    if (!scheduleConfig) {
+      throw new Error(
+        "Schedule config not found. Please create a schedule configuration first before generating the schedule."
+      );
+    }
+
     const whereClause: Record<string, unknown> = {
       categoryId,
       status: "ready",
@@ -412,7 +433,7 @@ export class ScheduleService {
       throw new Error("No ready brackets found.");
     }
 
-    const allocator = createAllocator(tournament);
+    const allocator = createAllocator(tournament, scheduleConfig);
     const { warning } = allocator.validate(
       brackets.length,
       tournament.numberOfTables,

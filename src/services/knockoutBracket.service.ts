@@ -434,7 +434,8 @@ export class KnockoutBracketService {
   async getBracketsByEntry(
     categoryId: number,
     filter: { entryId?: number; entryName?: string },
-  ): Promise<KnockoutBracket[]> {
+    options?: { skip?: number; limit?: number }
+  ): Promise<{ brackets?: KnockoutBracket[], pagination?: any } | KnockoutBracket[]> {
     if (!filter.entryId && !filter.entryName) {
       throw new Error("Provide either entryId or entryName");
     }
@@ -452,6 +453,44 @@ export class KnockoutBracketService {
       });
       if (!entry) throw new Error("Entry not found for the given name");
       targetEntryId = entry.id;
+    }
+
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await KnockoutBracket.findAndCountAll({
+        where: {
+          categoryId,
+          [Op.or]: [
+            { entryAId: targetEntryId },
+            { entryBId: targetEntryId },
+            { winnerEntryId: targetEntryId },
+          ],
+        },
+        order: [
+          ["roundNumber", "ASC"],
+          ["bracketPosition", "ASC"],
+        ],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        brackets: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
     }
 
     return await KnockoutBracket.findAll({

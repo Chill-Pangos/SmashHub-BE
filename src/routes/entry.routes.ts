@@ -212,16 +212,42 @@ router.post(
  * /entries/{entryId}/members:
  *   get:
  *     tags: [Entries]
- *     summary: Get all members of entry
+ *     summary: Get all members of entry with pagination
  *     parameters:
  *       - in: path
  *         name: entryId
  *         required: true
  *         schema:
  *           type: integer
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of members
+ *         description: List of members with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 members:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  */
 router.get(
   "/:entryId/members",
@@ -325,7 +351,7 @@ router.post(
  * /entries/{entryId}/join-requests:
  *   get:
  *     tags: [Entries]
- *     summary: Get join requests for entry (captain only)
+ *     summary: Get join requests for entry with pagination
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -334,6 +360,8 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
  *         schema:
@@ -341,7 +369,31 @@ router.post(
  *           enum: [pending, approved, rejected]
  *     responses:
  *       200:
- *         description: List of join requests
+ *         description: List of join requests with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 joinRequests:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  */
 router.get(
   "/:entryId/join-requests",
@@ -417,16 +469,46 @@ router.post(
  * /entries/category/{categoryId}/eligible:
  *   get:
  *     tags: [Entries]
- *     summary: Get eligible entries for competition
+ *     summary: Get eligible entries for competition with pagination
  *     parameters:
  *       - in: path
  *         name: categoryId
  *         required: true
  *         schema:
  *           type: integer
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: Eligible and ineligible entries
+ *         description: Eligible and ineligible entries with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 eligible:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 ineligible:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  */
 router.get(
   "/category/:categoryId/eligible",

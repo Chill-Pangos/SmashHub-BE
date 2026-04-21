@@ -311,8 +311,12 @@ export class GroupStandingService {
    */
   async getQualifiers(
     categoryId: number,
-    qualifiersPerGroup = DEFAULT_QUALIFIERS_PER_GROUP
-  ): Promise<{ groupName: string; qualifiers: GroupStanding[] }[]> {
+    qualifiersPerGroup = DEFAULT_QUALIFIERS_PER_GROUP,
+    options?: { skip?: number; limit?: number }
+  ): Promise<{
+    qualifiers?: { groupName: string; qualifiers: GroupStanding[] }[],
+    pagination?: any
+  } | { groupName: string; qualifiers: GroupStanding[] }[]> {
     if (qualifiersPerGroup < 1) {
       throw new Error("qualifiersPerGroup must be at least 1");
     }
@@ -339,7 +343,7 @@ export class GroupStandingService {
       groupMap.set(standing.groupName, group);
     }
 
-    return Array.from(groupMap.entries()).map(([groupName, groupStandings]) => {
+    const results = Array.from(groupMap.entries()).map(([groupName, groupStandings]) => {
       const qualifiers = groupStandings.filter(
         (s) => s.position != null && s.position <= qualifiersPerGroup
       );
@@ -352,6 +356,31 @@ export class GroupStandingService {
 
       return { groupName, qualifiers };
     });
+
+    // If pagination is requested
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const total = results.length;
+      const paginatedResults = results.slice(skip, skip + limit);
+      const totalPages = Math.ceil(total / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        qualifiers: paginatedResults,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    return results;
   }
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────

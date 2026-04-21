@@ -353,6 +353,33 @@ CREATE TABLE IF NOT EXISTS `schedules` (
   CONSTRAINT `fk_schedules_category` FOREIGN KEY (`categoryId`) REFERENCES `tournament_categories` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SCHEDULE CONFIGURATION
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS `schedule_configs` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tournamentId` INT UNSIGNED NOT NULL,
+  `matchDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 60,
+  `breakDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 10,
+  `dailyStartHour` INT UNSIGNED NOT NULL DEFAULT 8,
+  `dailyStartMinute` INT UNSIGNED NOT NULL DEFAULT 0,
+  `dailyEndHour` INT UNSIGNED NOT NULL DEFAULT 22,
+  `dailyEndMinute` INT UNSIGNED NOT NULL DEFAULT 0,
+  `lunchBreakStartHour` INT UNSIGNED NULL,
+  `lunchBreakStartMinute` INT UNSIGNED NOT NULL DEFAULT 0,
+  `lunchBreakEndHour` INT UNSIGNED NULL,
+  `lunchBreakEndMinute` INT UNSIGNED NOT NULL DEFAULT 0,
+  `lunchBreakDurationMinutes` INT UNSIGNED NULL,
+  `notes` LONGTEXT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `schedule_configs_tournament_unique` (`tournamentId`),
+  INDEX `schedule_configs_tournament_idx` (`tournamentId`),
+  CONSTRAINT `fk_schedule_configs_tournament` FOREIGN KEY (`tournamentId`) REFERENCES `tournaments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `matches` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `scheduleId` INT UNSIGNED NOT NULL,

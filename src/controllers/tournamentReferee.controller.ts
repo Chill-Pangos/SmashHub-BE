@@ -142,12 +142,15 @@ export class TournamentRefereeController {
     try {
       const { tournamentId } = req.params;
       const role = req.query.role as string | undefined;
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
 
-      const referees = await tournamentRefereeService.getRefereesByTournament(
+      const result = await tournamentRefereeService.getRefereesByTournament(
         Number(tournamentId),
-        role as any
+        role as any,
+        { skip, limit }
       );
-      res.status(200).json(referees);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -160,13 +163,16 @@ export class TournamentRefereeController {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId } = req.params;
       const status = req.query.status as string | undefined;
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
 
-      const invitations = await tournamentRefereeService.getInvitationsByTournament(
+      const result = await tournamentRefereeService.getInvitationsByTournament(
         organizerId,
         Number(tournamentId),
-        status as any
+        status as any,
+        { skip, limit }
       );
-      res.status(200).json(invitations);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

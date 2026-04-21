@@ -8,6 +8,7 @@ import tournamentCategoryRoutes from "./tournamentCategory.routes";
 import tournamentRefereeRoutes from "./tournamentReferee.routes";
 import entryRoutes from "./entry.routes";
 import scheduleRoutes from "./schedule.routes";
+import scheduleConfigRoutes from "./scheduleConfig.routes";
 import matchRoutes from "./match.routes";
 import subMatchRoutes from "./subMatch.routes";
 import subMatchPlayerRoutes from "./subMatchPlayer.routes";
@@ -22,7 +23,6 @@ import paymentRoutes from "./payment.routes";
 
 const router = Router();
 
-// Mount all routes
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/roles", roleRoutes);
@@ -33,6 +33,7 @@ router.use("/tournament-referees", tournamentRefereeRoutes);
 router.use("/entries", entryRoutes);
 router.use("/entries", entryImportRoutes);
 router.use("/schedules", scheduleRoutes);
+router.use("/schedule-configs", scheduleConfigRoutes);
 router.use("/matches", matchRoutes);
 router.use("/sub-matches", subMatchRoutes);
 router.use("/sub-match-players", subMatchPlayerRoutes);

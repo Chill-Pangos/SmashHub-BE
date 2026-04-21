@@ -11,8 +11,10 @@ export class SubMatchPlayerController {
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const subMatchId = Number(req.params.subMatchId);
-      const players = await subMatchPlayerService.getPlayersBySubMatch(subMatchId);
-      res.status(200).json(players);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await subMatchPlayerService.getPlayersBySubMatch(subMatchId, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -26,13 +28,15 @@ export class SubMatchPlayerController {
     try {
       const subMatchId = Number(req.params.subMatchId);
       const team = req.params.team as "A" | "B";
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
 
       if (team !== "A" && team !== "B") {
         throw new BadRequestError("Team must be 'A' or 'B'");
       }
 
-      const players = await subMatchPlayerService.getPlayersByTeam(subMatchId, team);
-      res.status(200).json(players);
+      const result = await subMatchPlayerService.getPlayersByTeam(subMatchId, team, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

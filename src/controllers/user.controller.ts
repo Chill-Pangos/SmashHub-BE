@@ -14,8 +14,10 @@ export class UserController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const users = await userService.findAll();
-      res.status(200).json(users);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await userService.findAll(skip, limit);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -74,8 +76,10 @@ export class UserController {
 
   async getAvailableChiefReferees(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const referees = await userService.findAvailableChiefReferees();
-      res.status(200).json(referees);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await userService.findAvailableChiefReferees(skip, limit);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

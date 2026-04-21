@@ -247,7 +247,7 @@ router.post(
  * /tournament-referees/tournament/{tournamentId}:
  *   get:
  *     tags: [Tournament Referees]
- *     summary: Get referees by tournament
+ *     summary: Get referees by tournament with pagination
  *     description: Get all referees assigned to a tournament
  *     parameters:
  *       - in: path
@@ -256,6 +256,8 @@ router.post(
  *         schema:
  *           type: integer
  *         description: Tournament ID
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: role
  *         schema:
@@ -264,7 +266,31 @@ router.post(
  *         description: Filter by role
  *     responses:
  *       200:
- *         description: List of referees
+ *         description: List of referees with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 referees:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *       400:
  *         description: Bad request
  */
@@ -278,7 +304,7 @@ router.get(
  * /tournament-referees/tournament/{tournamentId}/invitations:
  *   get:
  *     tags: [Tournament Referees]
- *     summary: Get invitations by tournament
+ *     summary: Get invitations by tournament with pagination
  *     description: Get all referee invitations for a tournament (organizer only)
  *     security:
  *       - bearerAuth: []
@@ -289,6 +315,8 @@ router.get(
  *         schema:
  *           type: integer
  *         description: Tournament ID
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
  *         schema:
@@ -297,7 +325,31 @@ router.get(
  *         description: Filter by invitation status
  *     responses:
  *       200:
- *         description: List of invitations
+ *         description: List of invitations with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 invitations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *       400:
  *         description: Bad request
  *       404:

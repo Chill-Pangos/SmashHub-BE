@@ -4,6 +4,7 @@ import {
   Model,
   DataType,
   HasMany,
+  HasOne,
   ForeignKey,
   BelongsTo,
   BeforeValidate,
@@ -11,6 +12,7 @@ import {
 import TournamentCategory from "./tournamentCategory.model";
 import User from "./user.model";
 import TournamentReferee from "./tournamentReferee.model";
+import ScheduleConfig from "./scheduleConfig.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -116,6 +118,9 @@ export default class Tournament extends Model {
 
   @HasMany(() => TournamentReferee)
   referees?: TournamentReferee[];
+
+  @HasOne(() => ScheduleConfig)
+  scheduleConfig?: ScheduleConfig;
 
   // ─── Validators ─────────────────────────────────────────────────────────────
 

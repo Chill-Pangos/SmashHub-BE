@@ -88,8 +88,10 @@ export class SubMatchController {
   async getByMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const matchId = Number(req.params.matchId);
-      const subMatches = await subMatchService.getSubMatchesByMatch(matchId);
-      res.status(200).json(subMatches);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await subMatchService.getSubMatchesByMatch(matchId, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

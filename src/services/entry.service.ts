@@ -569,13 +569,52 @@ export class EntryService {
     captainId: number,
     entryId: number,
     status?: "pending" | "approved" | "rejected",
-  ): Promise<JoinRequest[]> {
+    options?: { skip?: number; limit?: number }
+  ): Promise<{ requests?: JoinRequest[], joinRequests?: JoinRequest[], pagination?: any } | JoinRequest[]> {
     const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can view join requests");
     }
 
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await JoinRequest.findAndCountAll({
+        where: {
+          entryId,
+          ...(status ? { status } : {}),
+        },
+        include: [
+          {
+            model: User,
+            attributes: ["id", "firstName", "lastName", "email", "gender", "dob"],
+          },
+        ],
+        order: [["createdAt", "DESC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        joinRequests: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    // Without pagination (backward compatibility)
     return await JoinRequest.findAll({
       where: {
         entryId,
@@ -733,10 +772,53 @@ export class EntryService {
   /**
    * 11. Lấy danh sách tất cả thành viên của entry
    */
-  async getAllMembers(entryId: number): Promise<EntryMember[]> {
+  async getAllMembers(entryId: number, options?: { skip?: number; limit?: number }): Promise<{ members?: EntryMember[], pagination?: any } | EntryMember[]> {
     const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
 
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await EntryMember.findAndCountAll({
+        where: { entryId },
+        include: [
+          {
+            model: User,
+            attributes: [
+              "id",
+              "firstName",
+              "lastName",
+              "email",
+              "gender",
+              "dob",
+              "avatarUrl",
+            ],
+          },
+        ],
+        order: [["createdAt", "ASC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        members: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    // Without pagination (backward compatibility)
     return await EntryMember.findAll({
       where: { entryId },
       include: [
@@ -879,7 +961,11 @@ export class EntryService {
    *
    * Dùng bởi groupStanding.service trước khi chia bảng.
    */
-  async getEligibleEntries(categoryId: number): Promise<{
+  async getEligibleEntries(categoryId: number, options?: { skip?: number; limit?: number }): Promise<{
+    eligible?: Entry[];
+    ineligible?: { entry: Entry; reasons: string[] }[];
+    pagination?: any;
+  } | {
     eligible: Entry[];
     ineligible: { entry: Entry; reasons: string[] }[];
   }> {
@@ -929,6 +1015,39 @@ export class EntryService {
       }
     }
 
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested, combine and paginate the results
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const combined = [...eligible, ...ineligible.map(item => item.entry)];
+      const total = combined.length;
+      const paginatedCombined = combined.slice(skip, skip + limit);
+
+      const eligibleMap = new Set(eligible.map(e => e.id));
+      const paginatedEligible = paginatedCombined.filter(e => eligibleMap.has(e.id));
+      const paginatedIneligible = ineligible.filter(item =>
+        paginatedCombined.some(e => e.id === item.entry.id)
+      );
+
+      const totalPages = Math.ceil(total / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        eligible: paginatedEligible,
+        ineligible: paginatedIneligible,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    // Without pagination (backward compatibility)
     return { eligible, ineligible };
   }
 

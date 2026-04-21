@@ -168,7 +168,51 @@ export class SubMatchService {
 
   // ── 5. Queries ────────────────────────────────────────────────────────────
 
-  async getSubMatchesByMatch(matchId: number): Promise<SubMatch[]> {
+  async getSubMatchesByMatch(matchId: number, options?: { skip?: number; limit?: number }): Promise<{ subMatches?: SubMatch[], pagination?: any } | SubMatch[]> {
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await SubMatch.findAndCountAll({
+        where: { matchId },
+        include: [
+          { model: MatchSet, as: "matchSets" },
+          {
+            model: SubMatchPlayer,
+            as: "subMatchPlayers",
+            include: [{
+              model: EntryMember,
+              as: "entryMember",
+              include: [{
+                model: User,
+                as: "user",
+                attributes: ["id", "firstName", "lastName"],
+              }],
+            }],
+          },
+        ],
+        order: [["subMatchNumber", "ASC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        subMatches: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
     return await SubMatch.findAll({
       where: { matchId },
       include: [

@@ -61,8 +61,10 @@ export class MatchSetController {
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const subMatchId = Number(req.params.subMatchId);
-      const matchSets = await matchSetService.getSetsBySubMatch(subMatchId);
-      res.status(200).json(matchSets);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await matchSetService.getSetsBySubMatch(subMatchId, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }

@@ -50,10 +50,71 @@ const router = Router();
  *         $ref: '#/components/responses/BadRequest'
  *   get:
  *     tags: [Users]
- *     summary: Get all users
+ *     summary: Get all users with pagination
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of users
+ *         description: List of users with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       firstName:
+ *                         type: string
+ *                         example: "John"
+ *                       lastName:
+ *                         type: string
+ *                         example: "Doe"
+ *                       email:
+ *                         type: string
+ *                         example: "john@example.com"
+ *                       avatarUrl:
+ *                         type: string
+ *                       dob:
+ *                         type: string
+ *                         format: date
+ *                       phoneNumber:
+ *                         type: string
+ *                       gender:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 50
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 5
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: true
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */

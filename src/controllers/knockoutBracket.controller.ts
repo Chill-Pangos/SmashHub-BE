@@ -103,6 +103,8 @@ export class KnockoutBracketController {
     try {
       const { categoryId } = req.params;
       const { entryId, entryName } = req.query;
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
 
       const filter: { entryId?: number; entryName?: string } = {};
 
@@ -111,7 +113,8 @@ export class KnockoutBracketController {
 
       const result = await knockoutBracketService.getBracketsByEntry(
         parseInt(categoryId as string),
-        filter
+        filter,
+        { skip, limit }
       );
 
       res.status(200).json({

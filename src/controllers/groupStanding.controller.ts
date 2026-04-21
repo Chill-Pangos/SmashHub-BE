@@ -311,9 +311,13 @@ export class GroupStandingController {
         throw new BadRequestError("qualifiersPerGroup must be a positive integer");
       }
 
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+
       const result = await groupStandingService.getQualifiers(
         categoryId,
-        qualifiersPerGroup
+        qualifiersPerGroup,
+        { skip, limit }
       );
 
       res.status(200).json({

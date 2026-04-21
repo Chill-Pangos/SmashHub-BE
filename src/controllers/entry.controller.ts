@@ -149,18 +149,21 @@ export class EntryController {
         return;
       }
       const entryId = Number(req.params.entryId);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
       const status = req.query.status as
         | "pending"
         | "approved"
         | "rejected"
         | undefined;
 
-      const requests = await entryService.getJoinRequests(
+      const result = await entryService.getJoinRequests(
         captainId,
         entryId,
-        status
+        status,
+        { skip, limit }
       );
-      res.status(200).json(requests);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -244,8 +247,10 @@ export class EntryController {
   async getAllMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
-      const members = await entryService.getAllMembers(entryId);
-      res.status(200).json(members);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+      const result = await entryService.getAllMembers(entryId, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -316,8 +321,10 @@ export class EntryController {
   async getEligibleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
 
-      const result = await entryService.getEligibleEntries(categoryId);
+      const result = await entryService.getEligibleEntries(categoryId, { skip, limit });
       res.status(200).json(result);
     } catch (error) {
       next(error);

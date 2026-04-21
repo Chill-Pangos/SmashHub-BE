@@ -273,8 +273,42 @@ private async assertNotCompetingInTournament(
 
   async getRefereesByTournament(
     tournamentId: number,
-    role?: RefereeRole
-  ): Promise<TournamentReferee[]> {
+    role?: RefereeRole,
+    options?: { skip?: number; limit?: number }
+  ): Promise<{ referees?: TournamentReferee[], pagination?: any } | TournamentReferee[]> {
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await TournamentReferee.findAndCountAll({
+        where: {
+          tournamentId,
+          ...(role ? { role } : {}),
+        },
+        include: [REFEREE_INCLUDE],
+        order: [["role", "ASC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        referees: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    // Without pagination (backward compatibility)
     return await TournamentReferee.findAll({
       where: {
         tournamentId,
@@ -288,11 +322,45 @@ private async assertNotCompetingInTournament(
   async getInvitationsByTournament(
     organizerId: number,
     tournamentId: number,
-    status?: RefereeInvitation["status"]
-  ): Promise<RefereeInvitation[]> {
+    status?: RefereeInvitation["status"],
+    options?: { skip?: number; limit?: number }
+  ): Promise<{ invitations?: RefereeInvitation[], pagination?: any } | RefereeInvitation[]> {
     const tournament = await getTournament(tournamentId);
     assertOrganizer(organizerId, tournament);
 
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await RefereeInvitation.findAndCountAll({
+        where: {
+          tournamentId,
+          ...(status ? { status } : {}),
+        },
+        include: [REFEREE_INCLUDE],
+        order: [["createdAt", "DESC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        invitations: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    // Without pagination (backward compatibility)
     return await RefereeInvitation.findAll({
       where: {
         tournamentId,
