@@ -120,7 +120,7 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission("user:create"),
+  checkPermission("users:create"),
   userController.create.bind(userController)
 );
 router.get("/", userController.findAll.bind(userController));
@@ -191,12 +191,12 @@ router.get("/", userController.findAll.bind(userController));
 router.get("/:id", userController.findById.bind(userController));
 router.put("/:id",
   authenticate,
-  checkPermission("user:update"),
+  checkPermission("users:update"),
   userController.update.bind(userController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission("user:delete"),
+  checkPermission("users:delete"),
   userController.delete.bind(userController)
 );
 
