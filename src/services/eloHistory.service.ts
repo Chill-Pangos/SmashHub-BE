@@ -2,6 +2,7 @@
 import EloHistory from "../models/eloHistory.model";
 import User from "../models/user.model";
 import Match from "../models/match.model";
+import { Op } from "sequelize";
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
 
@@ -47,7 +48,7 @@ export class EloHistoryService {
     const histories = await EloHistory.findAll({
       where: {
         userId,
-        createdAt: { $gte: from, $lte: to },
+        createdAt: { [Op.gte]: from, [Op.lte]: to },
       },
       attributes: ["eloDelta"],
     });

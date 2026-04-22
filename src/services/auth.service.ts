@@ -541,13 +541,12 @@ export class AuthService {
     if (new Date() > otpRecord.expiresAt) {
       throw AuthErrors.ExpiredOTP();
     }
-    
-    await this.comparePassword(newPassword, user.password).then(isSame => {
-      if (isSame) {
-        throw AuthErrors.SamePasswordError();
-      }
-    });
-    
+
+    const isSame = await this.comparePassword(newPassword, user.password);
+    if (isSame) {
+      throw AuthErrors.SamePasswordError();
+    }
+
     // Hash new password
     const hashedPassword = await this.hashPassword(newPassword);
 

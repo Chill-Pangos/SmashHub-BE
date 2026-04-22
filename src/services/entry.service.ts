@@ -1074,7 +1074,10 @@ export class EntryService {
     await assertRegistrationClosed(tournament);
 
     // Lấy danh sách không đủ điều kiện
-    const { ineligible } = await this.getEligibleEntries(categoryId);
+    const result = await this.getEligibleEntries(categoryId);
+    const ineligible = Array.isArray(result)
+      ? [] // fallback, should not happen
+      : (result.ineligible || []);
 
     if (ineligible.length === 0) {
       return { deletedCount: 0, deleted: [] };

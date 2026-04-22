@@ -276,10 +276,15 @@ export class KnockoutBracketService {
     const category = await getCategoryWithTournament(categoryId);
     await assertChiefReferee(chiefRefereeId, category.tournamentId);
 
-    const qualifiers = await groupStandingService.getQualifiers(
+    const qualifiersResult = await groupStandingService.getQualifiers(
       categoryId,
       qualifiersPerGroup,
     );
+
+    // Handle union return type: could be array or object with pagination
+    const qualifiers = Array.isArray(qualifiersResult)
+      ? qualifiersResult
+      : qualifiersResult.qualifiers || [];
 
     if (qualifiers.length === 0) {
       throw new Error("No qualifiers found. Run getQualifiers first.");
@@ -340,7 +345,8 @@ export class KnockoutBracketService {
       );
     }
 
-    const { eligible } = await entryService.getEligibleEntries(categoryId);
+    const result = await entryService.getEligibleEntries(categoryId);
+    const eligible = Array.isArray(result) ? [] : (result.eligible ?? []);
 
     if (eligible.length < MIN_ENTRIES) {
       throw new Error(

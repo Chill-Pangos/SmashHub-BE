@@ -65,7 +65,7 @@ export class UserService {
     return deletedCount > 0;
   }
 
-  async findAvailableChiefReferees(skip: number = 0, limit: number = 10): Promise<{ referees: User[], pagination: any } | User[]> {
+  async findAvailableChiefReferees(skip: number = 0, limit: number = 10): Promise<{ referees: User[]; pagination?: any }> {
     const assignedRefereeIds = await TournamentReferee.findAll({
       attributes: ['refereeId'],
       where: {
@@ -115,7 +115,7 @@ export class UserService {
       };
     }
 
-    return await User.findAll({
+    const rows = await User.findAll({
       include: [
         {
           model: Role,
@@ -132,6 +132,8 @@ export class UserService {
         }
       } : {}
     });
+
+    return { referees: rows };
   }
 }
 
