@@ -135,6 +135,16 @@ export class AuthService {
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const { firstName, lastName, email, password, role } = registerDto;
 
+    // Validate firstName
+    if (!firstName || firstName.trim().length === 0) {
+      throw AuthErrors.ValidationError("First name is required");
+    }
+
+    // Validate lastName
+    if (!lastName || lastName.trim().length === 0) {
+      throw AuthErrors.ValidationError("Last name is required");
+    }
+
     // Validate email format
     validateEmail(email);
 
@@ -223,6 +233,11 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw AuthErrors.InvalidCredentials();
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      throw AuthErrors.EmailNotVerified();
     }
 
     // Blacklist all existing tokens for this user
@@ -369,6 +384,17 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw AuthErrors.InvalidOldPassword();
+    }
+
+    // Check if new password is same as old password (string level)
+    if (oldPassword === newPassword) {
+      throw AuthErrors.SamePasswordError();
+    }
+
+    // Check if new password is different from old password (hash level - extra security)
+    const isSamePassword = await this.comparePassword(newPassword, user.password);
+    if (isSamePassword) {
+      throw AuthErrors.SamePasswordError();
     }
 
     // Hash new password
@@ -578,11 +604,15 @@ export class AuthService {
 
     // Find user by email
     const user = await User.findOne({ where: { email } });
-    
+
     if (!user) {
       throw AuthErrors.UserNotFound();
     }
-    console.log(user.id);
+
+    // Check if email is already verified
+    if (user.isEmailVerified) {
+      throw AuthErrors.ValidationError("Email is already verified");
+    }
 
     // Generate OTP
     const otpCode = this.generateOtp();

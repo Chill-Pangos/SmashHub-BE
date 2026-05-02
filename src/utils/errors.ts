@@ -147,6 +147,10 @@ export class AuthErrors {
   static EmailSendError() {
     return new InternalServerError("Unable to send email. Please try again later.", "EMAIL_SEND_ERROR");
   }
+
+  static ValidationError(message: string) {
+    return new BadRequestError(message, "VALIDATION_ERROR");
+  }
 }
 
 /**

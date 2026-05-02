@@ -14,7 +14,7 @@
     // Target & Environment
     "target": "esnext",
     "lib": ["esnext"],
-    "types": ["node"],
+    "types": ["node", "jest"],
 
     // Interop & ESM fixes
     "esModuleInterop": true,
