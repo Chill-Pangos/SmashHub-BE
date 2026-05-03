@@ -84,7 +84,7 @@ export class EntryController {
       const isAcceptingMembers = req.query.isAcceptingMembers
         ? req.query.isAcceptingMembers === "true"
         : undefined;
-      const captainName = req.query.captainName as string | undefined;
+      const captainName = typeof req.query.captainName === "string" ? req.query.captainName : undefined;
 
       const options: {
         skip: number;
@@ -151,11 +151,9 @@ export class EntryController {
       const entryId = Number(req.params.entryId);
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const status = req.query.status as
-        | "pending"
-        | "approved"
-        | "rejected"
-        | undefined;
+      const status = typeof req.query.status === "string"
+        ? (req.query.status as "pending" | "approved" | "rejected")
+        : undefined;
 
       const result = await entryService.getJoinRequests(
         captainId,

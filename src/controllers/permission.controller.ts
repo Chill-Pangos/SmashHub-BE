@@ -1,12 +1,14 @@
+// controllers/permission.controller.ts
+
 import { Request, Response, NextFunction } from "express";
 import permissionService from "../services/permission.service";
-import { NotFoundError } from "../utils/errors";
+import { CreatePermissionDto, UpdatePermissionDto } from "../dto/permission.dto";
 
 export class PermissionController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.create(req.body);
-      res.status(201).json(permission);
+      const data = await permissionService.create(req.body as CreatePermissionDto);
+      res.status(201).json(data);
     } catch (error) {
       next(error);
     }
@@ -14,10 +16,8 @@ export class PermissionController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const permissions = await permissionService.findAll(skip, limit);
-      res.status(200).json(permissions);
+      const data = await permissionService.findAll(Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      res.status(200).json(data);
     } catch (error) {
       next(error);
     }
@@ -25,13 +25,17 @@ export class PermissionController {
 
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.findById(
-        Number(req.params.id)
-      );
-      if (!permission) {
-        throw new NotFoundError("Permission not found");
-      }
-      res.status(200).json(permission);
+      const data = await permissionService.findById(Number(req.params.id));
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findByName(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await permissionService.findByName(req.params.name as string);
+      res.status(200).json(data);
     } catch (error) {
       next(error);
     }
@@ -39,14 +43,8 @@ export class PermissionController {
 
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.update(
-        Number(req.params.id),
-        req.body
-      );
-      if (!permission) {
-        throw new NotFoundError("Permission not found");
-      }
-      res.status(200).json(permission);
+      const data = await permissionService.update(Number(req.params.id), req.body as UpdatePermissionDto);
+      res.status(200).json(data);
     } catch (error) {
       next(error);
     }
@@ -54,10 +52,7 @@ export class PermissionController {
 
   async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const deleted = await permissionService.delete(Number(req.params.id));
-      if (!deleted) {
-        throw new NotFoundError("Permission not found");
-      }
+      await permissionService.delete(Number(req.params.id));
       res.status(204).send();
     } catch (error) {
       next(error);
