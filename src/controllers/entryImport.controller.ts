@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import entryImportService from "../services/entryImport.service";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
@@ -7,36 +7,28 @@ import User from "../models/user.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import { ConfirmEntryImportDto, ValidatedSingleEntryDto, ValidatedDoubleEntryDto } from "../dto/entryImport.dto";
 import { withTransaction } from "../utils/transaction.helper";
+import { BadRequestError, UnauthorizedError } from "../utils/errors";
 
 export class EntryImportController {
   /**
    * Preview Excel import data for single entries
    * POST /entries/import/preview
    */
-  async previewSingleEntries(req: Request, res: Response) {
+  async previewSingleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = (req as any).user?.id;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
+        throw new UnauthorizedError("Unauthorized");
       }
 
       if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: "No file uploaded",
-        });
+        throw new BadRequestError("No file uploaded");
       }
 
       const categoryId = Number(req.body.categoryId);
       if (!categoryId) {
-        return res.status(400).json({
-          success: false,
-          message: "Category ID is required",
-        });
+        throw new BadRequestError("Category ID is required");
       }
 
       // Parse and validate Excel file
@@ -49,12 +41,8 @@ export class EntryImportController {
         success: true,
         data: previewData,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to parse Excel file",
-        error: error.toString(),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -62,30 +50,21 @@ export class EntryImportController {
    * Confirm and save import data for single entries
    * POST /entries/import/confirm
    */
-  async confirmSingleEntries(req: Request, res: Response) {
+  async confirmSingleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const data: ConfirmEntryImportDto = req.body;
       const userId = (req as any).user?.id;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
+        throw new UnauthorizedError("Unauthorized");
       }
 
       if (!data.categoryId) {
-        return res.status(400).json({
-          success: false,
-          message: "Category ID is required",
-        });
+        throw new BadRequestError("Category ID is required");
       }
 
       if (!data.entries || data.entries.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No entries to import",
-        });
+        throw new BadRequestError("No entries to import");
       }
 
       // Type guard to check if entries are single entries
@@ -94,22 +73,16 @@ export class EntryImportController {
       };
 
       const singleEntries = data.entries as ValidatedSingleEntryDto[];
-      
+
       // Validate all entries are single type
       if (!singleEntries.every(isSingleEntry)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid entry format for single entries",
-        });
+        throw new BadRequestError("Invalid entry format for single entries");
       }
 
       // Validate category exists before creating entries
       const category = await TournamentCategory.findByPk(data.categoryId);
       if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: "Tournament category not found",
-        });
+        throw new BadRequestError("Tournament category not found");
       }
 
       // Re-validate users and check for duplicates
@@ -134,34 +107,22 @@ export class EntryImportController {
         // Get user to validate
         const user = await User.findByPk(entryData.userId);
         if (!user) {
-          return res.status(400).json({
-            success: false,
-            message: `User with ID ${entryData.userId} not found`,
-          });
+          throw new BadRequestError(`User with ID ${entryData.userId} not found`);
         }
 
         // Check if user already registered for this category
         if (existingUserIds.has(entryData.userId)) {
-          return res.status(400).json({
-            success: false,
-            message: `User ${user.email} is already registered for this category`,
-          });
+          throw new BadRequestError(`User ${user.email} is already registered for this category`);
         }
 
         // Validate gender for single entries
         if (category.gender) {
           if (!user.gender) {
-            return res.status(400).json({
-              success: false,
-              message: `User ${user.email}'s gender is not set. Category requires "${category.gender}"`,
-            });
+            throw new BadRequestError(`User ${user.email}'s gender is not set. Category requires "${category.gender}"`);
           }
 
           if (user.gender !== category.gender) {
-            return res.status(400).json({
-              success: false,
-              message: `User ${user.email}'s gender (${user.gender}) does not match category requirement (${category.gender})`,
-            });
+            throw new BadRequestError(`User ${user.email}'s gender (${user.gender}) does not match category requirement (${category.gender})`);
           }
         }
       }
@@ -210,12 +171,8 @@ export class EntryImportController {
         message: "Entries imported successfully",
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to import entries",
-        error: error.toString(),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -223,30 +180,21 @@ export class EntryImportController {
    * Preview Excel import data for double entries
    * POST /entries/import/double/preview
    */
-  async previewDoubleEntries(req: Request, res: Response) {
+  async previewDoubleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = (req as any).user?.id;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
+        throw new UnauthorizedError("Unauthorized");
       }
 
       if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: "No file uploaded",
-        });
+        throw new BadRequestError("No file uploaded");
       }
 
       const categoryId = Number(req.body.categoryId);
       if (!categoryId) {
-        return res.status(400).json({
-          success: false,
-          message: "Category ID is required",
-        });
+        throw new BadRequestError("Category ID is required");
       }
 
       // Parse and validate Excel file
@@ -259,12 +207,8 @@ export class EntryImportController {
         success: true,
         data: previewData,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to parse Excel file",
-        error: error.toString(),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -272,30 +216,21 @@ export class EntryImportController {
    * Confirm and save import data for double entries
    * POST /entries/import/double/confirm
    */
-  async confirmDoubleEntries(req: Request, res: Response) {
+  async confirmDoubleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const data: ConfirmEntryImportDto = req.body;
       const userId = (req as any).user?.id;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
+        throw new UnauthorizedError("Unauthorized");
       }
 
       if (!data.categoryId) {
-        return res.status(400).json({
-          success: false,
-          message: "Category ID is required",
-        });
+        throw new BadRequestError("Category ID is required");
       }
 
       if (!data.entries || data.entries.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "No entries to import",
-        });
+        throw new BadRequestError("No entries to import");
       }
 
       // Type guard to check if entries are double entries
@@ -304,22 +239,16 @@ export class EntryImportController {
       };
 
       const doubleEntries = data.entries as ValidatedDoubleEntryDto[];
-      
+
       // Validate all entries are double type
       if (!doubleEntries.every(isDoubleEntry)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid entry format for double entries",
-        });
+        throw new BadRequestError("Invalid entry format for double entries");
       }
 
       // Validate category exists before creating entries
       const category = await TournamentCategory.findByPk(data.categoryId);
       if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: "Tournament category not found",
-        });
+        throw new BadRequestError("Tournament category not found");
       }
 
       // Re-validate mixed gender requirement for double entries
@@ -330,24 +259,15 @@ export class EntryImportController {
           const user2 = await User.findByPk(entryData.player2UserId);
 
           if (!user1 || !user2) {
-            return res.status(400).json({
-              success: false,
-              message: "One or more users not found",
-            });
+            throw new BadRequestError("One or more users not found");
           }
 
           if (!user1.gender || !user2.gender) {
-            return res.status(400).json({
-              success: false,
-              message: `Mixed gender category requires both players to have gender set`,
-            });
+            throw new BadRequestError("Mixed gender category requires both players to have gender set");
           }
 
           if (user1.gender === user2.gender) {
-            return res.status(400).json({
-              success: false,
-              message: `Mixed gender category requires 1 male and 1 female. Both players are ${user1.gender}`,
-            });
+            throw new BadRequestError(`Mixed gender category requires 1 male and 1 female. Both players are ${user1.gender}`);
           }
         }
       }
@@ -391,28 +311,19 @@ export class EntryImportController {
       for (const entryData of doubleEntries) {
         // Check if player 1 already registered (each user can only register once)
         if (existingUserIds.has(entryData.player1UserId)) {
-          return res.status(400).json({
-            success: false,
-            message: `Player ${entryData.player1Email} is already registered in this category (each user can only register once)`,
-          });
+          throw new BadRequestError(`Player ${entryData.player1Email} is already registered in this category (each user can only register once)`);
         }
 
         // Check if player 2 already registered (each user can only register once)
         if (existingUserIds.has(entryData.player2UserId)) {
-          return res.status(400).json({
-            success: false,
-            message: `Player ${entryData.player2Email} is already registered in this category (each user can only register once)`,
-          });
+          throw new BadRequestError(`Player ${entryData.player2Email} is already registered in this category (each user can only register once)`);
         }
 
         const sortedIds = [entryData.player1UserId, entryData.player2UserId].sort((a, b) => a - b);
         const pairKey = `${sortedIds[0]}-${sortedIds[1]}`;
 
         if (existingPairs.has(pairKey)) {
-          return res.status(400).json({
-            success: false,
-            message: `Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this category`,
-          });
+          throw new BadRequestError(`Pair ${entryData.player1Email} & ${entryData.player2Email} is already registered for this category`);
         }
       }
 
@@ -474,12 +385,8 @@ export class EntryImportController {
         message: "Double entries imported successfully",
         data: result,
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message || "Failed to import double entries",
-        error: error.toString(),
-      });
+    } catch (error) {
+      next(error);
     }
   }
 }

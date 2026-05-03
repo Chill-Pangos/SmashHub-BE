@@ -1,98 +1,102 @@
-import { Request, Response } from "express";
+import { Response, NextFunction } from "express";
+import { AuthRequest } from "../middlewares/auth.middleware";
 import matchSetService from "../services/matchSet.service";
-import {
-  CreateMatchSetDto,
-  UpdateMatchSetDto,
-  UpdateMatchSetScoreDto,
-} from "../dto/matchSet.dto";
+import { BadRequestError } from "../utils/errors";
 
 export class MatchSetController {
-  async create(req: Request, res: Response): Promise<void> {
+  /**
+   * Tạo set với điểm số
+   * POST /match-sets
+   */
+  async createSet(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const payload = req.body as CreateMatchSetDto;
-      const matchSet = await matchSetService.create(payload);
+      const refereeId = req.userId!;
+      const { subMatchId, entryAScore, entryBScore } = req.body;
+
+      if (!subMatchId || entryAScore === undefined || entryBScore === undefined) {
+        throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
+      }
+
+      const matchSet = await matchSetService.createSet(refereeId, {
+        subMatchId,
+        entryAScore,
+        entryBScore,
+      });
       res.status(201).json(matchSet);
     } catch (error) {
-      res.status(400).json({ message: "Error creating match set", error });
+      next(error);
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  /**
+   * Cập nhật điểm set
+   * PUT /match-sets/:id
+   */
+  async updateSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const matchSets = await matchSetService.findAll(skip, limit);
-      res.status(200).json(matchSets);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching match sets", error });
-    }
-  }
+      const refereeId = req.userId!;
+      const setId = Number(req.params.id);
+      const { entryAScore, entryBScore } = req.body;
 
-  async findById(req: Request, res: Response): Promise<void> {
-    try {
-      const matchSet = await matchSetService.findById(Number(req.params.id));
-      if (!matchSet) {
-        res.status(404).json({ message: "Match set not found" });
-        return;
+      if (entryAScore === undefined || entryBScore === undefined) {
+        throw new BadRequestError("entryAScore and entryBScore are required");
       }
+
+      const matchSet = await matchSetService.updateSetScore(
+        refereeId,
+        setId,
+        entryAScore,
+        entryBScore
+      );
       res.status(200).json(matchSet);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching match set", error });
+      next(error);
     }
   }
 
-  async findByMatchId(req: Request, res: Response): Promise<void> {
+  /**
+   * Lấy danh sách sets theo subMatchId
+   * GET /match-sets/sub-match/:subMatchId
+   */
+  async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      const subMatchId = Number(req.params.subMatchId);
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
-      const matchSets = await matchSetService.findByMatchId(
-        Number(req.params.matchId),
-        skip,
-        limit
-      );
-      res.status(200).json(matchSets);
+      const result = await matchSetService.getSetsBySubMatch(subMatchId, { skip, limit });
+      res.status(200).json(result);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching match sets", error });
+      next(error);
     }
   }
 
-  async update(req: Request, res: Response): Promise<void> {
+  /**
+   * Lấy chi tiết set theo ID
+   * GET /match-sets/:id
+   */
+  async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const payload = req.body as UpdateMatchSetDto;
-      const matchSet = await matchSetService.update(
-        Number(req.params.id),
-        payload
-      );
-      if (!matchSet) {
-        res.status(404).json({ message: "Match set not found" });
-        return;
-      }
+      const setId = Number(req.params.id);
+      const matchSet = await matchSetService.getSetById(setId);
       res.status(200).json(matchSet);
     } catch (error) {
-      res.status(400).json({ message: "Error updating match set", error });
+      next(error);
     }
   }
 
-  async createSetWithScore(req: Request, res: Response): Promise<void> {
+  /**
+   * Xóa set
+   * DELETE /match-sets/:id
+   */
+  async deleteSet(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const payload = req.body as UpdateMatchSetScoreDto;
-      const matchSet = await matchSetService.createSetWithScore(payload);
-      res.status(201).json(matchSet);
-    } catch (error: any) {
-      res.status(400).json({ message: error.message || "Error creating match set with score", error });
-    }
-  }
+      const refereeId = req.userId!;
+      const setId = Number(req.params.id);
 
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const deleted = await matchSetService.delete(Number(req.params.id));
-      if (!deleted) {
-        res.status(404).json({ message: "Match set not found" });
-        return;
-      }
+      await matchSetService.deleteSet(refereeId, setId);
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting match set", error });
+      next(error);
     }
   }
 }

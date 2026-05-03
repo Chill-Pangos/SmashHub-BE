@@ -31,8 +31,9 @@ const swaggerDefinition = {
       name: "Tournament Categories",
       description: "Tournament category endpoints",
     },
-    { name: "Entries", description: "Tournament entry endpoints" },
+    { name: "Entries", description: "Entry management endpoints" },
     { name: "Schedules", description: "Schedule management endpoints" },
+    { name: "Schedule Config", description: "Schedule configuration endpoints" },
     { name: "Matches", description: "Match management endpoints" },
     { name: "Match Sets", description: "Match set endpoints" },
     { name: "ELO Scores", description: "ELO scoring system endpoints" },
@@ -158,18 +159,21 @@ const swaggerDefinition = {
       },
       Tournament: {
         type: "object",
-        required: ["name", "tier", "startDate", "location", "createdBy"],
+        required: ["name", "tier", "startDate", "endDate", "registrationStartDate", "registrationEndDate", "bracketGenerationDate", "location", "createdBy"],
         properties: {
           id: { type: "integer" },
-          name: { type: "string", maxLength: 100 },
-          tier: { type: "integer", minimum: 1 },
+          name: { type: "string", maxLength: 255 },
+          tier: { type: "integer", minimum: 1, maximum: 5 },
           status: {
             type: "string",
-            enum: ["upcoming", "ongoing", "completed"],
+            enum: ["upcoming", "registration_open", "registration_closed", "brackets_generated", "ongoing", "completed", "cancelled"],
             default: "upcoming",
           },
           startDate: { type: "string", format: "date-time" },
           endDate: { type: "string", format: "date-time" },
+          registrationStartDate: { type: "string", format: "date-time" },
+          registrationEndDate: { type: "string", format: "date-time" },
+          bracketGenerationDate: { type: "string", format: "date-time" },
           location: { type: "string", maxLength: 100 },
           numberOfTables: { type: "integer", default: 1 },
           createdBy: { type: "integer" },
@@ -230,6 +234,68 @@ const swaggerDefinition = {
           scheduledAt: { type: "string", format: "date-time" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      ScheduleConfig: {
+        type: "object",
+        required: ["tournamentId"],
+        properties: {
+          id: { type: "integer" },
+          tournamentId: { type: "integer", description: "Tournament ID" },
+          matchDurationMinutes: { type: "integer", minimum: 15, maximum: 120, default: 60, description: "Duration of each match in minutes" },
+          breakDurationMinutes: { type: "integer", minimum: 0, maximum: 60, default: 10, description: "Break time between matches in minutes" },
+          dailyStartHour: { type: "integer", minimum: 0, maximum: 23, default: 8, description: "Daily start hour (0-23)" },
+          dailyStartMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Daily start minute (0-59)" },
+          dailyEndHour: { type: "integer", minimum: 0, maximum: 23, default: 22, description: "Daily end hour (0-23)" },
+          dailyEndMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Daily end minute (0-59)" },
+          lunchBreakStartHour: { type: ["integer", "null"], minimum: 0, maximum: 23, description: "Lunch break start hour (optional)" },
+          lunchBreakStartMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Lunch break start minute" },
+          lunchBreakEndHour: { type: ["integer", "null"], minimum: 0, maximum: 23, description: "Lunch break end hour (optional)" },
+          lunchBreakEndMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Lunch break end minute" },
+          lunchBreakDurationMinutes: { type: ["integer", "null"], description: "Lunch break duration in minutes (optional)" },
+          notes: { type: ["string", "null"], description: "Additional notes about the configuration" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      ScheduleValidationResponse: {
+        type: "object",
+        properties: {
+          isValid: { type: "boolean", description: "Whether the config fits within tournament timeframe" },
+          message: { type: "string", description: "Validation result message" },
+          details: {
+            type: "object",
+            properties: {
+              totalMatches: { type: "integer", description: "Number of matches to schedule" },
+              totalSlots: { type: "integer", description: "Number of time slots needed" },
+              lastMatchEndTime: { type: "string", format: "date-time", description: "When the last match will end" },
+              tournamentEndTime: { type: "string", format: "date-time", description: "Tournament end time" },
+              overflowMinutes: { type: "integer", description: "How many minutes over the limit (if not valid)" },
+            },
+          },
+          suggestions: {
+            type: "array",
+            items: { $ref: "#/components/schemas/OptimizationSuggestion" },
+            description: "Array of optimization suggestions if config doesn't fit",
+          },
+        },
+      },
+      OptimizationSuggestion: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["increase_tables", "reduce_match_duration", "reduce_break_duration", "extend_schedule"], description: "Type of suggestion" },
+          description: { type: "string", description: "Detailed description of the suggestion" },
+          impact: {
+            type: "object",
+            properties: {
+              matchDurationMinutes: { type: "integer", description: "Suggested match duration (if applicable)" },
+              breakDurationMinutes: { type: "integer", description: "Suggested break duration (if applicable)" },
+              numberOfTables: { type: "integer", description: "Suggested number of tables (if applicable)" },
+              newEndDate: { type: "string", format: "date-time", description: "Suggested new end date (if applicable)" },
+            },
+            description: "Impact of this suggestion on the schedule",
+          },
+          priority: { type: "string", enum: ["high", "medium", "low"], description: "Priority of this suggestion" },
         },
       },
       Match: {
@@ -432,16 +498,86 @@ const swaggerDefinition = {
       },
     },
     responses: {
+      Success200: {
+        description: "Request processed successfully",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/SuccessResponse" },
+          },
+        },
+      },
+      Created201: {
+        description: "Resource created successfully",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/SuccessResponse" },
+          },
+        },
+      },
+      NoContent204: {
+        description: "Request processed successfully, no content returned",
+      },
+      BadRequest400: {
+        description: "Invalid request data",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Invalid request data" },
+          },
+        },
+      },
+      Unauthorized401: {
+        description: "Authentication required or token invalid",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Unauthorized access" },
+          },
+        },
+      },
+      Forbidden403: {
+        description: "Insufficient permissions",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Forbidden - insufficient permissions" },
+          },
+        },
+      },
+      NotFound404: {
+        description: "Resource not found",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Resource not found" },
+          },
+        },
+      },
+      Conflict409: {
+        description: "Conflict - resource already exists or state conflict",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Resource already exists" },
+          },
+        },
+      },
+      InternalError500: {
+        description: "Internal server error",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Internal server error" },
+          },
+        },
+      },
+      // Legacy responses - deprecated
       NotFound: {
         description: "Resource not found",
         content: {
           "application/json": {
-            schema: {
-              $ref: "#/components/schemas/Error",
-            },
-            example: {
-              message: "Resource not found",
-            },
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Resource not found" },
           },
         },
       },
@@ -449,12 +585,8 @@ const swaggerDefinition = {
         description: "Bad request",
         content: {
           "application/json": {
-            schema: {
-              $ref: "#/components/schemas/Error",
-            },
-            example: {
-              message: "Invalid request data",
-            },
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Invalid request data" },
           },
         },
       },
@@ -462,12 +594,8 @@ const swaggerDefinition = {
         description: "Internal server error",
         content: {
           "application/json": {
-            schema: {
-              $ref: "#/components/schemas/Error",
-            },
-            example: {
-              message: "Internal server error",
-            },
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Internal server error" },
           },
         },
       },

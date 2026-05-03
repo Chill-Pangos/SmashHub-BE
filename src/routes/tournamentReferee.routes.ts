@@ -2,18 +2,16 @@ import { Router } from "express";
 import tournamentRefereeController from "../controllers/tournamentReferee.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
-import userController from "../controllers/user.controller";
 
 const router = Router();
 
 /**
  * @swagger
- * /tournament-referees:
+ * /tournament-referees/invite:
  *   post:
  *     tags: [Tournament Referees]
- *     summary: Create a tournament referee
- *     description: Add a referee to a tournament
+ *     summary: Send invitation to referee
+ *     description: Organizer invites a referee to join tournament
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -29,37 +27,143 @@ const router = Router();
  *             properties:
  *               tournamentId:
  *                 type: integer
- *                 description: Tournament ID
  *                 example: 1
  *               refereeId:
  *                 type: integer
- *                 description: Referee user ID
  *                 example: 5
  *               role:
  *                 type: string
- *                 enum: [main, assistant]
- *                 description: Referee role
- *                 example: main
+ *                 enum: [referee, chief]
+ *                 example: referee
  *     responses:
  *       201:
- *         description: Tournament referee created successfully
+ *         description: Invitation sent successfully
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         description: Bad request
  */
 router.post(
-  "/",
+  "/invite",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
-  tournamentRefereeController.create.bind(tournamentRefereeController)
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.inviteReferee.bind(tournamentRefereeController)
 );
 
 /**
  * @swagger
- * /tournament-referees/assign:
+ * /tournament-referees/accept-invitation:
  *   post:
  *     tags: [Tournament Referees]
- *     summary: Assign multiple referees to a tournament
- *     description: Assign multiple referees to a tournament at once
+ *     summary: Accept referee invitation
+ *     description: Referee accepts an invitation
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - invitationId
+ *             properties:
+ *               invitationId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Invitation accepted
+ *       400:
+ *         description: Bad request
+ *       404:
+ *         description: Invitation not found
+ */
+router.post(
+  "/accept-invitation",
+  authenticate,
+  tournamentRefereeController.acceptInvitation.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/reject-invitation:
+ *   post:
+ *     tags: [Tournament Referees]
+ *     summary: Reject referee invitation
+ *     description: Referee rejects an invitation
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - invitationId
+ *             properties:
+ *               invitationId:
+ *                 type: integer
+ *                 example: 1
+ *               rejectionReason:
+ *                 type: string
+ *                 example: "Not available at that time"
+ *     responses:
+ *       200:
+ *         description: Invitation rejected
+ *       400:
+ *         description: Bad request
+ *       404:
+ *         description: Invitation not found
+ */
+router.post(
+  "/reject-invitation",
+  authenticate,
+  tournamentRefereeController.rejectInvitation.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/cancel-invitation:
+ *   post:
+ *     tags: [Tournament Referees]
+ *     summary: Cancel pending invitation
+ *     description: Organizer cancels a pending invitation
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - invitationId
+ *             properties:
+ *               invitationId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Invitation cancelled
+ *       400:
+ *         description: Bad request
+ *       404:
+ *         description: Invitation not found
+ */
+router.post(
+  "/cancel-invitation",
+  authenticate,
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.cancelInvitation.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/remove:
+ *   post:
+ *     tags: [Tournament Referees]
+ *     summary: Remove referee from tournament
+ *     description: Organizer removes a referee from tournament
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -70,274 +174,38 @@ router.post(
  *             type: object
  *             required:
  *               - tournamentId
- *               - refereeIds
+ *               - refereeId
  *             properties:
  *               tournamentId:
  *                 type: integer
- *                 description: Tournament ID
  *                 example: 1
- *               refereeIds:
- *                 type: array
- *                 items:
- *                   type: integer
- *                 description: Array of referee user IDs
- *                 example: [5, 6, 7]
+ *               refereeId:
+ *                 type: integer
+ *                 example: 5
  *     responses:
- *       201:
- *         description: Referees assigned successfully
+ *       204:
+ *         description: Referee removed
+ *       404:
+ *         description: Not found
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         description: Bad request
  */
 router.post(
-  "/assign",
+  "/remove",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
-  tournamentRefereeController.assignReferees.bind(tournamentRefereeController)
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.removeReferee.bind(tournamentRefereeController)
 );
 
 /**
  * @swagger
- * /tournament-referees:
- *   get:
+ * /tournament-referees/update-role:
+ *   post:
  *     tags: [Tournament Referees]
- *     summary: Get all tournament referees
- *     description: Get all tournament referees with optional tournament filter
- *     parameters:
- *       - in: query
- *         name: tournamentId
- *         schema:
- *           type: integer
- *         description: Filter by tournament ID
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Number of records to skip
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *         description: Maximum number of records to return
- *     responses:
- *       200:
- *         description: List of tournament referees
- *       500:
- *         description: Server error
- */
-router.get(
-  "/",
-  tournamentRefereeController.findAll.bind(tournamentRefereeController)
-);
-
-/**
- * @swagger
- * /tournament-referees/available-chief-referees:
- *   get:
- *     tags: [Tournament Referees]
- *     summary: Get list of available chief referees
- *     description: Get all chief referees who are not currently assigned to any tournament as main referee
+ *     summary: Update referee role
+ *     description: Organizer updates a referee's role in tournament
  *     security:
  *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of available chief referees
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: integer
- *                     example: 1
- *                   firstName:
- *                     type: string
- *                     example: "Nguyen"
- *                   lastName:
- *                     type: string
- *                     example: "Van A"
- *                   email:
- *                     type: string
- *                     example: "referee@example.com"
- *                   avatarUrl:
- *                     type: string
- *                     nullable: true
- *                     example: "https://example.com/avatar.jpg"
- *                   phoneNumber:
- *                     type: string
- *                     nullable: true
- *                     example: "0123456789"
- *       500:
- *         description: Server error
- */
-router.get(
-  "/available-chief-referees",
-  authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
-  userController.getAvailableChiefReferees.bind(userController)
-);
-
-/**
- * @swagger
- * /tournament-referees/tournament/{tournamentId}:
- *   get:
- *     tags: [Tournament Referees]
- *     summary: Get referees by tournament ID
- *     description: Get all referees assigned to a specific tournament
- *     parameters:
- *       - in: path
- *         name: tournamentId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Tournament ID
- *       - in: query
- *         name: skip
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Number of records to skip
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *         description: Maximum number of records to return
- *     responses:
- *       200:
- *         description: List of tournament referees
- *       500:
- *         description: Server error
- */
-router.get(
-  "/tournament/:tournamentId",
-  tournamentRefereeController.findByTournamentId.bind(
-    tournamentRefereeController
-  )
-);
-
-/**
- * @swagger
- * /tournament-referees/tournament/{tournamentId}/available:
- *   get:
- *     tags: [Tournament Referees]
- *     summary: Get available referees for a tournament
- *     description: Get all available referees for a tournament, excluding specific IDs
- *     parameters:
- *       - in: path
- *         name: tournamentId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Tournament ID
- *       - in: query
- *         name: excludeIds
- *         schema:
- *           type: string
- *         description: Comma-separated referee IDs to exclude
- *         example: "1,2,3"
- *     responses:
- *       200:
- *         description: List of available referees
- *       500:
- *         description: Server error
- */
-router.get(
-  "/tournament/:tournamentId/available",
-  tournamentRefereeController.getAvailableReferees.bind(
-    tournamentRefereeController
-  )
-);
-
-/**
- * @swagger
- * /tournament-referees/{id}:
- *   get:
- *     tags: [Tournament Referees]
- *     summary: Get tournament referee by ID
- *     description: Get a specific tournament referee by ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Tournament referee ID
- *     responses:
- *       200:
- *         description: Tournament referee details
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         description: Server error
- */
-router.get(
-  "/:id",
-  tournamentRefereeController.findById.bind(tournamentRefereeController)
-);
-
-/**
- * @swagger
- * /tournament-referees/{id}:
- *   put:
- *     tags: [Tournament Referees]
- *     summary: Update tournament referee
- *     description: Update a tournament referee's information
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Tournament referee ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               role:
- *                 type: string
- *                 enum: [main, assistant]
- *                 description: Referee role
- *               isAvailable:
- *                 type: boolean
- *                 description: Referee availability
- *     responses:
- *       200:
- *         description: Tournament referee updated successfully
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- */
-router.put(
-  "/:id",
-  authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
-  tournamentRefereeController.update.bind(tournamentRefereeController)
-);
-
-/**
- * @swagger
- * /tournament-referees/{id}/availability:
- *   patch:
- *     tags: [Tournament Referees]
- *     summary: Update referee availability
- *     description: Update a referee's availability status for a tournament
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Tournament referee ID
  *     requestBody:
  *       required: true
  *       content:
@@ -345,55 +213,153 @@ router.put(
  *           schema:
  *             type: object
  *             required:
- *               - isAvailable
+ *               - tournamentId
+ *               - refereeId
+ *               - newRole
  *             properties:
- *               isAvailable:
- *                 type: boolean
- *                 description: Referee availability
- *                 example: false
+ *               tournamentId:
+ *                 type: integer
+ *                 example: 1
+ *               refereeId:
+ *                 type: integer
+ *                 example: 5
+ *               newRole:
+ *                 type: string
+ *                 enum: [referee, chief]
+ *                 example: chief
  *     responses:
  *       200:
- *         description: Availability updated successfully
- *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         description: Role updated
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         description: Bad request
+ *       404:
+ *         description: Not found
  */
-router.patch(
-  "/:id/availability",
-  tournamentRefereeController.updateAvailability.bind(
-    tournamentRefereeController
-  )
+router.post(
+  "/update-role",
+  authenticate,
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.updateRole.bind(tournamentRefereeController)
 );
 
 /**
  * @swagger
- * /tournament-referees/{id}:
- *   delete:
+ * /tournament-referees/tournament/{tournamentId}:
+ *   get:
  *     tags: [Tournament Referees]
- *     summary: Delete tournament referee
- *     description: Remove a referee from a tournament
+ *     summary: Get referees by tournament with pagination
+ *     description: Get all referees assigned to a tournament
+ *     parameters:
+ *       - in: path
+ *         name: tournamentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament ID
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [referee, chief]
+ *         description: Filter by role
+ *     responses:
+ *       200:
+ *         description: List of referees with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 referees:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
+ *       400:
+ *         description: Bad request
+ */
+router.get(
+  "/tournament/:tournamentId",
+  tournamentRefereeController.getRefereesByTournament.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/tournament/{tournamentId}/invitations:
+ *   get:
+ *     tags: [Tournament Referees]
+ *     summary: Get invitations by tournament with pagination
+ *     description: Get all referee invitations for a tournament (organizer only)
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: tournamentId
  *         required: true
  *         schema:
  *           type: integer
- *         description: Tournament referee ID
+ *         description: Tournament ID
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, accepted, rejected, cancelled, expired]
+ *         description: Filter by invitation status
  *     responses:
- *       204:
- *         description: Tournament referee deleted successfully
+ *       200:
+ *         description: List of invitations with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 invitations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
+ *       400:
+ *         description: Bad request
  *       404:
- *         $ref: '#/components/responses/NotFound'
- *       500:
- *         description: Server error
+ *         description: Tournament not found
  */
-router.delete(
-  "/:id",
+router.get(
+  "/tournament/:tournamentId/invitations",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_MANAGE),
-  tournamentRefereeController.delete.bind(tournamentRefereeController)
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.getInvitationsByTournament.bind(tournamentRefereeController)
 );
+
 export default router;

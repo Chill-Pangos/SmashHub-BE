@@ -1,184 +1,269 @@
+// matchSet.service.ts
+import { sequelize } from "../config/database";
 import MatchSet from "../models/matchSet.model";
-import { CreateMatchSetDto, UpdateMatchSetDto, UpdateMatchSetScoreDto } from "../dto/matchSet.dto";
 import Match from "../models/match.model";
+import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
+import MatchReferee from "../models/matchReferee.model";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SetScoreInput {
+  subMatchId: number;
+  entryAScore: number;
+  entryBScore: number;
+}
+
+interface ScoreValidation {
+  isValid: boolean;
+  winner: "A" | "B" | null;
+  error?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getSubMatchWithCategory(subMatchId: number): Promise<{
+  subMatch: SubMatch;
+  match: Match;
+  category: TournamentCategory;
+}> {
+  const subMatch = await SubMatch.findByPk(subMatchId, {
+    include: [{
+      model: Match,
+      as: "match",
+      include: [{
+        model: Schedule,
+        as: "schedule",
+        include: [{ model: TournamentCategory, as: "tournamentCategory" }],
+      }],
+    }],
+  });
+  if (!subMatch) throw new Error("SubMatch not found");
+  if (!subMatch.match) throw new Error("Match not found");
+
+  const category = subMatch.match.schedule?.tournamentCategory;
+  if (!category) throw new Error("Match category not found");
+
+  return { subMatch, match: subMatch.match, category };
+}
+
+async function assertMatchReferee(
+  userId: number,
+  matchId: number
+): Promise<void> {
+  const ref = await MatchReferee.findOne({ where: { matchId, refereeId: userId } });
+  if (!ref) throw new Error("Only an assigned referee can perform this action");
+}
+
+/**
+ * Validate điểm theo luật bóng bàn/cầu lông:
+ * - Thắng khi đạt điểm target (11 cho bóng bàn) và dẫn ít nhất 2 điểm
+ * - Từ deuce (target-1 : target-1) phải thắng cách 2 điểm
+ */
+function validateSetScore(
+  entryAScore: number,
+  entryBScore: number,
+  targetScore: number // lấy từ category config
+): ScoreValidation {
+  if (entryAScore < 0 || entryBScore < 0) {
+    return { isValid: false, winner: null, error: "Score cannot be negative" };
+  }
+
+  const maxScore = Math.max(entryAScore, entryBScore);
+  const minScore = Math.min(entryAScore, entryBScore);
+  const diff = maxScore - minScore;
+  const deuce = targetScore - 1;
+
+  if (maxScore < targetScore) {
+    return {
+      isValid: false,
+      winner: null,
+      error: `At least one player must reach ${targetScore} points`,
+    };
+  }
+
+  // Trước deuce: thắng khi đạt đúng targetScore và đối < targetScore-1
+  if (minScore < deuce) {
+    if (maxScore === targetScore) {
+      return { isValid: true, winner: entryAScore > entryBScore ? "A" : "B" };
+    }
+    return {
+      isValid: false,
+      winner: null,
+      error: `Invalid score: winner must have exactly ${targetScore} when opponent has less than ${deuce}`,
+    };
+  }
+
+  // Deuce trở lên: phải thắng cách 2 điểm
+  if (diff >= 2) {
+    return { isValid: true, winner: entryAScore > entryBScore ? "A" : "B" };
+  }
+
+  return {
+    isValid: false,
+    winner: null,
+    error: `From ${deuce}-${deuce} onwards, must win by 2 points (current diff: ${diff})`,
+  };
+}
+
+// ─── Service ──────────────────────────────────────────────────────────────────
 
 export class MatchSetService {
-  async create(data: CreateMatchSetDto): Promise<MatchSet> {
-    return await MatchSet.create(data as any);
-  }
+  // ── 1. Thêm set với điểm số ───────────────────────────────────────────────
 
-  async findAll(skip = 0, limit = 10): Promise<MatchSet[]> {
-    return await MatchSet.findAll({
-      offset: skip,
-      limit,
-    });
-  }
+  async createSet(refereeId: number, data: SetScoreInput): Promise<MatchSet> {
+    const { subMatch, match, category } = await getSubMatchWithCategory(data.subMatchId);
+    await assertMatchReferee(refereeId, subMatch.matchId);
 
-  async findById(id: number): Promise<MatchSet | null> {
-    return await MatchSet.findByPk(id);
-  }
-
-  async findByMatchId(
-    matchId: number,
-    skip = 0,
-    limit = 10
-  ): Promise<MatchSet[]> {
-    return await MatchSet.findAll({
-      where: { matchId },
-      offset: skip,
-      limit,
-      order: [["setNumber", "ASC"]],
-    });
-  }
-
-  async update(
-    id: number,
-    data: UpdateMatchSetDto
-  ): Promise<[number, MatchSet[]]> {
-    return await MatchSet.update(data, {
-      where: { id },
-      returning: true,
-    });
-  }
-
-  async delete(id: number): Promise<number> {
-    return await MatchSet.destroy({ where: { id } });
-  }
-
-  /**
-   * Validate điểm số cuối cùng của set theo quy tắc cầu lông:
-   * - Đội nào đạt 11 điểm trước và đối kia < 10 thắng
-   * - Từ 10-10 trở đi phải cách nhau 2 điểm
-   * - Phải có người thắng (kết quả cuối cùng)
-   */
-  private validateFinalSetScore(entryAScore: number, entryBScore: number): { isValid: boolean; winner: 'A' | 'B'; error?: string } | { isValid: false; winner: null; error: string } {
-    // Kiểm tra điểm số không âm
-    if (entryAScore < 0 || entryBScore < 0) {
-      return { isValid: false, winner: null, error: "Score cannot be negative" };
+    if (subMatch.status !== "in_progress") {
+      throw new Error(
+        `Cannot add set. SubMatch status is "${subMatch.status}", must be "in_progress"`
+      );
     }
 
-    // Phải có ít nhất 1 đội đạt 11 điểm
-    if (entryAScore < 11 && entryBScore < 11) {
-      return { isValid: false, winner: null, error: "At least one team must reach 11 points" };
-    }
-
-    const maxScore = Math.max(entryAScore, entryBScore);
-    const minScore = Math.min(entryAScore, entryBScore);
-    const scoreDiff = maxScore - minScore;
-
-    // Nếu điểm thấp < 10, người có điểm cao phải >= 11
-    if (minScore < 10) {
-      if (maxScore >= 11) {
-        return { 
-          isValid: true, 
-          winner: entryAScore > entryBScore ? 'A' : 'B' 
-        };
-      }
-      return { isValid: false, winner: null, error: "Invalid score: winner must have at least 11 points" };
-    }
-
-    // Từ 10-10 trở đi, phải cách nhau đúng 2 điểm
-    if (minScore >= 10) {
-      if (scoreDiff >= 2) {
-        return { 
-          isValid: true, 
-          winner: entryAScore > entryBScore ? 'A' : 'B' 
-        };
-      }
-      return { isValid: false, winner: null, error: `Invalid score: from 10-10 onwards, must win by 2 points (current difference: ${scoreDiff})` };
-    }
-
-    return { isValid: false, winner: null, error: "Invalid score" };
-  }
-
-  async createSetWithScore(data: UpdateMatchSetScoreDto): Promise<MatchSet> {
-    // Lấy thông tin match để kiểm tra maxSets và status
-    const matchInstance = await Match.findByPk(data.matchId, {
-      include: [
-        {
-          model: Schedule,
-          include: [
-            {
-              model: TournamentCategory,
-            }
-          ],
-        },
-      ],
-    });
-
-    const match = matchInstance?.get({ plain: true }) as any;
-
-    if (!match) {
-      throw new Error("Match not found");
-    }
-
-    const schedule = match.schedule;
-    if (!schedule || !schedule.TournamentCategory) {
-      throw new Error("Cannot find tournament information for this match");
-    }
-
-    const maxSets = schedule.TournamentCategory.maxSets;
-
-    // Kiểm tra match phải đang in_progress
-    if (match.status !== "in_progress") {
-      throw new Error(`Cannot add set. Match status is ${match.status}, must be in_progress`);
-    }
-
-    // Lấy danh sách các set hiện có
     const existingSets = await MatchSet.findAll({
-      where: { matchId: data.matchId },
+      where: { subMatchId: data.subMatchId },
       order: [["setNumber", "ASC"]],
     });
 
-    // Kiểm tra không vượt quá maxSets
-    if (existingSets.length >= maxSets) {
-      throw new Error(`Cannot create more sets. Maximum sets is ${maxSets}`);
+    if (existingSets.length >= category.maxSets) {
+      throw new Error(
+        `Cannot create more sets. Maximum is ${category.maxSets}`
+      );
     }
 
-    // Tính số set đã thắng của mỗi entry
-    let entryASetsWon = 0;
-    let entryBSetsWon = 0;
+    // Check đã có người thắng chưa
+    const setsToWin = Math.floor(category.maxSets / 2) + 1;
+    const entryASets = existingSets.filter(
+      (s) => s.entryAScore > s.entryBScore
+    ).length;
+    const entryBSets = existingSets.filter(
+      (s) => s.entryBScore > s.entryAScore
+    ).length;
 
-    existingSets.forEach((set) => {
-      if (set.entryAScore > set.entryBScore) {
-        entryASetsWon++;
-      } else if (set.entryBScore > set.entryAScore) {
-        entryBSetsWon++;
-      }
-    });
-
-    // Tính số set cần thắng để kết thúc: maxSets / 2 + 1
-    const setsToWin = Math.floor(maxSets / 2) + 1;
-
-    // Kiểm tra đã có người thắng chưa
-    if (entryASetsWon >= setsToWin) {
-      throw new Error(`Entry A has already won ${entryASetsWon} sets (needed ${setsToWin}). Cannot add more sets`);
+    if (entryASets >= setsToWin) {
+      throw new Error(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
     }
-    if (entryBSetsWon >= setsToWin) {
-      throw new Error(`Entry B has already won ${entryBSetsWon} sets (needed ${setsToWin}). Cannot add more sets`);
+    if (entryBSets >= setsToWin) {
+      throw new Error(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
     }
 
-    // Tính setNumber tiếp theo
-    const nextSetNumber = existingSets.length > 0 ? existingSets[existingSets.length - 1]!.setNumber + 1 : 1;
-
-    // Validate điểm số cuối cùng
-    const validation = this.validateFinalSetScore(data.entryAScore, data.entryBScore);
-    
+    // Validate điểm — target score lấy từ maxSets (5 sets → 11pts, 7 sets → 11pts)
+    // Có thể mở rộng thành field riêng trong category nếu cần
+    const targetScore = 11;
+    const validation = validateSetScore(
+      data.entryAScore,
+      data.entryBScore,
+      targetScore
+    );
     if (!validation.isValid) {
-      throw new Error(validation.error || "Invalid score");
+      throw new Error(validation.error);
     }
 
-    // Tạo matchSet mới với điểm số
-    const matchSet = await MatchSet.create({
-      matchId: data.matchId,
+    const nextSetNumber =
+      existingSets.length > 0
+        ? existingSets[existingSets.length - 1]!.setNumber + 1
+        : 1;
+
+    return await MatchSet.create({
+      subMatchId: data.subMatchId,
       setNumber: nextSetNumber,
       entryAScore: data.entryAScore,
       entryBScore: data.entryBScore,
-    } as any);
+    });
+  }
 
-    return matchSet;
+  // ── 2. Sửa điểm set (referee nhập sai) ───────────────────────────────────
+
+  async updateSetScore(
+    refereeId: number,
+    setId: number,
+    entryAScore: number,
+    entryBScore: number
+  ): Promise<MatchSet> {
+    const set = await MatchSet.findByPk(setId);
+    if (!set) throw new Error("Set not found");
+
+    const { subMatch } = await getSubMatchWithCategory(set.subMatchId);
+    await assertMatchReferee(refereeId, subMatch.matchId);
+
+    if (subMatch.status !== "in_progress") {
+      throw new Error("Can only update score while sub-match is in progress");
+    }
+
+    const validation = validateSetScore(entryAScore, entryBScore, 11);
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+
+    return await set.update({ entryAScore, entryBScore });
+  }
+
+  // ── 3. Queries ────────────────────────────────────────────────────────────
+
+  async getSetsBySubMatch(subMatchId: number, options?: { skip?: number; limit?: number }): Promise<{ sets?: MatchSet[], pagination?: any } | MatchSet[]> {
+    const skip = options?.skip || 0;
+    const limit = options?.limit || 10;
+
+    // If pagination is requested
+    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+      const { count, rows } = await MatchSet.findAndCountAll({
+        where: { subMatchId },
+        order: [["setNumber", "ASC"]],
+        offset: skip,
+        limit: limit,
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        sets: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    return await MatchSet.findAll({
+      where: { subMatchId },
+      order: [["setNumber", "ASC"]],
+    });
+  }
+
+  async getSetById(setId: number): Promise<MatchSet> {
+    const set = await MatchSet.findByPk(setId);
+    if (!set) throw new Error("Set not found");
+    return set;
+  }
+
+  async deleteSet(refereeId: number, setId: number): Promise<void> {
+    const set = await MatchSet.findByPk(setId);
+    if (!set) throw new Error("Set not found");
+
+    const { subMatch } = await getSubMatchWithCategory(set.subMatchId);
+    await assertMatchReferee(refereeId, subMatch.matchId);
+
+    if (subMatch.status !== "in_progress") {
+      throw new Error("Can only delete set while sub-match is in progress");
+    }
+
+    // Chỉ cho xóa set cuối cùng
+    const allSets = await MatchSet.findAll({
+      where: { subMatchId: set.subMatchId },
+      order: [["setNumber", "DESC"]],
+    });
+    if (allSets[0]?.id !== setId) {
+      throw new Error("Can only delete the latest set");
+    }
+
+    await set.destroy();
   }
 }
 

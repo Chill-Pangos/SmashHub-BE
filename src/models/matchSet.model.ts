@@ -72,6 +72,8 @@ export default class MatchSet extends Model {
 
   @BeforeValidate
   static validateSetNumber(instance: MatchSet): void {
+    if (instance.setNumber === undefined) return;
+
     const { setNumber } = instance;
 
     if (
@@ -87,6 +89,8 @@ export default class MatchSet extends Model {
 
   @BeforeValidate
   static validateScores(instance: MatchSet): void {
+    if (instance.entryAScore === undefined && instance.entryBScore === undefined) return;
+
     const { entryAScore, entryBScore } = instance;
 
     if (!Number.isInteger(entryAScore) || entryAScore < 0 || entryAScore > MAX_SCORE) {

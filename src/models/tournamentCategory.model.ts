@@ -35,7 +35,7 @@ export type CategoryGender = (typeof CATEGORY_GENDERS)[number];
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
-  tableName: "tournament_categories",  // đổi sang số nhiều cho nhất quán
+  tableName: "tournament_categories", // đổi sang số nhiều cho nhất quán
   timestamps: true,
   indexes: [
     { fields: ["type"] },
@@ -87,11 +87,11 @@ export default class TournamentCategory extends Model {
   declare maxElo?: number;
 
   @Column({
-  type: DataType.INTEGER.UNSIGNED,
-  allowNull: true,
-  comment: "Only applicable for team type. Null = no upper limit",
-})
-declare maxMembersPerEntry?: number;
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+    comment: "Only applicable for team type. Null = no upper limit",
+  })
+  declare maxMembersPerEntry?: number;
 
   @Column({
     type: DataType.ENUM(...CATEGORY_GENDERS),
@@ -105,6 +105,14 @@ declare maxMembersPerEntry?: number;
     defaultValue: false,
   })
   declare isGroupStage: boolean;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+    defaultValue: 0,
+    comment: "Entry fee for this category. 0 or null = free",
+  })
+  declare entryFee?: number;
 
   // ─── Associations ─────────────────────────────────────────────────────────
 
@@ -121,6 +129,8 @@ declare maxMembersPerEntry?: number;
 
   @BeforeValidate
   static validateName(instance: TournamentCategory): void {
+    if (instance.name === undefined) return;
+
     const name = instance.name?.trim();
 
     if (!name) {
@@ -128,13 +138,15 @@ declare maxMembersPerEntry?: number;
     }
     if (name.length > NAME_MAX_LENGTH) {
       throw new Error(
-        `Category name must not exceed ${NAME_MAX_LENGTH} characters`
+        `Category name must not exceed ${NAME_MAX_LENGTH} characters`,
       );
     }
   }
 
   @BeforeValidate
   static validateGender(instance: TournamentCategory): void {
+    if (instance.gender === undefined && instance.type === undefined) return;
+
     const { gender, type } = instance;
 
     if (gender === "mixed" && type !== "double") {
@@ -144,6 +156,8 @@ declare maxMembersPerEntry?: number;
 
   @BeforeValidate
   static validateTeamFormat(instance: TournamentCategory): void {
+    if (instance.type === undefined && instance.teamFormat === undefined) return;
+
     const { type, teamFormat } = instance;
 
     if (type === "team" && !teamFormat) {
@@ -156,7 +170,7 @@ declare maxMembersPerEntry?: number;
 
     if (!TEAM_FORMAT_REGEX.test(teamFormat)) {
       throw new Error(
-        "Team format must contain only S or D separated by hyphens (e.g. S-S-S, S-D-S-D-S)"
+        "Team format must contain only S or D separated by hyphens (e.g. S-S-S, S-D-S-D-S)",
       );
     }
 
@@ -183,7 +197,7 @@ declare maxMembersPerEntry?: number;
 
     if (maxEntries < minRequired) {
       throw new Error(
-        `Max entries must be at least ${minRequired} for ${isGroupStage ? "group stage" : "knockout"} categories`
+        `Max entries must be at least ${minRequired} for ${isGroupStage ? "group stage" : "knockout"} categories`,
       );
     }
 
@@ -208,45 +222,49 @@ declare maxMembersPerEntry?: number;
 
   @BeforeValidate
   static validateAgeRange(instance: TournamentCategory): void {
+    if (instance.minAge === undefined && instance.maxAge === undefined) return;
+
     TournamentCategory.assertRange("Age", instance.minAge, instance.maxAge);
   }
 
   @BeforeValidate
   static validateEloRange(instance: TournamentCategory): void {
+    if (instance.minElo === undefined && instance.maxElo === undefined) return;
+
     TournamentCategory.assertRange("ELO", instance.minElo, instance.maxElo);
   }
 
   @BeforeValidate
-static validateMaxMembersPerEntry(instance: TournamentCategory): void {
-  const { type, maxMembersPerEntry } = instance;
+  static validateMaxMembersPerEntry(instance: TournamentCategory): void {
+    if (instance.type === undefined && instance.maxMembersPerEntry === undefined) return;
 
-  if (type !== "team") {
-    if (maxMembersPerEntry != null) {
-      throw new Error("maxMembersPerEntry is only applicable for team categories");
+    const { type, maxMembersPerEntry } = instance;
+
+    if (type !== "team") {
+      if (maxMembersPerEntry != null) {
+        throw new Error(
+          "maxMembersPerEntry is only applicable for team categories",
+        );
+      }
+      return;
     }
-    return;
-  }
 
-  // type === "team"
-  if (maxMembersPerEntry == null) return; // null = không giới hạn trên
+    // type === "team"
+    if (maxMembersPerEntry == null) return; // null = không giới hạn trên
 
-  if (
-    !Number.isInteger(maxMembersPerEntry) ||
-    maxMembersPerEntry < MIN_MEMBERS_TEAM
-  ) {
-    throw new Error(
-      `maxMembersPerEntry must be an integer of at least ${MIN_MEMBERS_TEAM} for team categories`
-    );
+    if (
+      !Number.isInteger(maxMembersPerEntry) ||
+      maxMembersPerEntry < MIN_MEMBERS_TEAM
+    ) {
+      throw new Error(
+        `maxMembersPerEntry must be an integer of at least ${MIN_MEMBERS_TEAM} for team categories`,
+      );
+    }
   }
-}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private static assertRange(
-    label: string,
-    min?: number,
-    max?: number
-  ): void {
+  private static assertRange(label: string, min?: number, max?: number): void {
     if (min != null && min < 0) {
       throw new Error(`Min ${label} cannot be negative`);
     }

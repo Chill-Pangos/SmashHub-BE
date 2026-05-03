@@ -14,6 +14,10 @@ export interface UpdateEntryDto {
   requiredMemberCount?: number;
 }
 
+export interface ConfirmEntryDto {
+  isConfirmed: boolean;
+}
+
 export interface EntryResponseDto {
   id: number;
   categoryId: number;
@@ -22,6 +26,30 @@ export interface EntryResponseDto {
   isAcceptingMembers: boolean;
   requiredMemberCount?: number;
   currentMemberCount: number;
+  isConfirmed: boolean;
+  confirmedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserEntryWithRoleDto {
+  id: number;
+  name: string;
+  categoryId: number;
+  role: "captain" | "member";
+  currentMemberCount: number;
+  requiredMemberCount?: number;
+  isConfirmed: boolean;
+  confirmedAt?: Date;
+  category?: {
+    id: number;
+    name: string;
+    tournamentId: number;
+  };
+  tournament?: {
+    id: number;
+    name: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,81 +1,61 @@
-import { Request, Response } from "express";
+// controllers/role.controller.ts
+
+import { Request, Response, NextFunction } from "express";
 import roleService from "../services/role.service";
+import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
 
 export class RoleController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const role = await roleService.create(req.body);
-      res.status(201).json(role);
+      const data = await roleService.create(req.body as CreateRoleDto);
+      res.status(201).json(data);
     } catch (error) {
-      res.status(400).json({ message: "Error creating role", error });
+      next(error);
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const roles = await roleService.findAll(skip, limit);
-      res.status(200).json(roles);
+      const data = await roleService.findAll(Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      res.status(200).json(data);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching roles", error });
+      next(error);
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const role = await roleService.findById(Number(req.params.id));
-      if (!role) {
-        res.status(404).json({ message: "Role not found" });
-        return;
-      }
-      res.status(200).json(role);
+      const data = await roleService.findById(Number(req.params.id));
+      res.status(200).json(data);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching role", error });
+      next(error);
     }
   }
 
-  async findByName(req: Request, res: Response): Promise<void> {
+  async findByName(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const name = req.params.name;
-      if (!name || typeof name !== 'string') {
-        res.status(400).json({ message: "Role name is required" });
-        return;
-      }
-      const role = await roleService.findByName(name);
-      if (!role) {
-        res.status(404).json({ message: "Role not found" });
-        return;
-      }
-      res.status(200).json(role);
+      const data = await roleService.findByName(req.params.name as string);
+      res.status(200).json(data);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching role", error });
+      next(error);
     }
   }
 
-  async update(req: Request, res: Response): Promise<void> {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const role = await roleService.update(Number(req.params.id), req.body);
-      if (!role) {
-        res.status(404).json({ message: "Role not found" });
-        return;
-      }
-      res.status(200).json(role);
+      const data = await roleService.update(Number(req.params.id), req.body as UpdateRoleDto);
+      res.status(200).json(data);
     } catch (error) {
-      res.status(400).json({ message: "Error updating role", error });
+      next(error);
     }
   }
 
-  async delete(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const deleted = await roleService.delete(Number(req.params.id));
-      if (!deleted) {
-        res.status(404).json({ message: "Role not found" });
-        return;
-      }
+      await roleService.delete(Number(req.params.id));
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting role", error });
+      next(error);
     }
   }
 }

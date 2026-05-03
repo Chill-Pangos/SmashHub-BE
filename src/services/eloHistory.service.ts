@@ -1,51 +1,59 @@
-import { CreateEloHistoryDto } from "../dto/eloHistory.dto";
+// eloHistory.service.ts
 import EloHistory from "../models/eloHistory.model";
+import User from "../models/user.model";
+import Match from "../models/match.model";
+import { Op } from "sequelize";
+
+const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
 
 export class EloHistoryService {
-  async create(data: CreateEloHistoryDto): Promise<EloHistory> {
-    return await EloHistory.create(data as any);
-  }
-
-  async findAll(skip = 0, limit = 10): Promise<EloHistory[]> {
-    return await EloHistory.findAll({
-      offset: skip,
-      limit,
-      order: [["createdAt", "DESC"]],
-    });
-  }
-
-  async findById(id: number): Promise<EloHistory | null> {
-    return await EloHistory.findByPk(id);
-  }
-
-  async findByUserId(
+  /**
+   * Lịch sử ELO của 1 user theo thời gian.
+   */
+  async getByUser(
     userId: number,
-    skip = 0,
-    limit = 10
-  ): Promise<EloHistory[]> {
-    return await EloHistory.findAll({
+    options: { skip?: number; limit?: number } = {}
+  ): Promise<{ rows: EloHistory[]; count: number }> {
+    const { skip = 0, limit = 20 } = options;
+
+    return await EloHistory.findAndCountAll({
       where: { userId },
+      include: [{ model: Match, as: "match", attributes: ["id", "status"] }],
+      order: [["createdAt", "DESC"]],
       offset: skip,
       limit,
-      order: [["createdAt", "DESC"]],
+      distinct: true,
     });
   }
 
-  async findByMatchId(
-    matchId: number,
-    skip = 0,
-    limit = 10
-  ): Promise<EloHistory[]> {
+  /**
+   * Lịch sử ELO của tất cả players trong 1 match.
+   */
+  async getByMatch(matchId: number): Promise<EloHistory[]> {
     return await EloHistory.findAll({
       where: { matchId },
-      offset: skip,
-      limit,
+      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
       order: [["createdAt", "DESC"]],
     });
   }
 
-  async delete(id: number): Promise<number> {
-    return await EloHistory.destroy({ where: { id } });
+  /**
+   * Tổng thay đổi ELO của user trong 1 khoảng thời gian.
+   */
+  async getNetEloChange(
+    userId: number,
+    from: Date,
+    to: Date
+  ): Promise<number> {
+    const histories = await EloHistory.findAll({
+      where: {
+        userId,
+        createdAt: { [Op.gte]: from, [Op.lte]: to },
+      },
+      attributes: ["eloDelta"],
+    });
+
+    return histories.reduce((sum, h) => sum + h.eloDelta, 0);
   }
 }
 

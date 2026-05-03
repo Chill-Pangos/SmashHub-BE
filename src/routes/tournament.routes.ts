@@ -2,7 +2,6 @@ import { Router } from "express";
 import tournamentController from "../controllers/tournament.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -23,13 +22,24 @@ const router = Router();
  *             type: object
  *             required:
  *               - name
+ *               - tier
  *               - startDate
+ *               - endDate
+ *               - registrationStartDate
+ *               - registrationEndDate
+ *               - bracketGenerationDate
  *               - location
  *             properties:
  *               name:
  *                 type: string
  *                 description: Name of the tournament
  *                 example: "Spring Championship 2026"
+ *               tier:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 5
+ *                 description: Tournament tier level (1-5)
+ *                 example: 3
  *               startDate:
  *                 type: string
  *                 format: date-time
@@ -38,19 +48,35 @@ const router = Router();
  *               endDate:
  *                 type: string
  *                 format: date-time
- *                 description: Tournament end date and time (optional)
+ *                 description: Tournament end date and time
  *                 example: "2026-03-20T18:00:00Z"
+ *               registrationStartDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Registration opens at this date (cannot be in the past)
+ *                 example: "2026-02-15T00:00:00Z"
+ *               registrationEndDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Registration closes at this date (must be before startDate)
+ *                 example: "2026-03-10T23:59:59Z"
+ *               bracketGenerationDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Date when brackets are generated (must be at least 2 days before startDate, after registrationEndDate)
+ *                 example: "2026-03-12T10:00:00Z"
  *               location:
  *                 type: string
  *                 description: Tournament venue location
  *                 example: "National Stadium"
  *               status:
  *                 type: string
- *                 enum: [upcoming, ongoing, completed]
+ *                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                 description: Tournament status (default is 'upcoming')
  *                 example: "upcoming"
  *               numberOfTables:
  *                 type: integer
+ *                 minimum: 1
  *                 description: Number of tables available for concurrent matches (default is 1)
  *                 example: 4
  *               categories:
@@ -89,6 +115,22 @@ const router = Router();
  *                       type: integer
  *                       description: Number of doubles matches
  *                       example: 2
+ *                     minAge:
+ *                       type: integer
+ *                       description: Minimum age requirement
+ *                       example: 18
+ *                     maxAge:
+ *                       type: integer
+ *                       description: Maximum age requirement
+ *                       example: 65
+ *                     minElo:
+ *                       type: integer
+ *                       description: Minimum ELO rating requirement
+ *                       example: 1000
+ *                     maxElo:
+ *                       type: integer
+ *                       description: Maximum ELO rating requirement
+ *                       example: 2000
  *                     gender:
  *                       type: string
  *                       enum: [male, female, mixed]
@@ -100,11 +142,15 @@ const router = Router();
  *                       example: false
  *           examples:
  *             full:
- *               summary: Full tournament with multiple categories
+ *               summary: Full tournament with comprehensive categories
  *               value:
  *                 name: "Spring Championship 2026"
+ *                 tier: 3
  *                 startDate: "2026-03-15T09:00:00Z"
  *                 endDate: "2026-03-20T18:00:00Z"
+ *                 registrationStartDate: "2026-02-15T00:00:00Z"
+ *                 registrationEndDate: "2026-03-10T23:59:59Z"
+ *                 bracketGenerationDate: "2026-03-12T10:00:00Z"
  *                 location: "National Stadium"
  *                 status: "upcoming"
  *                 numberOfTables: 4
@@ -113,19 +159,36 @@ const router = Router();
  *                     type: "single"
  *                     maxEntries: 32
  *                     maxSets: 3
+ *                     numberOfSingles: 3
+ *                     numberOfDoubles: 0
+ *                     minAge: 18
+ *                     maxAge: 65
+ *                     minElo: 1000
+ *                     maxElo: 2500
  *                     gender: "male"
  *                     isGroupStage: false
  *                   - name: "Women's Singles"
  *                     type: "single"
  *                     maxEntries: 32
  *                     maxSets: 3
+ *                     numberOfSingles: 3
+ *                     numberOfDoubles: 0
+ *                     minAge: 18
+ *                     maxAge: 65
+ *                     minElo: 1000
+ *                     maxElo: 2500
  *                     gender: "female"
  *                     isGroupStage: false
  *             minimal:
  *               summary: Minimal tournament without categories
  *               value:
  *                 name: "Local Tournament 2026"
+ *                 tier: 1
  *                 startDate: "2026-04-01T10:00:00Z"
+ *                 endDate: "2026-04-05T18:00:00Z"
+ *                 registrationStartDate: "2026-03-01T00:00:00Z"
+ *                 registrationEndDate: "2026-03-28T23:59:59Z"
+ *                 bracketGenerationDate: "2026-03-30T10:00:00Z"
  *                 location: "Community Center"
  *     responses:
  *       201:
@@ -141,6 +204,9 @@ const router = Router();
  *                 name:
  *                   type: string
  *                   example: "Spring Championship 2026"
+ *                 tier:
+ *                   type: integer
+ *                   example: 3
  *                 startDate:
  *                   type: string
  *                   format: date-time
@@ -149,6 +215,18 @@ const router = Router();
  *                   type: string
  *                   format: date-time
  *                   example: "2026-03-20T18:00:00Z"
+ *                 registrationStartDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-02-15T00:00:00Z"
+ *                 registrationEndDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-10T23:59:59Z"
+ *                 bracketGenerationDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-12T10:00:00Z"
  *                 location:
  *                   type: string
  *                   example: "National Stadium"
@@ -161,40 +239,72 @@ const router = Router();
  *                 createdBy:
  *                   type: integer
  *                   description: ID of the user who created this tournament
- *                   example: 1
+ *                   example: 5
  *                 createdAt:
  *                   type: string
  *                   format: date-time
+ *                   example: "2026-02-10T14:30:00Z"
  *                 updatedAt:
  *                   type: string
  *                   format: date-time
- *                 contents:
+ *                   example: "2026-02-10T14:30:00Z"
+ *                 categories:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
  *                       id:
  *                         type: integer
+ *                         example: 1
  *                       tournamentId:
  *                         type: integer
+ *                         example: 1
  *                       name:
  *                         type: string
+ *                         example: "Men's Singles"
  *                       type:
  *                         type: string
  *                         enum: [single, team, double]
+ *                         example: "single"
  *                       maxEntries:
  *                         type: integer
+ *                         example: 32
  *                       maxSets:
  *                         type: integer
+ *                         example: 3
  *                       numberOfSingles:
  *                         type: integer
+ *                         example: 3
  *                       numberOfDoubles:
  *                         type: integer
+ *                         example: 0
+ *                       minAge:
+ *                         type: integer
+ *                         example: 18
+ *                       maxAge:
+ *                         type: integer
+ *                         example: 65
+ *                       minElo:
+ *                         type: integer
+ *                         example: 1000
+ *                       maxElo:
+ *                         type: integer
+ *                         example: 2500
  *                       gender:
  *                         type: string
  *                         enum: [male, female, mixed]
+ *                         example: "male"
  *                       isGroupStage:
  *                         type: boolean
+ *                         example: false
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
  *       400:
  *         description: Bad request - Invalid input data
  *         content:
@@ -229,17 +339,158 @@ const router = Router();
  *                   example: "Transaction failed"
  *   get:
  *     tags: [Tournaments]
- *     summary: Get all tournaments
+ *     summary: Get all tournaments with pagination
+ *     description: Get all tournaments with their categories and pagination information
  *     parameters:
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of tournaments
+ *         description: List of tournaments with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tournaments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       name:
+ *                         type: string
+ *                         example: "Spring Championship 2026"
+ *                       tier:
+ *                         type: integer
+ *                         example: 3
+ *                       status:
+ *                         type: string
+ *                         enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
+ *                         example: "upcoming"
+ *                       startDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-15T09:00:00Z"
+ *                       endDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-20T18:00:00Z"
+ *                       registrationStartDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-15T00:00:00Z"
+ *                       registrationEndDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-10T23:59:59Z"
+ *                       bracketGenerationDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-12T10:00:00Z"
+ *                       location:
+ *                         type: string
+ *                         example: "National Stadium"
+ *                       numberOfTables:
+ *                         type: integer
+ *                         example: 4
+ *                       createdBy:
+ *                         type: integer
+ *                         example: 5
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *                       categories:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: integer
+ *                               example: 1
+ *                             tournamentId:
+ *                               type: integer
+ *                               example: 1
+ *                             name:
+ *                               type: string
+ *                               example: "Men's Singles"
+ *                             type:
+ *                               type: string
+ *                               enum: [single, team, double]
+ *                               example: "single"
+ *                             maxEntries:
+ *                               type: integer
+ *                               example: 32
+ *                             maxSets:
+ *                               type: integer
+ *                               example: 3
+ *                             numberOfSingles:
+ *                               type: integer
+ *                               example: 3
+ *                             numberOfDoubles:
+ *                               type: integer
+ *                               example: 0
+ *                             minAge:
+ *                               type: integer
+ *                               example: 18
+ *                             maxAge:
+ *                               type: integer
+ *                               example: 65
+ *                             minElo:
+ *                               type: integer
+ *                               example: 1000
+ *                             maxElo:
+ *                               type: integer
+ *                               example: 2500
+ *                             gender:
+ *                               type: string
+ *                               enum: [male, female, mixed]
+ *                               example: "male"
+ *                             isGroupStage:
+ *                               type: boolean
+ *                               example: false
+ *                             createdAt:
+ *                               type: string
+ *                               format: date-time
+ *                               example: "2026-02-10T14:30:00Z"
+ *                             updatedAt:
+ *                               type: string
+ *                               format: date-time
+ *                               example: "2026-02-10T14:30:00Z"
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 25
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 3
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: true
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
+ *       500:
+ *         description: Internal server error
  */
 router.post("/", 
   authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_CREATE),
+  checkPermission('tournaments:create'),
   tournamentController.create.bind(tournamentController)
 );
 router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tournamentController));
@@ -328,21 +579,54 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *                     properties:
  *                       id:
  *                         type: integer
+ *                         example: 1
  *                       name:
  *                         type: string
+ *                         example: "Spring Championship 2026"
+ *                       tier:
+ *                         type: integer
+ *                         example: 3
  *                       status:
  *                         type: string
- *                         enum: [upcoming, ongoing, completed]
+ *                         enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
+ *                         example: "upcoming"
  *                       startDate:
  *                         type: string
  *                         format: date-time
+ *                         example: "2026-03-15T09:00:00Z"
  *                       endDate:
  *                         type: string
  *                         format: date-time
+ *                         example: "2026-03-20T18:00:00Z"
+ *                       registrationStartDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-15T00:00:00Z"
+ *                       registrationEndDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-10T23:59:59Z"
+ *                       bracketGenerationDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-03-12T10:00:00Z"
  *                       location:
  *                         type: string
+ *                         example: "National Stadium"
+ *                       numberOfTables:
+ *                         type: integer
+ *                         example: 4
  *                       createdBy:
  *                         type: integer
+ *                         example: 5
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
  *                       categories:
  *                         type: array
  *                         items:
@@ -350,21 +634,53 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *                           properties:
  *                             id:
  *                               type: integer
+ *                               example: 1
  *                             name:
  *                               type: string
+ *                               example: "Men's Singles"
  *                             type:
  *                               type: string
  *                               enum: [single, team, double]
+ *                               example: "single"
  *                             maxEntries:
  *                               type: integer
+ *                               example: 32
  *                             maxSets:
  *                               type: integer
+ *                               example: 3
+ *                             numberOfSingles:
+ *                               type: integer
+ *                               example: 3
+ *                             numberOfDoubles:
+ *                               type: integer
+ *                               example: 0
+ *                             minAge:
+ *                               type: integer
+ *                               example: 18
+ *                             maxAge:
+ *                               type: integer
+ *                               example: 65
+ *                             minElo:
+ *                               type: integer
+ *                               example: 1000
+ *                             maxElo:
+ *                               type: integer
+ *                               example: 2500
  *                             gender:
  *                               type: string
  *                               enum: [male, female, mixed]
-
+ *                               example: "male"
  *                             isGroupStage:
  *                               type: boolean
+ *                               example: false
+ *                             createdAt:
+ *                               type: string
+ *                               format: date-time
+ *                               example: "2026-02-10T14:30:00Z"
+ *                             updatedAt:
+ *                               type: string
+ *                               format: date-time
+ *                               example: "2026-02-10T14:30:00Z"
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -399,189 +715,6 @@ router.get("/search", tournamentController.findAllWithCategoriesFiltered.bind(to
 
 /**
  * @swagger
- * /tournaments/{id}:
- *   get:
- *     tags: [Tournaments]
- *     summary: Get tournament by ID with categories
- *     description: Retrieve a tournament by ID including all tournament categories
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Tournament details with categories
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: integer
- *                   example: 1
- *                 name:
- *                   type: string
- *                   example: "Spring Championship 2026"
- *                 status:
- *                   type: string
- *                   enum: [upcoming, ongoing, completed]
- *                   example: "upcoming"
- *                 startDate:
- *                   type: string
- *                   format: date-time
- *                 endDate:
- *                   type: string
- *                   format: date-time
- *                 location:
- *                   type: string
- *                   example: "National Stadium"
- *                 createdBy:
- *                   type: integer
- *                   example: 1
- *                 createdAt:
- *                   type: string
- *                   format: date-time
- *                 updatedAt:
- *                   type: string
- *                   format: date-time
- *                 categories:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                       tournamentId:
- *                         type: integer
- *                       name:
- *                         type: string
- *                       type:
- *                         type: string
- *                         enum: [single, team, double]
- *                       maxEntries:
- *                         type: integer
- *                       maxSets:
- *                         type: integer
- *                       numberOfSingles:
- *                         type: integer
- *                       numberOfDoubles:
- *                         type: integer
- *                       gender:
- *                         type: string
- *                         enum: [male, female, mixed]
- *                       isGroupStage:
- *                         type: boolean
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   put:
- *     tags: [Tournaments]
- *     summary: Update tournament with categories
- *     description: Update a tournament and optionally its categories. If categories are provided, all existing categories will be replaced.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Spring Championship 2026 - Updated"
- *               startDate:
- *                 type: string
- *                 format: date-time
- *                 example: "2026-03-15T09:00:00Z"
- *               endDate:
- *                 type: string
- *                 format: date-time
- *                 example: "2026-03-20T18:00:00Z"
- *               location:
- *                 type: string
- *                 example: "National Stadium"
- *               status:
- *                 type: string
- *                 enum: [upcoming, ongoing, completed]
- *                 example: "ongoing"
- *               numberOfTables:
- *                 type: integer
- *                 description: Number of tables available for concurrent matches
- *                 example: 6
- *               categories:
- *                 type: array
- *                 description: Array of tournament categories (optional). If provided, replaces all existing categories.
- *                 items:
- *                   type: object
- *                   required:
- *                     - name
- *                     - type
- *                     - maxEntries
- *                     - maxSets
- *                   properties:
- *                     name:
- *                       type: string
- *                       example: "Men's Singles"
- *                     type:
- *                       type: string
- *                       enum: [single, team, double]
- *                       example: "single"
- *                     maxEntries:
- *                       type: integer
- *                       example: 32
- *                     maxSets:
- *                       type: integer
- *                       example: 3
- *                     numberOfSingles:
- *                       type: integer
- *                       example: 3
- *                     numberOfDoubles:
- *                       type: integer
- *                       example: 2
- *                     gender:
- *                       type: string
- *                       enum: [male, female, mixed]
- *                       example: "male"
- *                     isGroupStage:
- *                       type: boolean
- *                       example: false
- *     responses:
- *       200:
- *         description: Tournament updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Tournament'
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       400:
- *         description: Bad request
- *   delete:
- *     tags: [Tournaments]
- *     summary: Delete tournament
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       204:
- *         $ref: '#/components/responses/NoContent'
- */
-router.get("/:id", tournamentController.findByIdWithCategories.bind(tournamentController));
-router.put("/:id", 
-  authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
-  tournamentController.updateWithCategories.bind(tournamentController)
-);
-router.delete("/:id", 
-  authenticate, 
-  checkPermission(PERMISSIONS.TOURNAMENTS_DELETE),
-  tournamentController.delete.bind(tournamentController)
-);
-
-
-/**
- * @swagger
  * /tournaments/update-statuses:
  *   post:
  *     tags: [Tournaments]
@@ -590,7 +723,7 @@ router.delete("/:id",
  *       Manually update tournament statuses based on registration and bracket dates.
  *       This endpoint is useful for admins to force status updates outside the cron schedule.
  *       Status transitions:
- *       - draft → registration_open (when registrationStartDate is reached)
+ *       - upcoming → registration_open (when registrationStartDate is reached)
  *       - registration_open → registration_closed (when registrationEndDate is reached)
  *       - registration_closed → brackets_generated (when bracketGenerationDate is reached)
  *     security:
@@ -629,14 +762,14 @@ router.delete("/:id",
  *                       description: Total number of tournaments updated
  *                       example: 3
  *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *         $ref: '#/components/responses/Unauthorized401'
  *       500:
  *         description: Internal server error
  */
 router.post(
   "/update-statuses",
   authenticate,
-  checkPermission(PERMISSIONS.TOURNAMENTS_UPDATE),
+  checkPermission('tournaments:update'),
   tournamentController.updateStatuses.bind(tournamentController)
 );
 
@@ -688,7 +821,7 @@ router.post(
  *                             format: date-time
  *                           status:
  *                             type: string
- *                             example: "draft"
+ *                             example: "upcoming"
  *                     closingSoon:
  *                       type: array
  *                       description: Tournaments that will close registration soon
@@ -731,15 +864,281 @@ router.post(
  *                       type: string
  *                       format: date-time
  *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *         $ref: '#/components/responses/Unauthorized401'
  *       500:
  *         description: Internal server error
  */
 router.get(
   "/upcoming-changes",
   authenticate,
-  checkAnyPermission([PERMISSIONS.TOURNAMENTS_VIEW, PERMISSIONS.TOURNAMENTS_UPDATE]),
+  checkAnyPermission(['tournaments:view', 'tournaments:update']),
   tournamentController.getUpcomingChanges.bind(tournamentController)
 );
+
+/**
+ * @swagger
+ * /tournaments/{id}:
+ *   get:
+ *     tags: [Tournaments]
+ *     summary: Get tournament by ID with categories
+ *     description: Retrieve a tournament by ID including all tournament categories
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Tournament details with categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                   example: 1
+ *                 name:
+ *                   type: string
+ *                   example: "Spring Championship 2026"
+ *                 tier:
+ *                   type: integer
+ *                   example: 3
+ *                 status:
+ *                   type: string
+ *                   enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
+ *                   example: "upcoming"
+ *                 startDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-15T09:00:00Z"
+ *                 endDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-20T18:00:00Z"
+ *                 registrationStartDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-02-15T00:00:00Z"
+ *                 registrationEndDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-10T23:59:59Z"
+ *                 bracketGenerationDate:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-03-12T10:00:00Z"
+ *                 location:
+ *                   type: string
+ *                   example: "National Stadium"
+ *                 numberOfTables:
+ *                   type: integer
+ *                   example: 4
+ *                 createdBy:
+ *                   type: integer
+ *                   example: 5
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-02-10T14:30:00Z"
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-02-10T14:30:00Z"
+ *                 categories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       tournamentId:
+ *                         type: integer
+ *                         example: 1
+ *                       name:
+ *                         type: string
+ *                         example: "Men's Singles"
+ *                       type:
+ *                         type: string
+ *                         enum: [single, team, double]
+ *                         example: "single"
+ *                       maxEntries:
+ *                         type: integer
+ *                         example: 32
+ *                       maxSets:
+ *                         type: integer
+ *                         example: 3
+ *                       numberOfSingles:
+ *                         type: integer
+ *                         example: 3
+ *                       numberOfDoubles:
+ *                         type: integer
+ *                         example: 0
+ *                       minAge:
+ *                         type: integer
+ *                         example: 18
+ *                       maxAge:
+ *                         type: integer
+ *                         example: 65
+ *                       minElo:
+ *                         type: integer
+ *                         example: 1000
+ *                       maxElo:
+ *                         type: integer
+ *                         example: 2500
+ *                       gender:
+ *                         type: string
+ *                         enum: [male, female, mixed]
+ *                         example: "male"
+ *                       isGroupStage:
+ *                         type: boolean
+ *                         example: false
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-02-10T14:30:00Z"
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *   put:
+ *     tags: [Tournaments]
+ *     summary: Update tournament with categories
+ *     description: Update a tournament and optionally its categories. If categories are provided, all existing categories will be replaced.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: "Spring Championship 2026 - Updated"
+ *               tier:
+ *                 type: integer
+ *                 minimum: 1
+ *                 example: 3
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-03-15T09:00:00Z"
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *                 example: "2026-03-20T18:00:00Z"
+ *               registrationStartDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Registration opens at this date
+ *                 example: "2026-02-15T00:00:00Z"
+ *               registrationEndDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Registration closes at this date (must be before startDate)
+ *                 example: "2026-03-10T23:59:59Z"
+ *               bracketGenerationDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Date when brackets are generated (must be at least 2 days before startDate)
+ *                 example: "2026-03-12T10:00:00Z"
+ *               location:
+ *                 type: string
+ *                 example: "National Stadium"
+ *               status:
+ *                 type: string
+ *                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
+ *                 example: "ongoing"
+ *               numberOfTables:
+ *                 type: integer
+ *                 description: Number of tables available for concurrent matches
+ *                 example: 6
+ *               categories:
+ *                 type: array
+ *                 description: Array of tournament categories (optional). If provided, replaces all existing categories.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - name
+ *                     - type
+ *                     - maxEntries
+ *                     - maxSets
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       example: "Men's Singles"
+ *                     type:
+ *                       type: string
+ *                       enum: [single, team, double]
+ *                       example: "single"
+ *                     maxEntries:
+ *                       type: integer
+ *                       example: 32
+ *                     maxSets:
+ *                       type: integer
+ *                       example: 3
+ *                     numberOfSingles:
+ *                       type: integer
+ *                       example: 3
+ *                     numberOfDoubles:
+ *                       type: integer
+ *                       example: 2
+ *                     minAge:
+ *                       type: integer
+ *                       example: 18
+ *                     maxAge:
+ *                       type: integer
+ *                       example: 65
+ *                     minElo:
+ *                       type: integer
+ *                       example: 1000
+ *                     maxElo:
+ *                       type: integer
+ *                       example: 2500
+ *                     gender:
+ *                       type: string
+ *                       enum: [male, female, mixed]
+ *                       example: "male"
+ *                     isGroupStage:
+ *                       type: boolean
+ *                       example: false
+ *     responses:
+ *       200:
+ *         description: Tournament updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Tournament'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       400:
+ *         description: Bad request
+ *   delete:
+ *     tags: [Tournaments]
+ *     summary: Delete tournament
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       204:
+ *         $ref: '#/components/responses/NoContent'
+ */
+router.get("/:id", tournamentController.findByIdWithCategories.bind(tournamentController));
+router.put("/:id", 
+  authenticate, 
+  checkPermission('tournaments:update'),
+  tournamentController.updateWithCategories.bind(tournamentController)
+);
+router.delete("/:id", 
+  authenticate, 
+  checkPermission('tournaments:delete'),
+  tournamentController.delete.bind(tournamentController)
+);
+
 
 export default router;

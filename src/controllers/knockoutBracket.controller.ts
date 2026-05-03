@@ -1,164 +1,38 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import knockoutBracketService from "../services/knockoutBracket.service";
 import {
   CreateKnockoutBracketDto,
   UpdateKnockoutBracketDto,
   AdvanceWinnerDto,
 } from "../dto/knockoutBracket.dto";
+import { UnauthorizedError } from "../utils/errors";
 
 export class KnockoutBracketController {
-  async create(req: Request, res: Response): Promise<void> {
-    try {
-      const data: CreateKnockoutBracketDto = req.body;
-      const result = await knockoutBracketService.create(data);
-      res.status(201).json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async findAll(req: Request, res: Response): Promise<void> {
-    try {
-      const skip = parseInt(req.query.skip as string) || 0;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const result = await knockoutBracketService.findAll(skip, limit);
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async findById(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const result = await knockoutBracketService.findById(parseInt(id as string));
-      if (!result) {
-        res.status(404).json({
-          success: false,
-          message: "Knockout bracket not found",
-        });
-        return;
-      }
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async findByCategoryId(req: Request, res: Response): Promise<void> {
-    try {
-      const { categoryId } = req.params;
-      const result = await knockoutBracketService.findByCategoryId(
-        parseInt(categoryId as string)
-      );
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async update(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const data: UpdateKnockoutBracketDto = req.body;
-      const updatedBracket = await knockoutBracketService.update(
-        parseInt(id as string),
-        data
-      );
-
-      if (!updatedBracket) {
-        res.status(404).json({
-          success: false,
-          message: "Knockout bracket not found",
-        });
-        return;
-      }
-
-      res.status(200).json({
-        success: true,
-        message: "Knockout bracket updated successfully",
-        data: updatedBracket
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
-  async delete(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const recordId = parseInt(id as string);
-
-      // Check if record exists first
-      const existing = await knockoutBracketService.findById(recordId);
-      if (!existing) {
-        res.status(404).json({
-          success: false,
-          message: "Knockout bracket not found",
-        });
-        return;
-      }
-
-      await knockoutBracketService.delete(recordId);
-
-      res.status(200).json({
-        success: true,
-        message: "Knockout bracket deleted successfully",
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  }
-
   /**
-   * Tạo cấu trúc nhánh đấu knockout
+   * Generate knockout bracket từ danh sách entries (không có vòng bảng)
    * POST /knockout-brackets/generate
    * Body: { categoryId: number }
    */
-  async generateBracket(req: Request, res: Response): Promise<void> {
+  async generateFromEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { categoryId } = req.body;
-      const result = await knockoutBracketService.generateKnockoutBracket(categoryId);
+      const chiefRefereeId = (req as any).user?.id;
+
+      if (!chiefRefereeId) {
+        throw new UnauthorizedError("Unauthorized");
+      }
+
+      const result = await knockoutBracketService.generateFromEntries(
+        chiefRefereeId,
+        categoryId
+      );
       res.status(201).json({
         success: true,
         data: result,
         message: "Knockout bracket generated successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
@@ -167,43 +41,156 @@ export class KnockoutBracketController {
    * POST /knockout-brackets/advance-winner
    * Body: { bracketId: number, winnerEntryId: number }
    */
-  async advanceWinner(req: Request, res: Response): Promise<void> {
+  async advanceWinner(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data: AdvanceWinnerDto = req.body;
-      const result = await knockoutBracketService.advanceWinner(data);
+      const { bracketId, winnerEntryId } = req.body;
+      const chiefRefereeId = (req as any).user?.id;
+
+      if (!chiefRefereeId) {
+        throw new UnauthorizedError("Unauthorized");
+      }
+
+      const result = await knockoutBracketService.advanceWinner(
+        chiefRefereeId,
+        bracketId,
+        winnerEntryId
+      );
 
       res.status(200).json({
         success: true,
         message: "Winner updated and advanced to the next round successfully",
         data: result
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+    } catch (error) {
+      next(error);
     }
   }
 
   /**
-   * Tạo knockout bracket từ kết quả vòng bảng
-   * POST /knockout-brackets/generate-from-groups
-   * Body: { categoryId: number }
+   * Generate knockout bracket từ kết quả vòng bảng
+   * POST /knockout-brackets/generate-from-group-stage
+   * Body: { categoryId: number, qualifiersPerGroup?: number }
    */
-  async generateFromGroups(req: Request, res: Response): Promise<void> {
+  async generateFromGroupStage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.body;
-      const result = await knockoutBracketService.generateKnockoutBracketFromGroups(categoryId);
+      const { categoryId, qualifiersPerGroup } = req.body;
+      const chiefRefereeId = (req as any).user?.id;
+
+      if (!chiefRefereeId) {
+        throw new UnauthorizedError("Unauthorized");
+      }
+
+      const result = await knockoutBracketService.generateFromGroupStage(
+        chiefRefereeId,
+        categoryId,
+        qualifiersPerGroup
+      );
       res.status(201).json({
         success: true,
         data: result,
         message: "Knockout bracket generated from group stage results successfully",
       });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Lấy brackets theo entry ID hoặc entry name
+   * GET /knockout-brackets/category/:categoryId/entry?entryId=5 hoặc ?entryName=Team+Alpha
+   */
+  async getBracketsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { categoryId } = req.params;
+      const { entryId, entryName } = req.query;
+      const skip = Number(req.query.skip) || 0;
+      const limit = Number(req.query.limit) || 10;
+
+      const filter: { entryId?: number; entryName?: string } = {};
+
+      if (entryId) filter.entryId = parseInt(entryId as string);
+      if (entryName) filter.entryName = entryName as string;
+
+      const result = await knockoutBracketService.getBracketsByEntry(
+        parseInt(categoryId as string),
+        filter,
+        { skip, limit }
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Lấy toàn bộ bracket tree của 1 category
+   * GET /knockout-brackets/category/:categoryId/tree
+   */
+  async getBracketTree(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { categoryId } = req.params;
+      const result = await knockoutBracketService.getBracketTree(
+        parseInt(categoryId as string)
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Validate bracket integrity trước khi bắt đầu giải
+   * POST /knockout-brackets/validate
+   * Body: { categoryId: number }
+   */
+  async validateBracketIntegrity(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { categoryId } = req.body;
+      const chiefRefereeId = (req as any).user?.id;
+
+      if (!chiefRefereeId) {
+        throw new UnauthorizedError("Unauthorized");
+      }
+
+      const result = await knockoutBracketService.validateBracketIntegrity(
+        chiefRefereeId,
+        categoryId
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Lấy kết quả xếp hạng cuối giải knockout
+   * GET /knockout-brackets/category/:categoryId/standings
+   */
+  async getStandings(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { categoryId } = req.params;
+      const result = await knockoutBracketService.getStandings(
+        parseInt(categoryId as string)
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
     }
   }
 }

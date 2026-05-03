@@ -170,6 +170,20 @@ export class EntryImportService {
       })
     );
 
+    // Fetch category once before loop to avoid N+1 query
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) {
+      return {
+        validatedEntries: [],
+        errors: [{
+          rowNumber: 0,
+          field: 'category',
+          message: 'Category not found',
+          value: categoryId,
+        }],
+      };
+    }
+
     const processedEmails = new Set<string>();
 
     for (const entry of parsedEntries) {
@@ -231,33 +245,22 @@ export class EntryImportService {
             });
           }
 
-          // Get tournament ID from category
-          const category = await TournamentCategory.findByPk(categoryId);
-          if (!category) {
-            entryErrors.push({
-              rowNumber: entry.rowNumber,
-              field: 'category',
-              message: 'Category not found',
-              value: categoryId,
-            });
-          } else {
-            // Validate user's gender against category requirements
-            if (category.gender) {
-              if (!user.gender) {
-                entryErrors.push({
-                  rowNumber: entry.rowNumber,
-                  field: 'gender',
-                  message: `User's gender is not set. Category requires "${category.gender}"`,
-                  value: user.email,
-                });
-              } else if (user.gender !== category.gender) {
-                entryErrors.push({
-                  rowNumber: entry.rowNumber,
-                  field: 'gender',
-                  message: `User's gender (${user.gender}) does not match category requirement (${category.gender})`,
-                  value: user.email,
-                });
-              }
+          // Validate user's gender against category requirements
+          if (category.gender) {
+            if (!user.gender) {
+              entryErrors.push({
+                rowNumber: entry.rowNumber,
+                field: 'gender',
+                message: `User's gender is not set. Category requires "${category.gender}"`,
+                value: user.email,
+              });
+            } else if (user.gender !== category.gender) {
+              entryErrors.push({
+                rowNumber: entry.rowNumber,
+                field: 'gender',
+                message: `User's gender (${user.gender}) does not match category requirement (${category.gender})`,
+                value: user.email,
+              });
             }
           }
         }

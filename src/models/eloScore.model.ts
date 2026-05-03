@@ -56,6 +56,8 @@ export default class EloScore extends Model {
 
   @BeforeValidate
   static validateScore(instance: EloScore): void {
+    if (instance.score === undefined) return;
+
     const { score } = instance;
 
     if (!Number.isInteger(score) || score < MIN_ELO || score > MAX_ELO) {

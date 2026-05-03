@@ -128,6 +128,8 @@ export default class Match extends Model {
 
   @BeforeValidate
   static validateEntries(instance: Match): void {
+    if (instance.entryAId === undefined && instance.entryBId === undefined) return;
+
     if (instance.entryAId === instance.entryBId) {
       throw new Error("Entry A and Entry B must be different");
     }

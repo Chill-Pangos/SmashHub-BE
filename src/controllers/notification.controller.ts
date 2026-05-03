@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import NotificationService from "../services/notification.service";
 import {
   CreateNotificationDto,
@@ -8,12 +8,13 @@ import {
   SendEventDto,
   NotificationStatsDto,
 } from "../dto/notification.dto";
+import { BadRequestError } from "../utils/errors";
 
 export class NotificationController {
   /**
    * Send notification
    */
-  async sendNotification(req: Request, res: Response): Promise<void> {
+  async sendNotification(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const {
         userId,
@@ -53,11 +54,7 @@ export class NotificationController {
         NotificationService.sendToRoom(roomId, notificationPayload);
         recipientCount = -1; // Unknown for rooms
       } else {
-        res.status(400).json({
-          success: false,
-          message: "Must specify userId, userIds, roomId, or broadcast: true",
-        });
-        return;
+        throw new BadRequestError("Must specify userId, userIds, roomId, or broadcast: true");
       }
 
       const response: NotificationResponseDto = {
@@ -69,27 +66,19 @@ export class NotificationController {
 
       res.status(200).json(response);
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error sending notification",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 
   /**
    * Send custom event
    */
-  async sendEvent(req: Request, res: Response): Promise<void> {
+  async sendEvent(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { userId, roomId, event, data } = req.body as SendEventDto;
 
       if (!event) {
-        res.status(400).json({
-          success: false,
-          message: "Event name is required",
-        });
-        return;
+        throw new BadRequestError("Event name is required");
       }
 
       if (userId) {
@@ -97,11 +86,7 @@ export class NotificationController {
       } else if (roomId) {
         NotificationService.sendEventToRoom(roomId, event, data);
       } else {
-        res.status(400).json({
-          success: false,
-          message: "Must specify userId or roomId",
-        });
-        return;
+        throw new BadRequestError("Must specify userId or roomId");
       }
 
       res.status(200).json({
@@ -110,18 +95,14 @@ export class NotificationController {
         timestamp: new Date(),
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error sending event",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 
   /**
    * Get connected users statistics
    */
-  async getConnectedUsers(req: Request, res: Response): Promise<void> {
+  async getConnectedUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const connectedUserIds = NotificationService.getConnectedUserIds();
       const count = NotificationService.getConnectedUsersCount();
@@ -133,27 +114,19 @@ export class NotificationController {
 
       res.status(200).json(response);
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error fetching connected users",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 
   /**
    * Check if user is connected
    */
-  async checkUserConnection(req: Request, res: Response): Promise<void> {
+  async checkUserConnection(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { userId } = req.params;
 
       if (!userId || typeof userId !== 'string') {
-        res.status(400).json({
-          success: false,
-          message: "userId is required",
-        });
-        return;
+        throw new BadRequestError("userId is required");
       }
 
       const isConnected = NotificationService.isUserConnected(userId);
@@ -165,27 +138,19 @@ export class NotificationController {
 
       res.status(200).json(response);
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error checking user connection",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 
   /**
    * Disconnect a user
    */
-  async disconnectUser(req: Request, res: Response): Promise<void> {
+  async disconnectUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { userId } = req.params;
 
       if (!userId || typeof userId !== 'string') {
-        res.status(400).json({
-          success: false,
-          message: "userId is required",
-        });
-        return;
+        throw new BadRequestError("userId is required");
       }
 
       NotificationService.disconnectUser(userId);
@@ -195,21 +160,17 @@ export class NotificationController {
         message: `User ${userId} disconnected successfully`,
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error disconnecting user",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 
   /**
    * Get notification service status
    */
-  async getStatus(req: Request, res: Response): Promise<void> {
+  async getStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const connectedUsers = NotificationService.getConnectedUsersCount();
-      
+
       res.status(200).json({
         success: true,
         status: "running",
@@ -217,11 +178,7 @@ export class NotificationController {
         timestamp: new Date(),
       });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Error getting service status",
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      next(error);
     }
   }
 }

@@ -1,68 +1,61 @@
-import { Request, Response } from "express";
+// controllers/permission.controller.ts
+
+import { Request, Response, NextFunction } from "express";
 import permissionService from "../services/permission.service";
+import { CreatePermissionDto, UpdatePermissionDto } from "../dto/permission.dto";
 
 export class PermissionController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.create(req.body);
-      res.status(201).json(permission);
+      const data = await permissionService.create(req.body as CreatePermissionDto);
+      res.status(201).json(data);
     } catch (error) {
-      res.status(400).json({ message: "Error creating permission", error });
+      next(error);
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const permissions = await permissionService.findAll(skip, limit);
-      res.status(200).json(permissions);
+      const data = await permissionService.findAll(Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      res.status(200).json(data);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching permissions", error });
+      next(error);
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.findById(
-        Number(req.params.id)
-      );
-      if (!permission) {
-        res.status(404).json({ message: "Permission not found" });
-        return;
-      }
-      res.status(200).json(permission);
+      const data = await permissionService.findById(Number(req.params.id));
+      res.status(200).json(data);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching permission", error });
+      next(error);
     }
   }
 
-  async update(req: Request, res: Response): Promise<void> {
+  async findByName(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const permission = await permissionService.update(
-        Number(req.params.id),
-        req.body
-      );
-      if (!permission) {
-        res.status(404).json({ message: "Permission not found" });
-        return;
-      }
-      res.status(200).json(permission);
+      const data = await permissionService.findByName(req.params.name as string);
+      res.status(200).json(data);
     } catch (error) {
-      res.status(400).json({ message: "Error updating permission", error });
+      next(error);
     }
   }
 
-  async delete(req: Request, res: Response): Promise<void> {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const deleted = await permissionService.delete(Number(req.params.id));
-      if (!deleted) {
-        res.status(404).json({ message: "Permission not found" });
-        return;
-      }
+      const data = await permissionService.update(Number(req.params.id), req.body as UpdatePermissionDto);
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await permissionService.delete(Number(req.params.id));
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting permission", error });
+      next(error);
     }
   }
 }

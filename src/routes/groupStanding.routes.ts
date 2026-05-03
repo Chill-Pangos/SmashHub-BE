@@ -2,7 +2,6 @@ import { Router } from "express";
 import groupStandingController from "../controllers/groupStanding.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -40,7 +39,7 @@ const router = Router();
 router.post(
   "/generate-placeholders",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
 );
 
@@ -49,10 +48,10 @@ router.post(
  * /group-standings/random-draw:
  *   post:
  *     tags: [Group Standings]
- *     summary: Random draw entries into groups
+ *     summary: Random draw preview (alias)
  *     description: |
- *       Bốc thăm ngẫu nhiên các entries vào các bảng đấu.
- *       Đảm bảo các entry cùng team không vào cùng bảng (nếu số entry của team < số bảng).
+ *       Alias của endpoint generate-placeholders.
+ *       Trả về preview phân bảng ngẫu nhiên (chưa lưu DB).
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -77,7 +76,7 @@ router.post(
 router.post(
   "/random-draw",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.randomDraw.bind(groupStandingController)
 );
 
@@ -98,7 +97,6 @@ router.post(
  *             type: object
  *             required:
  *               - categoryId
- *               - groupAssignments
  *             properties:
  *               categoryId:
  *                 type: integer
@@ -106,6 +104,21 @@ router.post(
  *                 example: 1
  *               groupAssignments:
  *                 type: array
+ *                 description: Preferred field for assignments
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     groupName:
+ *                       type: string
+ *                       example: "Group A"
+ *                     entryIds:
+ *                       type: array
+ *                       items:
+ *                         type: integer
+ *                       example: [1, 2, 3, 4]
+ *               assignments:
+ *                 type: array
+ *                 description: Backward-compatible alias of groupAssignments
  *                 items:
  *                   type: object
  *                   properties:
@@ -126,43 +139,8 @@ router.post(
 router.post(
   "/save-assignments",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
+  checkPermission('schedules:create'),
   groupStandingController.saveAssignments.bind(groupStandingController)
-);
-
-/**
- * @swagger
- * /group-standings/random-draw-and-save:
- *   post:
- *     tags: [Group Standings]
- *     summary: Random draw and save
- *     description: Bốc thăm ngẫu nhiên và lưu luôn kết quả vào database
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - categoryId
- *             properties:
- *               categoryId:
- *                 type: integer
- *                 description: Tournament category ID
- *                 example: 1
- *     responses:
- *       201:
- *         description: Random draw and save completed successfully
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- */
-router.post(
-  "/random-draw-and-save",
-  authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_CREATE),
-  groupStandingController.randomDrawAndSave.bind(groupStandingController)
 );
 
 /**
@@ -170,17 +148,14 @@ router.post(
  * /group-standings/calculate:
  *   post:
  *     tags: [Group Standings]
- *     summary: Calculate group stage standings
+ *     summary: Recalculate group standings positions
  *     description: |
- *       Calculates standings based on completed matches in group stage.
- *       Uses the following tiebreaker rules:
- *       1. Match points (Win=3, Draw=1, Loss=0)
- *       2. Head-to-head result
- *       3. Games (sets) difference
- *       4. Games won
- *       5. Points difference
- *       6. Points won
- *       7. Random draw if still tied
+ *       Recalculate ranking positions from existing standings stats.
+ *       Current tie-breaker order in service:
+ *       1. matchesWon (desc)
+ *       2. setsDiff (desc)
+ *       3. head-to-head result
+ *       Nếu không truyền groupName sẽ tính lại cho tất cả bảng trong category.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -209,8 +184,39 @@ router.post(
 router.post(
   "/calculate",
   authenticate,
-  checkPermission(PERMISSIONS.SCHEDULES_UPDATE),
+  checkPermission('schedules:update'),
   groupStandingController.calculateStandings.bind(groupStandingController)
+);
+
+/**
+ * @swagger
+ * /group-standings/matches/{matchId}/sync:
+ *   post:
+ *     tags: [Group Standings]
+ *     summary: Sync standings after a completed group match
+ *     description: |
+ *       Cập nhật thống kê và thứ hạng của 2 entry trong bảng sau khi trận đấu group stage hoàn tất.
+ *       Chỉ chief referee của tournament được phép thực hiện.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: matchId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID
+ *     responses:
+ *       200:
+ *         description: Standings synced successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ */
+router.post(
+  "/matches/:matchId/sync",
+  authenticate,
+  checkPermission('matches:approve_result'),
+  groupStandingController.updateAfterMatch.bind(groupStandingController)
 );
 
 /**
@@ -259,6 +265,13 @@ router.get(
  *           type: integer
  *         description: Tournament category ID
  *       - name: teamsPerGroup
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 2
+ *         description: Legacy alias of qualifiersPerGroup
+ *       - name: qualifiersPerGroup
  *         in: query
  *         required: false
  *         schema:

@@ -2,7 +2,6 @@ import { Router } from "express";
 import notificationController from "../controllers/notification.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -70,7 +69,7 @@ const router = Router();
  */
 router.post("/send",
   authenticate,
-  checkPermission(PERMISSIONS.NOTIFICATIONS_SEND),
+  checkPermission('notifications:send'),
   notificationController.sendNotification
 );
 
@@ -116,7 +115,7 @@ router.post("/send",
  */
 router.post("/event",
   authenticate,
-  checkPermission(PERMISSIONS.NOTIFICATIONS_SEND),
+  checkPermission('notifications:send'),
   notificationController.sendEvent
 );
 

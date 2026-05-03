@@ -1,43 +1,43 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import eloHistoryService from "../services/eloHistory.service";
+import { NotFoundError } from "../utils/errors";
 
 export class EloHistoryController {
-  async create(req: Request, res: Response): Promise<void> {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const eloHistory = await eloHistoryService.create(req.body);
       res.status(201).json(eloHistory);
     } catch (error) {
-      res.status(400).json({ message: "Error creating ELO history", error });
+      next(error);
     }
   }
 
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const eloHistories = await eloHistoryService.findAll(skip, limit);
       res.status(200).json(eloHistories);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching ELO histories", error });
+      next(error);
     }
   }
 
-  async findById(req: Request, res: Response): Promise<void> {
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const eloHistory = await eloHistoryService.findById(
         Number(req.params.id)
       );
       if (!eloHistory) {
-        res.status(404).json({ message: "ELO history not found" });
-        return;
+        throw new NotFoundError("ELO history not found");
       }
       res.status(200).json(eloHistory);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching ELO history", error });
+      next(error);
     }
   }
 
-  async findByUserId(req: Request, res: Response): Promise<void> {
+  async findByUserId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
@@ -48,11 +48,11 @@ export class EloHistoryController {
       );
       res.status(200).json(eloHistories);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching ELO histories", error });
+      next(error);
     }
   }
 
-  async findByMatchId(req: Request, res: Response): Promise<void> {
+  async findByMatchId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
@@ -63,20 +63,19 @@ export class EloHistoryController {
       );
       res.status(200).json(eloHistories);
     } catch (error) {
-      res.status(500).json({ message: "Error fetching ELO histories", error });
+      next(error);
     }
   }
 
-  async delete(req: Request, res: Response): Promise<void> {
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const deleted = await eloHistoryService.delete(Number(req.params.id));
       if (!deleted) {
-        res.status(404).json({ message: "ELO history not found" });
-        return;
+        throw new NotFoundError("ELO history not found");
       }
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Error deleting ELO history", error });
+      next(error);
     }
   }
 }

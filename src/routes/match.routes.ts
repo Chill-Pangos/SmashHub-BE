@@ -2,7 +2,6 @@ import { Router } from "express";
 import matchController from "../controllers/match.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -37,7 +36,7 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_CREATE),
+  checkPermission('matches:create'),
   matchController.create.bind(matchController)
 );
 router.get("/", matchController.findAll.bind(matchController));
@@ -60,7 +59,7 @@ router.get("/", matchController.findAll.bind(matchController));
  *       200:
  *         description: List of pending matches
  */
-router.get("/pending", authenticate, checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT), matchController.findPendingMatches.bind(matchController));
+router.get("/pending", authenticate, checkPermission('matches:approve_result'), matchController.findPendingMatches.bind(matchController));
 
 /**
  * @swagger
@@ -129,7 +128,7 @@ router.get(
  */
 router.post("/:id/start", 
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_START),
+  checkPermission('matches:start'),
   matchController.startMatch.bind(matchController)
 );
 
@@ -167,7 +166,7 @@ router.post("/:id/start",
  */
 router.get("/:id/pending-with-elo", 
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  checkPermission('matches:approve_result'),
   matchController.getPendingMatchWithEloPreview.bind(matchController)
 );
 
@@ -196,7 +195,7 @@ router.get("/:id/pending-with-elo",
  */
 router.post("/:id/finalize",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_REPORT_RESULT),
+  checkPermission('matches:report_result'),
   matchController.finalizeMatch.bind(matchController)
 );
 
@@ -234,7 +233,7 @@ router.post("/:id/finalize",
  */
 router.post("/:id/approve",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  checkPermission('matches:approve_result'),
   matchController.approveMatchResult.bind(matchController)
 );
 
@@ -275,7 +274,7 @@ router.post("/:id/approve",
  */
 router.post("/:id/reject",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT),
+  checkPermission('matches:approve_result'),
   matchController.rejectMatchResult.bind(matchController)
 );
 
@@ -336,7 +335,7 @@ router.post("/:id/reject",
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:id/elo-preview", authenticate, checkPermission(PERMISSIONS.MATCHES_APPROVE_RESULT), matchController.previewEloChanges.bind(matchController));
+router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_result'), matchController.previewEloChanges.bind(matchController));
 
 /**
  * @swagger
@@ -460,12 +459,12 @@ router.get("/athlete/:userId/history", authenticate, matchController.getMatchHis
 router.get("/:id", matchController.findById.bind(matchController));
 router.put("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_UPDATE),
+  checkPermission('matches:update'),
   matchController.update.bind(matchController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.MATCHES_DELETE),
+  checkPermission('matches:delete'),
   matchController.delete.bind(matchController)
 );
 

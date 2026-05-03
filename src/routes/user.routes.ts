@@ -2,7 +2,6 @@ import { Router } from "express";
 import userController from "../controllers/user.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -51,16 +50,77 @@ const router = Router();
  *         $ref: '#/components/responses/BadRequest'
  *   get:
  *     tags: [Users]
- *     summary: Get all users
+ *     summary: Get all users with pagination
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
- *         description: List of users
+ *         description: List of users with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       firstName:
+ *                         type: string
+ *                         example: "John"
+ *                       lastName:
+ *                         type: string
+ *                         example: "Doe"
+ *                       email:
+ *                         type: string
+ *                         example: "john@example.com"
+ *                       avatarUrl:
+ *                         type: string
+ *                       dob:
+ *                         type: string
+ *                         format: date
+ *                       phoneNumber:
+ *                         type: string
+ *                       gender:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 50
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 5
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: true
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
 router.post("/",
   authenticate,
-  checkPermission(PERMISSIONS.USERS_CREATE),
+  checkPermission("users:create"),
   userController.create.bind(userController)
 );
 router.get("/", userController.findAll.bind(userController));
@@ -131,12 +191,12 @@ router.get("/", userController.findAll.bind(userController));
 router.get("/:id", userController.findById.bind(userController));
 router.put("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.USERS_UPDATE),
+  checkPermission("users:update"),
   userController.update.bind(userController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission(PERMISSIONS.USERS_DELETE),
+  checkPermission("users:delete"),
   userController.delete.bind(userController)
 );
 

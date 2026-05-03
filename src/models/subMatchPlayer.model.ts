@@ -10,7 +10,9 @@ import {
 } from "sequelize-typescript";
 import SubMatch from "./subMatch.model";
 import EntryMember from "./entryMember.model";
-import { TEAMS, Team } from "./subMatch.model";
+
+const PLAYER_TEAMS = ["A", "B"] as const;
+type Team = (typeof PLAYER_TEAMS)[number];
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +53,7 @@ export default class SubMatchPlayer extends Model {
   declare entryMemberId: number;
 
   @Column({
-    type: DataType.ENUM(...TEAMS),
+    type: DataType.ENUM(...PLAYER_TEAMS),
     allowNull: false,
   })
   declare team: Team;

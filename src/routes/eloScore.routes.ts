@@ -2,7 +2,6 @@ import { Router } from "express";
 import eloScoreController from "../controllers/eloScore.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 
 const router = Router();
 
@@ -37,7 +36,7 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission(PERMISSIONS.ELO_MANAGE),
+  checkPermission('elo:manage'),
   eloScoreController.create.bind(eloScoreController)
 );
 router.get("/", eloScoreController.findAll.bind(eloScoreController));

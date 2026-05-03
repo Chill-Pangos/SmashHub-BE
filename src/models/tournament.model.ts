@@ -4,6 +4,7 @@ import {
   Model,
   DataType,
   HasMany,
+  HasOne,
   ForeignKey,
   BelongsTo,
   BeforeValidate,
@@ -11,6 +12,7 @@ import {
 import TournamentCategory from "./tournamentCategory.model";
 import User from "./user.model";
 import TournamentReferee from "./tournamentReferee.model";
+import ScheduleConfig from "./scheduleConfig.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,9 @@ export default class Tournament extends Model {
   @HasMany(() => TournamentReferee)
   referees?: TournamentReferee[];
 
+  @HasOne(() => ScheduleConfig)
+  scheduleConfig?: ScheduleConfig;
+
   // ─── Validators ─────────────────────────────────────────────────────────────
 
   @BeforeValidate
@@ -206,6 +211,9 @@ export default class Tournament extends Model {
 
   @BeforeValidate
   static validateName(instance: Tournament): void {
+    // Skip validation if name is not being updated (during update operations)
+    if (instance.name === undefined) return;
+
     const name = instance.name?.trim();
 
     if (!name) {
@@ -221,6 +229,9 @@ export default class Tournament extends Model {
 
   @BeforeValidate
   static validateLocation(instance: Tournament): void {
+    // Skip validation if location is not being updated (during update operations)
+    if (instance.location === undefined) return;
+
     const location = instance.location?.trim();
 
     if (!location) {

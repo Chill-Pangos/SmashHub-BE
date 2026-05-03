@@ -2,7 +2,6 @@ import { Router } from "express";
 import entryImportController from "../controllers/entryImport.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { PERMISSIONS } from "../constants/permissions";
 import { uploadExcel } from "../middlewares/upload.middleware";
 
 const router = Router();
@@ -113,7 +112,7 @@ const router = Router();
 router.post(
   "/import/preview",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  checkPermission('entries:create'),
   uploadExcel.single('file'),
   entryImportController.previewSingleEntries.bind(entryImportController)
 );
@@ -192,7 +191,7 @@ router.post(
 router.post(
   "/import/confirm",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  checkPermission('entries:create'),
   entryImportController.confirmSingleEntries.bind(entryImportController)
 );
 
@@ -233,7 +232,7 @@ router.post(
 router.post(
   "/import/double/preview",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  checkPermission('entries:create'),
   uploadExcel.single('file'),
   entryImportController.previewDoubleEntries.bind(entryImportController)
 );
@@ -296,7 +295,7 @@ router.post(
 router.post(
   "/import/double/confirm",
   authenticate,
-  checkPermission(PERMISSIONS.ENTRIES_CREATE),
+  checkPermission('entries:create'),
   entryImportController.confirmDoubleEntries.bind(entryImportController)
 );
 

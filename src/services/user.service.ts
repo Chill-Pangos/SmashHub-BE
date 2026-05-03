@@ -9,8 +9,28 @@ export class UserService {
     return await User.create(userData as any);
   }
 
-  async findAll(): Promise<User[]> {
-    return await User.findAll();
+  async findAll(skip: number = 0, limit: number = 10): Promise<{ users: User[], pagination: any }> {
+    const offset = skip;
+    const { count, rows } = await User.findAndCountAll({
+      offset,
+      limit,
+      order: [['createdAt', 'DESC']]
+    });
+
+    const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(skip / limit) + 1;
+
+    return {
+      users: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    };
   }
 
   async findById(id: number): Promise<User | null> {
@@ -45,7 +65,7 @@ export class UserService {
     return deletedCount > 0;
   }
 
-  async findAvailableChiefReferees(): Promise<User[]> {
+  async findAvailableChiefReferees(skip: number = 0, limit: number = 10): Promise<{ referees: User[]; pagination?: any }> {
     const assignedRefereeIds = await TournamentReferee.findAll({
       attributes: ['refereeId'],
       where: {
@@ -56,7 +76,46 @@ export class UserService {
 
     const assignedIds = assignedRefereeIds.map(ref => ref.refereeId);
 
-    return await User.findAll({
+    // If pagination is requested
+    if (skip !== undefined || limit !== undefined) {
+      const { count, rows } = await User.findAndCountAll({
+        include: [
+          {
+            model: Role,
+            as: 'roles',
+            where: {
+              name: 'chief_referee'
+            },
+            through: { attributes: [] }
+          }
+        ],
+        where: assignedIds.length > 0 ? {
+          id: {
+            [Op.notIn]: assignedIds
+          }
+        } : {},
+        offset: skip,
+        limit: limit,
+        order: [['createdAt', 'DESC']]
+      });
+
+      const totalPages = Math.ceil(count / limit);
+      const page = Math.floor(skip / limit) + 1;
+
+      return {
+        referees: rows,
+        pagination: {
+          total: count,
+          page,
+          limit,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      };
+    }
+
+    const rows = await User.findAll({
       include: [
         {
           model: Role,
@@ -73,6 +132,8 @@ export class UserService {
         }
       } : {}
     });
+
+    return { referees: rows };
   }
 }
 

@@ -1,3 +1,4 @@
+// tournamentReferee.model.ts — sửa lại
 import {
   Table,
   Column,
@@ -5,14 +6,13 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
-  BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
 import User from "./user.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export const REFEREE_ROLES = ["main", "assistant"] as const;
+export const REFEREE_ROLES = ["chief", "referee"] as const;
 export type RefereeRole = (typeof REFEREE_ROLES)[number];
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -23,10 +23,10 @@ export type RefereeRole = (typeof REFEREE_ROLES)[number];
   indexes: [
     { fields: ["tournamentId"] },
     { fields: ["refereeId"] },
-    { fields: ["tournamentId", "role", "isAvailable"] },
+    { fields: ["tournamentId", "role"] },
     {
       unique: true,
-      fields: ["tournamentId", "refereeId"], // 1 referee chỉ có 1 role trong 1 tournament
+      fields: ["tournamentId", "refereeId"],
     },
   ],
 })
@@ -55,16 +55,9 @@ export default class TournamentReferee extends Model {
   @Column({
     type: DataType.ENUM(...REFEREE_ROLES),
     allowNull: false,
-    defaultValue: "assistant" satisfies RefereeRole,
+    defaultValue: "referee" satisfies RefereeRole,
   })
   declare role: RefereeRole;
-
-  @Column({
-    type: DataType.BOOLEAN,
-    allowNull: false,
-    defaultValue: true,
-  })
-  declare isAvailable: boolean;
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
@@ -73,16 +66,4 @@ export default class TournamentReferee extends Model {
 
   @BelongsTo(() => User, { foreignKey: "refereeId" })
   declare referee?: User;
-
-  // ─── Validators ────────────────────────────────────────────────────────────
-
-  @BeforeValidate
-  static validateMainRefereeUnique(instance: TournamentReferee): void {
-    // Mỗi tournament chỉ có 1 main referee
-    // Logic này cần check ở Service layer vì cần query DB
-    // Ở đây chỉ validate những gì model tự biết được
-    if (!REFEREE_ROLES.includes(instance.role)) {
-      throw new Error(`Role must be one of: ${REFEREE_ROLES.join(", ")}`);
-    }
-  }
 }

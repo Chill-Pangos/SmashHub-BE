@@ -10,6 +10,7 @@
 INSERT INTO `roles` (`name`, `description`) VALUES
   ('admin', 'System administrator with full access'),
   ('user', 'Regular user who can register for tournaments'),
+  ('chief_referee', 'Chief referee who can approve and oversee match results'),
   ('referee', 'Tournament referee who can manage matches'),
   ('organizer', 'Tournament organizer who can create and manage tournaments');
 
@@ -19,46 +20,74 @@ INSERT INTO `roles` (`name`, `description`) VALUES
 
 INSERT INTO `permissions` (`name`) VALUES
   -- User permissions
-  ('user:read'),
-  ('user:create'),
-  ('user:update'),
-  ('user:delete'),
-  
+  ('users:view'),
+  ('users:create'),
+  ('users:update'),
+  ('users:delete'),
+
   -- Tournament permissions
-  ('tournament:read'),
-  ('tournament:create'),
-  ('tournament:update'),
-  ('tournament:delete'),
-  
+  ('tournaments:view'),
+  ('tournaments:create'),
+  ('tournaments:update'),
+  ('tournaments:delete'),
+  ('tournaments:manage'),
+
   -- Category permissions
-  ('category:read'),
+  ('category:view'),
   ('category:create'),
   ('category:update'),
   ('category:delete'),
-  
+
   -- Entry permissions
-  ('entry:read'),
-  ('entry:create'),
-  ('entry:update'),
-  ('entry:delete'),
-  
+  ('entries:view'),
+  ('entries:create'),
+  ('entries:update'),
+  ('entries:delete'),
+  ('entries:approve'),
+
   -- Match permissions
-  ('match:read'),
-  ('match:create'),
-  ('match:update'),
-  ('match:delete'),
-  ('match:approve'),
-  
+  ('matches:view'),
+  ('matches:create'),
+  ('matches:update'),
+  ('matches:delete'),
+  ('matches:start'),
+  ('matches:report_result'),
+  ('matches:approve_result'),
+
   -- Schedule permissions
-  ('schedule:read'),
-  ('schedule:create'),
-  ('schedule:update'),
-  ('schedule:delete'),
-  
-  -- Referee permissions
-  ('referee:read'),
-  ('referee:assign'),
-  ('referee:remove');
+  ('schedules:view'),
+  ('schedules:create'),
+  ('schedules:update'),
+  ('schedules:delete'),
+
+  -- Team permissions
+  ('teams:view'),
+  ('teams:create'),
+  ('teams:update'),
+  ('teams:delete'),
+  ('teams:manage_members'),
+
+  -- ELO permissions
+  ('elo:view'),
+  ('elo:manage'),
+
+  -- Role & permission management
+  ('roles:view'),
+  ('roles:create'),
+  ('roles:update'),
+  ('roles:delete'),
+  ('permissions:view'),
+  ('permissions:manage'),
+
+  -- Notification permissions
+  ('notifications:view'),
+  ('notifications:send'),
+
+  -- Payment permissions
+  ('payments:view'),
+  ('payments:create'),
+  ('payments:update'),
+  ('payments:delete');
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ROLE PERMISSIONS
@@ -78,15 +107,17 @@ SELECT
   `id`
 FROM `permissions` 
 WHERE `name` IN (
-  'user:read',
-  'user:update',
-  'tournament:read',
-  'category:read',
-  'entry:read',
-  'entry:create',
-  'entry:update',
-  'match:read',
-  'schedule:read'
+  'users:view',
+  'users:update',
+  'tournaments:view',
+  'category:view',
+  'entries:view',
+  'entries:create',
+  'entries:update',
+  'matches:view',
+  'schedules:view',
+  'elo:view',
+  'notifications:view'
 );
 
 -- Referee permissions
@@ -96,14 +127,40 @@ SELECT
   `id`
 FROM `permissions` 
 WHERE `name` IN (
-  'user:read',
-  'user:update',
-  'tournament:read',
-  'category:read',
-  'entry:read',
-  'match:read',
-  'match:update',
-  'schedule:read'
+  'users:view',
+  'users:update',
+  'tournaments:view',
+  'category:view',
+  'entries:view',
+  'entries:update',
+  'matches:view',
+  'matches:update',
+  'matches:start',
+  'matches:report_result',
+  'schedules:view',
+  'notifications:view'
+);
+
+-- Chief referee permissions
+INSERT INTO `role_permissions` (`roleId`, `permissionId`)
+SELECT 
+  (SELECT `id` FROM `roles` WHERE `name` = 'chief_referee'),
+  `id`
+FROM `permissions` 
+WHERE `name` IN (
+  'users:view',
+  'users:update',
+  'tournaments:view',
+  'category:view',
+  'entries:view',
+  'entries:update',
+  'matches:view',
+  'matches:update',
+  'matches:start',
+  'matches:report_result',
+  'matches:approve_result',
+  'schedules:view',
+  'notifications:view'
 );
 
 -- Organizer permissions
@@ -113,25 +170,37 @@ SELECT
   `id`
 FROM `permissions` 
 WHERE `name` IN (
-  'user:read',
-  'user:update',
-  'tournament:read',
-  'tournament:create',
-  'tournament:update',
-  'category:read',
+  'users:view',
+  'users:update',
+  'tournaments:view',
+  'tournaments:create',
+  'tournaments:update',
+  'tournaments:manage',
+  'category:view',
   'category:create',
   'category:update',
-  'entry:read',
-  'entry:update',
-  'entry:delete',
-  'match:read',
-  'match:create',
-  'match:update',
-  'match:approve',
-  'schedule:read',
-  'schedule:create',
-  'schedule:update',
-  'referee:read',
-  'referee:assign',
-  'referee:remove'
+  'entries:view',
+  'entries:create',
+  'entries:update',
+  'entries:delete',
+  'entries:approve',
+  'matches:view',
+  'matches:create',
+  'matches:update',
+  'matches:start',
+  'matches:report_result',
+  'matches:approve_result',
+  'schedules:view',
+  'schedules:create',
+  'schedules:update',
+  'teams:view',
+  'teams:create',
+  'teams:update',
+  'teams:manage_members',
+  'payments:view',
+  'payments:create',
+  'payments:update',
+  'notifications:view',
+  'notifications:send',
+  'elo:view'
 );
