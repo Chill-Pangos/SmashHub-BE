@@ -1,7 +1,7 @@
 import { Router } from "express";
 import roleController from "../controllers/role.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkPermission, checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -41,10 +41,14 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission('roles:create'),
+  checkRole('admin'),
   roleController.create.bind(roleController)
 );
-router.get("/", roleController.findAll.bind(roleController));
+router.get("/",
+  authenticate,
+  checkRole('admin'),
+  roleController.findAll.bind(roleController)
+);
 
 /**
  * @swagger
@@ -82,15 +86,19 @@ router.get("/", roleController.findAll.bind(roleController));
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", roleController.findById.bind(roleController));
+router.get("/:id",
+  authenticate,
+  checkRole('admin'),
+  roleController.findById.bind(roleController)
+);
 router.put("/:id",
   authenticate,
-  checkPermission('roles:update'),
+  checkRole('admin'),
   roleController.update.bind(roleController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission('roles:delete'),
+  checkRole('admin'),
   roleController.delete.bind(roleController)
 );
 
@@ -112,6 +120,10 @@ router.delete("/:id",
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/name/:name", roleController.findByName.bind(roleController));
+router.get("/name/:name",
+  authenticate,
+  checkRole('admin'),
+  roleController.findByName.bind(roleController)
+);
 
 export default router;

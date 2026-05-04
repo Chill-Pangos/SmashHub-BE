@@ -1,7 +1,7 @@
 import { Router } from "express";
 import permissionController from "../controllers/permission.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkPermission, checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -36,10 +36,14 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkPermission('permissions:manage'),
+  checkRole('admin'),
   permissionController.create.bind(permissionController)
 );
-router.get("/", permissionController.findAll.bind(permissionController));
+router.get("/",
+  authenticate,
+  checkRole('admin'),
+  permissionController.findAll.bind(permissionController)
+);
 
 /**
  * @swagger
@@ -77,15 +81,19 @@ router.get("/", permissionController.findAll.bind(permissionController));
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", permissionController.findById.bind(permissionController));
+router.get("/:id",
+  authenticate,
+  checkRole('admin'),
+  permissionController.findById.bind(permissionController)
+);
 router.put("/:id",
   authenticate,
-  checkPermission('permissions:manage'),
+  checkRole('admin'),
   permissionController.update.bind(permissionController)
 );
 router.delete("/:id",
   authenticate,
-  checkPermission('permissions:manage'),
+  checkRole('admin'),
   permissionController.delete.bind(permissionController)
 );
 
