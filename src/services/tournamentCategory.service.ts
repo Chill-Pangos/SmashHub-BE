@@ -3,6 +3,7 @@ import {
   CreateTournamentCategoryDto,
   UpdateTournamentCategoryDto,
 } from "../dto/tournamentCategory.dto";
+import { NotFoundError } from "../utils/errors";
 
 export class TournamentCategoryService {
   /**
@@ -49,14 +50,14 @@ export class TournamentCategoryService {
     id: number,
     data: UpdateTournamentCategoryDto
   ): Promise<[number, TournamentCategory[]]> {
-    // If updating gender or type, validate the combination
-    if (data.gender || data.type) {
-      // Get current category to check existing values
-      const currentCategory = await TournamentCategory.findByPk(id);
-      if (!currentCategory) {
-        throw new Error('Category not found');
-      }
+    // Always check if category exists
+    const currentCategory = await TournamentCategory.findByPk(id);
+    if (!currentCategory) {
+      throw new NotFoundError('Category not found', 'CATEGORY_NOT_FOUND');
+    }
 
+    // If updating gender or type, validate the combination
+    if (data.gender !== undefined || data.type !== undefined) {
       const finalType = data.type || currentCategory.type;
       const finalGender = data.gender !== undefined ? data.gender : currentCategory.gender;
 
