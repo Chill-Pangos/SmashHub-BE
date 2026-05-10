@@ -25,7 +25,12 @@ const MINUTE_MAX = 59;
 @Table({
   tableName: "schedule_configs",
   timestamps: true,
-  indexes: [{ fields: ["tournamentId"] }],
+  indexes: [
+    { fields: ["tournamentId"] },
+    { fields: ["registrationStartDate"] },
+    { fields: ["registrationEndDate"] },
+    { fields: ["bracketGenerationDate"] },
+  ],
 })
 export default class ScheduleConfig extends Model {
   @Column({
@@ -42,6 +47,34 @@ export default class ScheduleConfig extends Model {
     unique: true,
   })
   declare tournamentId: number;
+
+  // ─── Tournament Dates ─────────────────────────────────────────────────────
+
+  @Column({ type: DataType.DATE, allowNull: false })
+  declare startDate: Date;
+
+  @Column({ type: DataType.DATE, allowNull: false })
+  declare endDate: Date;
+
+  // ─── Registration & Bracket Dates ────────────────────────────────────────
+
+  @Column({ type: DataType.DATE, allowNull: false })
+  declare registrationStartDate: Date;
+
+  @Column({ type: DataType.DATE, allowNull: false })
+  declare registrationEndDate: Date;
+
+  @Column({ type: DataType.DATE, allowNull: false })
+  declare bracketGenerationDate: Date;
+
+  // ─── Tables ───────────────────────────────────────────────────────────────
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare numberOfTables: number;
 
   // ─── Match Configuration ──────────────────────────────────────────────────
 
@@ -331,4 +364,77 @@ export default class ScheduleConfig extends Model {
       );
     }
   }
+
+  @BeforeValidate
+  static validateDates(instance: ScheduleConfig): void {
+    const {
+      startDate,
+      endDate,
+      registrationStartDate,
+      registrationEndDate,
+      bracketGenerationDate,
+      isNewRecord,
+    } = instance;
+
+    const now = new Date();
+
+    // Khi tạo mới, startDate không được là quá khứ
+    if (isNewRecord && startDate && startDate < now) {
+      throw new Error("Start date cannot be in the past");
+    }
+
+    // Khi tạo mới, registrationStartDate không được là quá khứ
+    if (isNewRecord && registrationStartDate && registrationStartDate < now) {
+      throw new Error("Registration start date cannot be in the past");
+    }
+
+    // endDate phải sau startDate
+    if (startDate && endDate && endDate <= startDate) {
+      throw new Error("End date must be after start date");
+    }
+
+    // registrationEndDate phải sau registrationStartDate
+    if (
+      registrationStartDate &&
+      registrationEndDate &&
+      registrationEndDate <= registrationStartDate
+    ) {
+      throw new Error("Registration end date must be after registration start date");
+    }
+
+    // Đăng ký phải đóng trước khi giải bắt đầu
+    if (registrationEndDate && startDate && registrationEndDate >= startDate) {
+      throw new Error("Registration must close before the tournament starts");
+    }
+
+    // bracketGenerationDate phải sau registrationEndDate
+    if (
+      bracketGenerationDate &&
+      registrationEndDate &&
+      bracketGenerationDate < registrationEndDate
+    ) {
+      throw new Error("Bracket generation date must be after registration end date");
+    }
+
+    // bracketGenerationDate phải trước startDate ít nhất 2 ngày
+    if (bracketGenerationDate && startDate) {
+      const twoDaysBeforeStart = new Date(startDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+      if (bracketGenerationDate > twoDaysBeforeStart) {
+        throw new Error(
+          "Bracket generation date must be at least 2 days (48 hours) before the start date"
+        );
+      }
+    }
+  }
+
+  @BeforeValidate
+  static validateNumberOfTables(instance: ScheduleConfig): void {
+    const { numberOfTables } = instance;
+    if (numberOfTables == null) return;
+
+    if (!Number.isInteger(numberOfTables) || numberOfTables < 1) {
+      throw new Error("Number of tables must be at least 1");
+    }
+  }
 }
+

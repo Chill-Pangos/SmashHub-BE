@@ -2,15 +2,9 @@
 export interface CreateTournamentDto {
   name: string;
   tier: number;
-  startDate: Date;
-  endDate?: Date;
-  registrationStartDate?: Date;
-  registrationEndDate?: Date;
-  bracketGenerationDate?: Date;
   location: string;
   status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
   createdBy: number;
-  numberOfTables?: number;
   categories?: CreateTournamentCategoryDto[];
 }
 
@@ -32,14 +26,8 @@ export interface CreateTournamentCategoryDto {
 export interface UpdateTournamentDto {
   name?: string;
   tier?: number;
-  startDate?: Date;
-  endDate?: Date;
-  registrationStartDate?: Date;
-  registrationEndDate?: Date;
-  bracketGenerationDate?: Date;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
-  numberOfTables?: number;
   categories?: UpdateTournamentCategoryDto[];
 }
 
@@ -63,13 +51,7 @@ export interface TournamentResponseDto {
   name: string;
   tier: number;
   status: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled";
-  startDate: Date;
-  endDate?: Date;
-  registrationStartDate?: Date;
-  registrationEndDate?: Date;
-  bracketGenerationDate?: Date;
   location: string;
-  numberOfTables: number;
   createdAt: Date;
   updatedAt: Date;
 }

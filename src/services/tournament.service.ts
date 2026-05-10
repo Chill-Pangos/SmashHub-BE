@@ -2,6 +2,7 @@ import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -22,20 +23,8 @@ export class TournamentService {
         {
           name: data.name,
           tier: data.tier,
-          startDate: data.startDate,
-          endDate: data.endDate ? data.endDate : null,
-          registrationStartDate: data.registrationStartDate
-            ? data.registrationStartDate
-            : null,
-          registrationEndDate: data.registrationEndDate
-            ? data.registrationEndDate
-            : null,
-          bracketGenerationDate: data.bracketGenerationDate
-            ? data.bracketGenerationDate
-            : null,
           location: data.location,
           status: data.status || "upcoming",
-          numberOfTables: data.numberOfTables || 1,
           createdBy: data.createdBy,
         } as any,
         { transaction },
@@ -334,19 +323,7 @@ export class TournamentService {
       await tournament.update(
         {
           name: data.name,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          registrationStartDate: data.registrationStartDate
-            ? data.registrationStartDate
-            : null,
-          registrationEndDate: data.registrationEndDate
-            ? data.registrationEndDate
-            : null,
-          bracketGenerationDate: data.bracketGenerationDate
-            ? data.bracketGenerationDate
-            : null,
           location: data.location,
-          numberOfTables: data.numberOfTables ?? 1,
           status: data.status,
         },
         { transaction },
@@ -428,112 +405,88 @@ export class TournamentService {
     totalUpdated: number;
   }> {
     const now = new Date();
+    const statuses = { openedCount: 0, closedCount: 0, bracketsGeneratedCount: 0 };
 
-    // Track counts per status
-    const statuses = {
-      openedCount: 0,
-      closedCount: 0,
-      bracketsGeneratedCount: 0,
+    // Helper: lấy tournamentIds từ ScheduleConfig theo điều kiện ngày
+    const getIds = async (where: WhereOptions<any>): Promise<number[]> => {
+      const configs = await ScheduleConfig.findAll({
+        where,
+        attributes: ["tournamentId"],
+      });
+      return configs.map((c) => c.tournamentId);
     };
 
-    // 1. Update to registration_open: upcoming → registration_open
-    // (registrationStartDate has passed, but registrationEndDate has NOT)
-    const openedResult = await Tournament.update(
-      { status: "registration_open" },
-      {
-        where: {
-          status: "upcoming",
-          registrationStartDate: {
-            [Op.lte]: now,
-            [Op.not]: null,
-          },
-          registrationEndDate: {
-            [Op.gt]: now,
-            [Op.not]: null,
-          },
-        },
-      },
-    );
-    statuses.openedCount += openedResult[0];
+    // 1. upcoming → registration_open
+    const openIds = await getIds({
+      registrationStartDate: { [Op.lte]: now, [Op.not]: null },
+      registrationEndDate: { [Op.gt]: now, [Op.not]: null },
+    });
+    if (openIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "registration_open" },
+        { where: { status: "upcoming", id: { [Op.in]: openIds } } }
+      );
+      statuses.openedCount += r[0];
+    }
 
-    // 2. Update to registration_closed: registration_open → registration_closed
-    // (registrationEndDate has passed, but bracketGenerationDate has NOT)
-    const closedResult = await Tournament.update(
-      { status: "registration_closed" },
-      {
-        where: {
-          status: "registration_open",
-          registrationEndDate: {
-            [Op.lte]: now,
-            [Op.not]: null,
-          },
-          bracketGenerationDate: {
-            [Op.gt]: now,
-            [Op.not]: null,
-          },
-        },
-      },
-    );
-    statuses.closedCount += closedResult[0];
+    // 2. registration_open → registration_closed
+    const closeIds = await getIds({
+      registrationEndDate: { [Op.lte]: now, [Op.not]: null },
+      bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
+    });
+    if (closeIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "registration_closed" },
+        { where: { status: "registration_open", id: { [Op.in]: closeIds } } }
+      );
+      statuses.closedCount += r[0];
+    }
 
-    // 3. Update to brackets_generated: registration_closed → brackets_generated
-    // (bracketGenerationDate has passed)
-    const bracketsResult = await Tournament.update(
-      { status: "brackets_generated" },
-      {
-        where: {
-          status: "registration_closed",
-          bracketGenerationDate: {
-            [Op.lte]: now,
-            [Op.not]: null,
+    // 3. registration_closed → brackets_generated
+    const bracketIds = await getIds({
+      bracketGenerationDate: { [Op.lte]: now, [Op.not]: null },
+    });
+    if (bracketIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "brackets_generated" },
+        { where: { status: "registration_closed", id: { [Op.in]: bracketIds } } }
+      );
+      statuses.bracketsGeneratedCount += r[0];
+    }
+
+    // 4. Edge case: upcoming → registration_closed (skip open phase)
+    const skipCloseIds = await getIds({
+      registrationStartDate: { [Op.lte]: now, [Op.not]: null },
+      registrationEndDate: { [Op.lte]: now, [Op.not]: null },
+      bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
+    });
+    if (skipCloseIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "registration_closed" },
+        { where: { status: "upcoming", id: { [Op.in]: skipCloseIds } } }
+      );
+      statuses.closedCount += r[0];
+    }
+
+    // 5. Edge case: any early phase → brackets_generated
+    if (bracketIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "brackets_generated" },
+        {
+          where: {
+            status: { [Op.in]: ["upcoming", "registration_open", "registration_closed"] },
+            id: { [Op.in]: bracketIds },
           },
-        },
-      },
-    );
-    statuses.bracketsGeneratedCount += bracketsResult[0];
-
-    // Handle edge cases: tournaments that skipped phases due to incorrect date setup
-    // If a tournament was created after registrationStartDate, it may still be "upcoming"
-    // but needs to jump to later phases
-
-    // Skip from upcoming → registration_closed
-    // (when both registrationStartDate AND registrationEndDate have passed)
-    const skippedClosedResult = await Tournament.update(
-      { status: "registration_closed" },
-      {
-        where: {
-          status: "upcoming",
-          registrationStartDate: { [Op.lte]: now, [Op.not]: null },
-          registrationEndDate: { [Op.lte]: now, [Op.not]: null },
-          bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
-        },
-      },
-    );
-    statuses.closedCount += skippedClosedResult[0];
-
-    // Skip from upcoming/registration_open → brackets_generated
-    // (when all dates including bracketGenerationDate have passed)
-    const skippedBracketsResult = await Tournament.update(
-      { status: "brackets_generated" },
-      {
-        where: {
-          status: {
-            [Op.in]: ["upcoming", "registration_open", "registration_closed"],
-          },
-          bracketGenerationDate: { [Op.lte]: now, [Op.not]: null },
-        },
-      },
-    );
-    statuses.bracketsGeneratedCount += skippedBracketsResult[0];
+        }
+      );
+      statuses.bracketsGeneratedCount += r[0];
+    }
 
     return {
       openedCount: statuses.openedCount,
       closedCount: statuses.closedCount,
       bracketsGeneratedCount: statuses.bracketsGeneratedCount,
-      totalUpdated:
-        statuses.openedCount +
-        statuses.closedCount +
-        statuses.bracketsGeneratedCount,
+      totalUpdated: statuses.openedCount + statuses.closedCount + statuses.bracketsGeneratedCount,
     };
   }
 
@@ -550,41 +503,36 @@ export class TournamentService {
     const now = new Date();
     const futureTime = new Date(now.getTime() + hours * 60 * 60 * 1000);
 
-    const openingSoon = await Tournament.findAll({
-      where: {
-        status: "upcoming",
-        registrationStartDate: {
-          [Op.between]: [now, futureTime],
-        },
-      },
-      attributes: ["id", "name", "registrationStartDate", "status"],
-    });
-
-    const closingSoon = await Tournament.findAll({
-      where: {
-        status: "registration_open",
-        registrationEndDate: {
-          [Op.between]: [now, futureTime],
-        },
-      },
-      attributes: ["id", "name", "registrationEndDate", "status"],
-    });
-
-    const bracketsSoon = await Tournament.findAll({
-      where: {
-        status: "registration_closed",
-        bracketGenerationDate: {
-          [Op.between]: [now, futureTime],
-        },
-      },
-      attributes: ["id", "name", "bracketGenerationDate", "status"],
-    });
-
-    return {
-      openingSoon,
-      closingSoon,
-      bracketsSoon,
+    const findTournamentsByConfigDates = async (
+      status: string,
+      configWhere: WhereOptions<any>
+    ): Promise<Tournament[]> => {
+      const configs = await ScheduleConfig.findAll({
+        where: configWhere,
+        attributes: ["tournamentId"],
+      });
+      const ids = configs.map((c) => c.tournamentId);
+      if (ids.length === 0) return [];
+      return Tournament.findAll({
+        where: { status, id: { [Op.in]: ids } },
+        attributes: ["id", "name", "status"],
+        include: [{ model: ScheduleConfig, as: "scheduleConfig", attributes: ["registrationStartDate", "registrationEndDate", "bracketGenerationDate"] }],
+      });
     };
+
+    const [openingSoon, closingSoon, bracketsSoon] = await Promise.all([
+      findTournamentsByConfigDates("upcoming", {
+        registrationStartDate: { [Op.between]: [now, futureTime] },
+      }),
+      findTournamentsByConfigDates("registration_open", {
+        registrationEndDate: { [Op.between]: [now, futureTime] },
+      }),
+      findTournamentsByConfigDates("registration_closed", {
+        bracketGenerationDate: { [Op.between]: [now, futureTime] },
+      }),
+    ]);
+
+    return { openingSoon, closingSoon, bracketsSoon };
   }
 }
 
