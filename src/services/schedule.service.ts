@@ -45,9 +45,9 @@ const MATCH_INCLUDE = {
 
 // ─── Tournament Type Detection ────────────────────────────────────────────────
 
-function isSingleDayTournament(tournament: Tournament): boolean {
+function isSingleDayTournament(scheduleConfig: ScheduleConfig): boolean {
   const diffHours =
-    (tournament.endDate.getTime() - tournament.startDate.getTime()) /
+    (scheduleConfig.endDate.getTime() - scheduleConfig.startDate.getTime()) /
     (1000 * 60 * 60);
   return diffHours <= SINGLE_DAY_THRESHOLD_HOURS;
 }
@@ -63,9 +63,9 @@ class SingleDayAllocator {
   private readonly startDate: Date;
   private readonly endDate: Date;
 
-  constructor(tournament: Tournament, scheduleConfig: ScheduleConfig) {
-    this.startDate = tournament.startDate;
-    this.endDate = tournament.endDate;
+  constructor(scheduleConfig: ScheduleConfig) {
+    this.startDate = scheduleConfig.startDate;
+    this.endDate = scheduleConfig.endDate;
     this.slotDuration =
       scheduleConfig.matchDurationMinutes + scheduleConfig.breakDurationMinutes;
   }
@@ -114,9 +114,9 @@ class MultiDayAllocator {
   private readonly dailyEndMinute: number;
   private readonly slotDuration: number;
 
-  constructor(tournament: Tournament, scheduleConfig: ScheduleConfig) {
-    this.startDate = tournament.startDate;
-    this.endDate = tournament.endDate;
+  constructor(scheduleConfig: ScheduleConfig) {
+    this.startDate = scheduleConfig.startDate;
+    this.endDate = scheduleConfig.endDate;
     this.dailyStartHour = scheduleConfig.dailyStartHour;
     this.dailyStartMinute = scheduleConfig.dailyStartMinute;
     this.dailyEndHour = scheduleConfig.dailyEndHour;
@@ -180,9 +180,9 @@ function createAllocator(
   tournament: Tournament,
   scheduleConfig: ScheduleConfig
 ): SingleDayAllocator | MultiDayAllocator {
-  return isSingleDayTournament(tournament)
-    ? new SingleDayAllocator(tournament, scheduleConfig)
-    : new MultiDayAllocator(tournament, scheduleConfig);
+  return isSingleDayTournament(scheduleConfig)
+    ? new SingleDayAllocator(scheduleConfig)
+    : new MultiDayAllocator(scheduleConfig);
 }
 
 // ─── Referee Assignment ───────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ export class ScheduleService {
     const allocator = createAllocator(tournament, scheduleConfig);
     const { fits, warning } = allocator.validate(
       matchPairs.length,
-      tournament.numberOfTables,
+      scheduleConfig.numberOfTables,
     );
 
     const referees = await getTournamentReferees(tournament.id);
@@ -350,7 +350,7 @@ export class ScheduleService {
 
       for (let i = 0; i < matchPairs.length; i++) {
         const pair = matchPairs[i]!;
-        const slot = allocator.getSlot(i, tournament.numberOfTables);
+        const slot = allocator.getSlot(i, scheduleConfig.numberOfTables);
 
         const schedule = await Schedule.create(
           {
@@ -436,7 +436,7 @@ export class ScheduleService {
     const allocator = createAllocator(tournament, scheduleConfig);
     const { warning } = allocator.validate(
       brackets.length,
-      tournament.numberOfTables,
+      scheduleConfig.numberOfTables,
     );
 
     const referees = await getTournamentReferees(tournament.id);
@@ -453,7 +453,7 @@ export class ScheduleService {
 
       for (let i = 0; i < brackets.length; i++) {
         const bracket = brackets[i]!;
-        const slot = allocator.getSlot(i, tournament.numberOfTables);
+        const slot = allocator.getSlot(i, scheduleConfig.numberOfTables);
 
         const schedule = await Schedule.create(
           {

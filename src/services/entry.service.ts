@@ -4,6 +4,7 @@ import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
 import JoinRequest from "../models/joinRequest.model";
@@ -24,16 +25,41 @@ async function getCategoryWithTournament(
 
 async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
   const now = new Date();
-  if (
-    now < tournament.registrationStartDate ||
-    now > tournament.registrationEndDate
-  ) {
+  // Use ScheduleConfig where registration dates now reside
+  let regStart: Date | undefined;
+  let regEnd: Date | undefined;
+  if (tournament.scheduleConfig) {
+    regStart = tournament.scheduleConfig.registrationStartDate;
+    regEnd = tournament.scheduleConfig.registrationEndDate;
+  } else {
+    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+    regStart = cfg?.registrationStartDate;
+    regEnd = cfg?.registrationEndDate;
+  }
+
+  if (!regStart || !regEnd) {
+    throw new Error("Registration window is not configured for this tournament");
+  }
+
+  if (now < regStart || now > regEnd) {
     throw new Error("Registration is not open at this time");
   }
 }
 
 async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
-  if (new Date() <= tournament.registrationEndDate) {
+  let regEnd: Date | undefined;
+  if (tournament.scheduleConfig && tournament.scheduleConfig.registrationEndDate) {
+    regEnd = tournament.scheduleConfig.registrationEndDate;
+  } else {
+    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+    regEnd = cfg?.registrationEndDate;
+  }
+
+  if (!regEnd) {
+    throw new Error("Registration end date is not configured for this tournament");
+  }
+
+  if (new Date() <= regEnd) {
     throw new Error("Registration must be closed before disqualifying entries");
   }
 }
