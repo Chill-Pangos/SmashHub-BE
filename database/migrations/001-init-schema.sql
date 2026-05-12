@@ -1,7 +1,9 @@
 -- ============================================================================
 -- SmashHub Database Schema
--- Version: 1.0.0
--- Generated based on Sequelize models
+-- Version: 1.1.0
+-- Changes: Moved startDate, endDate, numberOfTables, registrationStartDate,
+--          registrationEndDate, bracketGenerationDate from tournaments
+--          to schedule_configs
 -- ============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -129,26 +131,14 @@ CREATE TABLE IF NOT EXISTS `tournaments` (
   `name` VARCHAR(255) NOT NULL,
   `tier` INT UNSIGNED NOT NULL,
   `status` ENUM('upcoming', 'registration_open', 'registration_closed', 'brackets_generated', 'ongoing', 'completed', 'cancelled') NOT NULL DEFAULT 'upcoming',
-  `startDate` DATETIME NOT NULL,
-  `endDate` DATETIME NOT NULL,
-  `registrationStartDate` DATETIME NOT NULL,
-  `registrationEndDate` DATETIME NOT NULL,
-  `bracketGenerationDate` DATETIME NOT NULL,
   `location` VARCHAR(100) NOT NULL,
   `createdBy` INT UNSIGNED NOT NULL,
-  `numberOfTables` INT UNSIGNED NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tournaments_name_unique` (`name`),
   INDEX `tournaments_created_by_idx` (`createdBy`),
-  INDEX `tournaments_start_date_idx` (`startDate`),
   INDEX `tournaments_tier_idx` (`tier`),
-  INDEX `tournaments_status_start_idx` (`status`, `startDate`),
-  INDEX `tournaments_reg_start_idx` (`registrationStartDate`),
-  INDEX `tournaments_reg_end_idx` (`registrationEndDate`),
-  INDEX `tournaments_bracket_gen_idx` (`bracketGenerationDate`),
-  INDEX `tournaments_status_reg_bracket_idx` (`status`, `registrationEndDate`, `bracketGenerationDate`),
   CONSTRAINT `fk_tournaments_creator` FOREIGN KEY (`createdBy`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -360,23 +350,38 @@ CREATE TABLE IF NOT EXISTS `schedules` (
 CREATE TABLE IF NOT EXISTS `schedule_configs` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `tournamentId` INT UNSIGNED NOT NULL,
+  -- Tournament dates & tables (moved from tournaments)
+  `startDate` DATETIME NOT NULL,
+  `endDate` DATETIME NOT NULL,
+  `numberOfTables` INT UNSIGNED NOT NULL DEFAULT 1,
+  `registrationStartDate` DATETIME NOT NULL,
+  `registrationEndDate` DATETIME NOT NULL,
+  `bracketGenerationDate` DATETIME NOT NULL,
+  -- Match configuration
   `matchDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 60,
   `breakDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 10,
+  -- Daily schedule
   `dailyStartHour` INT UNSIGNED NOT NULL DEFAULT 8,
   `dailyStartMinute` INT UNSIGNED NOT NULL DEFAULT 0,
   `dailyEndHour` INT UNSIGNED NOT NULL DEFAULT 22,
   `dailyEndMinute` INT UNSIGNED NOT NULL DEFAULT 0,
+  -- Lunch break (optional)
   `lunchBreakStartHour` INT UNSIGNED NULL,
   `lunchBreakStartMinute` INT UNSIGNED NOT NULL DEFAULT 0,
   `lunchBreakEndHour` INT UNSIGNED NULL,
   `lunchBreakEndMinute` INT UNSIGNED NOT NULL DEFAULT 0,
   `lunchBreakDurationMinutes` INT UNSIGNED NULL,
+  -- Notes
   `notes` LONGTEXT NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `schedule_configs_tournament_unique` (`tournamentId`),
   INDEX `schedule_configs_tournament_idx` (`tournamentId`),
+  INDEX `schedule_configs_start_date_idx` (`startDate`),
+  INDEX `schedule_configs_reg_start_idx` (`registrationStartDate`),
+  INDEX `schedule_configs_reg_end_idx` (`registrationEndDate`),
+  INDEX `schedule_configs_bracket_gen_idx` (`bracketGenerationDate`),
   CONSTRAINT `fk_schedule_configs_tournament` FOREIGN KEY (`tournamentId`) REFERENCES `tournaments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

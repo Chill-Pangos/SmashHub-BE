@@ -123,6 +123,70 @@ export class ScheduleConfigController {
   }
 
   /**
+   * Preview new schedule config (without saving)
+   * POST /tournaments/:tournamentId/schedule-config/preview-create
+   */
+  async previewCreate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const tournamentId = Number(req.params.tournamentId);
+
+      if (isNaN(tournamentId) || tournamentId <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const { totalMatches, ...configData }: any = req.body;
+
+      if (!Number.isInteger(totalMatches) || totalMatches <= 0) {
+        throw new BadRequestError(
+          "totalMatches must be a positive integer"
+        );
+      }
+
+      const preview = await ScheduleConfigService.previewCreate(
+        tournamentId,
+        configData,
+        totalMatches
+      );
+
+      res.status(200).json(preview);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Preview updating schedule config (without saving)
+   * POST /tournaments/:tournamentId/schedule-config/preview-update
+   */
+  async previewUpdate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const tournamentId = Number(req.params.tournamentId);
+
+      if (isNaN(tournamentId) || tournamentId <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const { totalMatches, ...configData }: any = req.body;
+
+      if (!Number.isInteger(totalMatches) || totalMatches <= 0) {
+        throw new BadRequestError(
+          "totalMatches must be a positive integer"
+        );
+      }
+
+      const preview = await ScheduleConfigService.previewUpdate(
+        tournamentId,
+        configData,
+        totalMatches
+      );
+
+      res.status(200).json(preview);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Get default schedule config
    * GET /schedule-configs/defaults
    */

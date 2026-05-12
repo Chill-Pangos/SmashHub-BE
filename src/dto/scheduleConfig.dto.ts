@@ -1,43 +1,73 @@
-// schedule-config.dto.ts
-
 export interface CreateScheduleConfigDto {
   tournamentId: number;
-  matchDurationMinutes?: number; // default: 60
-  breakDurationMinutes?: number; // default: 10
-  dailyStartHour?: number; // default: 8
-  dailyStartMinute?: number; // default: 0
-  dailyEndHour?: number; // default: 22
-  dailyEndMinute?: number; // default: 0
-  lunchBreakStartHour?: number;
-  lunchBreakStartMinute?: number;
-  lunchBreakEndHour?: number;
-  lunchBreakEndMinute?: number;
-  notes?: string;
-}
-
-export interface UpdateScheduleConfigDto {
+  // Tournament dates & tables (moved from tournaments)
+  startDate: Date;
+  endDate: Date;
+  numberOfTables?: number;
+  registrationStartDate: Date;
+  registrationEndDate: Date;
+  bracketGenerationDate: Date;
+  // Match configuration
   matchDurationMinutes?: number;
   breakDurationMinutes?: number;
+  // Daily schedule
   dailyStartHour?: number;
   dailyStartMinute?: number;
   dailyEndHour?: number;
   dailyEndMinute?: number;
+  // Lunch break
   lunchBreakStartHour?: number;
   lunchBreakStartMinute?: number;
   lunchBreakEndHour?: number;
   lunchBreakEndMinute?: number;
+  lunchBreakDurationMinutes?: number;
+  notes?: string;
+}
+
+export interface UpdateScheduleConfigDto {
+  // Tournament dates & tables (optional for updates)
+  startDate?: Date;
+  endDate?: Date;
+  numberOfTables?: number;
+  registrationStartDate?: Date;
+  registrationEndDate?: Date;
+  bracketGenerationDate?: Date;
+  // Match configuration
+  matchDurationMinutes?: number;
+  breakDurationMinutes?: number;
+  // Daily schedule
+  dailyStartHour?: number;
+  dailyStartMinute?: number;
+  dailyEndHour?: number;
+  dailyEndMinute?: number;
+  // Lunch break
+  lunchBreakStartHour?: number;
+  lunchBreakStartMinute?: number;
+  lunchBreakEndHour?: number;
+  lunchBreakEndMinute?: number;
+  lunchBreakDurationMinutes?: number;
   notes?: string;
 }
 
 export interface ScheduleConfigResponseDto {
   id: number;
   tournamentId: number;
+  // Tournament dates & tables
+  startDate: Date;
+  endDate: Date;
+  numberOfTables: number;
+  registrationStartDate: Date;
+  registrationEndDate: Date;
+  bracketGenerationDate: Date;
+  // Match configuration
   matchDurationMinutes: number;
   breakDurationMinutes: number;
+  // Daily schedule
   dailyStartHour: number;
   dailyStartMinute: number;
   dailyEndHour: number;
   dailyEndMinute: number;
+  // Lunch break
   lunchBreakStartHour?: number;
   lunchBreakStartMinute?: number;
   lunchBreakEndHour?: number;
@@ -55,28 +85,11 @@ export interface ValidateScheduleConfigDto {
 export interface ScheduleValidationResponseDto {
   isValid: boolean;
   message: string;
-  details?: {
+  details: {
     totalMatches: number;
     totalSlots: number;
-    lastMatchEndTime: Date;
-    tournamentEndTime: Date;
-    overflowMinutes?: number;
+    estimatedEndTime: Date;      // thời gian kết thúc dự kiến theo config
+    tournamentEndTime: Date;     // deadline của tournament
+    overflowMinutes?: number;    // chỉ có khi isValid = false
   };
-  suggestions?: OptimizationSuggestionDto[];
-}
-
-export interface OptimizationSuggestionDto {
-  type:
-    | "increase_tables"
-    | "reduce_match_duration"
-    | "reduce_break_duration"
-    | "extend_schedule";
-  description: string;
-  impact: {
-    matchDurationMinutes?: number;
-    breakDurationMinutes?: number;
-    numberOfTables?: number;
-    newEndDate?: Date;
-  };
-  priority: "high" | "medium" | "low";
 }

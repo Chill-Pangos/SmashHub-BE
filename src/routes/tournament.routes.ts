@@ -11,7 +11,7 @@ const router = Router();
  *   post:
  *     tags: [Tournaments]
  *     summary: Create a new tournament with categories
- *     description: Create a tournament along with its tournament categories in a single transaction. Creator ID is automatically taken from authenticated user.
+ *     description: Create a tournament along with its tournament categories in a single transaction. 
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -23,11 +23,6 @@ const router = Router();
  *             required:
  *               - name
  *               - tier
- *               - startDate
- *               - endDate
- *               - registrationStartDate
- *               - registrationEndDate
- *               - bracketGenerationDate
  *               - location
  *             properties:
  *               name:
@@ -40,31 +35,6 @@ const router = Router();
  *                 maximum: 5
  *                 description: Tournament tier level (1-5)
  *                 example: 3
- *               startDate:
- *                 type: string
- *                 format: date-time
- *                 description: Tournament start date and time
- *                 example: "2026-03-15T09:00:00Z"
- *               endDate:
- *                 type: string
- *                 format: date-time
- *                 description: Tournament end date and time
- *                 example: "2026-03-20T18:00:00Z"
- *               registrationStartDate:
- *                 type: string
- *                 format: date-time
- *                 description: Registration opens at this date (cannot be in the past)
- *                 example: "2026-02-15T00:00:00Z"
- *               registrationEndDate:
- *                 type: string
- *                 format: date-time
- *                 description: Registration closes at this date (must be before startDate)
- *                 example: "2026-03-10T23:59:59Z"
- *               bracketGenerationDate:
- *                 type: string
- *                 format: date-time
- *                 description: Date when brackets are generated (must be at least 2 days before startDate, after registrationEndDate)
- *                 example: "2026-03-12T10:00:00Z"
  *               location:
  *                 type: string
  *                 description: Tournament venue location
@@ -74,10 +44,6 @@ const router = Router();
  *                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                 description: Tournament status (default is 'upcoming')
  *                 example: "upcoming"
- *               numberOfTables:
- *                 type: integer
- *                 minimum: 1
- *                 description: Number of tables available for concurrent matches (default is 1)
  *                 example: 4
  *               categories:
  *                 type: array
@@ -146,14 +112,8 @@ const router = Router();
  *               value:
  *                 name: "Spring Championship 2026"
  *                 tier: 3
- *                 startDate: "2026-03-15T09:00:00Z"
- *                 endDate: "2026-03-20T18:00:00Z"
- *                 registrationStartDate: "2026-02-15T00:00:00Z"
- *                 registrationEndDate: "2026-03-10T23:59:59Z"
- *                 bracketGenerationDate: "2026-03-12T10:00:00Z"
  *                 location: "National Stadium"
  *                 status: "upcoming"
- *                 numberOfTables: 4
  *                 categories:
  *                   - name: "Men's Singles"
  *                     type: "single"
@@ -184,11 +144,6 @@ const router = Router();
  *               value:
  *                 name: "Local Tournament 2026"
  *                 tier: 1
- *                 startDate: "2026-04-01T10:00:00Z"
- *                 endDate: "2026-04-05T18:00:00Z"
- *                 registrationStartDate: "2026-03-01T00:00:00Z"
- *                 registrationEndDate: "2026-03-28T23:59:59Z"
- *                 bracketGenerationDate: "2026-03-30T10:00:00Z"
  *                 location: "Community Center"
  *     responses:
  *       201:
@@ -207,35 +162,12 @@ const router = Router();
  *                 tier:
  *                   type: integer
  *                   example: 3
- *                 startDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-15T09:00:00Z"
- *                 endDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-20T18:00:00Z"
- *                 registrationStartDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-02-15T00:00:00Z"
- *                 registrationEndDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-10T23:59:59Z"
- *                 bracketGenerationDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-12T10:00:00Z"
  *                 location:
  *                   type: string
  *                   example: "National Stadium"
  *                 status:
  *                   type: string
  *                   example: "upcoming"
- *                 numberOfTables:
- *                   type: integer
- *                   example: 4
  *                 createdBy:
  *                   type: integer
  *                   description: ID of the user who created this tournament
@@ -340,7 +272,7 @@ const router = Router();
  *   get:
  *     tags: [Tournaments]
  *     summary: Get all tournaments with pagination
- *     description: Get all tournaments with their categories and pagination information
+ *     description: Get all tournaments with their categories and pagination information. Note: Date and table configuration is managed in ScheduleConfig.
  *     parameters:
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
@@ -370,32 +302,9 @@ const router = Router();
  *                         type: string
  *                         enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                         example: "upcoming"
- *                       startDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-15T09:00:00Z"
- *                       endDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-20T18:00:00Z"
- *                       registrationStartDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-02-15T00:00:00Z"
- *                       registrationEndDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-10T23:59:59Z"
- *                       bracketGenerationDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-12T10:00:00Z"
  *                       location:
  *                         type: string
  *                         example: "National Stadium"
- *                       numberOfTables:
- *                         type: integer
- *                         example: 4
  *                       createdBy:
  *                         type: integer
  *                         example: 5

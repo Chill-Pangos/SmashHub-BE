@@ -5,100 +5,192 @@ import { BadRequestError, NotFoundError } from "../utils/errors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ValidationResult {
+export interface SchedulePreviewResponse {
   isValid: boolean;
-  message?: string;
-  details?: {
+  message: string;
+  preview: {
     totalMatches: number;
     totalSlots: number;
-    lastMatchEndTime: Date;
+    estimatedEndTime: Date;
     tournamentEndTime: Date;
+    availableMinutes: number;
+    neededMinutes: number;
     overflowMinutes?: number;
+    // Thông tin ngày tháng để user xác nhận
+    startDate: Date;
+    endDate: Date;
+    registrationStartDate: Date;
+    registrationEndDate: Date;
+    bracketGenerationDate: Date;
+    numberOfTables: number;
+    matchDurationMinutes: number;
+    breakDurationMinutes: number;
   };
-}
-
-export interface OptimizationSuggestion {
-  type:
-    | "increase_tables"
-    | "reduce_match_duration"
-    | "reduce_break_duration"
-    | "extend_schedule";
-  description: string;
-  impact: {
-    matchDurationMinutes?: number;
-    breakDurationMinutes?: number;
-    numberOfTables?: number;
-    newEndDate?: Date;
-  };
-  priority: "high" | "medium" | "low";
 }
 
 export interface ScheduleValidationResponse {
   isValid: boolean;
   message: string;
-  details?: ValidationResult["details"];
-  suggestions?: OptimizationSuggestion[];
+  details: {
+    totalMatches: number;
+    totalSlots: number;
+    estimatedEndTime: Date;
+    tournamentEndTime: Date;
+    overflowMinutes?: number;
+  };
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SINGLE_DAY_THRESHOLD_HOURS = 20; // startDate - endDate < 20h = 1 ngày
+const SINGLE_DAY_THRESHOLD_HOURS = 20;
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
-function isSingleDayTournament(tournament: Tournament): boolean {
+/**
+ * Dùng được cho cả ScheduleConfig instance lẫn plain data object
+ * nên nhận startDate/endDate trực tiếp.
+ */
+function isSingleDay(startDate: Date, endDate: Date): boolean {
   const diffHours =
-    (tournament.endDate.getTime() - tournament.startDate.getTime()) /
-    (1000 * 60 * 60);
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
   return diffHours < SINGLE_DAY_THRESHOLD_HOURS;
 }
 
-function calculateTournamentDayHours(tournament: Tournament): number {
-  if (isSingleDayTournament(tournament)) {
-    return (tournament.endDate.getTime() - tournament.startDate.getTime()) /
-      (1000 * 60 * 60);
-  }
-
-  // Giải nhiều ngày: tính tổng giờ làm việc per day
-  // (dailyEndHour - dailyStartHour) * number_of_days
+function calculateAvailableMinutesMultiDay(
+  startDate: Date,
+  endDate: Date,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  dailyEndHour: number,
+  dailyEndMinute: number
+): number {
   const diffDays = Math.ceil(
-    (tournament.endDate.getTime() - tournament.startDate.getTime()) /
-      (1000 * 60 * 60 * 24)
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
-
-  const dailyStartTotalMinutes =
-    tournament.startDate.getHours() * 60 + tournament.startDate.getMinutes();
-  const dailyEndTotalMinutes =
-    tournament.endDate.getHours() * 60 + tournament.endDate.getMinutes();
-
-  const dailyHours = (dailyEndTotalMinutes - dailyStartTotalMinutes) / 60;
-  return dailyHours * diffDays;
+  const dailyStartTotal = dailyStartHour * 60 + dailyStartMinute;
+  const dailyEndTotal = dailyEndHour * 60 + dailyEndMinute;
+  return (dailyEndTotal - dailyStartTotal) * diffDays;
 }
 
-function calculateTotalMatchDurationNeeded(
+function calculateAvailableMinutes(
+  startDate: Date,
+  endDate: Date,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  dailyEndHour: number,
+  dailyEndMinute: number
+): number {
+  if (isSingleDay(startDate, endDate)) {
+    return (endDate.getTime() - startDate.getTime()) / 60000;
+  }
+  return calculateAvailableMinutesMultiDay(
+    startDate,
+    endDate,
+    dailyStartHour,
+    dailyStartMinute,
+    dailyEndHour,
+    dailyEndMinute
+  );
+}
+
+function calculateNeededMinutes(
   totalMatches: number,
   matchDurationMinutes: number,
   breakDurationMinutes: number,
   numberOfTables: number
 ): number {
   const totalSlots = Math.ceil(totalMatches / numberOfTables);
-  const slotDurationMinutes = matchDurationMinutes + breakDurationMinutes;
-  return totalSlots * slotDurationMinutes;
+  return totalSlots * (matchDurationMinutes + breakDurationMinutes);
+}
+
+function calculateEstimatedEndTime(
+  startDate: Date,
+  totalMatches: number,
+  matchDurationMinutes: number,
+  breakDurationMinutes: number,
+  numberOfTables: number
+): Date {
+  const totalSlots = Math.ceil(totalMatches / numberOfTables);
+  const totalMinutes = totalSlots * (matchDurationMinutes + breakDurationMinutes);
+  return new Date(startDate.getTime() + totalMinutes * 60000);
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class ScheduleConfigService {
+  // ─── Preview (validate chưa lưu) ─────────────────────────────────────────
+
   /**
-   * Tạo schedule config mới cho tournament
+   * Preview khi TẠO MỚI schedule config.
+   * Validate toàn bộ config + tính estimated end time.
+   * KHÔNG lưu vào DB — trả về để user xác nhận trước.
+   */
+  async previewCreate(
+    tournamentId: number,
+    data: Partial<ScheduleConfig>,
+    totalMatches: number
+  ): Promise<SchedulePreviewResponse> {
+    const tournament = await Tournament.findByPk(tournamentId);
+    if (!tournament) throw new NotFoundError("Tournament not found");
+
+    // Không cho preview nếu config đã tồn tại
+    const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
+    if (existing) {
+      throw new BadRequestError(
+        "Schedule config already exists for this tournament. Use update preview instead."
+      );
+    }
+
+    return this._buildPreview(data, totalMatches);
+  }
+
+  /**
+   * Preview khi CẬP NHẬT schedule config.
+   * Validate config mới (merge với config hiện tại) + tính estimated end time.
+   * KHÔNG lưu vào DB — trả về để user xác nhận trước.
+   */
+  async previewUpdate(
+    tournamentId: number,
+    data: Partial<ScheduleConfig>,
+    totalMatches: number
+  ): Promise<SchedulePreviewResponse> {
+    const tournament = await Tournament.findByPk(tournamentId);
+    if (!tournament) throw new NotFoundError("Tournament not found");
+
+    const existing = await this.getConfig(tournamentId);
+    if (!existing) throw new NotFoundError("Schedule config not found");
+
+    // Merge config hiện tại với data mới để preview đúng trạng thái sau update
+    const merged: Partial<ScheduleConfig> = {
+      startDate: existing.startDate,
+      endDate: existing.endDate,
+      numberOfTables: existing.numberOfTables,
+      registrationStartDate: existing.registrationStartDate,
+      registrationEndDate: existing.registrationEndDate,
+      bracketGenerationDate: existing.bracketGenerationDate,
+      matchDurationMinutes: existing.matchDurationMinutes,
+      breakDurationMinutes: existing.breakDurationMinutes,
+      dailyStartHour: existing.dailyStartHour,
+      dailyStartMinute: existing.dailyStartMinute,
+      dailyEndHour: existing.dailyEndHour,
+      dailyEndMinute: existing.dailyEndMinute,
+      ...data, // data mới override config hiện tại
+    };
+
+    return this._buildPreview(merged, totalMatches);
+  }
+
+  // ─── CRUD thật (chỉ gọi sau khi user đã xác nhận preview) ───────────────
+
+  /**
+   * Tạo schedule config mới cho tournament.
+   * Nên gọi sau khi user đã confirm từ previewCreate.
    */
   async createConfig(
     tournamentId: number,
     data: Partial<ScheduleConfig>
   ): Promise<ScheduleConfig> {
-    const existing = await ScheduleConfig.findOne({
-      where: { tournamentId },
-    });
+    const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
 
     if (existing) {
       throw new BadRequestError(
@@ -113,16 +205,15 @@ export class ScheduleConfigService {
   }
 
   /**
-   * Lấy config của tournament
+   * Lấy config của tournament.
    */
   async getConfig(tournamentId: number): Promise<ScheduleConfig | null> {
-    return await ScheduleConfig.findOne({
-      where: { tournamentId },
-    });
+    return await ScheduleConfig.findOne({ where: { tournamentId } });
   }
 
   /**
-   * Cập nhật config
+   * Cập nhật config.
+   * Nên gọi sau khi user đã confirm từ previewUpdate.
    */
   async updateConfig(
     tournamentId: number,
@@ -130,29 +221,26 @@ export class ScheduleConfigService {
   ): Promise<ScheduleConfig> {
     const config = await this.getConfig(tournamentId);
 
-    if (!config) {
-      throw new NotFoundError("Schedule config not found");
-    }
+    if (!config) throw new NotFoundError("Schedule config not found");
 
     return await config.update(data);
   }
 
+  // ─── Validate sau khi đã lưu (dùng khi generate schedule) ───────────────
+
   /**
-   * Validate xem config fit với tournament không
+   * Validate xem config đã lưu có fit với số trận không.
+   * Dùng nội bộ (vd: trước khi generate schedule).
    */
   async validateScheduleConfig(
     tournamentId: number,
     totalMatches: number
   ): Promise<ScheduleValidationResponse> {
     const tournament = await Tournament.findByPk(tournamentId);
-    if (!tournament) {
-      throw new NotFoundError("Tournament not found");
-    }
+    if (!tournament) throw new NotFoundError("Tournament not found");
 
     const config = await this.getConfig(tournamentId);
-    if (!config) {
-      throw new NotFoundError("Schedule config not found");
-    }
+    if (!config) throw new NotFoundError("Schedule config not found");
 
     const {
       matchDurationMinutes,
@@ -161,23 +249,148 @@ export class ScheduleConfigService {
       dailyStartMinute,
       dailyEndHour,
       dailyEndMinute,
+      numberOfTables,
+      startDate,
+      endDate,
     } = config;
 
-    const numberOfTables = tournament.numberOfTables;
+    const availableMinutes = calculateAvailableMinutes(
+      startDate,
+      endDate,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute
+    );
 
-    // Calculate available time (in minutes)
-    const availableMinutes = isSingleDayTournament(tournament)
-      ? (tournament.endDate.getTime() - tournament.startDate.getTime()) / 60000
-      : this._calculateAvailableMinutesMultiDay(
-          tournament,
-          dailyStartHour,
-          dailyStartMinute,
-          dailyEndHour,
-          dailyEndMinute
-        );
+    const totalSlots = Math.ceil(totalMatches / numberOfTables);
+    const neededMinutes = calculateNeededMinutes(
+      totalMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables
+    );
+    const estimatedEndTime = calculateEstimatedEndTime(
+      startDate,
+      totalMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables
+    );
 
-    // Calculate total time needed
-    const neededMinutes = calculateTotalMatchDurationNeeded(
+    const isValid = neededMinutes <= availableMinutes;
+    const details = {
+      totalMatches,
+      totalSlots,
+      estimatedEndTime,
+      tournamentEndTime: endDate,
+      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+    };
+
+    if (isValid) {
+      return {
+        isValid: true,
+        message: `Lịch thi đấu hợp lệ. Dự kiến kết thúc lúc ${estimatedEndTime.toISOString()}, trước deadline ${Math.floor((endDate.getTime() - estimatedEndTime.getTime()) / 60000)} phút.`,
+        details,
+      };
+    }
+
+    return {
+      isValid: false,
+      message: `Lịch thi đấu vượt quá thời gian cho phép. Dự kiến kết thúc lúc ${estimatedEndTime.toISOString()}, nhưng tournament kết thúc lúc ${endDate.toISOString()} (vượt ${neededMinutes - availableMinutes} phút).`,
+      details,
+    };
+  }
+
+  /**
+   * Delete schedule config for a tournament
+   */
+  async deleteConfig(tournamentId: number): Promise<number> {
+    return await ScheduleConfig.destroy({ where: { tournamentId } });
+  }
+
+  /**
+   * Get default schedule config values
+   * Used by clients to understand default values when creating schedule config
+   */
+  async getDefaultConfig(): Promise<{
+    matchDurationMinutes: number;
+    breakDurationMinutes: number;
+    dailyStartHour: number;
+    dailyStartMinute: number;
+    dailyEndHour: number;
+    dailyEndMinute: number;
+    numberOfTables: number;
+    lunchBreakStartHour?: number;
+    lunchBreakStartMinute?: number;
+    lunchBreakEndHour?: number;
+    lunchBreakEndMinute?: number;
+    lunchBreakDurationMinutes?: number;
+  }> {
+    return {
+      matchDurationMinutes: 60,
+      breakDurationMinutes: 10,
+      dailyStartHour: 8,
+      dailyStartMinute: 0,
+      dailyEndHour: 22,
+      dailyEndMinute: 0,
+      numberOfTables: 1,
+    };
+  }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  /**
+   * Build preview response từ raw data (chưa lưu).
+   * Dùng chung cho cả previewCreate và previewUpdate.
+   */
+  private _buildPreview(
+    data: Partial<ScheduleConfig>,
+    totalMatches: number
+  ): SchedulePreviewResponse {
+    const {
+      startDate,
+      endDate,
+      numberOfTables = 1,
+      registrationStartDate,
+      registrationEndDate,
+      bracketGenerationDate,
+      matchDurationMinutes = 60,
+      breakDurationMinutes = 10,
+      dailyStartHour = 8,
+      dailyStartMinute = 0,
+      dailyEndHour = 22,
+      dailyEndMinute = 0,
+    } = data;
+
+    // Validate required fields
+    if (!startDate || !endDate) {
+      throw new BadRequestError("startDate and endDate are required");
+    }
+    if (!registrationStartDate || !registrationEndDate || !bracketGenerationDate) {
+      throw new BadRequestError(
+        "registrationStartDate, registrationEndDate, and bracketGenerationDate are required"
+      );
+    }
+
+    const availableMinutes = calculateAvailableMinutes(
+      startDate,
+      endDate,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute
+    );
+
+    const totalSlots = Math.ceil(totalMatches / numberOfTables);
+    const neededMinutes = calculateNeededMinutes(
+      totalMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables
+    );
+    const estimatedEndTime = calculateEstimatedEndTime(
+      startDate,
       totalMatches,
       matchDurationMinutes,
       breakDurationMinutes,
@@ -186,205 +399,37 @@ export class ScheduleConfigService {
 
     const isValid = neededMinutes <= availableMinutes;
 
+    const preview = {
+      totalMatches,
+      totalSlots,
+      estimatedEndTime,
+      tournamentEndTime: endDate,
+      availableMinutes,
+      neededMinutes,
+      startDate,
+      endDate,
+      registrationStartDate,
+      registrationEndDate,
+      bracketGenerationDate,
+      numberOfTables,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+    };
+
     if (isValid) {
       return {
         isValid: true,
-        message: "Schedule config fits within tournament timeframe",
-        details: {
-          totalMatches,
-          totalSlots: Math.ceil(totalMatches / numberOfTables),
-          lastMatchEndTime: this._calculateLastMatchEndTime(
-            tournament,
-            totalMatches,
-            matchDurationMinutes,
-            breakDurationMinutes,
-            numberOfTables
-          ),
-          tournamentEndTime: tournament.endDate,
-        },
+        message: `Config hợp lệ. Với ${totalMatches} trận, dự kiến kết thúc lúc ${estimatedEndTime.toISOString()}, còn dư ${Math.floor(availableMinutes - neededMinutes)} phút so với thời gian cho phép.`,
+        preview,
       };
     }
 
-    // Generate suggestions
-    const suggestions = this._generateSuggestions(
-      totalMatches,
-      matchDurationMinutes,
-      breakDurationMinutes,
-      numberOfTables,
-      neededMinutes,
-      availableMinutes,
-      tournament
-    );
-
     return {
       isValid: false,
-      message: `Schedule config does NOT fit tournament timeframe. Need ${neededMinutes} minutes but only have ${availableMinutes} minutes available (overflow: ${neededMinutes - availableMinutes} minutes)`,
-      details: {
-        totalMatches,
-        totalSlots: Math.ceil(totalMatches / numberOfTables),
-        lastMatchEndTime: this._calculateLastMatchEndTime(
-          tournament,
-          totalMatches,
-          matchDurationMinutes,
-          breakDurationMinutes,
-          numberOfTables
-        ),
-        tournamentEndTime: tournament.endDate,
-        overflowMinutes: neededMinutes - availableMinutes,
-      },
-      suggestions,
+      message: `Config không hợp lệ. Cần ${neededMinutes} phút nhưng chỉ có ${availableMinutes} phút (thiếu ${neededMinutes - availableMinutes} phút). Hãy điều chỉnh số bàn, thời lượng trận, hoặc ngày thi đấu.`,
+      preview,
     };
-  }
-
-  /**
-   * Tính available minutes cho multi-day tournament
-   */
-  private _calculateAvailableMinutesMultiDay(
-    tournament: Tournament,
-    dailyStartHour: number,
-    dailyStartMinute: number,
-    dailyEndHour: number,
-    dailyEndMinute: number
-  ): number {
-    const diffDays = Math.ceil(
-      (tournament.endDate.getTime() - tournament.startDate.getTime()) /
-        (1000 * 60 * 60 * 24)
-    );
-
-    const dailyStartTotalMinutes = dailyStartHour * 60 + dailyStartMinute;
-    const dailyEndTotalMinutes = dailyEndHour * 60 + dailyEndMinute;
-
-    const dailyMinutes = dailyEndTotalMinutes - dailyStartTotalMinutes;
-
-    return dailyMinutes * diffDays;
-  }
-
-  /**
-   * Tính thời điểm kết thúc match cuối
-   */
-  private _calculateLastMatchEndTime(
-    tournament: Tournament,
-    totalMatches: number,
-    matchDurationMinutes: number,
-    breakDurationMinutes: number,
-    numberOfTables: number
-  ): Date {
-    const totalSlots = Math.ceil(totalMatches / numberOfTables);
-    const slotDurationMinutes = matchDurationMinutes + breakDurationMinutes;
-    const totalMinutesNeeded = totalSlots * slotDurationMinutes;
-
-    return new Date(tournament.startDate.getTime() + totalMinutesNeeded * 60000);
-  }
-
-  /**
-   * Sinh suggestions để fix
-   */
-  private _generateSuggestions(
-    totalMatches: number,
-    matchDurationMinutes: number,
-    breakDurationMinutes: number,
-    numberOfTables: number,
-    neededMinutes: number,
-    availableMinutes: number,
-    tournament: Tournament
-  ): OptimizationSuggestion[] {
-    const suggestions: OptimizationSuggestion[] = [];
-    const overflowMinutes = neededMinutes - availableMinutes;
-
-    // 1. Tăng số bàn
-    const newTables = numberOfTables + 1;
-    const newNeededMinutes1 = calculateTotalMatchDurationNeeded(
-      totalMatches,
-      matchDurationMinutes,
-      breakDurationMinutes,
-      newTables
-    );
-
-    if (newNeededMinutes1 <= availableMinutes) {
-      suggestions.push({
-        type: "increase_tables",
-        description: `Increase number of tables from ${numberOfTables} to ${newTables} tables. This will allow ${Math.ceil(totalMatches / newTables)} time slots instead of ${Math.ceil(totalMatches / numberOfTables)}.`,
-        impact: { numberOfTables: newTables },
-        priority: "high",
-      });
-    }
-
-    // 2. Giảm match duration
-    const reducedMatchDuration = Math.max(15, matchDurationMinutes - 15);
-    const newNeededMinutes2 = calculateTotalMatchDurationNeeded(
-      totalMatches,
-      reducedMatchDuration,
-      breakDurationMinutes,
-      numberOfTables
-    );
-
-    if (newNeededMinutes2 <= availableMinutes && reducedMatchDuration !== matchDurationMinutes) {
-      suggestions.push({
-        type: "reduce_match_duration",
-        description: `Reduce match duration from ${matchDurationMinutes} to ${reducedMatchDuration} minutes per match.`,
-        impact: { matchDurationMinutes: reducedMatchDuration },
-        priority: "medium",
-      });
-    }
-
-    // 3. Giảm break duration
-    const reducedBreakDuration = Math.max(0, breakDurationMinutes - 5);
-    const newNeededMinutes3 = calculateTotalMatchDurationNeeded(
-      totalMatches,
-      matchDurationMinutes,
-      reducedBreakDuration,
-      numberOfTables
-    );
-
-    if (newNeededMinutes3 <= availableMinutes && reducedBreakDuration !== breakDurationMinutes) {
-      suggestions.push({
-        type: "reduce_break_duration",
-        description: `Reduce break duration from ${breakDurationMinutes} to ${reducedBreakDuration} minutes between matches.`,
-        impact: { breakDurationMinutes: reducedBreakDuration },
-        priority: "medium",
-      });
-    }
-
-    // 4. Kéo dài tournament
-    const newEndDate = new Date(
-      tournament.endDate.getTime() + overflowMinutes * 60000
-    );
-
-    suggestions.push({
-      type: "extend_schedule",
-      description: `Extend tournament end date from ${tournament.endDate.toISOString()} to ${newEndDate.toISOString()} (add ${Math.ceil(overflowMinutes / 60)} hours).`,
-      impact: { newEndDate },
-      priority: "low",
-    });
-
-    return suggestions;
-  }
-
-  /**
-   * Lấy config mặc định
-   */
-  async getDefaultConfig(): Promise<Partial<ScheduleConfig>> {
-    return {
-      matchDurationMinutes: 60,
-      breakDurationMinutes: 10,
-      dailyStartHour: 8,
-      dailyStartMinute: 0,
-      dailyEndHour: 22,
-      dailyEndMinute: 0,
-    };
-  }
-
-  /**
-   * Xóa config
-   */
-  async deleteConfig(tournamentId: number): Promise<boolean> {
-    const config = await this.getConfig(tournamentId);
-    if (!config) {
-      return false;
-    }
-
-    await config.destroy();
-    return true;
   }
 }
 

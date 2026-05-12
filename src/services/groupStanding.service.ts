@@ -10,6 +10,7 @@ import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,21 @@ async function assertChiefReferee(
 }
 
 async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
-  if (new Date() <= tournament.registrationEndDate) {
+  // registrationEndDate moved to ScheduleConfig. Prefer scheduleConfig if loaded,
+  // otherwise fetch it by tournament id.
+  let regEnd: Date | undefined;
+  if (tournament.scheduleConfig && tournament.scheduleConfig.registrationEndDate) {
+    regEnd = tournament.scheduleConfig.registrationEndDate;
+  } else {
+    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+    regEnd = cfg?.registrationEndDate;
+  }
+
+  if (!regEnd) {
+    throw new Error("Registration end date is not configured for this tournament");
+  }
+
+  if (new Date() <= regEnd) {
     throw new Error("Registration must be closed before managing groups");
   }
 }

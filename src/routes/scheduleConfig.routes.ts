@@ -227,6 +227,163 @@ router.post(
 
 /**
  * @swagger
+ * /tournaments/{tournamentId}/schedule-config/preview-create:
+ *   post:
+ *     tags: [Schedule Config]
+ *     summary: Preview creating a new schedule config
+ *     description: Preview the schedule configuration without saving it. Useful for client-side validation before confirming creation.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tournamentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [totalMatches, startDate, endDate, registrationStartDate, registrationEndDate, bracketGenerationDate]
+ *             properties:
+ *               totalMatches:
+ *                 type: integer
+ *                 minimum: 1
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               registrationStartDate:
+ *                 type: string
+ *                 format: date-time
+ *               registrationEndDate:
+ *                 type: string
+ *                 format: date-time
+ *               bracketGenerationDate:
+ *                 type: string
+ *                 format: date-time
+ *               numberOfTables:
+ *                 type: integer
+ *                 minimum: 1
+ *               matchDurationMinutes:
+ *                 type: integer
+ *               breakDurationMinutes:
+ *                 type: integer
+ *               dailyStartHour:
+ *                 type: integer
+ *               dailyStartMinute:
+ *                 type: integer
+ *               dailyEndHour:
+ *                 type: integer
+ *               dailyEndMinute:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Preview of schedule config creation
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SchedulePreviewResponse'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:tournamentId/schedule-config/preview-create",
+  authenticate,
+  checkPermission("tournaments:view"),
+  scheduleConfigController.previewCreate.bind(scheduleConfigController)
+);
+
+/**
+ * @swagger
+ * /tournaments/{tournamentId}/schedule-config/preview-update:
+ *   post:
+ *     tags: [Schedule Config]
+ *     summary: Preview updating a schedule config
+ *     description: Preview the updated schedule configuration without saving it. Useful for client-side validation before confirming update.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tournamentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [totalMatches]
+ *             properties:
+ *               totalMatches:
+ *                 type: integer
+ *                 minimum: 1
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               registrationStartDate:
+ *                 type: string
+ *                 format: date-time
+ *               registrationEndDate:
+ *                 type: string
+ *                 format: date-time
+ *               bracketGenerationDate:
+ *                 type: string
+ *                 format: date-time
+ *               numberOfTables:
+ *                 type: integer
+ *               matchDurationMinutes:
+ *                 type: integer
+ *               breakDurationMinutes:
+ *                 type: integer
+ *               dailyStartHour:
+ *                 type: integer
+ *               dailyStartMinute:
+ *                 type: integer
+ *               dailyEndHour:
+ *                 type: integer
+ *               dailyEndMinute:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Preview of schedule config update
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SchedulePreviewResponse'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:tournamentId/schedule-config/preview-update",
+  authenticate,
+  checkPermission("tournaments:view"),
+  scheduleConfigController.previewUpdate.bind(scheduleConfigController)
+);
+
+/**
+ * @swagger
  * /tournaments/{tournamentId}/schedule-config:
  *   delete:
  *     tags: [Schedule Config]
