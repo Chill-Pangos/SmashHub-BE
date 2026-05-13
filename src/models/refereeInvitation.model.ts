@@ -10,7 +10,8 @@ import {
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
 import User from "./user.model";
-import { REFEREE_ROLES, RefereeRole } from "./tournamentReferee.model";
+import { REFEREE_ROLES } from "./tournamentReferee.model";
+import type { RefereeRole } from "./tournamentReferee.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

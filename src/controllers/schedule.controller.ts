@@ -1,36 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import scheduleService from "../services/schedule.service";
 import { BadRequestError } from "../utils/errors";
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 export class ScheduleController {
-  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async generateGroupStageSchedule(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const result = await scheduleService.findAll(skip, limit);
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+      const { categoryId } = req.body;
 
-  async generateGroupStageSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { categoryId, startDate } = req.body;
-
-      if (!categoryId || !startDate) {
-        throw new BadRequestError("categoryId and startDate are required");
+      if (!categoryId) {
+        throw new BadRequestError("categoryId is required");
+      }
+      
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
       }
 
-      const start = new Date(startDate);
-      if (isNaN(start.getTime())) {
-        throw new BadRequestError("Invalid startDate");
-      }
-
-      const result = await scheduleService.generateGroupStageSchedule(categoryId, start);
+      const result = await scheduleService.generateGroupStageSchedule(req.userId, categoryId);
 
       res.status(201).json({
         success: true,
@@ -48,86 +34,23 @@ export class ScheduleController {
   }
 
 
-  async generateCompleteSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async generateKnockoutSchedule(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId, startDate } = req.body;
+      const { categoryId, roundName } = req.body;
 
-      if (!categoryId || !startDate) {
-        throw new BadRequestError("categoryId and startDate are required");
+      if (!categoryId) {
+        throw new BadRequestError("categoryId is required");
       }
 
-      const start = new Date(startDate);
-      if (isNaN(start.getTime())) {
-        throw new BadRequestError("Invalid startDate");
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
       }
 
-      const result = await scheduleService.generateCompleteSchedule(categoryId, start);
+      const result = await scheduleService.generateKnockoutSchedule(req.userId, categoryId, roundName);
 
       res.status(201).json({
         success: true,
-        message: "Complete schedule generated successfully",
-        data: {
-          totalSchedules: result.schedules.length,
-          totalMatches: result.matches.length,
-          schedules: result.schedules,
-          matches: result.matches,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-
-  async generateKnockoutOnlySchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { categoryId, startDate } = req.body;
-
-      if (!categoryId || !startDate) {
-        throw new BadRequestError("categoryId and startDate are required");
-      }
-
-      const start = new Date(startDate);
-      if (isNaN(start.getTime())) {
-        throw new BadRequestError("Invalid startDate");
-      }
-
-      const result = await scheduleService.generateKnockoutOnlySchedule(categoryId, start);
-
-      res.status(201).json({
-        success: true,
-        message: "Knockout-only schedule generated successfully",
-        data: {
-          totalSchedules: result.schedules.length,
-          totalMatches: result.matches.length,
-          schedules: result.schedules,
-          matches: result.matches,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-
-  async generateKnockoutStageSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { categoryId, startDate } = req.body;
-
-      if (!categoryId || !startDate) {
-        throw new BadRequestError("categoryId and startDate are required");
-      }
-
-      const start = new Date(startDate);
-      if (isNaN(start.getTime())) {
-        throw new BadRequestError("Invalid startDate");
-      }
-
-      const result = await scheduleService.generateKnockoutStageSchedule(categoryId, start);
-
-      res.status(201).json({
-        success: true,
-        message: "Knockout stage schedule created successfully",
+        message: "Knockout schedule generated successfully",
         data: {
           totalSchedules: result.schedules.length,
           totalMatches: result.matches.length,
@@ -212,17 +135,16 @@ export class ScheduleController {
 
       // Note: The service currently doesn't support stage filtering
       // TODO: Add stage filtering support to the service method
-      const result = await scheduleService.findSchedulesByCategoryId(
+      const result = await scheduleService.getSchedulesByCategory(
         categoryId,
-        skip,
-        limit
+        { skip, limit, stage: stage as any }
       );
 
       res.status(200).json({
         success: true,
         data: {
-          schedules: result.schedules,
-          total: result.total,
+          schedules: result.rows,
+          total: result.count,
           skip,
           limit,
         },

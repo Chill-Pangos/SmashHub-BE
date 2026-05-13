@@ -38,9 +38,9 @@ const router = Router();
 router.post("/",
   authenticate,
   checkPermission('elo:manage'),
-  eloHistoryController.create.bind(eloHistoryController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
-router.get("/", eloHistoryController.findAll.bind(eloHistoryController));
+router.get("/", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 
 /**
  * @swagger
@@ -66,8 +66,8 @@ router.get("/", eloHistoryController.findAll.bind(eloHistoryController));
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", eloHistoryController.findById.bind(eloHistoryController));
-router.delete("/:id", eloHistoryController.delete.bind(eloHistoryController));
+router.get("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
+router.delete("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 
 /**
  * @swagger

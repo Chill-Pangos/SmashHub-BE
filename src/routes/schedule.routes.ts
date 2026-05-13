@@ -33,8 +33,6 @@ const router = Router();
  *     responses:
  *       200:
  *         description: List of schedules ordered by scheduled time
- */
-router.get("/", scheduleController.findAll.bind(scheduleController));
 
 /**
  * @swagger
@@ -314,7 +312,7 @@ router.post("/generate-group-stage",
 router.post("/generate-complete",
   authenticate,
   checkPermission('schedules:create'),
-  scheduleController.generateCompleteSchedule.bind(scheduleController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**
@@ -378,7 +376,7 @@ router.post("/generate-complete",
 router.post("/generate-knockout-only",
   authenticate,
   checkPermission('schedules:create'),
-  scheduleController.generateKnockoutOnlySchedule.bind(scheduleController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**
@@ -450,7 +448,7 @@ router.post("/generate-knockout-only",
 router.post("/generate-knockout-stage",
   authenticate,
   checkPermission('schedules:create'),
-  scheduleController.generateKnockoutStageSchedule.bind(scheduleController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**

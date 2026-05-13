@@ -37,9 +37,9 @@ const router = Router();
 router.post("/",
   authenticate,
   checkPermission('matches:create'),
-  matchController.create.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
-router.get("/", matchController.findAll.bind(matchController));
+router.get("/", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 
 /**
  * @swagger
@@ -81,7 +81,7 @@ router.get("/pending", authenticate, checkPermission('matches:approve_result'), 
  */
 router.get(
   "/schedule/:scheduleId",
-  matchController.findByScheduleId.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**
@@ -104,7 +104,7 @@ router.get(
  */
 router.get(
   "/status/:status",
-  matchController.findByStatus.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**
@@ -167,7 +167,7 @@ router.post("/:id/start",
 router.get("/:id/pending-with-elo", 
   authenticate,
   checkPermission('matches:approve_result'),
-  matchController.getPendingMatchWithEloPreview.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 /**
@@ -456,16 +456,16 @@ router.get("/athlete/:userId/history", authenticate, matchController.getMatchHis
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", matchController.findById.bind(matchController));
+router.get("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 router.put("/:id",
   authenticate,
   checkPermission('matches:update'),
-  matchController.update.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 router.delete("/:id",
   authenticate,
   checkPermission('matches:delete'),
-  matchController.delete.bind(matchController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
 
 export default router;

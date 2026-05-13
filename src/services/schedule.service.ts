@@ -11,18 +11,18 @@ import Tournament from "../models/tournament.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
-import User from "../models/user.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ScheduleResult {
   schedules: Schedule[];
   matches: Match[];
-  warning?: string | undefined; // thêm | undefined để chấp nhận cả 2 trường hợp
+  warning?: string;
 }
+
 interface TimeSlot {
   scheduledAt: Date;
-  tableNumber: number;
+  // tableNumber bị loại bỏ — sẽ được assign động khi match bắt đầu
 }
 
 interface RefereeWorkload {
@@ -32,7 +32,7 @@ interface RefereeWorkload {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SINGLE_DAY_THRESHOLD_HOURS = 20; // startDate và endDate cách nhau < 20h → coi là giải 1 ngày
+const SINGLE_DAY_THRESHOLD_HOURS = 20;
 
 const MATCH_INCLUDE = {
   model: Match,
@@ -45,56 +45,56 @@ const MATCH_INCLUDE = {
 
 // ─── Tournament Type Detection ────────────────────────────────────────────────
 
-function isSingleDayTournament(scheduleConfig: ScheduleConfig): boolean {
-  const diffHours =
-    (scheduleConfig.endDate.getTime() - scheduleConfig.startDate.getTime()) /
-    (1000 * 60 * 60);
-  return diffHours <= SINGLE_DAY_THRESHOLD_HOURS;
+function isSingleDayTournament(config: ScheduleConfig): boolean {
+  return (
+    (config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60) <=
+    SINGLE_DAY_THRESHOLD_HOURS
+  );
 }
 
 // ─── Slot Allocators ──────────────────────────────────────────────────────────
 
 /**
- * Giải 1 ngày: tất cả trận chạy song song tối đa theo số bàn.
- * Slot = floor(matchIndex / numberOfTables) × slotDuration
+ * Giải 1 ngày.
+ * Slot chỉ tính scheduledAt dựa trên slot index.
+ * numberOfTables dùng để tính số slot song song (bao nhiêu trận cùng lúc),
+ * nhưng KHÔNG gán tableNumber cụ thể vào schedule.
  */
 class SingleDayAllocator {
   private readonly slotDuration: number;
   private readonly startDate: Date;
   private readonly endDate: Date;
 
-  constructor(scheduleConfig: ScheduleConfig) {
-    this.startDate = scheduleConfig.startDate;
-    this.endDate = scheduleConfig.endDate;
-    this.slotDuration =
-      scheduleConfig.matchDurationMinutes + scheduleConfig.breakDurationMinutes;
+  constructor(config: ScheduleConfig) {
+    this.startDate = config.startDate;
+    this.endDate = config.endDate;
+    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
   }
 
   getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
     const slotIndex = Math.floor(matchIndex / numberOfTables);
-    const scheduledAt = new Date(
-      this.startDate.getTime() + slotIndex * this.slotDuration * 60_000,
-    );
     return {
-      scheduledAt,
-      tableNumber: (matchIndex % numberOfTables) + 1,
+      scheduledAt: new Date(
+        this.startDate.getTime() + slotIndex * this.slotDuration * 60_000
+      ),
     };
   }
 
   validate(
     totalMatches: number,
-    numberOfTables: number,
+    numberOfTables: number
   ): { fits: boolean; warning?: string } {
     const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
     const lastMatchStart = new Date(
-      this.startDate.getTime() + lastSlotIndex * this.slotDuration * 60_000,
+      this.startDate.getTime() + lastSlotIndex * this.slotDuration * 60_000
     );
 
-    // So sánh thời điểm BẮT ĐẦU trận cuối với endDate
     if (lastMatchStart > this.endDate) {
       return {
         fits: false,
-        warning: `Schedule overflows. Last match starts at ${lastMatchStart.toISOString()}, but tournament's last allowed start time is ${this.endDate.toISOString()}`,
+        warning:
+          `Schedule overflows. Last match starts at ${lastMatchStart.toISOString()}, ` +
+          `but tournament's last allowed start time is ${this.endDate.toISOString()}`,
       };
     }
     return { fits: true };
@@ -102,8 +102,9 @@ class SingleDayAllocator {
 }
 
 /**
- * Giải nhiều ngày: phân bổ đều số trận mỗi ngày.
+ * Giải nhiều ngày.
  * Tự động sang ngày mới khi hết giờ trong ngày.
+ * KHÔNG gán tableNumber.
  */
 class MultiDayAllocator {
   private readonly startDate: Date;
@@ -114,39 +115,31 @@ class MultiDayAllocator {
   private readonly dailyEndMinute: number;
   private readonly slotDuration: number;
 
-  constructor(scheduleConfig: ScheduleConfig) {
-    this.startDate = scheduleConfig.startDate;
-    this.endDate = scheduleConfig.endDate;
-    this.dailyStartHour = scheduleConfig.dailyStartHour;
-    this.dailyStartMinute = scheduleConfig.dailyStartMinute;
-    this.dailyEndHour = scheduleConfig.dailyEndHour;
-    this.dailyEndMinute = scheduleConfig.dailyEndMinute;
-    this.slotDuration =
-      scheduleConfig.matchDurationMinutes + scheduleConfig.breakDurationMinutes;
+  constructor(config: ScheduleConfig) {
+    this.startDate = config.startDate;
+    this.endDate = config.endDate;
+    this.dailyStartHour = config.dailyStartHour;
+    this.dailyStartMinute = config.dailyStartMinute;
+    this.dailyEndHour = config.dailyEndHour;
+    this.dailyEndMinute = config.dailyEndMinute;
+    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
   }
 
   getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
     const slotIndex = Math.floor(matchIndex / numberOfTables);
-    const scheduledAt = this.computeSlotTime(slotIndex);
-    return {
-      scheduledAt,
-      tableNumber: (matchIndex % numberOfTables) + 1,
-    };
+    return { scheduledAt: this._computeSlotTime(slotIndex) };
   }
 
-  private computeSlotTime(slotIndex: number): Date {
+  private _computeSlotTime(slotIndex: number): Date {
     let current = new Date(this.startDate);
 
     for (let i = 0; i < slotIndex; i++) {
       current = new Date(current.getTime() + this.slotDuration * 60_000);
 
-      const nextSlotStart = new Date(
-        current.getTime() + this.slotDuration * 60_000,
-      );
+      const nextSlotStart = new Date(current.getTime() + this.slotDuration * 60_000);
       const lastStartOfDay = new Date(current);
       lastStartOfDay.setHours(this.dailyEndHour, this.dailyEndMinute, 0, 0);
 
-      // Nếu slot tiếp theo sẽ bắt đầu SAU giờ cuối cho phép → sang ngày mới
       if (nextSlotStart > lastStartOfDay) {
         current.setDate(current.getDate() + 1);
         current.setHours(this.dailyStartHour, this.dailyStartMinute, 0, 0);
@@ -158,31 +151,91 @@ class MultiDayAllocator {
 
   validate(
     totalMatches: number,
-    numberOfTables: number,
+    numberOfTables: number
   ): { fits: boolean; warning?: string } {
     const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
-    const lastMatchAt = this.computeSlotTime(lastSlotIndex);
+    const lastMatchAt = this._computeSlotTime(lastSlotIndex);
     const lastMatchEnd = new Date(
-      lastMatchAt.getTime() + this.slotDuration * 60_000,
+      lastMatchAt.getTime() + this.slotDuration * 60_000
     );
 
     if (lastMatchEnd > this.endDate) {
       return {
         fits: false,
-        warning: `Schedule overflows tournament end time. Last match ends at ${lastMatchEnd.toISOString()}, tournament ends at ${this.endDate.toISOString()}`,
+        warning:
+          `Schedule overflows tournament end time. Last match ends at ${lastMatchEnd.toISOString()}, ` +
+          `tournament ends at ${this.endDate.toISOString()}`,
       };
     }
     return { fits: true };
   }
 }
 
-function createAllocator(
-  tournament: Tournament,
-  scheduleConfig: ScheduleConfig
-): SingleDayAllocator | MultiDayAllocator {
-  return isSingleDayTournament(scheduleConfig)
-    ? new SingleDayAllocator(scheduleConfig)
-    : new MultiDayAllocator(scheduleConfig);
+function createAllocator(config: ScheduleConfig): SingleDayAllocator | MultiDayAllocator {
+  return isSingleDayTournament(config)
+    ? new SingleDayAllocator(config)
+    : new MultiDayAllocator(config);
+}
+
+// ─── Table Assignment ─────────────────────────────────────────────────────────
+
+/**
+ * Tìm bàn trống tại thời điểm cụ thể.
+ * Bàn được coi là "bận" khi có match đang `in_progress` hoặc `scheduled`
+ * với scheduledAt nằm trong khoảng [now - slotDuration, now].
+ *
+ * @returns tableNumber (1-based) hoặc null nếu không còn bàn trống
+ */
+async function findAvailableTable(
+  tournamentId: number,
+  config: ScheduleConfig,
+  t: Transaction
+): Promise<number | null> {
+  const slotDurationMs =
+    (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - slotDurationMs);
+
+  // Lấy tất cả bàn đang bận trong cửa sổ thời gian hiện tại
+  const busySchedules = await Schedule.findAll({
+    include: [
+      {
+        model: TournamentCategory,
+        as: "category",
+        where: { tournamentId },
+        required: true,
+        attributes: [],
+      },
+      {
+        model: Match,
+        as: "scheduledMatches",
+        where: {
+          status: { [Op.in]: ["scheduled", "in_progress"] },
+        },
+        required: true,
+        attributes: [],
+      },
+    ],
+    attributes: ["tableNumber"],
+    where: {
+      scheduledAt: { [Op.between]: [windowStart, now] },
+      tableNumber: { [Op.not]: null },
+    } as any,
+    transaction: t,
+  });
+
+  const busyTables = new Set(
+    busySchedules.map((s) => s.tableNumber).filter(Boolean)
+  );
+
+  // Tìm bàn trống đầu tiên trong khoảng [1, numberOfTables]
+  for (let table = 1; table <= config.numberOfTables; table++) {
+    if (!busyTables.has(table)) {
+      return table;
+    }
+  }
+
+  return null; // Tất cả bàn đang bận
 }
 
 // ─── Referee Assignment ───────────────────────────────────────────────────────
@@ -193,9 +246,7 @@ function buildWorkloads(referees: TournamentReferee[]): RefereeWorkload[] {
 
 function assignReferees(workloads: RefereeWorkload[], count: number): number[] {
   if (workloads.length === 0) return [];
-  const sorted = [...workloads].sort(
-    (a, b) => a.assignedCount - b.assignedCount,
-  );
+  const sorted = [...workloads].sort((a, b) => a.assignedCount - b.assignedCount);
   const selected = sorted.slice(0, count).map((r) => r.refereeId);
   for (const w of workloads) {
     if (selected.includes(w.refereeId)) w.assignedCount += 1;
@@ -211,19 +262,19 @@ function calcRefsPerMatch(totalMatches: number, totalRefs: number): number {
 async function bulkCreateMatchReferees(
   matchId: number,
   refereeIds: number[],
-  t: Transaction,
+  t: Transaction
 ): Promise<void> {
   if (refereeIds.length === 0) return;
   await MatchReferee.bulkCreate(
     refereeIds.map((refereeId) => ({ matchId, refereeId })),
-    { transaction: t },
+    { transaction: t }
   );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getCategoryWithTournament(
-  categoryId: number,
+  categoryId: number
 ): Promise<TournamentCategory> {
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
@@ -239,17 +290,29 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
 }
 
 async function getTournamentReferees(
-  tournamentId: number,
+  tournamentId: number
 ): Promise<TournamentReferee[]> {
   return await TournamentReferee.findAll({
-    where: { tournamentId, role: "referee" }, // chief không coi trận cụ thể
+    where: { tournamentId, role: "referee" },
   });
+}
+
+async function getRequiredScheduleConfig(
+  tournamentId: number
+): Promise<ScheduleConfig> {
+  const config = await ScheduleConfig.findOne({ where: { tournamentId } });
+  if (!config) {
+    throw new Error(
+      "Schedule config not found. Please create a schedule configuration first before generating the schedule."
+    );
+  }
+  return config;
 }
 
 async function clearExistingSchedules(
   categoryId: number,
   stage: Stage,
-  t: Transaction,
+  t: Transaction
 ): Promise<void> {
   const existing = await Schedule.findAll({
     where: { categoryId, stage },
@@ -278,26 +341,21 @@ async function clearExistingSchedules(
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class ScheduleService {
-  // ── 1. Xếp lịch vòng 1 (group stage) ────────────────────────────────────
+  // ── 1. Tạo lịch group stage ────────────────────────────────────────────────
 
+  /**
+   * Tạo lịch thi đấu vòng bảng.
+   * tableNumber KHÔNG được gán ở đây — sẽ được gán khi trận bắt đầu.
+   */
   async generateGroupStageSchedule(
     organizerId: number,
-    categoryId: number,
+    categoryId: number
   ): Promise<ScheduleResult> {
     const category = await getCategoryWithTournament(categoryId);
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
 
-    // Lấy schedule config - PHẢI tồn tại
-    const scheduleConfig = await ScheduleConfig.findOne({
-      where: { tournamentId: tournament.id },
-    });
-
-    if (!scheduleConfig) {
-      throw new Error(
-        "Schedule config not found. Please create a schedule configuration first before generating the schedule."
-      );
-    }
+    const config = await getRequiredScheduleConfig(tournament.id);
 
     const standings = await GroupStanding.findAll({
       where: { categoryId },
@@ -307,7 +365,7 @@ export class ScheduleService {
       throw new Error("No group standings found. Generate groups first.");
     }
 
-    // Build round-robin pairs trong mỗi bảng
+    // Build round-robin pairs
     const groupMap = new Map<string, number[]>();
     for (const s of standings) {
       const group = groupMap.get(s.groupName) ?? [];
@@ -315,11 +373,7 @@ export class ScheduleService {
       groupMap.set(s.groupName, group);
     }
 
-    const matchPairs: {
-      entryAId: number;
-      entryBId: number;
-      groupName: string;
-    }[] = [];
+    const matchPairs: { entryAId: number; entryBId: number; groupName: string }[] = [];
     for (const [groupName, entryIds] of groupMap) {
       for (let i = 0; i < entryIds.length; i++) {
         for (let j = i + 1; j < entryIds.length; j++) {
@@ -332,10 +386,10 @@ export class ScheduleService {
       }
     }
 
-    const allocator = createAllocator(tournament, scheduleConfig);
+    const allocator = createAllocator(config);
     const { fits, warning } = allocator.validate(
       matchPairs.length,
-      scheduleConfig.numberOfTables,
+      config.numberOfTables
     );
 
     const referees = await getTournamentReferees(tournament.id);
@@ -350,7 +404,8 @@ export class ScheduleService {
 
       for (let i = 0; i < matchPairs.length; i++) {
         const pair = matchPairs[i]!;
-        const slot = allocator.getSlot(i, scheduleConfig.numberOfTables);
+        // tableNumber = null — sẽ gán khi trận thực sự bắt đầu
+        const slot = allocator.getSlot(i, config.numberOfTables);
 
         const schedule = await Schedule.create(
           {
@@ -358,9 +413,9 @@ export class ScheduleService {
             stage: "group" satisfies Stage,
             groupName: pair.groupName,
             scheduledAt: slot.scheduledAt,
-            tableNumber: slot.tableNumber,
+            tableNumber: null,
           },
-          { transaction: t },
+          { transaction: t }
         );
 
         const match = await Match.create(
@@ -370,13 +425,13 @@ export class ScheduleService {
             entryBId: pair.entryBId,
             status: "scheduled",
           },
-          { transaction: t },
+          { transaction: t }
         );
 
         await bulkCreateMatchReferees(
           match.id,
           assignReferees(workloads, refsPerMatch),
-          t,
+          t
         );
 
         schedules.push(schedule);
@@ -386,33 +441,25 @@ export class ScheduleService {
       return { schedules, matches };
     });
 
-    return {
-      ...result,
-      ...(warning !== undefined && { warning }),
-    };
+    return { ...result, ...(warning !== undefined && { warning }) };
   }
 
-  // ── 2. Xếp lịch vòng knockout ────────────────────────────────────────────
+  // ── 2. Tạo lịch knockout ───────────────────────────────────────────────────
 
+  /**
+   * Tạo lịch thi đấu vòng knockout.
+   * tableNumber KHÔNG được gán ở đây.
+   */
   async generateKnockoutSchedule(
     organizerId: number,
     categoryId: number,
-    roundName?: KnockoutRound,
+    roundName?: KnockoutRound
   ): Promise<ScheduleResult> {
     const category = await getCategoryWithTournament(categoryId);
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
 
-    // Lấy schedule config - PHẢI tồn tại
-    const scheduleConfig = await ScheduleConfig.findOne({
-      where: { tournamentId: tournament.id },
-    });
-
-    if (!scheduleConfig) {
-      throw new Error(
-        "Schedule config not found. Please create a schedule configuration first before generating the schedule."
-      );
-    }
+    const config = await getRequiredScheduleConfig(tournament.id);
 
     const whereClause: Record<string, unknown> = {
       categoryId,
@@ -423,21 +470,15 @@ export class ScheduleService {
 
     const brackets = await KnockoutBracket.findAll({
       where: whereClause,
-      order: [
-        ["roundNumber", "ASC"],
-        ["bracketPosition", "ASC"],
-      ],
+      order: [["roundNumber", "ASC"], ["bracketPosition", "ASC"]],
     });
 
     if (brackets.length === 0) {
       throw new Error("No ready brackets found.");
     }
 
-    const allocator = createAllocator(tournament, scheduleConfig);
-    const { warning } = allocator.validate(
-      brackets.length,
-      scheduleConfig.numberOfTables,
-    );
+    const allocator = createAllocator(config);
+    const { warning } = allocator.validate(brackets.length, config.numberOfTables);
 
     const referees = await getTournamentReferees(tournament.id);
     const workloads = buildWorkloads(referees);
@@ -453,7 +494,8 @@ export class ScheduleService {
 
       for (let i = 0; i < brackets.length; i++) {
         const bracket = brackets[i]!;
-        const slot = allocator.getSlot(i, scheduleConfig.numberOfTables);
+        // tableNumber = null — sẽ gán khi trận thực sự bắt đầu
+        const slot = allocator.getSlot(i, config.numberOfTables);
 
         const schedule = await Schedule.create(
           {
@@ -461,9 +503,9 @@ export class ScheduleService {
             stage: "knockout" satisfies Stage,
             knockoutRound: bracket.roundName,
             scheduledAt: slot.scheduledAt,
-            tableNumber: slot.tableNumber,
+            tableNumber: null,
           },
-          { transaction: t },
+          { transaction: t }
         );
 
         const match = await Match.create(
@@ -473,18 +515,18 @@ export class ScheduleService {
             entryBId: bracket.entryBId!,
             status: "scheduled",
           },
-          { transaction: t },
+          { transaction: t }
         );
 
         await bracket.update(
           { matchId: match.id, scheduleId: schedule.id },
-          { transaction: t },
+          { transaction: t }
         );
 
         await bulkCreateMatchReferees(
           match.id,
           assignReferees(workloads, refsPerMatch),
-          t,
+          t
         );
 
         schedules.push(schedule);
@@ -494,28 +536,63 @@ export class ScheduleService {
       return { schedules, matches };
     });
 
-    return {
-      ...result,
-      ...(warning !== undefined && { warning }),
-    };
+    return { ...result, ...(warning !== undefined && { warning }) };
   }
 
-  // ── 3. Assign trọng tài động khi match bắt đầu ───────────────────────────
+  // ── 3. Assign bàn thi đấu khi match bắt đầu ───────────────────────────────
 
   /**
-   * Gọi từ match.service khi match chuyển sang in_progress.
-   * Tìm trọng tài rảnh nhất (ít trận đang diễn ra nhất) và assign.
+   * Gọi từ match.service khi match chuyển sang `in_progress`.
+   *
+   * Flow:
+   *  1. Tìm bàn trống trong khoảng thời gian hiện tại.
+   *  2. Gán tableNumber vào schedule của match đó.
+   *  3. Nếu không còn bàn trống → throw error (match không thể bắt đầu).
+   *
+   * @returns tableNumber đã được gán
+   */
+  async assignTableForMatch(
+    matchId: number,
+    tournamentId: number,
+    t: Transaction
+  ): Promise<number> {
+    const config = await getRequiredScheduleConfig(tournamentId);
+
+    const availableTable = await findAvailableTable(tournamentId, config, t);
+
+    if (availableTable === null) {
+      throw new Error(
+        `No available tables at this time. All ${config.numberOfTables} table(s) are currently in use. ` +
+        `Please wait for a table to become available before starting this match.`
+      );
+    }
+
+    // Cập nhật tableNumber vào schedule của match này
+    const match = await Match.findByPk(matchId, { transaction: t });
+    if (!match) throw new Error("Match not found");
+
+    await Schedule.update(
+      { tableNumber: availableTable },
+      { where: { id: match.scheduleId }, transaction: t }
+    );
+
+    return availableTable;
+  }
+
+  // ── 4. Assign trọng tài động khi match bắt đầu ────────────────────────────
+
+  /**
+   * Gọi từ match.service khi match chuyển sang `in_progress`.
+   * Tìm trọng tài rảnh nhất và assign.
    */
   async assignRefereeDynamic(
     matchId: number,
     tournamentId: number,
-    t: Transaction,
+    t: Transaction
   ): Promise<void> {
-    // Lấy danh sách trọng tài của giải
     const allReferees = await getTournamentReferees(tournamentId);
     if (allReferees.length === 0) return;
 
-    // Đếm số trận đang in_progress của mỗi trọng tài
     const activeAssignments = await MatchReferee.findAll({
       include: [
         {
@@ -533,7 +610,6 @@ export class ScheduleService {
       transaction: t,
     });
 
-    // Build workload dựa trên số trận đang active
     const activeCount = new Map<number, number>();
     for (const a of activeAssignments) {
       activeCount.set(a.refereeId, (activeCount.get(a.refereeId) ?? 0) + 1);
@@ -544,16 +620,14 @@ export class ScheduleService {
       assignedCount: activeCount.get(r.refereeId) ?? 0,
     }));
 
-    // Xóa assignment cũ nếu có (trường hợp reassign)
     await MatchReferee.destroy({ where: { matchId }, transaction: t });
 
-    // Assign trọng tài rảnh nhất
     const refsPerMatch = allReferees.length >= 2 ? 2 : 1;
     const selected = assignReferees(workloads, refsPerMatch);
     await bulkCreateMatchReferees(matchId, selected, t);
   }
 
-  // ── 4. Queries ────────────────────────────────────────────────────────────
+  // ── 5. Queries ────────────────────────────────────────────────────────────
 
   async getScheduleById(id: number): Promise<Schedule> {
     const schedule = await Schedule.findByPk(id, { include: [MATCH_INCLUDE] });
@@ -569,7 +643,7 @@ export class ScheduleService {
       stage?: Stage;
       groupName?: string;
       knockoutRound?: KnockoutRound;
-    } = {},
+    } = {}
   ): Promise<{ rows: Schedule[]; count: number }> {
     const { skip = 0, limit = 20, stage, groupName, knockoutRound } = options;
 
@@ -591,7 +665,7 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<Pick<Schedule, "scheduledAt" | "tableNumber">>,
+    data: Partial<Pick<Schedule, "scheduledAt" | "tableNumber">>
   ): Promise<Schedule> {
     const schedule = await this.getScheduleById(scheduleId);
     const category = await getCategoryWithTournament(schedule.categoryId);

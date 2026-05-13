@@ -1,6 +1,6 @@
 export interface CreateScheduleConfigDto {
   tournamentId: number;
-  // Tournament dates & tables (moved from tournaments)
+  // Tournament dates & tables 
   startDate: Date;
   endDate: Date;
   numberOfTables?: number;
