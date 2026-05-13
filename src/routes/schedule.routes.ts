@@ -33,6 +33,13 @@ const router = Router();
  *     responses:
  *       200:
  *         description: List of schedules ordered by scheduled time
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ */
 
 /**
  * @swagger

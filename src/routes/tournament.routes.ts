@@ -44,7 +44,6 @@ const router = Router();
  *                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                 description: Tournament status (default is 'upcoming')
  *                 example: "upcoming"
- *                 example: 4
  *               categories:
  *                 type: array
  *                 description: Array of tournament categories
@@ -272,7 +271,9 @@ const router = Router();
  *   get:
  *     tags: [Tournaments]
  *     summary: Get all tournaments with pagination
- *     description: Get all tournaments with their categories and pagination information. Note: Date and table configuration is managed in ScheduleConfig.
+ *     description: |
+ *       Get all tournaments with their categories and pagination information.
+ *       Note: Date and table configuration is managed in ScheduleConfig.
  *     parameters:
  *       - $ref: '#/components/parameters/skipParam'
  *       - $ref: '#/components/parameters/limitParam'
