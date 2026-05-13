@@ -469,6 +469,14 @@ export class ScheduleConfigService {
       );
     }
 
+    // Validate duration constraints
+    if (matchDurationMinutes < 30 || matchDurationMinutes > 90) {
+      throw new BadRequestError("matchDurationMinutes must be between 30 and 90");
+    }
+    if (breakDurationMinutes < 5 || breakDurationMinutes > 30) {
+      throw new BadRequestError("breakDurationMinutes must be between 5 and 30");
+    }
+
     const availableMinutes = calculateAvailableMinutes(
       startDate, endDate,
       dailyStartHour, dailyStartMinute,
