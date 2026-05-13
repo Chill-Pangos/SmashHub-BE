@@ -12,7 +12,8 @@ import TournamentCategory from "./tournamentCategory.model";
 import Schedule from "./schedule.model";
 import Match from "./match.model";
 import Entry from "./entry.model";
-import { KNOCKOUT_ROUNDS, KnockoutRound } from "./schedule.model";
+import { KNOCKOUT_ROUNDS } from "./schedule.model";
+import type { KnockoutRound } from "./schedule.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

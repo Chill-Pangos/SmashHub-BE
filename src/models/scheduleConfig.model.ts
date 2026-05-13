@@ -11,10 +11,10 @@ import Tournament from "./tournament.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MATCH_DURATION_MIN = 15; // phút
-const MATCH_DURATION_MAX = 120; // phút
-const BREAK_DURATION_MIN = 0; // phút
-const BREAK_DURATION_MAX = 60; // phút
+const MATCH_DURATION_MIN = 30; // phút
+const MATCH_DURATION_MAX = 90; // phút
+const BREAK_DURATION_MIN = 5; // phút
+const BREAK_DURATION_MAX = 30; // phút
 const HOUR_MIN = 0;
 const HOUR_MAX = 23;
 const MINUTE_MIN = 0;

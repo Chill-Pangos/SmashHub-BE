@@ -37,9 +37,9 @@ const router = Router();
 router.post("/",
   authenticate,
   checkPermission('elo:manage'),
-  eloScoreController.create.bind(eloScoreController)
+  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
 );
-router.get("/", eloScoreController.findAll.bind(eloScoreController));
+router.get("/", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 
 /**
  * @swagger
@@ -96,8 +96,8 @@ router.get(
  *       204:
  *         $ref: '#/components/responses/NoContent'
  */
-router.get("/:id", eloScoreController.findById.bind(eloScoreController));
-router.put("/:id", eloScoreController.update.bind(eloScoreController));
-router.delete("/:id", eloScoreController.delete.bind(eloScoreController));
+router.get("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
+router.put("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
+router.delete("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
 
 export default router;

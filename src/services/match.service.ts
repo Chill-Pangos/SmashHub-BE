@@ -131,6 +131,7 @@ export class MatchService {
 
   /**
    * Chuyển match sang in_progress.
+   * Assign bàn thi đấu động (nếu có bàn trống).
    * Assign trọng tài động từ pool của tournament.
    */
   async startMatch(matchId: number, refereeId: number): Promise<Match> {
@@ -145,6 +146,9 @@ export class MatchService {
 
     return await sequelize.transaction(async (t) => {
       await instance.update({ status: "in_progress" }, { transaction: t });
+
+      // Assign bàn thi đấu động (tìm bàn trống)
+      await scheduleService.assignTableForMatch(matchId, tournament.id, t);
 
       // Assign trọng tài động (chọn người rảnh nhất)
       await scheduleService.assignRefereeDynamic(matchId, tournament.id, t);

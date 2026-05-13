@@ -346,7 +346,7 @@ export class KnockoutBracketService {
     }
 
     const result = await entryService.getEligibleEntries(categoryId);
-    const eligible = Array.isArray(result) ? [] : (result.eligible ?? []);
+    const eligible = Array.isArray(result) ? result : (result.eligible ?? []);
 
     if (eligible.length < MIN_ENTRIES) {
       throw new Error(

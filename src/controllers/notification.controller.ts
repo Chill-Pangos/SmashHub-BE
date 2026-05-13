@@ -153,7 +153,7 @@ export class NotificationController {
         throw new BadRequestError("userId is required");
       }
 
-      NotificationService.disconnectUser(userId);
+      NotificationService.forceDisconnectUser(userId);
 
       res.status(200).json({
         success: true,

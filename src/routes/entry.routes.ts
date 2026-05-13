@@ -75,6 +75,27 @@ router.get(
 
 /**
  * @swagger
+ * /entries/me:
+ *   get:
+ *     tags: [Entries]
+ *     summary: Get current user's entries with role (captain or member)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of user's entries with role information
+ */
+router.get(
+  "/me",
+  authenticate,
+  entryController.getUserEntries.bind(entryController)
+);
+
+/**
+ * @swagger
  * /entries/{entryId}:
  *   get:
  *     tags: [Entries]
@@ -538,27 +559,6 @@ router.post(
   authenticate,
   checkPermission('entries:delete'),
   entryController.disqualifyIneligibleEntries.bind(entryController)
-);
-
-/**
- * @swagger
- * /entries/me:
- *   get:
- *     tags: [Entries]
- *     summary: Get current user's entries with role (captain or member)
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of user's entries with role information
- */
-router.get(
-  "/me",
-  authenticate,
-  entryController.getUserEntries.bind(entryController)
 );
 
 /**

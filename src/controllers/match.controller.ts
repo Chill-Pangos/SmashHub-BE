@@ -6,117 +6,35 @@ import {
   RejectPendingMatchResultDto,
 } from "../dto/pendingMatchResult.dto";
 import { BadRequestError, NotFoundError } from "../utils/errors";
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 export class MatchController {
-  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const match = await matchService.create(req.body);
-      res.status(201).json(match);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const matches = await matchService.findAll(skip, limit);
-      res.status(200).json(matches);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async startMatch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
       if (isNaN(id)) {
         throw new BadRequestError("Invalid match ID");
       }
-      const match = await matchService.findById(id);
-      if (!match) {
-        throw new NotFoundError("Match not found");
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
       }
+      const match = await matchService.startMatch(id, req.userId);
       res.status(200).json(match);
     } catch (error) {
       next(error);
     }
   }
 
-  async findByScheduleId(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const matches = await matchService.findByScheduleId(
-        Number(req.params.scheduleId),
-        skip,
-        limit
-      );
-      res.status(200).json(matches);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async findByStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const status = req.params.status;
-      if (!status || typeof status !== 'string') {
-        throw new BadRequestError("Status is required");
-      }
-
-      // Validate status value
-      const validStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-      if (!validStatuses.includes(status)) {
-        throw new BadRequestError("Invalid status. Must be one of: scheduled, in_progress, completed, cancelled");
-      }
-
-      const skip = Number(req.query.skip) || 0;
-      const limit = Number(req.query.limit) || 10;
-      const matches = await matchService.findByStatus(status, skip, limit);
-      res.status(200).json(matches);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async finalizeMatch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const id = Number(req.params.id);
       if (isNaN(id)) {
         throw new BadRequestError("Invalid match ID");
       }
-      const match = await matchService.update(id, req.body);
-      if (!match) {
-        throw new NotFoundError("Match not found");
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
       }
-      res.status(200).json(match);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async startMatch(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      const match = await matchService.startMatch(id);
-      res.status(200).json(match);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async finalizeMatch(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      const match = await matchService.finalizeMatch(id);
+      const match = await matchService.finalizeMatch(id, req.userId);
       res.status(200).json({
         message: "Match result submitted successfully. Waiting for chief referee approval.",
         match,
@@ -126,15 +44,18 @@ export class MatchController {
     }
   }
 
-  async approveMatchResult(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async approveMatchResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const matchId = Number(req.params.id);
       if (isNaN(matchId)) {
         throw new BadRequestError("Invalid match ID");
       }
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
+      }
       const { reviewNotes } = req.body as ApprovePendingMatchResultDto;
 
-      const match = await matchService.approveMatchResult(matchId, reviewNotes);
+      const match = await matchService.approveMatchResult(matchId, req.userId, reviewNotes);
       res.status(200).json({
         message: "Match result approved successfully. Standings and Elo scores updated.",
         match,
@@ -144,11 +65,14 @@ export class MatchController {
     }
   }
 
-  async rejectMatchResult(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async rejectMatchResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const matchId = Number(req.params.id);
       if (isNaN(matchId)) {
         throw new BadRequestError("Invalid match ID");
+      }
+      if (!req.userId) {
+        throw new BadRequestError("User not authenticated");
       }
       const { reviewNotes } = req.body as RejectPendingMatchResultDto;
 
@@ -156,27 +80,11 @@ export class MatchController {
         throw new BadRequestError("Review notes are required when rejecting");
       }
 
-      const match = await matchService.rejectMatchResult(matchId, reviewNotes);
+      const match = await matchService.rejectMatchResult(matchId, req.userId, reviewNotes);
       res.status(200).json({
         message: "Match result rejected. Referee needs to resubmit the result.",
         match,
       });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      const deleted = await matchService.delete(id);
-      if (!deleted) {
-        throw new NotFoundError("Match not found");
-      }
-      res.status(204).send();
     } catch (error) {
       next(error);
     }
@@ -188,7 +96,7 @@ export class MatchController {
       if (isNaN(id)) {
         throw new BadRequestError("Invalid match ID");
       }
-      const preview = await eloCalculationService.previewEloChanges(id);
+      const preview = await eloCalculationService.previewMatchEloChanges(id);
       res.status(200).json(preview);
     } catch (error) {
       next(error);
@@ -200,19 +108,6 @@ export class MatchController {
       const skip = Number(req.query.skip) || 0;
       const limit = Number(req.query.limit) || 10;
       const result = await matchService.findPendingMatches(skip, limit);
-      res.status(200).json(result);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async getPendingMatchWithEloPreview(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      const result = await matchService.getPendingMatchWithEloPreview(id);
       res.status(200).json(result);
     } catch (error) {
       next(error);
