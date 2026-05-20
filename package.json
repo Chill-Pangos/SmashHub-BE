@@ -6,7 +6,7 @@
     "prepare": "husky install",
     "dev": "dotenvx run -f .env.development -- ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "pm2 startOrReload ecosystem.config.json"
   },
   "dependencies": {
     "@dotenvx/dotenvx": "^1.51.4",
