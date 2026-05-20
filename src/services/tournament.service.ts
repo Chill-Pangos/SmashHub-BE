@@ -167,6 +167,12 @@ export class TournamentService {
         as: "categories",
         required: false, // Include all categories of the tournament
       },
+      {
+        model: ScheduleConfig,
+        as: "scheduleConfig",
+        required: false,
+        attributes: [],
+      },
     ];
 
     // If userId is provided, filter tournaments where user has entries
@@ -260,7 +266,7 @@ export class TournamentService {
       include: includeOptions,
       offset: skip,
       ...(limit && limit > 0 && { limit }),
-      order: [["startDate", "DESC"]],
+      order: [[{ model: ScheduleConfig, as: "scheduleConfig" }, "startDate", "DESC"]],
       distinct: true,
     });
 
