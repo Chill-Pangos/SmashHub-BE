@@ -18,7 +18,7 @@ const swaggerDefinition = {
       description: "Development server",
     },
     {
-      url: "https://api.smashhub.com/api",
+      url: "https://api.smashhub.io.vn/api",
       description: "Production server",
     },
   ],
