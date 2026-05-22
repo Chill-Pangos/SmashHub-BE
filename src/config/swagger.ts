@@ -9,7 +9,7 @@ const swaggerDefinition = {
       "API documentation for SmashHub - Tournament Management System",
     contact: {
       name: "SmashHub Team",
-      email: "support@smashhub.com",
+      email: "smashhub.app@gmail.com",
     },
   },
   servers: [
@@ -18,7 +18,7 @@ const swaggerDefinition = {
       description: "Production server",
     },
     {
-      url: "http://localhost:4000/api",
+      url: "http://localhost:3000/api",
       description: "Development server",
     },
   ],
