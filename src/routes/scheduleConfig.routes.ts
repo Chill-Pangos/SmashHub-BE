@@ -20,53 +20,94 @@ const router = Router({ mergeParams: true });
  *         application/json:
  *           schema:
  *             type: object
- *             required: [tournamentId]
+ *             required: [tournamentId, startDate, endDate, registrationStartDate, registrationEndDate, bracketGenerationDate]
  *             properties:
  *               tournamentId:
  *                 type: integer
  *                 description: Tournament ID
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Tournament start date and time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Tournament end date and time
+ *               numberOfTables:
+ *                 type: integer
+ *                 description: Number of tables available for matches
+ *               registrationStartDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Start date for player registration
+ *               registrationEndDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: End date for player registration
+ *               bracketGenerationDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Date when brackets will be generated
  *               matchDurationMinutes:
  *                 type: integer
  *                 minimum: 15
  *                 maximum: 120
- *                 default: 60
+ *                 description: Duration of each match in minutes
  *               breakDurationMinutes:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 60
- *                 default: 10
+ *                 description: Break duration between matches in minutes
  *               dailyStartHour:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 23
- *                 default: 8
+ *                 description: Tournament daily start hour (24-hour format)
  *               dailyStartMinute:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 59
- *                 default: 0
+ *                 description: Tournament daily start minute
  *               dailyEndHour:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 23
- *                 default: 22
+ *                 description: Tournament daily end hour (24-hour format)
  *               dailyEndMinute:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 59
- *                 default: 0
+ *                 description: Tournament daily end minute
  *               lunchBreakStartHour:
  *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 23
  *                 nullable: true
+ *                 description: Lunch break start hour (24-hour format)
  *               lunchBreakStartMinute:
  *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 59
+ *                 nullable: true
+ *                 description: Lunch break start minute
  *               lunchBreakEndHour:
  *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 23
  *                 nullable: true
+ *                 description: Lunch break end hour (24-hour format)
  *               lunchBreakEndMinute:
  *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 59
+ *                 nullable: true
+ *                 description: Lunch break end minute
+ *               lunchBreakDurationMinutes:
+ *                 type: integer
+ *                 description: Duration of lunch break in minutes
  *               notes:
  *                 type: string
+ *                 description: Additional notes about the schedule
  *     responses:
  *       201:
  *         description: Schedule config created successfully

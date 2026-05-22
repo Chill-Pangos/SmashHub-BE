@@ -14,12 +14,12 @@ const swaggerDefinition = {
   },
   servers: [
     {
-      url: "http://localhost:3000/api",
-      description: "Development server",
+      url: "https://api.smashhub.io.vn/api",
+      description: "Production server",
     },
     {
-      url: "https://api.smashhub.com/api",
-      description: "Production server",
+      url: "http://localhost:4000/api",
+      description: "Development server",
     },
   ],
   tags: [
