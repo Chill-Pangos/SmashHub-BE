@@ -1,3 +1,6 @@
+import { config as dotenvConfig } from '@dotenvx/dotenvx';
+dotenvConfig({ path: `.env.${process.env.NODE_ENV || 'development'}` });
+
 import Joi from "joi";
 
 const envSchema = Joi.object({
@@ -11,11 +14,10 @@ const envSchema = Joi.object({
 
   //Database
   DB_HOST: Joi.string().required(),
-  DB_PORT: Joi.number().default(4000),
+  DB_PORT: Joi.number().default(3306),
   DB_USERNAME: Joi.string().required(),
   DB_PASSWORD: Joi.string().required(),
   DB_DATABASE: Joi.string().required(),
-  DB_SSL_CA_PATH: Joi.string().required(),
 
   //Email
   SMTP_HOST: Joi.string().required(),
@@ -50,7 +52,6 @@ const config = {
     database: envVars.DB_DATABASE,
     username: envVars.DB_USERNAME,
     password: envVars.DB_PASSWORD,
-    ca: envVars.DB_SSL_CA_PATH,
   },
   email: {
     smtp: {
