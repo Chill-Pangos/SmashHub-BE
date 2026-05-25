@@ -50,7 +50,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: isFull
@@ -82,7 +82,7 @@ router.get(
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -240,7 +240,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -381,7 +381,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
@@ -497,7 +497,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:

@@ -27,8 +27,10 @@ const router = Router();
  *   get:
  *     tags: [Permissions]
  *     summary: Get all permissions
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -51,6 +53,8 @@ router.get("/",
  *   get:
  *     tags: [Permissions]
  *     summary: Get permission by ID
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:

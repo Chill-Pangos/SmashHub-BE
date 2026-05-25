@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import tournamentRefereeService from "../services/tournamentReferee.service";
-import { BadRequestError } from "../utils/errors";
+import { BadRequestError } from "../utils/errors.helper";
 
 export class TournamentRefereeController {
   // ── 1. Organizer sends invitation ───────────────────────────────────────
@@ -142,13 +142,14 @@ export class TournamentRefereeController {
     try {
       const { tournamentId } = req.params;
       const role = req.query.role as string | undefined;
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const result = await tournamentRefereeService.getRefereesByTournament(
         Number(tournamentId),
         role as any,
-        { skip, limit }
+        { offset, limit }
       );
       res.status(200).json(result);
     } catch (error) {
@@ -163,15 +164,41 @@ export class TournamentRefereeController {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId } = req.params;
       const status = req.query.status as string | undefined;
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const result = await tournamentRefereeService.getInvitationsByTournament(
         organizerId,
         Number(tournamentId),
         status as any,
-        { skip, limit }
+        { offset, limit }
       );
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ── 9. Get my invitations (referee) ───────────────────────────────────────
+
+  async getMyInvitations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const refereeId = (req as AuthRequest).userId!;
+      const status = req.query.status as string | undefined;
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+
+      const result = await tournamentRefereeService.getMyInvitations(refereeId, {
+        status: status as any,
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+      });
       res.status(200).json(result);
     } catch (error) {
       next(error);

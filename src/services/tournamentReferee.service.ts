@@ -127,7 +127,7 @@ export class TournamentRefereeService {
 
     // Enforce 1 chief khi accept
     if (invitation.role === "chief") {
-      await this.assertNoChiefReferee(invitation.tournamentId);
+      await this.assertNoChiefReferee(invitation.tournamentId, invitation.refereeId);
     }
 
     return await sequelize.transaction(async (t) => {
@@ -274,13 +274,13 @@ private async assertNotCompetingInTournament(
   async getRefereesByTournament(
     tournamentId: number,
     role?: RefereeRole,
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{ referees?: TournamentReferee[], pagination?: any } | TournamentReferee[]> {
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await TournamentReferee.findAndCountAll({
         where: {
           tournamentId,
@@ -288,12 +288,12 @@ private async assertNotCompetingInTournament(
         },
         include: [REFEREE_INCLUDE],
         order: [["role", "ASC"]],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         referees: rows,
@@ -323,16 +323,16 @@ private async assertNotCompetingInTournament(
     organizerId: number,
     tournamentId: number,
     status?: RefereeInvitation["status"],
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{ invitations?: RefereeInvitation[], pagination?: any } | RefereeInvitation[]> {
     const tournament = await getTournament(tournamentId);
     assertOrganizer(organizerId, tournament);
 
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await RefereeInvitation.findAndCountAll({
         where: {
           tournamentId,
@@ -340,12 +340,12 @@ private async assertNotCompetingInTournament(
         },
         include: [REFEREE_INCLUDE],
         order: [["createdAt", "DESC"]],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         invitations: rows,
@@ -386,6 +386,70 @@ private async assertNotCompetingInTournament(
     return count;
   }
 
+  async getMyInvitations(
+    refereeId: number,
+    filters?: {
+      status?: "pending" | "accepted" | "rejected" | "cancelled" | "expired";
+      offset?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: "ASC" | "DESC";
+    }
+  ): Promise<{
+    invitations: RefereeInvitation[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }> {
+    const { status, offset = 0, limit = 10, sortBy = "createdAt", sortOrder = "DESC" } = filters || {};
+
+    const where: any = { refereeId };
+    if (status) {
+      where.status = status;
+    }
+
+    const { count, rows } = await RefereeInvitation.findAndCountAll({
+      where,
+      include: [
+        {
+          model: Tournament,
+          as: "tournament",
+          attributes: ["id", "name", "location", "tier", "status", "createdBy"],
+        },
+        {
+          model: User,
+          as: "inviter",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+      offset,
+      ...(limit > 0 && { limit }),
+      order: [[sortBy, sortOrder]],
+      distinct: true,
+    });
+
+    const currentLimit = limit > 0 ? limit : count;
+    const currentPage = currentLimit > 0 ? Math.floor(offset / currentLimit) + 1 : 1;
+    const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
+
+    return {
+      invitations: rows,
+      pagination: {
+        total: count,
+        page: currentPage,
+        limit: currentLimit,
+        totalPages,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1,
+      },
+    };
+  }
+
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
 
   private async getValidPendingInvitation(
@@ -406,7 +470,10 @@ private async assertNotCompetingInTournament(
     return invitation;
   }
 
-  private async assertNoChiefReferee(tournamentId: number): Promise<void> {
+  private async assertNoChiefReferee(
+    tournamentId: number,
+    excludedRefereeId?: number
+  ): Promise<void> {
     const existingChief = await TournamentReferee.findOne({
       where: { tournamentId, role: "chief" },
     });
@@ -415,8 +482,18 @@ private async assertNotCompetingInTournament(
     }
 
     // Kiểm tra cả pending invitation cho chief
+    const pendingChiefWhere: any = {
+      tournamentId,
+      role: "chief",
+      status: "pending",
+      // Bỏ qua chính referee đang được accept
+      ...(excludedRefereeId !== undefined
+        ? { refereeId: { [Op.ne]: excludedRefereeId } }
+        : {}),
+    };
+
     const pendingChief = await RefereeInvitation.findOne({
-      where: { tournamentId, role: "chief", status: "pending" },
+      where: pendingChiefWhere,
     });
     if (pendingChief) {
       throw new Error(

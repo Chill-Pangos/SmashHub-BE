@@ -7,7 +7,7 @@ import User from "../models/user.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import { ConfirmEntryImportDto, ValidatedSingleEntryDto, ValidatedDoubleEntryDto } from "../dto/entryImport.dto";
 import { withTransaction } from "../utils/transaction.helper";
-import { BadRequestError, UnauthorizedError } from "../utils/errors";
+import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
 
 export class EntryImportController {
   /**

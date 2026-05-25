@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import scheduleService from "../services/schedule.service";
-import { BadRequestError } from "../utils/errors";
+import { BadRequestError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
 export class ScheduleController {
@@ -124,8 +124,9 @@ export class ScheduleController {
         throw new BadRequestError("Invalid category ID");
       }
 
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const stage = req.query.stage as 'group' | 'knockout' | undefined;
 
       // Validate stage if provided
@@ -137,7 +138,7 @@ export class ScheduleController {
       // TODO: Add stage filtering support to the service method
       const result = await scheduleService.getSchedulesByCategory(
         categoryId,
-        { skip, limit, stage: stage as any }
+        { offset, limit, stage: stage as any }
       );
 
       res.status(200).json({
@@ -145,7 +146,7 @@ export class ScheduleController {
         data: {
           schedules: result.rows,
           total: result.count,
-          skip,
+          offset,
           limit,
         },
       });

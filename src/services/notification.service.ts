@@ -118,7 +118,7 @@ class NotificationService {
 
   initialize(httpServer: HTTPServer): void {
     if (this.io) {
-      console.warn("NotificationService already initialized — skipping");
+      console.warn("NotificationService already initialized");
       return;
     }
 
@@ -338,13 +338,13 @@ class NotificationService {
   async getByUser(
     userId: number,
     options: {
-      skip?: number;
+      offset?: number;
       limit?: number;
       isRead?: boolean;
       type?: NotificationType;
     } = {}
   ): Promise<{ rows: Notification[]; count: number; unreadCount: number }> {
-    const { skip = 0, limit = 20, isRead, type } = options;
+    const { offset = 0, limit = 20, isRead, type } = options;
 
     const where: Record<string, unknown> = { userId };
     if (isRead !== undefined) where.isRead = isRead;
@@ -354,7 +354,7 @@ class NotificationService {
       Notification.findAndCountAll({
         where,
         order: [["createdAt", "DESC"]],
-        offset: skip,
+        offset,
         limit,
         distinct: true,
       }),

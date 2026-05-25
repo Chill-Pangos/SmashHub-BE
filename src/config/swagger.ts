@@ -61,10 +61,10 @@ const swaggerDefinition = {
       PaginationParams: {
         type: "object",
         properties: {
-          skip: {
+          page: {
             type: "integer",
-            default: 0,
-            description: "Number of records to skip",
+            default: 1,
+            description: "Page number for pagination",
           },
           limit: {
             type: "integer",
@@ -467,16 +467,44 @@ const swaggerDefinition = {
           timestamp: { type: "string", format: "date-time" },
         },
       },
+      SchedulePreviewResponse: {
+        type: "object",
+        required: ["isValid", "message", "preview"],
+        properties: {
+          isValid: { type: "boolean", description: "Whether the schedule is valid" },
+          message: { type: "string", description: "Validation message" },
+          preview: {
+            type: "object",
+            properties: {
+              totalMatches: { type: "integer", description: "Total number of matches" },
+              totalSlots: { type: "integer", description: "Total available time slots" },
+              estimatedEndTime: { type: "string", format: "date-time", description: "Estimated end time of tournament" },
+              tournamentEndTime: { type: "string", format: "date-time", description: "Configured tournament end time" },
+              availableMinutes: { type: "integer", description: "Available minutes in schedule" },
+              neededMinutes: { type: "integer", description: "Minutes needed for all matches" },
+              overflowMinutes: { type: "integer", description: "Overflow minutes if any", nullable: true },
+              startDate: { type: "string", format: "date-time" },
+              endDate: { type: "string", format: "date-time" },
+              registrationStartDate: { type: "string", format: "date-time" },
+              registrationEndDate: { type: "string", format: "date-time" },
+              bracketGenerationDate: { type: "string", format: "date-time" },
+              numberOfTables: { type: "integer" },
+              matchDurationMinutes: { type: "integer" },
+              breakDurationMinutes: { type: "integer" },
+            },
+          },
+        },
+      },
     },
     parameters: {
-      skipParam: {
+      pageParam: {
         in: "query",
-        name: "skip",
+        name: "page",
         schema: {
           type: "integer",
-          default: 0,
+          default: 1,
         },
-        description: "Number of records to skip for pagination",
+        description: "Page number for pagination",
       },
       limitParam: {
         in: "query",

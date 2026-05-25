@@ -6,12 +6,12 @@ import User from "../models/user.model";
 import { Team } from "../models/subMatch.model";
 
 export class SubMatchPlayerService {
-  async getPlayersBySubMatch(subMatchId: number, options?: { skip?: number; limit?: number }): Promise<{ players?: SubMatchPlayer[], pagination?: any } | SubMatchPlayer[]> {
-    const skip = options?.skip || 0;
+  async getPlayersBySubMatch(subMatchId: number, options?: { offset?: number; limit?: number }): Promise<{ players?: SubMatchPlayer[], pagination?: any } | SubMatchPlayer[]> {
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await SubMatchPlayer.findAndCountAll({
         where: { subMatchId },
         include: [{
@@ -23,12 +23,12 @@ export class SubMatchPlayerService {
             attributes: ["id", "firstName", "lastName", "avatarUrl"],
           }],
         }],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         players: rows,
@@ -60,13 +60,13 @@ export class SubMatchPlayerService {
   async getPlayersByTeam(
     subMatchId: number,
     team: Team,
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{ players?: SubMatchPlayer[], pagination?: any } | SubMatchPlayer[]> {
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await SubMatchPlayer.findAndCountAll({
         where: { subMatchId, team },
         include: [{
@@ -78,12 +78,12 @@ export class SubMatchPlayerService {
             attributes: ["id", "firstName", "lastName", "avatarUrl"],
           }],
         }],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         players: rows,
@@ -114,19 +114,19 @@ export class SubMatchPlayerService {
 
   async getMatchesByEntryMember(
     entryMemberId: number,
-    skip = 0,
+    offset = 0,
     limit = 10
   ): Promise<{ matches?: SubMatchPlayer[], pagination?: any }> {
     const { count, rows } = await SubMatchPlayer.findAndCountAll({
       where: { entryMemberId },
       include: [{ model: SubMatch, as: "subMatch" }],
-      offset: skip,
+      offset,
       limit,
       order: [["createdAt", "DESC"]],
     });
 
     const totalPages = Math.ceil(count / limit);
-    const page = Math.floor(skip / limit) + 1;
+    const page = Math.floor(offset / limit) + 1;
 
     return {
       matches: rows,

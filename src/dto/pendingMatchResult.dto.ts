@@ -7,7 +7,7 @@ export interface RejectPendingMatchResultDto {
 }
 
 export interface PendingMatchResultQueryDto {
-	skip?: number;
+	offset?: number;
 	limit?: number;
 }
 

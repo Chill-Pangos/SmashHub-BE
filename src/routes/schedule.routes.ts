@@ -28,7 +28,7 @@ const router = Router();
  *     tags: [Schedules]
  *     summary: Get all schedules
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -515,7 +515,7 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *           type: string
  *           enum: [group, knockout]
  *         description: Filter by stage (group or knockout)
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -536,7 +536,7 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *                         type: object
  *                     count:
  *                       type: number
- *                     skip:
+ *                     offset:
  *                       type: number
  *                     limit:
  *                       type: number

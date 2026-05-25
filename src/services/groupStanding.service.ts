@@ -327,7 +327,7 @@ export class GroupStandingService {
   async getQualifiers(
     categoryId: number,
     qualifiersPerGroup = DEFAULT_QUALIFIERS_PER_GROUP,
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{
     qualifiers?: { groupName: string; qualifiers: GroupStanding[] }[],
     pagination?: any
@@ -373,14 +373,14 @@ export class GroupStandingService {
     });
 
     // If pagination is requested
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const total = results.length;
-      const paginatedResults = results.slice(skip, skip + limit);
+      const paginatedResults = results.slice(offset, offset + limit);
       const totalPages = Math.ceil(total / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         qualifiers: paginatedResults,

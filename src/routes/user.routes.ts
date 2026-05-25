@@ -52,7 +52,7 @@ const router = Router();
  *     tags: [Users]
  *     summary: Get all users with pagination
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:

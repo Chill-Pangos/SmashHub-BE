@@ -8,7 +8,7 @@ import {
   SendEventDto,
   NotificationStatsDto,
 } from "../dto/notification.dto";
-import { BadRequestError } from "../utils/errors";
+import { BadRequestError } from "../utils/errors.helper";
 
 export class NotificationController {
   /**

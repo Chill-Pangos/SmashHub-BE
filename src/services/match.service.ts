@@ -285,7 +285,7 @@ export class MatchService {
   async findPendingMatches(
     chiefRefereeId: number,
     tournamentId: number,
-    skip = 0,
+    offset = 0,
     limit = 10,
   ): Promise<{ matches: Match[]; count: number }> {
     await assertChiefReferee(chiefRefereeId, tournamentId);
@@ -307,7 +307,7 @@ export class MatchService {
         },
         { model: MatchSet, as: "matchSets" },
       ],
-      offset: skip,
+      offset,
       limit,
       order: [["updatedAt", "DESC"]],
       distinct: true,
@@ -336,7 +336,7 @@ export class MatchService {
 
   async findUpcomingMatchesByAthlete(
     userId: number,
-    skip = 0,
+    offset = 0,
     limit = 10,
   ): Promise<{ matches: Match[]; count: number }> {
     const entryIds = await this.getEntryIdsByUser(userId);
@@ -352,7 +352,7 @@ export class MatchService {
       },
       include: MATCH_DETAIL_INCLUDE,
       order: [[{ model: Schedule, as: "schedule" }, "scheduledAt", "ASC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });
@@ -362,7 +362,7 @@ export class MatchService {
 
   async findMatchHistoryByAthlete(
     userId: number,
-    skip = 0,
+    offset = 0,
     limit = 10,
   ): Promise<{ matches: Match[]; count: number }> {
     const entryIds = await this.getEntryIdsByUser(userId);
@@ -383,7 +383,7 @@ export class MatchService {
         { model: MatchSet, as: "matchSets" },
       ],
       order: [["updatedAt", "DESC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });

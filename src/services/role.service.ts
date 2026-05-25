@@ -2,7 +2,7 @@
 
 import Role from "../models/role.model";
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
-import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors";
+import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors.helper";
 
 export class RoleService {
   // ─── Private Helpers ────────────────────────────────────────────────────────
@@ -32,14 +32,15 @@ export class RoleService {
     return Role.create(data as any);
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
+  async findAll(offset: number = 0, limit: number = 10) {
     const { rows, count } = await Role.findAndCountAll({
-      offset: (page - 1) * limit,
+      offset,
       limit,
       order: [["createdAt", "DESC"]],
     });
 
     const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       roles: rows,
       pagination: {

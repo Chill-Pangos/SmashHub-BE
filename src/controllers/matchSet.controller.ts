@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import matchSetService from "../services/matchSet.service";
-import { BadRequestError } from "../utils/errors";
+import { BadRequestError } from "../utils/errors.helper";
 
 export class MatchSetController {
   /**
@@ -61,9 +61,10 @@ export class MatchSetController {
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const subMatchId = Number(req.params.subMatchId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
-      const result = await matchSetService.getSetsBySubMatch(subMatchId, { skip, limit });
+      const offset = Math.max(page - 1, 0) * limit;
+      const result = await matchSetService.getSetsBySubMatch(subMatchId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
       next(error);

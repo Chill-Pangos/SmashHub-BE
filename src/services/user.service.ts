@@ -9,8 +9,7 @@ export class UserService {
     return await User.create(userData as any);
   }
 
-  async findAll(skip: number = 0, limit: number = 10): Promise<{ users: User[], pagination: any }> {
-    const offset = skip;
+  async findAll(offset: number = 0, limit: number = 10): Promise<{ users: User[], pagination: any }> {
     const { count, rows } = await User.findAndCountAll({
       offset,
       limit,
@@ -18,7 +17,7 @@ export class UserService {
     });
 
     const totalPages = Math.ceil(count / limit);
-    const page = Math.floor(skip / limit) + 1;
+    const page = Math.floor(offset / limit) + 1;
 
     return {
       users: rows,
@@ -65,7 +64,7 @@ export class UserService {
     return deletedCount > 0;
   }
 
-  async findAvailableChiefReferees(skip: number = 0, limit: number = 10): Promise<{ referees: User[]; pagination?: any }> {
+  async findAvailableChiefReferees(offset: number = 0, limit: number = 10): Promise<{ referees: User[]; pagination?: any }> {
     const assignedRefereeIds = await TournamentReferee.findAll({
       attributes: ['refereeId'],
       where: {
@@ -77,7 +76,7 @@ export class UserService {
     const assignedIds = assignedRefereeIds.map(ref => ref.refereeId);
 
     // If pagination is requested
-    if (skip !== undefined || limit !== undefined) {
+    if (offset !== undefined || limit !== undefined) {
       const { count, rows } = await User.findAndCountAll({
         include: [
           {
@@ -94,13 +93,13 @@ export class UserService {
             [Op.notIn]: assignedIds
           }
         } : {},
-        offset: skip,
+        offset,
         limit: limit,
         order: [['createdAt', 'DESC']]
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         referees: rows,

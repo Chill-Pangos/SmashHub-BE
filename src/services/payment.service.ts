@@ -20,7 +20,7 @@ interface PaymentStats {
 }
 
 interface PaginationOptions {
-  skip?: number;
+  offset?: number;
   limit?: number;
 }
 
@@ -275,7 +275,7 @@ export class PaymentService {
     entryId: number,
     options: PaymentListOptions = {}
   ): Promise<{ rows: Payment[]; count: number }> {
-    const { skip = 0, limit = 10, status } = options;
+    const { offset = 0, limit = 10, status } = options;
 
     const where: WhereOptions = { entryId };
     if (status) where.status = status;
@@ -283,7 +283,7 @@ export class PaymentService {
     return await Payment.findAndCountAll({
       where,
       include: [CONFIRMER_INCLUDE],
-      offset: skip,
+      offset,
       limit,
       order: [["createdAt", "DESC"]],
       distinct: true,
@@ -297,7 +297,7 @@ export class PaymentService {
     organizerId: number,
     options: PaymentListOptions = {}
   ): Promise<{ rows: Payment[]; count: number }> {
-    const { skip = 0, limit = 10, status, method } = options;
+    const { offset = 0, limit = 10, status, method } = options;
 
     const category = await getCategoryWithTournament(categoryId);
     assertOrganizer(organizerId, category.tournament!);
@@ -317,7 +317,7 @@ export class PaymentService {
         },
         CONFIRMER_INCLUDE,
       ],
-      offset: skip,
+      offset,
       limit,
       order: [["createdAt", "DESC"]],
       distinct: true,
@@ -331,7 +331,7 @@ export class PaymentService {
     categoryId: number,
     options: PaginationOptions & { method?: PaymentMethod } = {}
   ): Promise<{ rows: Payment[]; count: number }> {
-    const { skip = 0, limit = 10, method } = options;
+    const { offset = 0, limit = 10, method } = options;
 
     const category = await getCategoryWithTournament(categoryId);
     assertOrganizer(organizerId, category.tournament!);
@@ -349,7 +349,7 @@ export class PaymentService {
           include: [{ model: TournamentCategory }],
         },
       ],
-      offset: skip,
+      offset,
       limit,
       order: [["createdAt", "ASC"]], // cũ nhất trước để xử lý theo thứ tự
       distinct: true,

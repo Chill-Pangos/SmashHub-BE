@@ -28,7 +28,7 @@ const router = Router();
  *     tags: [ELO Scores]
  *     summary: Get all ELO scores
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -49,7 +49,7 @@ router.get("/", (_req, res) => res.status(501).json({ success: false, message: "
  *     summary: Get ELO leaderboard
  *     description: Returns ELO scores sorted by score in descending order
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:

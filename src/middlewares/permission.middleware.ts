@@ -24,11 +24,10 @@ export const checkPermission = (requiredPermission: string) => {
         include: [
           {
             model: Role,
-            as: "roles",
+            through: { attributes: [] },
             include: [
               {
                 model: Permission,
-                as: "permissions",
               },
             ],
           },
@@ -44,6 +43,7 @@ export const checkPermission = (requiredPermission: string) => {
       }
 
       const user = userInstance.get({ plain: true });
+
 
       if (!user.roles || user.roles.length === 0) {
         res.status(403).json({
@@ -99,11 +99,10 @@ export const checkAnyPermission = (requiredPermissions: string[]) => {
         include: [
           {
             model: Role,
-            as: "roles",
+            through: { attributes: [] },
             include: [
               {
                 model: Permission,
-                as: "permissions",
               },
             ],
           },
@@ -254,7 +253,7 @@ export const checkRole = (requiredRole: string | string[]) => {
         include: [
           {
             model: Role,
-            as: "roles",
+            through: { attributes: [] },
           },
         ],
       });
@@ -267,7 +266,11 @@ export const checkRole = (requiredRole: string | string[]) => {
         return;
       }
 
-      if (!user.roles || user.roles.length === 0) {
+      // Access roles from serialized object
+      const userJson = user.toJSON ? user.toJSON() : JSON.parse(JSON.stringify(user));
+      const userRolesData = userJson.roles || [];
+
+      if (!userRolesData || userRolesData.length === 0) {
         res.status(403).json({
           success: false,
           message: "No roles assigned",
@@ -275,7 +278,7 @@ export const checkRole = (requiredRole: string | string[]) => {
         return;
       }
 
-      const userRoles = user.roles.map(role => role.name);
+      const userRoles = userRolesData.map((role: any) => role.name);
       const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
       
       const hasRole = requiredRoles.some(role => userRoles.includes(role));

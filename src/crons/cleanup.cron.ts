@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { Op } from "sequelize";
 import Otp from "../models/otp.model";
 import Token from "../models/token.model";
+import { formatDateGMT7 } from "../utils/date.helper";
 
 /**
  * Cron job: Cleanup expired OTPs every 5 minutes
@@ -26,7 +27,7 @@ export const cleanupExpiredOtps = cron.schedule("*/5 * * * *", async () => {
 
     if (deleted > 0) {
       console.log(
-        `[CRON] Cleaned up ${deleted} expired OTP(s) at ${new Date().toISOString()}`
+        `[CRON] Cleaned up ${deleted} expired OTP(s) at ${formatDateGMT7(new Date())}`
       );
     }
   } catch (error) {
@@ -60,7 +61,7 @@ export const cleanupExpiredAccessTokens = cron.schedule(
 
       if (deleted > 0) {
         console.log(
-          `[CRON] Cleaned up ${deleted} expired/blacklisted access token(s) at ${new Date().toISOString()}`
+          `[CRON] Cleaned up ${deleted} expired/blacklisted access token(s) at ${formatDateGMT7(new Date())}`
         );
       }
     } catch (error) {
@@ -95,7 +96,7 @@ export const cleanupExpiredRefreshTokens = cron.schedule(
 
       if (deleted > 0) {
         console.log(
-          `[CRON] Cleaned up ${deleted} expired/blacklisted refresh token(s) at ${new Date().toISOString()}`
+          `[CRON] Cleaned up ${deleted} expired/blacklisted refresh token(s) at ${formatDateGMT7(new Date())}`
         );
       }
     } catch (error) {

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError } from "../utils/errors";
+import { UnauthorizedError } from "../utils/errors.helper";
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -124,8 +124,9 @@ export class PaymentController {
   async getPaymentsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const status = req.query.status as
         | "pending"
         | "completed"
@@ -134,11 +135,11 @@ export class PaymentController {
         | undefined;
 
       const options: {
-        skip: number;
+        offset: number;
         limit: number;
         status?: "pending" | "completed" | "failed" | "refunded";
       } = {
-        skip,
+        offset,
         limit,
       };
 
@@ -165,8 +166,9 @@ export class PaymentController {
       if (userId == null) return;
 
       const categoryId = Number(req.params.categoryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const status = req.query.status as
         | "pending"
         | "completed"
@@ -180,12 +182,12 @@ export class PaymentController {
         | undefined;
 
       const options: {
-        skip: number;
+        offset: number;
         limit: number;
         status?: "pending" | "completed" | "failed" | "refunded";
         method?: "cash" | "bank_transfer" | "online";
       } = {
-        skip,
+        offset,
         limit,
       };
 
@@ -287,8 +289,9 @@ export class PaymentController {
       if (organizerId == null) return;
 
       const categoryId = Number(req.params.categoryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const method = req.query.method as
         | "cash"
         | "bank_transfer"
@@ -296,11 +299,11 @@ export class PaymentController {
         | undefined;
 
       const options: {
-        skip: number;
+        offset: number;
         limit: number;
         method?: "cash" | "bank_transfer" | "online";
       } = {
-        skip,
+        offset,
         limit,
       };
 

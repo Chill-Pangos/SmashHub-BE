@@ -5,7 +5,7 @@ import {
   ApprovePendingMatchResultDto,
   RejectPendingMatchResultDto,
 } from "../dto/pendingMatchResult.dto";
-import { BadRequestError, NotFoundError } from "../utils/errors";
+import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
 
 export class MatchController {
@@ -105,9 +105,10 @@ export class MatchController {
 
   async findPendingMatches(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
-      const result = await matchService.findPendingMatches(skip, limit);
+      const offset = Math.max(page - 1, 0) * limit;
+      const result = await matchService.findPendingMatches(offset, limit);
       res.status(200).json(result);
     } catch (error) {
       next(error);
@@ -121,19 +122,20 @@ export class MatchController {
         throw new BadRequestError("Invalid user ID");
       }
 
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const result = await matchService.findUpcomingMatchesByAthlete(
         userId,
-        skip,
+        offset,
         limit
       );
 
       res.status(200).json({
         matches: result.matches,
         count: result.count,
-        skip,
+        offset,
         limit,
       });
     } catch (error) {
@@ -148,19 +150,20 @@ export class MatchController {
         throw new BadRequestError("Invalid user ID");
       }
 
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const result = await matchService.findMatchHistoryByAthlete(
         userId,
-        skip,
+        offset,
         limit
       );
 
       res.status(200).json({
         matches: result.matches,
         count: result.count,
-        skip,
+        offset,
         limit,
       });
     } catch (error) {

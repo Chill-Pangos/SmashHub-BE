@@ -1,6 +1,6 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.middleware";
-import { AuthErrors, UnauthorizedError } from "../utils/errors";
+import { AuthErrors, UnauthorizedError } from "../utils/errors.helper";
 
 /**
  * Middleware to check if user's email is verified

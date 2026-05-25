@@ -12,15 +12,15 @@ export class EloHistoryService {
    */
   async getByUser(
     userId: number,
-    options: { skip?: number; limit?: number } = {}
+    options: { offset?: number; limit?: number } = {}
   ): Promise<{ rows: EloHistory[]; count: number }> {
-    const { skip = 0, limit = 20 } = options;
+    const { offset = 0, limit = 20 } = options;
 
     return await EloHistory.findAndCountAll({
       where: { userId },
       include: [{ model: Match, as: "match", attributes: ["id", "status"] }],
       order: [["createdAt", "DESC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });

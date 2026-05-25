@@ -5,7 +5,7 @@ import groupStandingService, {
 import GroupStanding from "../models/groupStanding.model";
 import Entry from "../models/entry.model";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError, BadRequestError } from "../utils/errors";
+import { UnauthorizedError, BadRequestError } from "../utils/errors.helper";
 
 type CategoryBody = {
   categoryId?: unknown;
@@ -311,13 +311,14 @@ export class GroupStandingController {
         throw new BadRequestError("qualifiersPerGroup must be a positive integer");
       }
 
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const result = await groupStandingService.getQualifiers(
         categoryId,
         qualifiersPerGroup,
-        { skip, limit }
+        { offset, limit }
       );
 
       res.status(200).json({

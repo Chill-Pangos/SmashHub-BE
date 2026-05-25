@@ -2,7 +2,7 @@
 
 import Permission from "../models/permission.model";
 import { CreatePermissionDto, UpdatePermissionDto } from "../dto/permission.dto";
-import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors";
+import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors.helper";
 
 const PERMISSION_NAME_REGEX = /^[a-z0-9_]+:[a-z0-9_]+$/;
 
@@ -44,14 +44,15 @@ export class PermissionService {
     return Permission.create(data as any);
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
+  async findAll(offset: number = 0, limit: number = 10) {
     const { rows, count } = await Permission.findAndCountAll({
-      offset: (page - 1) * limit,
+      offset,
       limit,
-      order: [["createdAt", "DESC"]],
+      order: [["id", "ASC"]],
     });
 
     const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       permissions: rows,
       pagination: {

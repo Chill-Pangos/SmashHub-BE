@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AppError, formatErrorResponse } from "../utils/errors";
+import { AppError, formatErrorResponse } from "../utils/errors.helper";
 
 /**
  * Global error handler middleware

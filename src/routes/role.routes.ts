@@ -32,8 +32,10 @@ const router = Router();
  *   get:
  *     tags: [Roles]
  *     summary: Get all roles
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -56,6 +58,8 @@ router.get("/",
  *   get:
  *     tags: [Roles]
  *     summary: Get role by ID
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -108,6 +112,8 @@ router.delete("/:id",
  *   get:
  *     tags: [Roles]
  *     summary: Get role by name
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: name
