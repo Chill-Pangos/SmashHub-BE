@@ -7,7 +7,7 @@ import {
   UpdateScheduleConfigDto,
   ValidateScheduleConfigDto,
 } from "../dto/scheduleConfig.dto";
-import { BadRequestError, NotFoundError } from "../utils/errors";
+import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 
 export class ScheduleConfigController {
   /**

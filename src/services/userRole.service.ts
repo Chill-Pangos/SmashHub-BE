@@ -5,7 +5,7 @@ import UserRole from "../models/userRole.model";
 import User from "../models/user.model";
 import Role from "../models/role.model";
 import { CreateUserRoleDto } from "../dto/userRole.dto";
-import { NotFoundError, ConflictError } from "../utils/errors";
+import { NotFoundError, ConflictError } from "../utils/errors.helper";
 
 const USER_ATTRIBUTES = ["id", "email", "firstName", "lastName"];
 const ROLE_ATTRIBUTES = ["id", "name"];
@@ -46,9 +46,9 @@ export class UserRoleService {
     return UserRole.create(data as any);
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
+  async findAll(offset: number = 0, limit: number = 10) {
     const { rows, count } = await UserRole.findAndCountAll({
-      offset: (page - 1) * limit,
+      offset,
       limit,
       include: [
         { model: User, attributes: USER_ATTRIBUTES },
@@ -58,6 +58,7 @@ export class UserRoleService {
     });
 
     const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       userRoles: rows,
       pagination: {
@@ -71,12 +72,12 @@ export class UserRoleService {
     };
   }
 
-  async findByUserId(userId: number, page: number = 1, limit: number = 10) {
+  async findByUserId(userId: number, offset: number = 0, limit: number = 10) {
     const [user, result] = await Promise.all([
       User.findByPk(userId, { attributes: ["id"] }),
       UserRole.findAndCountAll({
         where: { userId },
-        offset: (page - 1) * limit,
+        offset,
         limit,
         include: [{ model: Role, attributes: ROLE_ATTRIBUTES }],
       }),
@@ -85,6 +86,7 @@ export class UserRoleService {
     if (!user) throw new NotFoundError("User not found", "USER_NOT_FOUND");
 
     const totalPages = Math.ceil(result.count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       userRoles: result.rows,
       pagination: {
@@ -98,12 +100,12 @@ export class UserRoleService {
     };
   }
 
-  async findByRoleId(roleId: number, page: number = 1, limit: number = 10) {
+  async findByRoleId(roleId: number, offset: number = 0, limit: number = 10) {
     const [role, result] = await Promise.all([
       Role.findByPk(roleId, { attributes: ["id"] }),
       UserRole.findAndCountAll({
         where: { roleId },
-        offset: (page - 1) * limit,
+        offset,
         limit,
         include: [{ model: User, attributes: USER_ATTRIBUTES }],
       }),
@@ -112,6 +114,7 @@ export class UserRoleService {
     if (!role) throw new NotFoundError("Role not found", "ROLE_NOT_FOUND");
 
     const totalPages = Math.ceil(result.count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       userRoles: result.rows,
       pagination: {

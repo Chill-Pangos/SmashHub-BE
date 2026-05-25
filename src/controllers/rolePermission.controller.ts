@@ -16,7 +16,10 @@ export class RolePermissionController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data = await rolePermissionService.findAll(Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const data = await rolePermissionService.findAll(offset, limit);
       res.status(200).json(data);
     } catch (error) {
       next(error);
@@ -25,7 +28,10 @@ export class RolePermissionController {
 
   async findByRoleId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data = await rolePermissionService.findByRoleId(Number(req.params.roleId), Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const data = await rolePermissionService.findByRoleId(Number(req.params.roleId), offset, limit);
       res.status(200).json(data);
     } catch (error) {
       next(error);
@@ -34,7 +40,10 @@ export class RolePermissionController {
 
   async findByPermissionId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data = await rolePermissionService.findByPermissionId(Number(req.params.permissionId), Number(req.query.page) || 1, Number(req.query.limit) || 10);
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const data = await rolePermissionService.findByPermissionId(Number(req.params.permissionId), offset, limit);
       res.status(200).json(data);
     } catch (error) {
       next(error);

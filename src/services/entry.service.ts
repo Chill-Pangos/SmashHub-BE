@@ -404,7 +404,7 @@ export class EntryService {
   async findByCategoryId(
     categoryId: number,
     options: {
-      skip?: number;
+      offset?: number;
       limit?: number;
       isFull?: boolean;
       isAcceptingMembers?: boolean;
@@ -412,7 +412,7 @@ export class EntryService {
     } = {},
   ): Promise<{ rows: Entry[]; count: number }> {
     const {
-      skip = 0,
+      offset = 0,
       limit = 10,
       isFull,
       isAcceptingMembers,
@@ -469,7 +469,7 @@ export class EntryService {
           ],
         },
       ],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });
@@ -595,7 +595,7 @@ export class EntryService {
     captainId: number,
     entryId: number,
     status?: "pending" | "approved" | "rejected",
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{ requests?: JoinRequest[], joinRequests?: JoinRequest[], pagination?: any } | JoinRequest[]> {
     const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
@@ -603,11 +603,11 @@ export class EntryService {
       throw new Error("Only the team captain can view join requests");
     }
 
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await JoinRequest.findAndCountAll({
         where: {
           entryId,
@@ -620,12 +620,12 @@ export class EntryService {
           },
         ],
         order: [["createdAt", "DESC"]],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         joinRequests: rows,
@@ -798,15 +798,15 @@ export class EntryService {
   /**
    * 11. Lấy danh sách tất cả thành viên của entry
    */
-  async getAllMembers(entryId: number, options?: { skip?: number; limit?: number }): Promise<{ members?: EntryMember[], pagination?: any } | EntryMember[]> {
+  async getAllMembers(entryId: number, options?: { offset?: number; limit?: number }): Promise<{ members?: EntryMember[], pagination?: any } | EntryMember[]> {
     const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
 
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await EntryMember.findAndCountAll({
         where: { entryId },
         include: [
@@ -824,12 +824,12 @@ export class EntryService {
           },
         ],
         order: [["createdAt", "ASC"]],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         members: rows,
@@ -987,7 +987,7 @@ export class EntryService {
    *
    * Dùng bởi groupStanding.service trước khi chia bảng.
    */
-  async getEligibleEntries(categoryId: number, options?: { skip?: number; limit?: number }): Promise<{
+  async getEligibleEntries(categoryId: number, options?: { offset?: number; limit?: number }): Promise<{
     eligible?: Entry[];
     ineligible?: { entry: Entry; reasons: string[] }[];
     pagination?: any;
@@ -1041,14 +1041,14 @@ export class EntryService {
       }
     }
 
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested, combine and paginate the results
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const combined = [...eligible, ...ineligible.map(item => item.entry)];
       const total = combined.length;
-      const paginatedCombined = combined.slice(skip, skip + limit);
+      const paginatedCombined = combined.slice(offset, offset + limit);
 
       const eligibleMap = new Set(eligible.map(e => e.id));
       const paginatedEligible = paginatedCombined.filter(e => eligibleMap.has(e.id));
@@ -1057,7 +1057,7 @@ export class EntryService {
       );
 
       const totalPages = Math.ceil(total / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         eligible: paginatedEligible,
@@ -1154,14 +1154,14 @@ export class EntryService {
   async getUserEntries(
     userId: number,
     options: {
-      skip?: number;
+      offset?: number;
       limit?: number;
     } = {},
   ): Promise<{
     rows: Array<Entry & { userRole: "captain" | "member" }>;
     count: number;
   }> {
-    const { skip = 0, limit = 10 } = options;
+    const { offset = 0, limit = 10 } = options;
 
     // Lấy tất cả unique entry IDs mà user tham gia
     const userEntryIds = new Set<number>();
@@ -1192,7 +1192,7 @@ export class EntryService {
     }
 
     // Paginate results
-    const paginatedEntryIds = allEntryIds.slice(skip, skip + limit);
+    const paginatedEntryIds = allEntryIds.slice(offset, offset + limit);
 
     // Lấy entries với thông tin chi tiết kèm Tournament và TournamentCategory
     const entries = await Entry.findAll({

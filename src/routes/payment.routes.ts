@@ -110,7 +110,7 @@ router.post(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
@@ -140,7 +140,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
@@ -203,7 +203,7 @@ router.get(
  *         schema:
  *           type: integer
  *         description: Tournament category ID
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: method

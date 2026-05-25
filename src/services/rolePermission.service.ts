@@ -5,7 +5,7 @@ import RolePermission from "../models/rolePermission.model";
 import Role from "../models/role.model";
 import Permission from "../models/permission.model";
 import { CreateRolePermissionDto } from "../dto/rolePermission.dto";
-import { NotFoundError, ConflictError } from "../utils/errors";
+import { NotFoundError, ConflictError } from "../utils/errors.helper";
 
 const ROLE_ATTRIBUTES = ["id", "name"];
 const PERMISSION_ATTRIBUTES = ["id", "name"];
@@ -58,9 +58,9 @@ export class RolePermissionService {
     return RolePermission.create(data as any);
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
+  async findAll(offset: number = 0, limit: number = 10) {
     const { rows, count } = await RolePermission.findAndCountAll({
-      offset: (page - 1) * limit,
+      offset,
       limit,
       include: [
         { model: Role, attributes: ROLE_ATTRIBUTES },
@@ -70,6 +70,7 @@ export class RolePermissionService {
     });
 
     const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       rolePermissions: rows,
       pagination: {
@@ -83,12 +84,12 @@ export class RolePermissionService {
     };
   }
 
-  async findByRoleId(roleId: number, page: number = 1, limit: number = 10) {
+  async findByRoleId(roleId: number, offset: number = 0, limit: number = 10) {
     const [role, result] = await Promise.all([
       Role.findByPk(roleId, { attributes: ["id"] }),
       RolePermission.findAndCountAll({
         where: { roleId },
-        offset: (page - 1) * limit,
+        offset,
         limit,
         include: [{ model: Permission, attributes: PERMISSION_ATTRIBUTES }],
       }),
@@ -97,6 +98,7 @@ export class RolePermissionService {
     if (!role) throw new NotFoundError("Role not found", "ROLE_NOT_FOUND");
 
     const totalPages = Math.ceil(result.count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       rolePermissions: result.rows,
       pagination: {
@@ -110,12 +112,12 @@ export class RolePermissionService {
     };
   }
 
-  async findByPermissionId(permissionId: number, page: number = 1, limit: number = 10) {
+  async findByPermissionId(permissionId: number, offset: number = 0, limit: number = 10) {
     const [permission, result] = await Promise.all([
       Permission.findByPk(permissionId, { attributes: ["id"] }),
       RolePermission.findAndCountAll({
         where: { permissionId },
-        offset: (page - 1) * limit,
+        offset,
         limit,
         include: [{ model: Role, attributes: ROLE_ATTRIBUTES }],
       }),
@@ -124,6 +126,7 @@ export class RolePermissionService {
     if (!permission) throw new NotFoundError("Permission not found", "PERMISSION_NOT_FOUND");
 
     const totalPages = Math.ceil(result.count / limit);
+    const page = Math.floor(offset / limit) + 1;
     return {
       rolePermissions: result.rows,
       pagination: {

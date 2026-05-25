@@ -256,7 +256,7 @@ router.post(
  *         schema:
  *           type: integer
  *         description: Tournament ID
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: role
@@ -315,7 +315,7 @@ router.get(
  *         schema:
  *           type: integer
  *         description: Tournament ID
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *       - in: query
  *         name: status
@@ -360,6 +360,132 @@ router.get(
   authenticate,
   checkPermission('tournaments:manage'),
   tournamentRefereeController.getInvitationsByTournament.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
+ * /tournament-referees/my-invitations:
+ *   get:
+ *     tags: [Tournament Referees]
+ *     summary: Get my invitation list
+ *     description: Retrieve all invitations sent to the current referee across all tournaments
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, accepted, rejected, cancelled, expired]
+ *         description: Filter by invitation status
+ *       - $ref: '#/components/parameters/pageParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *           default: DESC
+ *         description: Sort order
+ *     responses:
+ *       200:
+ *         description: List of referee invitations with tournament and organizer details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 invitations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       tournamentId:
+ *                         type: integer
+ *                       refereeId:
+ *                         type: integer
+ *                       invitedBy:
+ *                         type: integer
+ *                       role:
+ *                         type: string
+ *                         enum: [chief, referee]
+ *                       status:
+ *                         type: string
+ *                         enum: [pending, accepted, rejected, cancelled, expired]
+ *                       expiresAt:
+ *                         type: string
+ *                         format: date-time
+ *                       respondedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *                       rejectionReason:
+ *                         type: string
+ *                         nullable: true
+ *                       tournament:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           name:
+ *                             type: string
+ *                           location:
+ *                             type: string
+ *                           tier:
+ *                             type: integer
+ *                           status:
+ *                             type: string
+ *                           createdBy:
+ *                             type: integer
+ *                       inviter:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           firstName:
+ *                             type: string
+ *                           lastName:
+ *                             type: string
+ *                           email:
+ *                             type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/my-invitations",
+  authenticate,
+  tournamentRefereeController.getMyInvitations.bind(tournamentRefereeController)
 );
 
 export default router;

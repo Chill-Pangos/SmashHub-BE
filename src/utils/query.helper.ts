@@ -36,9 +36,9 @@ export class QueryHelper {
   /**
    * Calculate pagination info
    */
-  static calculatePagination(count: number, skip: number, limit?: number) {
+  static calculatePagination(count: number, offset: number, limit?: number) {
     const currentLimit = limit && limit > 0 ? limit : count;
-    const currentPage = currentLimit > 0 ? Math.floor(skip / currentLimit) + 1 : 1;
+    const currentPage = currentLimit > 0 ? Math.floor(offset / currentLimit) + 1 : 1;
     const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
 
     return {

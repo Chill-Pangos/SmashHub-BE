@@ -31,14 +31,14 @@ export class EloScoreService {
    * Leaderboard toàn hệ thống.
    */
   async getLeaderboard(
-    options: { skip?: number; limit?: number } = {}
+    options: { offset?: number; limit?: number } = {}
   ): Promise<{ rows: EloScore[]; count: number }> {
-    const { skip = 0, limit = 20 } = options;
+    const { offset = 0, limit = 20 } = options;
 
     return await EloScore.findAndCountAll({
       include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
       order: [["score", "DESC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });
@@ -50,9 +50,9 @@ export class EloScoreService {
   async getLeaderboardByRange(
     minScore?: number,
     maxScore?: number,
-    options: { skip?: number; limit?: number } = {}
+    options: { offset?: number; limit?: number } = {}
   ): Promise<{ rows: EloScore[]; count: number }> {
-    const { skip = 0, limit = 20 } = options;
+    const { offset = 0, limit = 20 } = options;
 
     const where: Record<string, unknown> = {};
     if (minScore != null) where.score = { [Op.gte]: minScore };
@@ -64,7 +64,7 @@ export class EloScoreService {
       where,
       include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
       order: [["score", "DESC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });

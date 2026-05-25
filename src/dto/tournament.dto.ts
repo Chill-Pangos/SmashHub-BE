@@ -66,7 +66,7 @@ export interface TournamentFilterDto {
   gender?: 'male' | 'female' | 'mixed' | undefined;
   status?: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled" | undefined;
   isGroupStage?: boolean | undefined;
-  skip?: number;
+  offset?: number;
   limit?: number;
 }
 

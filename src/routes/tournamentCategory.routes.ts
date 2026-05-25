@@ -77,7 +77,7 @@ const router = Router();
  *     tags: [Tournament Categories]
  *     summary: Get all tournament categories
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -205,7 +205,7 @@ router.delete(
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:

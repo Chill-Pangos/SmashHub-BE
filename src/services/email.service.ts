@@ -1,6 +1,6 @@
 import nodemailer, { Transporter } from "nodemailer";
 import config from "../config/config";
-import { AuthErrors } from "../utils/errors";
+import { AuthErrors } from "../utils/errors.helper";
 
 export class EmailService {
   private transporter: Transporter;

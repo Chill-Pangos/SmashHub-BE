@@ -28,7 +28,7 @@ const router = Router();
  *     tags: [Matches]
  *     summary: Get all matches
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -53,7 +53,7 @@ router.get("/", (_req, res) => res.status(501).json({ success: false, message: "
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -73,7 +73,7 @@ router.get("/pending", authenticate, checkPermission('matches:approve_result'), 
  *         required: true
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -96,7 +96,7 @@ router.get(
  *         required: true
  *         schema:
  *           type: string
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -353,7 +353,7 @@ router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_re
  *         schema:
  *           type: number
  *         description: ID of the athlete/user
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -369,7 +369,7 @@ router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_re
  *                     type: object
  *                 count:
  *                   type: number
- *                 skip:
+ *                 offset:
  *                   type: number
  *                 limit:
  *                   type: number
@@ -394,7 +394,7 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *         schema:
  *           type: number
  *         description: ID of the athlete/user
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -410,7 +410,7 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *                     type: object
  *                 count:
  *                   type: number
- *                 skip:
+ *                 offset:
  *                   type: number
  *                 limit:
  *                   type: number

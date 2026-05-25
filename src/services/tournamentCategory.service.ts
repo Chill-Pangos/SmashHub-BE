@@ -3,7 +3,7 @@ import {
   CreateTournamentCategoryDto,
   UpdateTournamentCategoryDto,
 } from "../dto/tournamentCategory.dto";
-import { NotFoundError } from "../utils/errors";
+import { NotFoundError } from "../utils/errors.helper";
 
 export class TournamentCategoryService {
   /**
@@ -23,9 +23,9 @@ export class TournamentCategoryService {
     return await TournamentCategory.create(data as any);
   }
 
-  async findAll(skip = 0, limit = 10): Promise<TournamentCategory[]> {
+  async findAll(offset = 0, limit = 10): Promise<TournamentCategory[]> {
     return await TournamentCategory.findAll({
-      offset: skip,
+      offset,
       limit,
     });
   }
@@ -36,12 +36,12 @@ export class TournamentCategoryService {
 
   async findByTournamentId(
     tournamentId: number,
-    skip = 0,
+    offset = 0,
     limit = 10
   ): Promise<TournamentCategory[]> {
     return await TournamentCategory.findAll({
       where: { tournamentId },
-      offset: skip,
+      offset,
       limit,
     });
   }

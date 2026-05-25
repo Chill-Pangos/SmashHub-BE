@@ -5,7 +5,7 @@ import {
   UpdateKnockoutBracketDto,
   AdvanceWinnerDto,
 } from "../dto/knockoutBracket.dto";
-import { UnauthorizedError } from "../utils/errors";
+import { UnauthorizedError } from "../utils/errors.helper";
 
 export class KnockoutBracketController {
   /**
@@ -103,8 +103,9 @@ export class KnockoutBracketController {
     try {
       const { categoryId } = req.params;
       const { entryId, entryName } = req.query;
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
       const filter: { entryId?: number; entryName?: string } = {};
 
@@ -114,7 +115,7 @@ export class KnockoutBracketController {
       const result = await knockoutBracketService.getBracketsByEntry(
         parseInt(categoryId as string),
         filter,
-        { skip, limit }
+        { offset, limit }
       );
 
       res.status(200).json({

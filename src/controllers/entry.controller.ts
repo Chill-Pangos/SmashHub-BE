@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import entryService from "../services/entry.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError } from "../utils/errors";
+import { UnauthorizedError } from "../utils/errors.helper";
 
 export class EntryController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -78,8 +78,9 @@ export class EntryController {
   async findByCategoryId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const isFull = req.query.isFull ? req.query.isFull === "true" : undefined;
       const isAcceptingMembers = req.query.isAcceptingMembers
         ? req.query.isAcceptingMembers === "true"
@@ -87,13 +88,13 @@ export class EntryController {
       const captainName = typeof req.query.captainName === "string" ? req.query.captainName : undefined;
 
       const options: {
-        skip: number;
+        offset: number;
         limit: number;
         isFull?: boolean;
         isAcceptingMembers?: boolean;
         captainName?: string;
       } = {
-        skip,
+        offset,
         limit,
       };
 
@@ -149,8 +150,9 @@ export class EntryController {
         return;
       }
       const entryId = Number(req.params.entryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const status = typeof req.query.status === "string"
         ? (req.query.status as "pending" | "approved" | "rejected")
         : undefined;
@@ -159,7 +161,7 @@ export class EntryController {
         captainId,
         entryId,
         status,
-        { skip, limit }
+        { offset, limit }
       );
       res.status(200).json(result);
     } catch (error) {
@@ -245,9 +247,10 @@ export class EntryController {
   async getAllMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryId = Number(req.params.entryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
-      const result = await entryService.getAllMembers(entryId, { skip, limit });
+      const offset = Math.max(page - 1, 0) * limit;
+      const result = await entryService.getAllMembers(entryId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
       next(error);
@@ -319,10 +322,11 @@ export class EntryController {
   async getEligibleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const categoryId = Number(req.params.categoryId);
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
-      const result = await entryService.getEligibleEntries(categoryId, { skip, limit });
+      const result = await entryService.getEligibleEntries(categoryId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
       next(error);
@@ -359,10 +363,11 @@ export class EntryController {
       if (userId == null) {
         return;
       }
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
 
-      const result = await entryService.getUserEntries(userId, { skip, limit });
+      const result = await entryService.getUserEntries(userId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
       next(error);

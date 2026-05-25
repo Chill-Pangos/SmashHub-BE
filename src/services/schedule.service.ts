@@ -638,14 +638,14 @@ export class ScheduleService {
   async getSchedulesByCategory(
     categoryId: number,
     options: {
-      skip?: number;
+      offset?: number;
       limit?: number;
       stage?: Stage;
       groupName?: string;
       knockoutRound?: KnockoutRound;
     } = {}
   ): Promise<{ rows: Schedule[]; count: number }> {
-    const { skip = 0, limit = 20, stage, groupName, knockoutRound } = options;
+    const { offset = 0, limit = 20, stage, groupName, knockoutRound } = options;
 
     const where: Record<string, unknown> = { categoryId };
     if (stage) where.stage = stage;
@@ -656,7 +656,7 @@ export class ScheduleService {
       where,
       include: [MATCH_INCLUDE],
       order: [["scheduledAt", "ASC"]],
-      offset: skip,
+      offset,
       limit,
       distinct: true,
     });

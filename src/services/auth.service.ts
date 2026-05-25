@@ -5,8 +5,8 @@ import Token, { TokenType } from "../models/token.model";
 import Otp from "../models/otp.model";
 import config from "../config/config";
 import emailService from "./email.service";
-import { AuthErrors } from "../utils/errors";
-import { validateEmail, validatePassword } from "../utils/validation";
+import { AuthErrors } from "../utils/errors.helper";
+import { validateEmail, validatePassword } from "../utils/validation.helper";
 import {
   LoginDto,
   RegisterDto,

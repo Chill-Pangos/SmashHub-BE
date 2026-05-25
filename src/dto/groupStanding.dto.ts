@@ -98,13 +98,13 @@ export interface RandomDrawResultDto {
 // Query DTOs
 export interface GetGroupStandingsByCategoryDto {
   categoryId: number;
-  skip?: number;
+  offset?: number;
   limit?: number;
 }
 
 export interface GetGroupStandingsByGroupDto {
   categoryId: number;
   groupName: string;
-  skip?: number;
+  offset?: number;
   limit?: number;
 }

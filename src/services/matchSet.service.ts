@@ -202,21 +202,21 @@ export class MatchSetService {
 
   // ── 3. Queries ────────────────────────────────────────────────────────────
 
-  async getSetsBySubMatch(subMatchId: number, options?: { skip?: number; limit?: number }): Promise<{ sets?: MatchSet[], pagination?: any } | MatchSet[]> {
-    const skip = options?.skip || 0;
+  async getSetsBySubMatch(subMatchId: number, options?: { offset?: number; limit?: number }): Promise<{ sets?: MatchSet[], pagination?: any } | MatchSet[]> {
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await MatchSet.findAndCountAll({
         where: { subMatchId },
         order: [["setNumber", "ASC"]],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         sets: rows,

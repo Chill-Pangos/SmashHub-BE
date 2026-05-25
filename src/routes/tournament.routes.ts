@@ -275,7 +275,7 @@ const router = Router();
  *       Get all tournaments with their categories and pagination information.
  *       Note: Date and table configuration is managed in ScheduleConfig.
  *     parameters:
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:
@@ -414,11 +414,11 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *     description: Get all tournaments with their categories filtered by various criteria including user participation, age, ELO, gender, and other category properties
  *     parameters:
  *       - in: query
- *         name: skip
+ *         name: offset
  *         schema:
  *           type: integer
  *           default: 0
- *         description: Number of records to skip for pagination
+ *         description: Number of records to offset for pagination
  *       - in: query
  *         name: limit
  *         schema:
@@ -783,6 +783,232 @@ router.get(
   authenticate,
   checkAnyPermission(['tournaments:view', 'tournaments:update']),
   tournamentController.getUpcomingChanges.bind(tournamentController)
+);
+
+/**
+ * @swagger
+ * /tournaments/organizer/my:
+ *   get:
+ *     tags: [Tournaments]
+ *     summary: Get tournaments organized by current user
+ *     description: Retrieve all tournaments created by the authenticated user with pagination and sorting support
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of items to offset for pagination
+ *         example: 0
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items to return per page
+ *         example: 10
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: Field to sort by
+ *         example: "name"
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *           default: DESC
+ *         description: Sort order (ASC or DESC)
+ *         example: "DESC"
+ *     responses:
+ *       200:
+ *         description: List of tournaments created by user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tournaments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       name:
+ *                         type: string
+ *                         example: "Spring Championship 2026"
+ *                       tier:
+ *                         type: integer
+ *                         example: 3
+ *                       status:
+ *                         type: string
+ *                         example: "upcoming"
+ *                       location:
+ *                         type: string
+ *                         example: "National Stadium"
+ *                       createdBy:
+ *                         type: integer
+ *                         example: 5
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       categories:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 5
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 1
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: false
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/organizer/my",
+  authenticate,
+  checkPermission('tournaments:view'),
+  tournamentController.getMyOrganizedTournaments.bind(tournamentController)
+);
+
+/**
+ * @swagger
+ * /tournaments/referee/my:
+ *   get:
+ *     tags: [Tournaments]
+ *     summary: Get tournaments where user is a referee
+ *     description: Retrieve all tournaments where the authenticated user is assigned as a referee with pagination and sorting support
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of items to offset for pagination
+ *         example: 0
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items to return per page
+ *         example: 10
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: Field to sort by
+ *         example: "name"
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *           default: DESC
+ *         description: Sort order (ASC or DESC)
+ *         example: "DESC"
+ *     responses:
+ *       200:
+ *         description: List of tournaments where user is a referee
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tournaments:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       name:
+ *                         type: string
+ *                         example: "Spring Championship 2026"
+ *                       tier:
+ *                         type: integer
+ *                         example: 3
+ *                       status:
+ *                         type: string
+ *                         example: "ongoing"
+ *                       location:
+ *                         type: string
+ *                         example: "National Stadium"
+ *                       createdBy:
+ *                         type: integer
+ *                         example: 5
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       categories:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 3
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 1
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: false
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/referee/my",
+  authenticate,
+  checkPermission('tournaments:view'),
+  tournamentController.getMyRefereedTournaments.bind(tournamentController)
 );
 
 /**

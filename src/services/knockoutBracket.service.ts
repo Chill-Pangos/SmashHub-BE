@@ -440,7 +440,7 @@ export class KnockoutBracketService {
   async getBracketsByEntry(
     categoryId: number,
     filter: { entryId?: number; entryName?: string },
-    options?: { skip?: number; limit?: number }
+    options?: { offset?: number; limit?: number }
   ): Promise<{ brackets?: KnockoutBracket[], pagination?: any } | KnockoutBracket[]> {
     if (!filter.entryId && !filter.entryName) {
       throw new Error("Provide either entryId or entryName");
@@ -461,11 +461,11 @@ export class KnockoutBracketService {
       targetEntryId = entry.id;
     }
 
-    const skip = options?.skip || 0;
+    const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
     // If pagination is requested
-    if (options && (options.skip !== undefined || options.limit !== undefined)) {
+    if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await KnockoutBracket.findAndCountAll({
         where: {
           categoryId,
@@ -479,12 +479,12 @@ export class KnockoutBracketService {
           ["roundNumber", "ASC"],
           ["bracketPosition", "ASC"],
         ],
-        offset: skip,
+        offset,
         limit: limit,
       });
 
       const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(skip / limit) + 1;
+      const page = Math.floor(offset / limit) + 1;
 
       return {
         brackets: rows,

@@ -6,9 +6,9 @@ export class EntryMemberService {
     return await EntryMember.create(data as any);
   }
 
-  async findAll(skip = 0, limit = 10): Promise<EntryMember[]> {
+  async findAll(offset = 0, limit = 10): Promise<EntryMember[]> {
     return await EntryMember.findAll({
-      offset: skip,
+      offset,
       limit,
     });
   }
@@ -19,24 +19,24 @@ export class EntryMemberService {
 
   async findByEntryId(
     entryId: number,
-    skip = 0,
+    offset = 0,
     limit = 10
   ): Promise<EntryMember[]> {
     return await EntryMember.findAll({
       where: { entryId },
-      offset: skip,
+      offset,
       limit,
     });
   }
 
   async findByUserId(
     userId: number,
-    skip = 0,
+    offset = 0,
     limit = 10
   ): Promise<EntryMember[]> {
     return await EntryMember.findAll({
       where: { userId },
-      offset: skip,
+      offset,
       limit,
     });
   }

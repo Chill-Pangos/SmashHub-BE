@@ -76,7 +76,7 @@ router.get(
  *         schema:
  *           type: integer
  *         description: ID of the entry member
- *       - $ref: '#/components/parameters/skipParam'
+ *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
  *     responses:
  *       200:

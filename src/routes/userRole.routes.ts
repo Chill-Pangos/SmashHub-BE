@@ -32,6 +32,8 @@ const router = Router();
  *   get:
  *     tags: [User Roles]
  *     summary: Get all user-role assignments
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
@@ -56,6 +58,8 @@ router.get("/",
  *   get:
  *     tags: [User Roles]
  *     summary: Get roles for a user
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -82,6 +86,8 @@ router.get("/user/:userId",
  *   get:
  *     tags: [User Roles]
  *     summary: Get users that have a role
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: roleId
@@ -108,6 +114,8 @@ router.get("/role/:roleId",
  *   get:
  *     tags: [User Roles]
  *     summary: Check if user has role
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: userId

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import tournamentService from "../services/tournament.service";
-import { BadRequestError, NotFoundError } from "../utils/errors";
+import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 
 export class TournamentController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -25,8 +25,9 @@ export class TournamentController {
 
   async findAllWithCategoriesFiltered(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const skip = Number(req.query.skip) || 0;
+      const page = Number(req.query.page) || 1;
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
+      const offset = Math.max(page - 1, 0) * limit;
       const userId = req.query.userId ? Number(req.query.userId) : undefined;
       const createdBy = req.query.createdBy ? Number(req.query.createdBy) : undefined;
       const minAge = req.query.minAge ? Number(req.query.minAge) : undefined;
@@ -37,7 +38,7 @@ export class TournamentController {
       const isGroupStage = req.query.isGroupStage === 'true' ? true : req.query.isGroupStage === 'false' ? false : undefined;
 
       const result = await tournamentService.findAllWithCategoriesFiltered({
-        skip,
+        offset,
         limit,
         userId,
         createdBy,
@@ -178,6 +179,58 @@ export class TournamentController {
           timestamp: new Date().toISOString(),
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMyOrganizedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const organizerId = (req as any).user?.id;
+      if (!organizerId) {
+        throw new BadRequestError("Unauthorized - User not authenticated");
+      }
+
+      const page = Number(req.query.page) || 1;
+      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+
+      const result = await tournamentService.getTournamentsByOrganizer(organizerId, {
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMyRefereedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const refereeId = (req as any).user?.id;
+      if (!refereeId) {
+        throw new BadRequestError("Unauthorized - User not authenticated");
+      }
+
+      const page = Number(req.query.page) || 1;
+      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+
+      const result = await tournamentService.getTournamentsByReferee(refereeId, {
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
