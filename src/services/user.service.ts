@@ -46,6 +46,7 @@ export class UserService {
         {
           model: Role,
           as: "roles",
+          attributes: ["id", "name"],
           through: { attributes: [] },
         },
         {
