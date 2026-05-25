@@ -1,5 +1,6 @@
 import User from "../models/user.model";
 import Role from "../models/role.model";
+import EloScore from "../models/eloScore.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { Op } from "sequelize";
@@ -34,6 +35,26 @@ export class UserService {
 
   async findById(id: number): Promise<User | null> {
     return await User.findByPk(id);
+  }
+
+  async findMe(userId: number): Promise<User | null> {
+    return await User.findByPk(userId, {
+      attributes: {
+        exclude: ["password"],
+      },
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          through: { attributes: [] },
+        },
+        {
+          model: EloScore,
+          as: "eloScore",
+          required: false,
+        },
+      ],
+    });
   }
 
   async update(
