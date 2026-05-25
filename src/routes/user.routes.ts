@@ -127,6 +127,22 @@ router.get("/", userController.findAll.bind(userController));
 
 /**
  * @swagger
+ * /users/me:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get current authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current user profile with roles and ELO score
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ */
+router.get("/me", authenticate, userController.me.bind(userController));
+
+/**
+ * @swagger
  * /users/{id}:
  *   get:
  *     tags: [Users]

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import userService from "../services/user.service";
+import { AuthRequest } from "../middlewares/auth.middleware";
 import { NotFoundError } from "../utils/errors.helper";
 
 export class UserController {
@@ -19,6 +20,27 @@ export class UserController {
       const offset = Math.max(page - 1, 0) * limit;
       const result = await userService.findAll(offset, limit);
       res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async me(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) {
+        res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+        return;
+      }
+
+      const user = await userService.findMe(req.userId);
+      if (!user) {
+        throw new NotFoundError("User not found");
+      }
+
+      res.status(200).json(user);
     } catch (error) {
       next(error);
     }
