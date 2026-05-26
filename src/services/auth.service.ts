@@ -473,7 +473,7 @@ export class AuthService {
 
     // Invalidate any existing unused OTPs for this user
     await Otp.update(
-      { isUsed: true },
+      { isUsed: true, usedAt: new Date() },
       {
         where: {
           userId: user.id,
@@ -620,7 +620,7 @@ export class AuthService {
 
     // Invalidate any existing unused OTPs for this user
     await Otp.update(
-      { isUsed: true },
+      { isUsed: true, usedAt: new Date() },
       {
         where: {
           userId: user.id,
