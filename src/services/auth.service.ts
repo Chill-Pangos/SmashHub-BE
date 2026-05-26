@@ -616,7 +616,7 @@ export class AuthService {
 
     // Generate OTP
     const otpCode = this.generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Invalidate any existing unused OTPs for this user
     await Otp.update(
