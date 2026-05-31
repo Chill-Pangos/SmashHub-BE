@@ -13,7 +13,7 @@ import notificationService, { NotificationTemplates } from "./notification.servi
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getCategoryWithTournament(
+export async function getCategoryWithTournament(
   categoryId: number,
 ): Promise<TournamentCategory> {
   const category = await TournamentCategory.findByPk(categoryId, {
@@ -23,7 +23,7 @@ async function getCategoryWithTournament(
   return category;
 }
 
-async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
+export async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
   const now = new Date();
   // Use ScheduleConfig where registration dates now reside
   let regStart: Date | undefined;
@@ -46,7 +46,7 @@ async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
   }
 }
 
-async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
+export async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
   let regEnd: Date | undefined;
   if (tournament.scheduleConfig && tournament.scheduleConfig.registrationEndDate) {
     regEnd = tournament.scheduleConfig.registrationEndDate;
@@ -64,7 +64,7 @@ async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
   }
 }
 
-async function assertUserEligible(
+export async function assertUserEligible(
   user: User,
   category: TournamentCategory,
 ): Promise<void> {
@@ -114,7 +114,7 @@ async function assertUserEligible(
   }
 }
 
-async function assertNotAlreadyRegistered(
+export async function assertNotAlreadyRegistered(
   userId: number,
   categoryId: number,
 ): Promise<void> {
@@ -278,124 +278,6 @@ export class EntryService {
     }
 
     throw new Error("Invalid action");
-  }
-
-  /**
-   * 2. Thêm thành viên vào đội (chỉ captain, trong thời gian đăng ký)
-   */
-  async addMember(
-    captainId: number,
-    entryId: number,
-    newMemberId: number,
-  ): Promise<EntryMember> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
-    });
-    if (!entry) throw new Error("Entry not found");
-    if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can add members");
-    }
-    if (entry.category?.type === "single") {
-      throw new Error("Cannot add members to a single entry");
-    }
-
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
-
-    if (!entry.isAcceptingMembers) {
-      throw new Error("This team is not accepting new members");
-    }
-    if (
-      entry.requiredMemberCount != null &&
-      entry.currentMemberCount >= entry.requiredMemberCount
-    ) {
-      throw new Error("Team is already full");
-    }
-
-    // Kiểm tra maxMembersPerEntry của category
-    if (
-      entry.category?.maxMembersPerEntry != null &&
-      entry.currentMemberCount >= entry.category.maxMembersPerEntry
-    ) {
-      throw new Error(
-        `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
-      );
-    }
-
-    const newMember = await User.findByPk(newMemberId);
-    if (!newMember) throw new Error("User not found");
-
-    await assertUserEligible(newMember, entry.category!);
-    await assertNotAlreadyRegistered(newMemberId, entry.categoryId);
-
-    return await sequelize.transaction(async (t) => {
-      const eloScore = await EloScore.findOne({
-        where: { userId: newMemberId },
-      });
-      const member = await EntryMember.create(
-        {
-          entryId,
-          userId: newMemberId,
-          eloAtEntry: eloScore?.score ?? 0,
-        },
-        { transaction: t },
-      );
-
-      await entry.increment("currentMemberCount", { by: 1, transaction: t });
-
-      // Tự động đóng đăng ký nếu đã đủ thành viên
-      const updatedCount = entry.currentMemberCount + 1;
-      if (
-        entry.requiredMemberCount != null &&
-        updatedCount >= entry.requiredMemberCount
-      ) {
-        await entry.update({ isAcceptingMembers: false }, { transaction: t });
-      }
-
-      return member;
-    });
-  }
-
-  /**
-   * 3. Xóa thành viên khỏi đội (chỉ captain, trong thời gian đăng ký)
-   */
-  async removeMember(
-    captainId: number,
-    entryId: number,
-    memberId: number,
-  ): Promise<void> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
-    });
-    if (!entry) throw new Error("Entry not found");
-    if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can remove members");
-    }
-
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
-
-    // Không cho xóa captain
-    if (memberId === captainId) {
-      throw new Error(
-        "Captain cannot be removed. Transfer captaincy or delete the entry instead",
-      );
-    }
-
-    const member = await EntryMember.findOne({
-      where: { entryId, userId: memberId },
-    });
-    if (!member) throw new Error("Member not found in this team");
-
-    await sequelize.transaction(async (t) => {
-      await member.destroy({ transaction: t });
-      await entry.decrement("currentMemberCount", { by: 1, transaction: t });
-
-      // Mở lại đăng ký nếu đang đóng
-      if (!entry.isAcceptingMembers) {
-        await entry.update({ isAcceptingMembers: true }, { transaction: t });
-      }
-    });
   }
 
   /**
@@ -793,111 +675,6 @@ export class EntryService {
     if (!newCaptain) throw new Error("User not found");
 
     return await entry.update({ captainId: newCaptainId });
-  }
-
-  /**
-   * 11. Lấy danh sách tất cả thành viên của entry
-   */
-  async getAllMembers(entryId: number, options?: { offset?: number; limit?: number }): Promise<{ members?: EntryMember[], pagination?: any } | EntryMember[]> {
-    const entry = await Entry.findByPk(entryId);
-    if (!entry) throw new Error("Entry not found");
-
-    const offset = options?.offset || 0;
-    const limit = options?.limit || 10;
-
-    // If pagination is requested
-    if (options && (options.offset !== undefined || options.limit !== undefined)) {
-      const { count, rows } = await EntryMember.findAndCountAll({
-        where: { entryId },
-        include: [
-          {
-            model: User,
-            attributes: [
-              "id",
-              "firstName",
-              "lastName",
-              "email",
-              "gender",
-              "dob",
-              "avatarUrl",
-            ],
-          },
-        ],
-        order: [["createdAt", "ASC"]],
-        offset,
-        limit: limit,
-      });
-
-      const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(offset / limit) + 1;
-
-      return {
-        members: rows,
-        pagination: {
-          total: count,
-          page,
-          limit,
-          totalPages,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      };
-    }
-
-    // Without pagination (backward compatibility)
-    return await EntryMember.findAll({
-      where: { entryId },
-      include: [
-        {
-          model: User,
-          attributes: [
-            "id",
-            "firstName",
-            "lastName",
-            "email",
-            "gender",
-            "dob",
-            "avatarUrl",
-          ],
-        },
-      ],
-      order: [["createdAt", "ASC"]],
-    });
-  }
-
-  /**
-   * 12. Thành viên rời đội
-   */
-  async leaveEntry(userId: number, entryId: number): Promise<void> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
-    });
-    if (!entry) throw new Error("Entry not found");
-
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
-
-    // Không cho captain rời
-    if (entry.captainId === userId) {
-      throw new Error(
-        "Captain cannot leave the team. Transfer captaincy or delete the entry instead",
-      );
-    }
-
-    const member = await EntryMember.findOne({
-      where: { entryId, userId },
-    });
-    if (!member) throw new Error("Member not found in this entry");
-
-    await sequelize.transaction(async (t) => {
-      await member.destroy({ transaction: t });
-      await entry.decrement("currentMemberCount", { by: 1, transaction: t });
-
-      // Mở lại đăng ký nếu đang đóng
-      if (!entry.isAcceptingMembers) {
-        await entry.update({ isAcceptingMembers: true }, { transaction: t });
-      }
-    });
   }
 
   /**

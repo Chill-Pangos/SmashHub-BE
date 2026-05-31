@@ -7,126 +7,182 @@ const router = Router();
 
 /**
  * @swagger
- * /matches:
- *   post:
- *     tags: [Matches]
- *     summary: Create a new match
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *     responses:
- *       201:
- *         description: Match created successfully
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- *   get:
- *     tags: [Matches]
- *     summary: Get all matches
- *     parameters:
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of matches
- */
-router.post("/",
-  authenticate,
-  checkPermission('matches:create'),
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
-router.get("/", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
-
-/**
- * @swagger
  * /matches/pending:
  *   get:
  *     tags: [Matches]
- *     summary: Get all pending matches waiting for approval (Chief Referee)
+ *     summary: Get all pending matches awaiting chief referee approval
  *     description: |
- *       Get list of matches with resultStatus = 'pending' that need chief referee approval.
- *       These are matches where referees have submitted results but not yet approved.
+ *       Retrieve list of matches with resultStatus = 'pending' that require chief referee approval.
+ *       These matches have been completed by referees and submitted for review but not yet approved.
+ *
+ *       Business Logic:
+ *       - Only returns matches where status = 'completed' AND resultStatus = 'pending'
+ *       - Chief referee can then approve or reject these results
+ *       - Approval updates standings/brackets and Elo scores
+ *       - Rejection resets match to 'in_progress' for referee resubmission
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of pending matches
- */
-router.get("/pending", authenticate, checkPermission('matches:approve_result'), matchController.findPendingMatches.bind(matchController));
-
-/**
- * @swagger
- * /matches/schedule/{scheduleId}:
- *   get:
- *     tags: [Matches]
- *     summary: Get matches by schedule ID
- *     parameters:
- *       - in: path
- *         name: scheduleId
- *         required: true
+ *       - in: query
+ *         name: page
  *         schema:
  *           type: integer
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of matches for schedule
- */
-router.get(
-  "/schedule/:scheduleId",
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
-
-/**
- * @swagger
- * /matches/status/{status}:
- *   get:
- *     tags: [Matches]
- *     summary: Get matches by status
- *     parameters:
- *       - in: path
- *         name: status
- *         required: true
+ *           default: 1
+ *         description: Page number for pagination (1-indexed)
+ *       - in: query
+ *         name: limit
  *         schema:
- *           type: string
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records per page
  *     responses:
  *       200:
- *         description: List of matches with specified status
+ *         description: Successfully retrieved pending matches with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 42
+ *                       scheduleId:
+ *                         type: integer
+ *                         example: 15
+ *                       entryAId:
+ *                         type: integer
+ *                         example: 101
+ *                       entryBId:
+ *                         type: integer
+ *                         example: 102
+ *                       status:
+ *                         type: string
+ *                         enum: [scheduled, in_progress, completed, cancelled]
+ *                         example: completed
+ *                       winnerEntryId:
+ *                         type: integer
+ *                         example: 101
+ *                       resultStatus:
+ *                         type: string
+ *                         enum: [pending, approved, rejected]
+ *                         example: pending
+ *                       reviewNotes:
+ *                         type: string
+ *                         nullable: true
+ *                         example: null
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                 count:
+ *                   type: integer
+ *                   example: 5
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
-router.get(
-  "/status/:status",
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
+router.get("/pending", authenticate, checkPermission('matches:approve_result'), matchController.findPendingMatches.bind(matchController));
 
 /**
  * @swagger
  * /matches/{id}/start:
  *   post:
  *     tags: [Matches]
- *     summary: Start a match
- *     description: Automatically assign 2 available referees and change match status from scheduled to in_progress
+ *     summary: Start a match and assign referees dynamically
+ *     description: |
+ *       Transition match from 'scheduled' to 'in_progress' status.
+ *       Automatically assigns a table (if available) and dynamically assigns available referees from tournament pool.
+ *
+ *       Business Logic:
+ *       - Match must be in 'scheduled' status
+ *       - Assigns available table dynamically (rotates through assigned tables)
+ *       - Assigns 1-2 available referees from tournament referee pool (least busy first)
+ *       - Only assigned referees can finalize the match result
+ *       - Changes match status to 'in_progress'
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID to start
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *           example: {}
  *     responses:
  *       200:
- *         description: Match started successfully with referees assigned
+ *         description: Match started successfully with referees and table assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                   example: 42
+ *                 scheduleId:
+ *                   type: integer
+ *                   example: 15
+ *                 entryAId:
+ *                   type: integer
+ *                   example: 101
+ *                 entryBId:
+ *                   type: integer
+ *                   example: 102
+ *                 status:
+ *                   type: string
+ *                   enum: [scheduled, in_progress, completed, cancelled]
+ *                   example: in_progress
+ *                 winnerEntryId:
+ *                   type: integer
+ *                   nullable: true
+ *                   example: null
+ *                 resultStatus:
+ *                   type: string
+ *                   enum: [pending, approved, rejected]
+ *                   nullable: true
+ *                   example: null
+ *                 createdAt:
+ *                   type: string
+ *                   format: date-time
+ *                 updatedAt:
+ *                   type: string
+ *                   format: date-time
  *       400:
- *         description: Bad request - Match is not in scheduled status or not enough available referees
+ *         description: Bad request - Match not in scheduled status or insufficient referees available
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Cannot start match. Status is \"in_progress\", must be \"scheduled\""
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
-router.post("/:id/start", 
+router.post("/:id/start",
   authenticate,
   checkPermission('matches:start'),
   matchController.startMatch.bind(matchController)
@@ -134,64 +190,100 @@ router.post("/:id/start",
 
 /**
  * @swagger
- * /matches/{id}/pending-with-elo:
- *   get:
+ * /matches/{id}/finalize:
+ *   post:
  *     tags: [Matches]
- *     summary: Get pending match with ELO preview (Chief Referee)
+ *     summary: Submit match result for chief referee approval
  *     description: |
- *       Get match details with pending status and preview of ELO changes.
- *       This helps chief referee review the result and see how ELO will change before approval.
+ *       Assigned referee submits the final match result. Match transitions to 'completed' with 'pending' resultStatus.
+ *       Result will be reviewed and approved/rejected by chief referee before affecting standings and Elo.
+ *
+ *       Business Logic:
+ *       - Match must be in 'in_progress' status
+ *       - Only assigned referees can finalize
+ *       - Validates that at least one team won enough sets: floor(maxSets/2) + 1
+ *       - Sets winner automatically based on sets won
+ *       - Changes match status to 'completed', resultStatus to 'pending'
+ *       - Chief referee must approve before standings/ELO are updated
+ *       - If rejected by chief referee, match returns to 'in_progress' for re-submission
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID to finalize
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *           example: {}
  *     responses:
  *       200:
- *         description: Pending match with ELO preview
+ *         description: Match result submitted successfully, awaiting chief referee approval
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Match result submitted successfully. Waiting for chief referee approval."
  *                 match:
  *                   type: object
- *                   description: Match details
- *                 eloPreview:
- *                   type: object
- *                   description: Preview of ELO changes for all players
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 42
+ *                     scheduleId:
+ *                       type: integer
+ *                       example: 15
+ *                     entryAId:
+ *                       type: integer
+ *                       example: 101
+ *                     entryBId:
+ *                       type: integer
+ *                       example: 102
+ *                     status:
+ *                       type: string
+ *                       enum: [scheduled, in_progress, completed, cancelled]
+ *                       example: completed
+ *                     winnerEntryId:
+ *                       type: integer
+ *                       example: 101
+ *                     resultStatus:
+ *                       type: string
+ *                       enum: [pending, approved, rejected]
+ *                       example: pending
+ *                     reviewNotes:
+ *                       type: string
+ *                       nullable: true
+ *                       example: null
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
  *       400:
- *         description: Bad request - Match is not in pending status
+ *         description: Bad request - Match not in_progress status or not enough sets completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Match not complete. Need 2 sets to win. Entry A: 1, Entry B: 1"
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         $ref: '#/components/responses/NotFound'
- */
-router.get("/:id/pending-with-elo", 
-  authenticate,
-  checkPermission('matches:approve_result'),
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
-
-/**
- * @swagger
- * /matches/{id}/finalize:
- *   post:
- *     tags: [Matches]
- *     summary: Submit match result for approval (Referee)
- *     description: |
- *       Referee submits match result which will be in pending status:
- *       - Check if a team has won enough sets (maxSets/2 + 1)
- *       - Set match status to completed with resultStatus = pending
- *       - Chief referee must approve before standings/brackets and Elo are updated
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Match result submitted, waiting for chief referee approval
- *       400:
- *         description: Bad request - Match not in_progress or not enough sets completed
- *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post("/:id/finalize",
   authenticate,
@@ -206,15 +298,27 @@ router.post("/:id/finalize",
  *     tags: [Matches]
  *     summary: Approve match result (Chief Referee only)
  *     description: |
- *       Chief referee approves the pending match result:
- *       - Update resultStatus to approved
- *       - Update group standings or knockout brackets
- *       - Calculate and update Elo scores for all players
+ *       Chief referee approves a pending match result. This triggers final updates to standings/brackets and Elo scores.
+ *
+ *       Business Logic:
+ *       - Match must be in 'completed' status with resultStatus = 'pending'
+ *       - Only chief referee of the tournament can approve
+ *       - Changes resultStatus to 'approved'
+ *       - For group stage: Updates group standings (win/loss counts, sets won/lost)
+ *       - For knockout stage: Advances winner to next round bracket
+ *       - Calculates and updates Elo scores for all participating players
+ *       - Approved results are permanent and affect tournament progression
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID to approve
  *     requestBody:
+ *       required: false
  *       content:
  *         application/json:
  *           schema:
@@ -222,14 +326,78 @@ router.post("/:id/finalize",
  *             properties:
  *               reviewNotes:
  *                 type: string
+ *                 maxLength: 1000
  *                 description: Optional review notes from chief referee
+ *           example:
+ *             reviewNotes: "Match approved. Set scores verified."
  *     responses:
  *       200:
- *         description: Match result approved, standings/brackets and Elo updated
+ *         description: Match result approved successfully, standings/brackets and Elo updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Match result approved successfully. Standings and Elo scores updated."
+ *                 match:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 42
+ *                     scheduleId:
+ *                       type: integer
+ *                       example: 15
+ *                     entryAId:
+ *                       type: integer
+ *                       example: 101
+ *                     entryBId:
+ *                       type: integer
+ *                       example: 102
+ *                     status:
+ *                       type: string
+ *                       enum: [scheduled, in_progress, completed, cancelled]
+ *                       example: completed
+ *                     winnerEntryId:
+ *                       type: integer
+ *                       example: 101
+ *                     resultStatus:
+ *                       type: string
+ *                       enum: [pending, approved, rejected]
+ *                       example: approved
+ *                     reviewNotes:
+ *                       type: string
+ *                       example: "Match approved. Set scores verified."
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
  *       400:
- *         description: Bad request - Invalid match state
+ *         description: Bad request - Invalid match state (must be completed with pending result)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Cannot approve. Result status is \"approved\", must be \"pending\""
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Forbidden - User is not the chief referee of the tournament
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Only the chief referee can perform this action"
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post("/:id/approve",
   authenticate,
@@ -244,14 +412,25 @@ router.post("/:id/approve",
  *     tags: [Matches]
  *     summary: Reject match result (Chief Referee only)
  *     description: |
- *       Chief referee rejects the pending match result:
- *       - Update resultStatus to rejected
- *       - Reset match to in_progress status
- *       - Clear winner so referee can resubmit
+ *       Chief referee rejects a pending match result and sends it back for resubmission.
+ *
+ *       Business Logic:
+ *       - Match must be in 'completed' status with resultStatus = 'pending'
+ *       - Only chief referee of the tournament can reject
+ *       - Changes resultStatus to 'rejected'
+ *       - Resets match status to 'in_progress' so referee can resubmit
+ *       - Clears winner entry so referee must resubmit scores
+ *       - Review notes explaining rejection are recorded
+ *       - Referee must submit the match result again after rejection
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID to reject
  *     requestBody:
  *       required: true
  *       content:
@@ -263,14 +442,79 @@ router.post("/:id/approve",
  *             properties:
  *               reviewNotes:
  *                 type: string
- *                 description: Required notes explaining why the result was rejected
+ *                 maxLength: 1000
+ *                 description: Required explanation for why the result was rejected
+ *           example:
+ *             reviewNotes: "Set scores don't match the recorded points. Please resubmit with correct scores."
  *     responses:
  *       200:
- *         description: Match result rejected, referee needs to resubmit
+ *         description: Match result rejected successfully, match returned to in_progress status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Match result rejected. Referee needs to resubmit the result."
+ *                 match:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 42
+ *                     scheduleId:
+ *                       type: integer
+ *                       example: 15
+ *                     entryAId:
+ *                       type: integer
+ *                       example: 101
+ *                     entryBId:
+ *                       type: integer
+ *                       example: 102
+ *                     status:
+ *                       type: string
+ *                       enum: [scheduled, in_progress, completed, cancelled]
+ *                       example: in_progress
+ *                     winnerEntryId:
+ *                       type: integer
+ *                       nullable: true
+ *                       example: null
+ *                     resultStatus:
+ *                       type: string
+ *                       enum: [pending, approved, rejected]
+ *                       example: rejected
+ *                     reviewNotes:
+ *                       type: string
+ *                       example: "Set scores don't match the recorded points. Please resubmit with correct scores."
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
  *       400:
- *         description: Bad request - Review notes required or invalid state
+ *         description: Bad request - Invalid match state or missing review notes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Review notes are required when rejecting a match result"
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Forbidden - User is not the chief referee of the tournament
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               example:
+ *                 message: "Only the chief referee can perform this action"
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post("/:id/reject",
   authenticate,
@@ -283,17 +527,35 @@ router.post("/:id/reject",
  * /matches/{id}/elo-preview:
  *   get:
  *     tags: [Matches]
- *     summary: Preview Elo changes for a match
+ *     summary: Preview Elo score changes for a match
  *     description: |
  *       Calculate and preview how Elo scores will change for all players after match completion.
- *       Useful for checking expected Elo changes before finalizing the match.
+ *       Displays expected vs actual scores and per-player Elo deltas.
+ *
+ *       Business Logic:
+ *       - Works on any match status (can preview before match is completed)
+ *       - Calculates based on current match state and set scores
+ *       - Shows average Elo for each entry
+ *       - Calculates expected win probability for each entry
+ *       - Shows actual match outcome (1 for winner, 0 for loser)
+ *       - Margin multiplier adjusts Elo change based on match difficulty
+ *       - Returns per-player Elo changes including:
+ *         - userId: player ID
+ *         - currentElo: current Elo rating
+ *         - expectedElo: Elo if match had expected outcome
+ *         - change: actual Elo change based on result
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID to preview Elo changes
  *     responses:
  *       200:
- *         description: Elo changes preview
+ *         description: Elo changes preview for match
  *         content:
  *           application/json:
  *             schema:
@@ -304,36 +566,60 @@ router.post("/:id/reject",
  *                   properties:
  *                     averageElo:
  *                       type: number
+ *                       example: 1200.5
  *                     expectedScore:
  *                       type: number
+ *                       description: Probability of winning (0-1)
+ *                       example: 0.65
  *                     actualScore:
  *                       type: number
+ *                       description: 1 if won, 0 if lost
+ *                       example: 1
  *                 entryB:
  *                   type: object
  *                   properties:
  *                     averageElo:
  *                       type: number
+ *                       example: 1150.3
  *                     expectedScore:
  *                       type: number
+ *                       description: Probability of winning (0-1)
+ *                       example: 0.35
  *                     actualScore:
  *                       type: number
+ *                       description: 1 if won, 0 if lost
+ *                       example: 0
  *                 marginMultiplier:
  *                   type: number
+ *                   description: Adjustment factor based on match margin/difficulty
+ *                   example: 1.2
  *                 changes:
  *                   type: array
+ *                   description: Elo changes for each player in both entries
  *                   items:
  *                     type: object
  *                     properties:
  *                       userId:
- *                         type: number
+ *                         type: integer
+ *                         example: 10
  *                       currentElo:
- *                         type: number
+ *                         type: integer
+ *                         example: 1200
  *                       expectedElo:
- *                         type: number
+ *                         type: integer
+ *                         example: 1215
  *                       change:
- *                         type: number
+ *                         type: integer
+ *                         description: Actual Elo change (positive for winner, negative for loser)
+ *                         example: 18
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_result'), matchController.previewEloChanges.bind(matchController));
 
@@ -343,7 +629,16 @@ router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_re
  *   get:
  *     tags: [Matches]
  *     summary: Get upcoming matches for an athlete
- *     description: Get list of scheduled and in-progress matches that an athlete is participating in
+ *     description: |
+ *       Retrieve list of matches that an athlete is participating in with status 'scheduled' or 'in_progress'.
+ *       These are matches the athlete will compete in soon or are currently being played.
+ *
+ *       Business Logic:
+ *       - Returns matches where user is member of either entryA or entryB
+ *       - Only includes matches with status 'scheduled' or 'in_progress'
+ *       - Sorted chronologically by scheduled time (ascending)
+ *       - Includes full match details: schedule, both entries with members, assigned referees
+ *       - Useful for athlete dashboard to see what matches are coming up
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -351,13 +646,23 @@ router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_re
  *         name: userId
  *         required: true
  *         schema:
- *           type: number
+ *           type: integer
  *         description: ID of the athlete/user
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination (1-indexed)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records per page
  *     responses:
  *       200:
- *         description: List of upcoming matches
+ *         description: List of upcoming matches for the athlete
  *         content:
  *           application/json:
  *             schema:
@@ -365,16 +670,87 @@ router.get("/:id/elo-preview", authenticate, checkPermission('matches:approve_re
  *               properties:
  *                 matches:
  *                   type: array
+ *                   description: Array of upcoming matches (scheduled or in_progress)
  *                   items:
  *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 42
+ *                       scheduleId:
+ *                         type: integer
+ *                       entryAId:
+ *                         type: integer
+ *                       entryBId:
+ *                         type: integer
+ *                       status:
+ *                         type: string
+ *                         enum: [scheduled, in_progress, completed, cancelled]
+ *                         example: scheduled
+ *                       winnerEntryId:
+ *                         type: integer
+ *                         nullable: true
+ *                       resultStatus:
+ *                         type: string
+ *                         enum: [pending, approved, rejected]
+ *                         nullable: true
+ *                       schedule:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           scheduledAt:
+ *                             type: string
+ *                             format: date-time
+ *                       entryA:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                       entryB:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                       matchReferees:
+ *                         type: array
+ *                         description: Assigned referees for the match
+ *                         items:
+ *                           type: object
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
  *                 count:
- *                   type: number
+ *                   type: integer
+ *                   description: Total count of upcoming matches for this user
+ *                   example: 5
  *                 offset:
- *                   type: number
+ *                   type: integer
+ *                   description: Records offset for this page
+ *                   example: 0
  *                 limit:
- *                   type: number
+ *                   type: integer
+ *                   description: Maximum records per page
+ *                   example: 10
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomingMatchesByAthlete.bind(matchController));
 
@@ -384,7 +760,16 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *   get:
  *     tags: [Matches]
  *     summary: Get match history for an athlete
- *     description: Get list of completed matches that an athlete has participated in
+ *     description: |
+ *       Retrieve list of completed and approved matches that an athlete has participated in.
+ *       Provides a complete history of all finished matches with final results and winners.
+ *
+ *       Business Logic:
+ *       - Returns matches where user is member of either entryA or entryB
+ *       - Only includes matches with status 'completed' AND resultStatus 'approved'
+ *       - Sorted by most recent first (newest matches first)
+ *       - Includes complete match details: all entries with members, set information, winner details
+ *       - Useful for athlete profile to show career history and past results
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -392,10 +777,20 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *         name: userId
  *         required: true
  *         schema:
- *           type: number
+ *           type: integer
  *         description: ID of the athlete/user
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination (1-indexed)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records per page
  *     responses:
  *       200:
  *         description: List of completed matches (match history)
@@ -406,66 +801,118 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *               properties:
  *                 matches:
  *                   type: array
+ *                   description: Array of completed and approved matches
  *                   items:
  *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 42
+ *                       scheduleId:
+ *                         type: integer
+ *                       entryAId:
+ *                         type: integer
+ *                       entryBId:
+ *                         type: integer
+ *                       status:
+ *                         type: string
+ *                         enum: [scheduled, in_progress, completed, cancelled]
+ *                         example: completed
+ *                       winnerEntryId:
+ *                         type: integer
+ *                         example: 101
+ *                       resultStatus:
+ *                         type: string
+ *                         enum: [pending, approved, rejected]
+ *                         example: approved
+ *                       reviewNotes:
+ *                         type: string
+ *                         nullable: true
+ *                       schedule:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           scheduledAt:
+ *                             type: string
+ *                             format: date-time
+ *                           roundNumber:
+ *                             type: integer
+ *                           stage:
+ *                             type: string
+ *                             enum: [group, knockout]
+ *                       entryA:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                       entryB:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                       winnerEntry:
+ *                         type: object
+ *                         description: The winning entry with members
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                           members:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                       matchSets:
+ *                         type: array
+ *                         description: All sets played in this match with scores
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: integer
+ *                             setNumber:
+ *                               type: integer
+ *                             entryAScore:
+ *                               type: integer
+ *                             entryBScore:
+ *                               type: integer
+ *                       matchReferees:
+ *                         type: array
+ *                         description: Referees who officiated the match
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
  *                 count:
- *                   type: number
+ *                   type: integer
+ *                   description: Total count of history matches for this user
+ *                   example: 15
  *                 offset:
- *                   type: number
+ *                   type: integer
+ *                   description: Records offset for this page
+ *                   example: 0
  *                 limit:
- *                   type: number
+ *                   type: integer
+ *                   description: Maximum records per page
+ *                   example: 10
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get("/athlete/:userId/history", authenticate, matchController.getMatchHistoryByAthlete.bind(matchController));
-
-
-/**
- * @swagger
- * /matches/{id}:
- *   get:
- *     tags: [Matches]
- *     summary: Get match by ID
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Match details
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   put:
- *     tags: [Matches]
- *     summary: Update match
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Match updated
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   delete:
- *     tags: [Matches]
- *     summary: Delete match
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       204:
- *         $ref: '#/components/responses/NoContent'
- */
-router.get("/:id", (_req, res) => res.status(501).json({ success: false, message: "Not implemented" }));
-router.put("/:id",
-  authenticate,
-  checkPermission('matches:update'),
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
-router.delete("/:id",
-  authenticate,
-  checkPermission('matches:delete'),
-  (_req, res) => res.status(501).json({ success: false, message: "Not implemented" })
-);
 
 export default router;

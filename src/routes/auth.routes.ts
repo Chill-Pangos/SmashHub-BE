@@ -9,8 +9,8 @@ const router = Router();
  * /auth/register:
  *   post:
  *     tags: [Auth]
- *     summary: Register new user
- *     description: Create a new user account. Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.
+ *     summary: Register new user account
+ *     description: Create a new user account. Email must be unique and in valid format. Password must be at least 8 characters, contain 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*()_+-=[]{}';:"|,.<>/?\\). User is assigned 'spectator' role by default unless specified otherwise. Email verification is required after registration.
  *     requestBody:
  *       required: true
  *       content:
@@ -25,30 +25,32 @@ const router = Router();
  *             properties:
  *               firstName:
  *                 type: string
- *                 example: Nguyen
- *                 description: User first name
+ *                 minLength: 1
+ *                 example: Nguyễn
+ *                 description: User first name (required, non-empty)
  *               lastName:
  *                 type: string
- *                 example: Van A
- *                 description: User last name
+ *                 minLength: 1
+ *                 example: Văn A
+ *                 description: User last name (required, non-empty)
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Valid email address
+ *                 example: nguyenvana@example.com
+ *                 description: Valid email address (must be unique, RFC 5322 format)
  *               password:
  *                 type: string
  *                 format: password
- *                 example: Password123!
+ *                 example: SecurePass123!
  *                 minLength: 8
- *                 description: Password (min 8 chars, 1 uppercase, 1 number, 1 special character)
+ *                 description: Strong password (min 8 chars, 1 uppercase, 1 digit, 1 special char)
  *               role:
  *                 type: string
  *                 example: spectator
- *                 description: User role (defaults to spectator if not specified)
+ *                 description: User role name (defaults to 'spectator' if not provided)
  *     responses:
  *       201:
- *         description: User registered successfully
+ *         description: User registered successfully with tokens and user details
  *         content:
  *           application/json:
  *             schema:
@@ -68,32 +70,36 @@ const router = Router();
  *                       properties:
  *                         id:
  *                           type: integer
- *                           example: 1
+ *                           example: 42
  *                         firstName:
  *                           type: string
- *                           example: Nguyen
+ *                           example: Nguyễn
  *                         lastName:
  *                           type: string
- *                           example: Van A
+ *                           example: Văn A
  *                         email:
  *                           type: string
- *                           example: user@test.com
+ *                           example: nguyenvana@example.com
  *                         roles:
  *                           type: array
  *                           items:
  *                             type: integer
  *                           example: [8]
+ *                           description: Array of role IDs assigned to user
  *                         isEmailVerified:
  *                           type: boolean
  *                           example: false
+ *                           description: Email verification status (false until verified via OTP)
  *                     accessToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcxOTY1Njg5NX0.ABC123...
+ *                       description: JWT access token for authenticated requests
  *                     refreshToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcyMDI1ODI5NX0.XYZ789...
+ *                       description: JWT refresh token for obtaining new access tokens
  *       400:
- *         description: Invalid input or user already exists
+ *         description: Invalid input - validation error or email already exists
  *         content:
  *           application/json:
  *             schema:
@@ -104,7 +110,20 @@ const router = Router();
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Registration failed
+ *                   example: Email already exists or Password does not meet requirements
+ *       500:
+ *         description: Internal server error during registration
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/register", authController.register);
 
@@ -113,8 +132,8 @@ router.post("/register", authController.register);
  * /auth/login:
  *   post:
  *     tags: [Auth]
- *     summary: Login user
- *     description: Authenticate with email and password. Email must be in valid format.
+ *     summary: Authenticate user and obtain tokens
+ *     description: Login with email and password. User must have a verified email to login. Returns access and refresh tokens for authenticated requests. Invalidates all previous tokens for security.
  *     requestBody:
  *       required: true
  *       content:
@@ -128,16 +147,16 @@ router.post("/register", authController.register);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Valid email address
+ *                 example: nguyenvana@example.com
+ *                 description: Registered email address (RFC 5322 format)
  *               password:
  *                 type: string
  *                 format: password
- *                 example: Password123!
+ *                 example: SecurePass123!
  *                 description: Account password
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: Login successful with user data and tokens
  *         content:
  *           application/json:
  *             schema:
@@ -154,30 +173,39 @@ router.post("/register", authController.register);
  *                   properties:
  *                     accessToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcxOTY1Njg5NX0.ABC123...
+ *                       description: JWT access token (short-lived, typically ~1 hour)
  *                     refreshToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcyMDI1ODI5NX0.XYZ789...
+ *                       description: JWT refresh token (long-lived, for getting new access tokens)
  *                     user:
  *                       type: object
  *                       properties:
  *                         id:
  *                           type: integer
- *                           example: 1
+ *                           example: 42
  *                         firstName:
  *                           type: string
- *                           example: Nguyen
+ *                           example: Nguyễn
  *                         lastName:
  *                           type: string
- *                           example: Van A
+ *                           example: Văn A
  *                         email:
  *                           type: string
- *                           example: user@test.com
+ *                           example: nguyenvana@example.com
+ *                         roles:
+ *                           type: array
+ *                           items:
+ *                             type: integer
+ *                           example: [8]
+ *                           description: Array of assigned role IDs
  *                         isEmailVerified:
  *                           type: boolean
- *                           example: false
- *       401:
- *         description: Invalid credentials
+ *                           example: true
+ *                           description: Email verification status
+ *       400:
+ *         description: Invalid email format
  *         content:
  *           application/json:
  *             schema:
@@ -188,7 +216,33 @@ router.post("/register", authController.register);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Login failed
+ *                   example: Invalid email format
+ *       401:
+ *         description: Invalid credentials or email not verified
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Email is not verified or Invalid credentials
+ *       500:
+ *         description: Internal server error during login
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/login", authController.login);
 
@@ -197,7 +251,8 @@ router.post("/login", authController.login);
  * /auth/refresh:
  *   post:
  *     tags: [Auth]
- *     summary: Refresh access token
+ *     summary: Obtain new access token using refresh token
+ *     description: Use a valid refresh token to obtain a new access token and refresh token. The old refresh token will be invalidated for security. Refresh tokens are long-lived but single-use.
  *     requestBody:
  *       required: true
  *       content:
@@ -209,10 +264,11 @@ router.post("/login", authController.login);
  *             properties:
  *               refreshToken:
  *                 type: string
- *                 example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                 example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcyMDI1ODI5NX0.XYZ789...
+ *                 description: Valid JWT refresh token from login or previous refresh
  *     responses:
  *       200:
- *         description: Token refreshed successfully
+ *         description: Token refreshed successfully with new tokens
  *         content:
  *           application/json:
  *             schema:
@@ -229,10 +285,25 @@ router.post("/login", authController.login);
  *                   properties:
  *                     accessToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcxOTY1Njg5NX0.ABC123...
+ *                       description: New JWT access token
  *                     refreshToken:
  *                       type: string
- *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                       example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQyLCJpYXQiOjE3MTk2NTMyOTUsImV4cCI6MTcyMDI1ODI5NX0.XYZ789...
+ *                       description: New JWT refresh token
+ *       400:
+ *         description: Missing or invalid refresh token format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Refresh token is required
  *       401:
  *         description: Invalid or expired refresh token
  *         content:
@@ -245,7 +316,20 @@ router.post("/login", authController.login);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Token refresh failed
+ *                   example: Invalid or expired refresh token
+ *       500:
+ *         description: Internal server error during token refresh
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/refresh", authController.refreshToken);
 
@@ -254,8 +338,8 @@ router.post("/refresh", authController.refreshToken);
  * /auth/change-password:
  *   post:
  *     tags: [Auth]
- *     summary: Change password
- *     description: Change user password. New password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character.
+ *     summary: Change user password (authenticated)
+ *     description: Change the current user's password. Requires valid authentication token. Old password must be verified. New password must be at least 8 characters, contain 1 uppercase letter, 1 number, and 1 special character, and must be different from old password.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -271,14 +355,14 @@ router.post("/refresh", authController.refreshToken);
  *               oldPassword:
  *                 type: string
  *                 format: password
- *                 example: Password123!
- *                 description: Current password
+ *                 example: OldPass123!
+ *                 description: Current password for verification
  *               newPassword:
  *                 type: string
  *                 format: password
  *                 example: NewStrongPass456!
  *                 minLength: 8
- *                 description: New password (min 8 chars, 1 uppercase, 1 number, 1 special character)
+ *                 description: New password (min 8 chars, 1 uppercase, 1 digit, 1 special char, must differ from old)
  *     responses:
  *       200:
  *         description: Password changed successfully
@@ -294,7 +378,7 @@ router.post("/refresh", authController.refreshToken);
  *                   type: string
  *                   example: Password changed successfully
  *       400:
- *         description: Invalid old password or weak new password
+ *         description: Invalid old password, weak new password, or password is same as old
  *         content:
  *           application/json:
  *             schema:
@@ -305,9 +389,9 @@ router.post("/refresh", authController.refreshToken);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Failed to change password
+ *                   example: Old password is incorrect or new password does not meet requirements
  *       401:
- *         description: Unauthorized - Invalid or missing token
+ *         description: Unauthorized - Invalid, expired, or missing authentication token
  *         content:
  *           application/json:
  *             schema:
@@ -319,6 +403,19 @@ router.post("/refresh", authController.refreshToken);
  *                 message:
  *                   type: string
  *                   example: Unauthorized
+ *       500:
+ *         description: Internal server error during password change
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/change-password", authenticate, authController.changePassword);
 
@@ -327,12 +424,13 @@ router.post("/change-password", authenticate, authController.changePassword);
  * /auth/logout:
  *   post:
  *     tags: [Auth]
- *     summary: Logout user - blacklist all tokens
+ *     summary: Logout user (authenticated)
+ *     description: Logout the current authenticated user. Invalidates all active tokens for this user. No request body required - user ID is extracted from the authentication token.
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Logout successful
+ *         description: Logout successful - all user tokens have been invalidated
  *         content:
  *           application/json:
  *             schema:
@@ -345,7 +443,7 @@ router.post("/change-password", authenticate, authController.changePassword);
  *                   type: string
  *                   example: Logout successful
  *       401:
- *         description: Unauthorized - Invalid or missing token
+ *         description: Unauthorized - Invalid, expired, or missing authentication token
  *         content:
  *           application/json:
  *             schema:
@@ -357,6 +455,19 @@ router.post("/change-password", authenticate, authController.changePassword);
  *                 message:
  *                   type: string
  *                   example: Unauthorized
+ *       500:
+ *         description: Internal server error during logout
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/logout", authenticate, authController.logout);
 
@@ -366,7 +477,7 @@ router.post("/logout", authenticate, authController.logout);
  *   post:
  *     tags: [Auth]
  *     summary: Request password reset - Send OTP to email
- *     description: Request a password reset OTP. Email must be in valid format.
+ *     description: Request a password reset by sending a 6-digit OTP code to the registered email address. OTP expires in 5 minutes. Any existing unused OTPs for this user are invalidated. Email must be in valid format.
  *     requestBody:
  *       required: true
  *       content:
@@ -379,11 +490,11 @@ router.post("/logout", authenticate, authController.logout);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Valid email address to receive OTP
+ *                 example: nguyenvana@example.com
+ *                 description: Registered email address to receive password reset OTP
  *     responses:
  *       200:
- *         description: OTP sent successfully
+ *         description: OTP sent successfully to email
  *         content:
  *           application/json:
  *             schema:
@@ -396,7 +507,7 @@ router.post("/logout", authenticate, authController.logout);
  *                   type: string
  *                   example: OTP has been sent to your email
  *       400:
- *         description: Failed to send OTP
+ *         description: Invalid email format or user not found
  *         content:
  *           application/json:
  *             schema:
@@ -407,7 +518,20 @@ router.post("/logout", authenticate, authController.logout);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: User not found with this email
+ *                   example: Invalid email format or user not found
+ *       500:
+ *         description: Failed to send OTP email or internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to send OTP
  */
 router.post("/forgot-password", authController.forgotPassword);
 
@@ -416,7 +540,8 @@ router.post("/forgot-password", authController.forgotPassword);
  * /auth/verify-otp:
  *   post:
  *     tags: [Auth]
- *     summary: Verify OTP code
+ *     summary: Verify password reset OTP code
+ *     description: Verify the 6-digit OTP code sent to email for password reset. OTP must be valid and not expired (5 minute expiry). Verification does not reset the password - only checks OTP validity. Use /auth/reset-password to actually reset password with OTP.
  *     requestBody:
  *       required: true
  *       content:
@@ -430,13 +555,15 @@ router.post("/forgot-password", authController.forgotPassword);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
+ *                 example: nguyenvana@example.com
+ *                 description: Email address associated with the OTP
  *               otp:
  *                 type: string
  *                 minLength: 6
  *                 maxLength: 6
+ *                 pattern: '^\d{6}$'
  *                 example: "123456"
- *                 description: 6-digit OTP code received via email
+ *                 description: 6-digit numeric OTP code received via email
  *     responses:
  *       200:
  *         description: OTP verified successfully
@@ -452,7 +579,7 @@ router.post("/forgot-password", authController.forgotPassword);
  *                   type: string
  *                   example: OTP verified successfully
  *       400:
- *         description: Invalid or expired OTP
+ *         description: Invalid email format, invalid OTP, or expired OTP
  *         content:
  *           application/json:
  *             schema:
@@ -463,7 +590,20 @@ router.post("/forgot-password", authController.forgotPassword);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Invalid OTP
+ *                   example: Invalid OTP or OTP has expired
+ *       500:
+ *         description: Internal server error during OTP verification
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/verify-otp", authController.verifyOtp);
 
@@ -473,7 +613,7 @@ router.post("/verify-otp", authController.verifyOtp);
  *   post:
  *     tags: [Auth]
  *     summary: Reset password with verified OTP
- *     description: Reset password using OTP. New password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character. Email must be in valid format.
+ *     description: Reset user password using a verified OTP code. OTP must be valid and not expired. New password must be at least 8 characters, contain 1 uppercase letter, 1 number, and 1 special character, and must be different from the current password. All existing tokens are invalidated for security after password reset.
  *     requestBody:
  *       required: true
  *       content:
@@ -488,20 +628,21 @@ router.post("/verify-otp", authController.verifyOtp);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Valid email address
+ *                 example: nguyenvana@example.com
+ *                 description: Email address associated with the password reset request
  *               otp:
  *                 type: string
  *                 minLength: 6
  *                 maxLength: 6
+ *                 pattern: '^\d{6}$'
  *                 example: "123456"
- *                 description: Verified 6-digit OTP code
+ *                 description: Valid 6-digit OTP code from /auth/forgot-password
  *               newPassword:
  *                 type: string
  *                 format: password
- *                 example: NewPassword123!
+ *                 example: NewPassword456!
  *                 minLength: 8
- *                 description: New password (min 8 chars, 1 uppercase, 1 number, 1 special character)
+ *                 description: New password (min 8 chars, 1 uppercase, 1 digit, 1 special char, must differ from old)
  *     responses:
  *       200:
  *         description: Password reset successfully
@@ -517,7 +658,7 @@ router.post("/verify-otp", authController.verifyOtp);
  *                   type: string
  *                   example: Password has been reset successfully
  *       400:
- *         description: Failed to reset password
+ *         description: Invalid email format, invalid/expired OTP, weak password, or password same as old
  *         content:
  *           application/json:
  *             schema:
@@ -528,7 +669,20 @@ router.post("/verify-otp", authController.verifyOtp);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Invalid OTP
+ *                   example: Invalid OTP, new password does not meet requirements, or password is same as current
+ *       500:
+ *         description: Internal server error during password reset
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/reset-password", authController.resetPassword);
 
@@ -538,7 +692,7 @@ router.post("/reset-password", authController.resetPassword);
  *   post:
  *     tags: [Auth]
  *     summary: Send email verification OTP
- *     description: Sends a 6-digit OTP to the user's email for email verification
+ *     description: Send a 6-digit OTP code to the user's email for email verification. Can only be sent to unverified emails. OTP expires in 5 minutes. Any existing unused OTPs for this user are invalidated. Email must be in valid format.
  *     requestBody:
  *       required: true
  *       content:
@@ -551,11 +705,11 @@ router.post("/reset-password", authController.resetPassword);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Email address to verify
+ *                 example: nguyenvana@example.com
+ *                 description: Email address to verify (must not be already verified)
  *     responses:
  *       200:
- *         description: OTP sent successfully
+ *         description: Verification OTP sent successfully to email
  *         content:
  *           application/json:
  *             schema:
@@ -566,9 +720,9 @@ router.post("/reset-password", authController.resetPassword);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Mã OTP xác thực đã được gửi đến email của bạn
+ *                   example: Verification OTP has been sent to your email
  *       400:
- *         description: Failed to send OTP
+ *         description: Invalid email format, user not found, or email already verified
  *         content:
  *           application/json:
  *             schema:
@@ -579,7 +733,20 @@ router.post("/reset-password", authController.resetPassword);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Không tìm thấy người dùng với email này
+ *                   example: Email already verified or Invalid email format
+ *       500:
+ *         description: Failed to send OTP email or internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to send verification OTP
  */
 router.post("/send-email-verification-otp", authController.sendEmailVerificationOtp);
 
@@ -589,7 +756,7 @@ router.post("/send-email-verification-otp", authController.sendEmailVerification
  *   post:
  *     tags: [Auth]
  *     summary: Verify email with OTP
- *     description: Verifies the user's email address using the OTP sent via email
+ *     description: Verify the user's email address using the 6-digit OTP code sent via email. OTP must be valid and not expired (5 minute expiry). After successful verification, user's email is marked as verified and can login.
  *     requestBody:
  *       required: true
  *       content:
@@ -603,13 +770,15 @@ router.post("/send-email-verification-otp", authController.sendEmailVerification
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
+ *                 example: nguyenvana@example.com
+ *                 description: Email address being verified
  *               otp:
  *                 type: string
  *                 minLength: 6
  *                 maxLength: 6
+ *                 pattern: '^\d{6}$'
  *                 example: "123456"
- *                 description: 6-digit OTP code received via email
+ *                 description: 6-digit numeric OTP code received via email
  *     responses:
  *       200:
  *         description: Email verified successfully
@@ -623,9 +792,9 @@ router.post("/send-email-verification-otp", authController.sendEmailVerification
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Email đã được xác thực thành công
+ *                   example: Email has been verified successfully
  *       400:
- *         description: Email verification failed
+ *         description: Email verification failed - invalid email, OTP, or expired OTP
  *         content:
  *           application/json:
  *             schema:
@@ -636,7 +805,20 @@ router.post("/send-email-verification-otp", authController.sendEmailVerification
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Mã OTP không hợp lệ hoặc đã hết hạn
+ *                   example: Invalid OTP or OTP has expired
+ *       500:
+ *         description: Internal server error during email verification
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
 router.post("/verify-email-otp", authController.verifyEmailOtp);
 
@@ -646,7 +828,7 @@ router.post("/verify-email-otp", authController.verifyEmailOtp);
  *   post:
  *     tags: [Auth]
  *     summary: Resend email verification OTP
- *     description: Resends a new 6-digit OTP to the user's email for email verification
+ *     description: Resend a new 6-digit OTP code to the user's email for email verification. Can be used if the previous OTP expired or was not received. Any existing unused OTPs for this email are invalidated. OTP expires in 5 minutes. Email must be in valid format and not already verified.
  *     requestBody:
  *       required: true
  *       content:
@@ -659,11 +841,11 @@ router.post("/verify-email-otp", authController.verifyEmailOtp);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: user@test.com
- *                 description: Email address to resend OTP to
+ *                 example: nguyenvana@example.com
+ *                 description: Email address to resend OTP to (must not be already verified)
  *     responses:
  *       200:
- *         description: OTP resent successfully
+ *         description: New verification OTP resent successfully to email
  *         content:
  *           application/json:
  *             schema:
@@ -674,9 +856,9 @@ router.post("/verify-email-otp", authController.verifyEmailOtp);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Mã OTP mới đã được gửi lại đến email của bạn
+ *                   example: A new OTP code has been sent to your email
  *       400:
- *         description: Failed to resend OTP
+ *         description: Invalid email format, user not found, or email already verified
  *         content:
  *           application/json:
  *             schema:
@@ -687,7 +869,20 @@ router.post("/verify-email-otp", authController.verifyEmailOtp);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Không thể gửi lại mã OTP
+ *                   example: Email already verified or Invalid email format
+ *       500:
+ *         description: Failed to resend OTP email or internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Failed to resend verification OTP
  */
 router.post("/resend-email-verification-otp", authController.resendEmailVerificationOtp);
 

@@ -23,21 +23,32 @@ const swaggerDefinition = {
     },
   ],
   tags: [
+    { name: "Auth", description: "Authentication and authorization endpoints" },
     { name: "Users", description: "User management endpoints" },
     { name: "Roles", description: "Role management endpoints" },
     { name: "Permissions", description: "Permission management endpoints" },
+    { name: "Role Permissions", description: "Role permission assignment endpoints" },
+    { name: "User Roles", description: "User role assignment endpoints" },
     { name: "Tournaments", description: "Tournament management endpoints" },
     {
       name: "Tournament Categories",
       description: "Tournament category endpoints",
     },
+    { name: "Tournament Referees", description: "Tournament referee management endpoints" },
     { name: "Entries", description: "Entry management endpoints" },
     { name: "Schedules", description: "Schedule management endpoints" },
     { name: "Schedule Config", description: "Schedule configuration endpoints" },
     { name: "Matches", description: "Match management endpoints" },
     { name: "Match Sets", description: "Match set endpoints" },
+    { name: "Sub Matches", description: "Sub-match management endpoints" },
+    { name: "Sub Match Players", description: "Sub-match player assignment endpoints" },
+    { name: "Group Standings", description: "Group stage standing management endpoints" },
+    { name: "Knockout Brackets", description: "Knockout bracket management endpoints" },
+    { name: "ELO Calculation", description: "ELO calculation and updates endpoints" },
     { name: "ELO Scores", description: "ELO scoring system endpoints" },
     { name: "ELO Histories", description: "ELO history tracking endpoints" },
+    { name: "Payments", description: "Payment and entry fee management endpoints" },
+    { name: "Notifications", description: "Real-time notifications endpoints" },
   ],
   components: {
     securitySchemes: {
@@ -71,6 +82,17 @@ const swaggerDefinition = {
             default: 10,
             description: "Maximum number of records to return",
           },
+        },
+      },
+      Pagination: {
+        type: "object",
+        properties: {
+          total: { type: "integer", description: "Total number of records" },
+          page: { type: "integer", description: "Current page number" },
+          limit: { type: "integer", description: "Records per page" },
+          totalPages: { type: "integer", description: "Total number of pages" },
+          hasNextPage: { type: "boolean", description: "Whether a next page exists" },
+          hasPrevPage: { type: "boolean", description: "Whether a previous page exists" },
         },
       },
       User: {
@@ -143,6 +165,16 @@ const swaggerDefinition = {
           id: { type: "integer" },
           name: { type: "string", maxLength: 50 },
           description: { type: "string" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      RolePermission: {
+        type: "object",
+        required: ["roleId", "permissionId"],
+        properties: {
+          roleId: { type: "integer" },
+          permissionId: { type: "integer" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -399,11 +431,59 @@ const swaggerDefinition = {
         type: "object",
         required: ["tournamentId", "refereeId", "role"],
         properties: {
-          id: { type: "integer" },
-          tournamentId: { type: "integer" },
-          refereeId: { type: "integer" },
-          role: { type: "string", enum: ["main", "assistant"] },
-          isAvailable: { type: "boolean", default: true },
+          id: { type: "integer", description: "Unique identifier" },
+          tournamentId: { type: "integer", description: "Tournament ID" },
+          refereeId: { type: "integer", description: "User ID of the referee" },
+          role: {
+            type: "string",
+            enum: ["referee", "chief"],
+            description: "Referee role in the tournament"
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      RefereeInvitation: {
+        type: "object",
+        required: ["tournamentId", "refereeId", "invitedBy", "role", "status", "expiresAt"],
+        properties: {
+          id: { type: "integer", description: "Unique identifier" },
+          tournamentId: { type: "integer", description: "Tournament ID" },
+          refereeId: {
+            type: "integer",
+            description: "User ID of the invited referee"
+          },
+          invitedBy: {
+            type: "integer",
+            description: "User ID of the organizer who sent the invitation"
+          },
+          role: {
+            type: "string",
+            enum: ["referee", "chief"],
+            description: "Role the referee is invited for"
+          },
+          status: {
+            type: "string",
+            enum: ["pending", "accepted", "rejected", "cancelled", "expired"],
+            description: "Current status of the invitation"
+          },
+          expiresAt: {
+            type: "string",
+            format: "date-time",
+            description: "When the invitation expires (default 48 hours from creation)"
+          },
+          respondedAt: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+            description: "When the referee responded or organizer cancelled/expired"
+          },
+          rejectionReason: {
+            type: "string",
+            maxLength: 255,
+            nullable: true,
+            description: "Reason for rejection (if status is rejected)"
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -431,6 +511,70 @@ const swaggerDefinition = {
           },
           roundName: { type: "string", maxLength: 50 },
           isByeMatch: { type: "boolean", default: false },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      SubMatch: {
+        type: "object",
+        required: ["matchId", "subMatchNumber", "matchType"],
+        properties: {
+          id: { type: "integer", description: "Unique identifier" },
+          matchId: { type: "integer", description: "Parent match ID" },
+          subMatchNumber: { type: "integer", description: "Position in team format (1-3 for S-D-S)" },
+          matchType: {
+            type: "string",
+            enum: ["single", "doubles"],
+            description: "Type of sub-match"
+          },
+          status: {
+            type: "string",
+            enum: ["scheduled", "in_progress", "completed", "cancelled"],
+            default: "scheduled",
+            description: "Current status of the sub-match"
+          },
+          umpireId: {
+            type: "integer",
+            nullable: true,
+            description: "Referee ID assigned as umpire"
+          },
+          winnerTeam: {
+            type: "string",
+            enum: ["A", "B"],
+            nullable: true,
+            description: "Winning team (A or B)"
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      SubMatchPlayer: {
+        type: "object",
+        required: ["subMatchId", "entryMemberId", "team"],
+        properties: {
+          id: { type: "integer", description: "Unique identifier" },
+          subMatchId: { type: "integer", description: "Sub-match ID" },
+          entryMemberId: { type: "integer", description: "Entry member ID (player)" },
+          team: {
+            type: "string",
+            enum: ["A", "B"],
+            description: "Team assignment"
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      ScheduleResponse: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          categoryId: { type: "integer" },
+          roundNumber: { type: "integer" },
+          groupName: { type: "string", maxLength: 50 },
+          stage: { type: "string", enum: ["group", "knockout"] },
+          knockoutRound: { type: "string", maxLength: 50 },
+          tableNumber: { type: "integer" },
+          scheduledAt: { type: "string", format: "date-time" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -631,6 +775,15 @@ const swaggerDefinition = {
         description: "Successfully deleted, no content returned",
       },
     },
+      InternalServerError: {
+        description: "Internal server error",
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Error" },
+            example: { message: "Internal server error" },
+          },
+        },
+      },
   },
 };
 

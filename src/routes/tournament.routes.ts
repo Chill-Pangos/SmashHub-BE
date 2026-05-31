@@ -6,14 +6,6 @@ import { checkPermission, checkAnyPermission } from "../middlewares/permission.m
 const router = Router();
 
 /**
- * @swagger
- * /tournaments:
- *   post:
- *     tags: [Tournaments]
- *     summary: Create a new tournament with categories
- *     description: Create a tournament along with its tournament categories in a single transaction. 
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -500,32 +492,9 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *                         type: string
  *                         enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                         example: "upcoming"
- *                       startDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-15T09:00:00Z"
- *                       endDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-20T18:00:00Z"
- *                       registrationStartDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-02-15T00:00:00Z"
- *                       registrationEndDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-10T23:59:59Z"
- *                       bracketGenerationDate:
- *                         type: string
- *                         format: date-time
- *                         example: "2026-03-12T10:00:00Z"
  *                       location:
  *                         type: string
  *                         example: "National Stadium"
- *                       numberOfTables:
- *                         type: integer
- *                         example: 4
  *                       createdBy:
  *                         type: integer
  *                         example: 5
@@ -726,12 +695,15 @@ router.post(
  *                             type: integer
  *                           name:
  *                             type: string
- *                           registrationStartDate:
- *                             type: string
- *                             format: date-time
  *                           status:
  *                             type: string
  *                             example: "upcoming"
+ *                           scheduleConfig:
+ *                             type: object
+ *                             properties:
+ *                               registrationStartDate:
+ *                                 type: string
+ *                                 format: date-time
  *                     closingSoon:
  *                       type: array
  *                       description: Tournaments that will close registration soon
@@ -742,12 +714,15 @@ router.post(
  *                             type: integer
  *                           name:
  *                             type: string
- *                           registrationEndDate:
- *                             type: string
- *                             format: date-time
  *                           status:
  *                             type: string
  *                             example: "registration_open"
+ *                           scheduleConfig:
+ *                             type: object
+ *                             properties:
+ *                               registrationEndDate:
+ *                                 type: string
+ *                                 format: date-time
  *                     bracketsSoon:
  *                       type: array
  *                       description: Tournaments that will generate brackets soon
@@ -758,12 +733,15 @@ router.post(
  *                             type: integer
  *                           name:
  *                             type: string
- *                           bracketGenerationDate:
- *                             type: string
- *                             format: date-time
  *                           status:
  *                             type: string
  *                             example: "registration_closed"
+ *                           scheduleConfig:
+ *                             type: object
+ *                             properties:
+ *                               bracketGenerationDate:
+ *                                 type: string
+ *                                 format: date-time
  *                 metadata:
  *                   type: object
  *                   properties:
@@ -1041,32 +1019,9 @@ router.get(
  *                   type: string
  *                   enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                   example: "upcoming"
- *                 startDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-15T09:00:00Z"
- *                 endDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-20T18:00:00Z"
- *                 registrationStartDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-02-15T00:00:00Z"
- *                 registrationEndDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-10T23:59:59Z"
- *                 bracketGenerationDate:
- *                   type: string
- *                   format: date-time
- *                   example: "2026-03-12T10:00:00Z"
  *                 location:
  *                   type: string
  *                   example: "National Stadium"
- *                 numberOfTables:
- *                   type: integer
- *                   example: 4
  *                 createdBy:
  *                   type: integer
  *                   example: 5
@@ -1140,7 +1095,7 @@ router.get(
  *   put:
  *     tags: [Tournaments]
  *     summary: Update tournament with categories
- *     description: Update a tournament and optionally its categories. If categories are provided, all existing categories will be replaced.
+ *     description: Update a tournament and optionally replace its categories.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1155,33 +1110,6 @@ router.get(
  *               name:
  *                 type: string
  *                 example: "Spring Championship 2026 - Updated"
- *               tier:
- *                 type: integer
- *                 minimum: 1
- *                 example: 3
- *               startDate:
- *                 type: string
- *                 format: date-time
- *                 example: "2026-03-15T09:00:00Z"
- *               endDate:
- *                 type: string
- *                 format: date-time
- *                 example: "2026-03-20T18:00:00Z"
- *               registrationStartDate:
- *                 type: string
- *                 format: date-time
- *                 description: Registration opens at this date
- *                 example: "2026-02-15T00:00:00Z"
- *               registrationEndDate:
- *                 type: string
- *                 format: date-time
- *                 description: Registration closes at this date (must be before startDate)
- *                 example: "2026-03-10T23:59:59Z"
- *               bracketGenerationDate:
- *                 type: string
- *                 format: date-time
- *                 description: Date when brackets are generated (must be at least 2 days before startDate)
- *                 example: "2026-03-12T10:00:00Z"
  *               location:
  *                 type: string
  *                 example: "National Stadium"
@@ -1189,10 +1117,6 @@ router.get(
  *                 type: string
  *                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
  *                 example: "ongoing"
- *               numberOfTables:
- *                 type: integer
- *                 description: Number of tables available for concurrent matches
- *                 example: 6
  *               categories:
  *                 type: array
  *                 description: Array of tournament categories (optional). If provided, replaces all existing categories.
@@ -1217,12 +1141,6 @@ router.get(
  *                     maxSets:
  *                       type: integer
  *                       example: 3
- *                     numberOfSingles:
- *                       type: integer
- *                       example: 3
- *                     numberOfDoubles:
- *                       type: integer
- *                       example: 2
  *                     minAge:
  *                       type: integer
  *                       example: 18
