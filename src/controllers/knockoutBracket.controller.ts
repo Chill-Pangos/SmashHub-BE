@@ -38,13 +38,15 @@ export class KnockoutBracketController {
 
   /**
    * Advance winner sang vòng tiếp theo
-   * POST /knockout-brackets/advance-winner
-   * Body: { bracketId: number, winnerEntryId: number }
+   * POST /knockout-brackets/:id/advance-winner
+   * Body: { winnerEntryId: number }
    */
   async advanceWinner(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { bracketId, winnerEntryId } = req.body;
+      const { id } = req.params;
+      const { winnerEntryId } = req.body;
       const chiefRefereeId = (req as any).user?.id;
+      const bracketId = Number(id);
 
       if (!chiefRefereeId) {
         throw new UnauthorizedError("Unauthorized");
@@ -149,13 +151,13 @@ export class KnockoutBracketController {
 
   /**
    * Validate bracket integrity trước khi bắt đầu giải
-   * POST /knockout-brackets/validate
-   * Body: { categoryId: number }
+   * GET /knockout-brackets/validate/:categoryId
    */
   async validateBracketIntegrity(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.body;
+      const { categoryId } = req.params;
       const chiefRefereeId = (req as any).user?.id;
+      const parsedCategoryId = Number(categoryId);
 
       if (!chiefRefereeId) {
         throw new UnauthorizedError("Unauthorized");
@@ -163,7 +165,7 @@ export class KnockoutBracketController {
 
       const result = await knockoutBracketService.validateBracketIntegrity(
         chiefRefereeId,
-        categoryId
+        parsedCategoryId
       );
 
       res.status(200).json({

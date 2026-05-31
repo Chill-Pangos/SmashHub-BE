@@ -11,7 +11,16 @@ const router = Router();
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Send invitation to referee
- *     description: Organizer invites a referee to join tournament
+ *     description: |
+ *       Organizer invites a referee to join tournament with a specific role.
+ *
+ *       Key constraints:
+ *       - Organizer cannot invite themselves
+ *       - Referee must have required system role (referee or chief_referee)
+ *       - Referee cannot be competing in the same tournament
+ *       - Only 1 chief referee allowed per tournament
+ *       - Each referee can only have 1 active invitation per tournament
+ *       - Invitation expires after INVITATION_EXPIRY_HOURS (default: 48 hours)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -27,19 +36,61 @@ const router = Router();
  *             properties:
  *               tournamentId:
  *                 type: integer
+ *                 description: Tournament ID
  *                 example: 1
  *               refereeId:
  *                 type: integer
+ *                 description: User ID of the referee to invite
  *                 example: 5
  *               role:
  *                 type: string
  *                 enum: [referee, chief]
+ *                 description: Role for the referee in this tournament
  *                 example: referee
+ *           examples:
+ *             referee_invitation:
+ *               summary: Invite regular referee
+ *               value:
+ *                 tournamentId: 1
+ *                 refereeId: 5
+ *                 role: referee
+ *             chief_referee_invitation:
+ *               summary: Invite as chief referee
+ *               value:
+ *                 tournamentId: 1
+ *                 refereeId: 6
+ *                 role: chief
  *     responses:
  *       201:
  *         description: Invitation sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RefereeInvitation'
+ *             example:
+ *               id: 1
+ *               tournamentId: 1
+ *               refereeId: 5
+ *               invitedBy: 2
+ *               role: referee
+ *               status: pending
+ *               expiresAt: "2024-06-29T12:00:00Z"
+ *               respondedAt: null
+ *               rejectionReason: null
+ *               createdAt: "2024-06-27T12:00:00Z"
+ *               updatedAt: "2024-06-27T12:00:00Z"
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       409:
+ *         $ref: '#/components/responses/Conflict409'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/invite",
@@ -54,7 +105,15 @@ router.post(
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Accept referee invitation
- *     description: Referee accepts an invitation
+ *     description: |
+ *       Referee accepts a pending invitation and becomes an active referee for the tournament.
+ *
+ *       Key behaviors:
+ *       - Only pending invitations can be accepted
+ *       - Expired invitations are automatically rejected
+ *       - Accepts chief role only if no other chief referee exists
+ *       - Creates active TournamentReferee record
+ *       - Updates invitation status and respondedAt timestamp
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -68,14 +127,37 @@ router.post(
  *             properties:
  *               invitationId:
  *                 type: integer
+ *                 description: ID of the invitation to accept
  *                 example: 1
+ *           examples:
+ *             basic:
+ *               summary: Accept invitation
+ *               value:
+ *                 invitationId: 1
  *     responses:
  *       200:
- *         description: Invitation accepted
+ *         description: Invitation accepted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TournamentReferee'
+ *             example:
+ *               id: 1
+ *               tournamentId: 1
+ *               refereeId: 5
+ *               role: referee
+ *               createdAt: "2024-06-27T12:00:00Z"
+ *               updatedAt: "2024-06-27T12:00:00Z"
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
  *       404:
- *         description: Invitation not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       409:
+ *         $ref: '#/components/responses/Conflict409'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/accept-invitation",
@@ -89,7 +171,15 @@ router.post(
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Reject referee invitation
- *     description: Referee rejects an invitation
+ *     description: |
+ *       Referee rejects a pending invitation with optional reason.
+ *
+ *       Key behaviors:
+ *       - Only pending invitations can be rejected
+ *       - Expired invitations cannot be manually rejected
+ *       - Rejection reason is optional (max 255 characters)
+ *       - Updates invitation status and respondedAt timestamp
+ *       - Rejected invitations cannot be re-sent (must be cancelled first if organizer wants to reinvite)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -103,17 +193,50 @@ router.post(
  *             properties:
  *               invitationId:
  *                 type: integer
+ *                 description: ID of the invitation to reject
  *                 example: 1
  *               rejectionReason:
  *                 type: string
+ *                 maxLength: 255
+ *                 description: Optional reason for rejection
  *                 example: "Not available at that time"
+ *           examples:
+ *             with_reason:
+ *               summary: Reject with reason
+ *               value:
+ *                 invitationId: 1
+ *                 rejectionReason: "Scheduling conflict with another tournament"
+ *             without_reason:
+ *               summary: Reject without reason
+ *               value:
+ *                 invitationId: 1
  *     responses:
  *       200:
- *         description: Invitation rejected
+ *         description: Invitation rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RefereeInvitation'
+ *             example:
+ *               id: 1
+ *               tournamentId: 1
+ *               refereeId: 5
+ *               invitedBy: 2
+ *               role: referee
+ *               status: rejected
+ *               expiresAt: "2024-06-29T12:00:00Z"
+ *               respondedAt: "2024-06-27T12:30:00Z"
+ *               rejectionReason: "Not available at that time"
+ *               createdAt: "2024-06-27T12:00:00Z"
+ *               updatedAt: "2024-06-27T12:30:00Z"
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
  *       404:
- *         description: Invitation not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/reject-invitation",
@@ -127,7 +250,14 @@ router.post(
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Cancel pending invitation
- *     description: Organizer cancels a pending invitation
+ *     description: |
+ *       Organizer cancels a pending invitation before referee responds.
+ *
+ *       Key behaviors:
+ *       - Only pending invitations can be cancelled
+ *       - Only tournament organizer can cancel
+ *       - Updates invitation status and respondedAt timestamp
+ *       - After cancellation, organizer can send a new invitation to same referee
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -141,14 +271,42 @@ router.post(
  *             properties:
  *               invitationId:
  *                 type: integer
+ *                 description: ID of the invitation to cancel
  *                 example: 1
+ *           examples:
+ *             basic:
+ *               summary: Cancel pending invitation
+ *               value:
+ *                 invitationId: 1
  *     responses:
  *       200:
- *         description: Invitation cancelled
+ *         description: Invitation cancelled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RefereeInvitation'
+ *             example:
+ *               id: 1
+ *               tournamentId: 1
+ *               refereeId: 5
+ *               invitedBy: 2
+ *               role: referee
+ *               status: cancelled
+ *               expiresAt: "2024-06-29T12:00:00Z"
+ *               respondedAt: "2024-06-27T13:00:00Z"
+ *               rejectionReason: null
+ *               createdAt: "2024-06-27T12:00:00Z"
+ *               updatedAt: "2024-06-27T13:00:00Z"
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         description: Invitation not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/cancel-invitation",
@@ -163,7 +321,14 @@ router.post(
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Remove referee from tournament
- *     description: Organizer removes a referee from tournament
+ *     description: |
+ *       Organizer removes an active referee from tournament.
+ *
+ *       Key behaviors:
+ *       - Only organizer can remove referees
+ *       - Removes from active referees (TournamentReferee record)
+ *       - Does not affect past invitations or rejections
+ *       - Returns no content on success (204)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -178,17 +343,31 @@ router.post(
  *             properties:
  *               tournamentId:
  *                 type: integer
+ *                 description: Tournament ID
  *                 example: 1
  *               refereeId:
  *                 type: integer
+ *                 description: Referee user ID to remove
  *                 example: 5
+ *           examples:
+ *             basic:
+ *               summary: Remove referee
+ *               value:
+ *                 tournamentId: 1
+ *                 refereeId: 5
  *     responses:
  *       204:
- *         description: Referee removed
- *       404:
- *         description: Not found
+ *         $ref: '#/components/responses/NoContent204'
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/remove",
@@ -203,7 +382,14 @@ router.post(
  *   post:
  *     tags: [Tournament Referees]
  *     summary: Update referee role
- *     description: Organizer updates a referee's role in tournament
+ *     description: |
+ *       Organizer changes a referee's role in tournament (PATCH route but uses POST).
+ *
+ *       Key constraints:
+ *       - Only organizer can update role
+ *       - Referee must exist in tournament
+ *       - When promoting to chief: must have chief_referee system role and no other chief exists
+ *       - Returns updated TournamentReferee record
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -219,21 +405,56 @@ router.post(
  *             properties:
  *               tournamentId:
  *                 type: integer
+ *                 description: Tournament ID
  *                 example: 1
  *               refereeId:
  *                 type: integer
+ *                 description: Referee user ID to update
  *                 example: 5
  *               newRole:
  *                 type: string
  *                 enum: [referee, chief]
+ *                 description: New role for the referee
  *                 example: chief
+ *           examples:
+ *             promote_to_chief:
+ *               summary: Promote to chief referee
+ *               value:
+ *                 tournamentId: 1
+ *                 refereeId: 5
+ *                 newRole: chief
+ *             demote_to_referee:
+ *               summary: Demote to regular referee
+ *               value:
+ *                 tournamentId: 1
+ *                 refereeId: 5
+ *                 newRole: referee
  *     responses:
  *       200:
- *         description: Role updated
+ *         description: Role updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TournamentReferee'
+ *             example:
+ *               id: 1
+ *               tournamentId: 1
+ *               refereeId: 5
+ *               role: chief
+ *               createdAt: "2024-06-27T12:00:00Z"
+ *               updatedAt: "2024-06-27T13:15:00Z"
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         description: Not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       409:
+ *         $ref: '#/components/responses/Conflict409'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/update-role",
@@ -247,8 +468,15 @@ router.post(
  * /tournament-referees/tournament/{tournamentId}:
  *   get:
  *     tags: [Tournament Referees]
- *     summary: Get referees by tournament with pagination
- *     description: Get all referees assigned to a tournament
+ *     summary: Get referees by tournament
+ *     description: |
+ *       Retrieve all active referees assigned to a tournament with optional role filtering.
+ *
+ *       Features:
+ *       - Supports pagination with page/limit query parameters
+ *       - Optional role filter (referee or chief)
+ *       - Returns referees with basic user information
+ *       - Public endpoint (no authentication required)
  *     parameters:
  *       - in: path
  *         name: tournamentId
@@ -263,7 +491,8 @@ router.post(
  *         schema:
  *           type: string
  *           enum: [referee, chief]
- *         description: Filter by role
+ *         description: Filter referees by role
+ *         example: chief
  *     responses:
  *       200:
  *         description: List of referees with pagination
@@ -275,24 +504,79 @@ router.post(
  *                 referees:
  *                   type: array
  *                   items:
- *                     type: object
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/TournamentReferee'
+ *                       - type: object
+ *                         properties:
+ *                           referee:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               firstName:
+ *                                 type: string
+ *                               lastName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
  *                 pagination:
  *                   type: object
  *                   properties:
  *                     total:
  *                       type: integer
+ *                       description: Total number of referees
  *                     page:
  *                       type: integer
+ *                       description: Current page number
  *                     limit:
  *                       type: integer
+ *                       description: Records per page
  *                     totalPages:
  *                       type: integer
+ *                       description: Total number of pages
  *                     hasNextPage:
  *                       type: boolean
+ *                       description: Whether next page exists
  *                     hasPrevPage:
  *                       type: boolean
+ *                       description: Whether previous page exists
+ *             example:
+ *               referees:
+ *                 - id: 1
+ *                   tournamentId: 1
+ *                   refereeId: 5
+ *                   role: chief
+ *                   createdAt: "2024-06-27T12:00:00Z"
+ *                   updatedAt: "2024-06-27T12:00:00Z"
+ *                   referee:
+ *                     id: 5
+ *                     firstName: John
+ *                     lastName: Doe
+ *                     email: john@example.com
+ *                 - id: 2
+ *                   tournamentId: 1
+ *                   refereeId: 6
+ *                   role: referee
+ *                   createdAt: "2024-06-27T12:05:00Z"
+ *                   updatedAt: "2024-06-27T12:05:00Z"
+ *                   referee:
+ *                     id: 6
+ *                     firstName: Jane
+ *                     lastName: Smith
+ *                     email: jane@example.com
+ *               pagination:
+ *                 total: 2
+ *                 page: 1
+ *                 limit: 10
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get(
   "/tournament/:tournamentId",
@@ -304,8 +588,16 @@ router.get(
  * /tournament-referees/tournament/{tournamentId}/invitations:
  *   get:
  *     tags: [Tournament Referees]
- *     summary: Get invitations by tournament with pagination
- *     description: Get all referee invitations for a tournament (organizer only)
+ *     summary: Get invitations by tournament
+ *     description: |
+ *       Retrieve all referee invitations for a tournament (organizer only).
+ *
+ *       Features:
+ *       - Organizer can track pending, accepted, rejected, cancelled, and expired invitations
+ *       - Supports pagination with page/limit query parameters
+ *       - Optional status filter
+ *       - Returns invitation details with invited referee information
+ *       - Only accessible to tournament organizer
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -322,7 +614,8 @@ router.get(
  *         schema:
  *           type: string
  *           enum: [pending, accepted, rejected, cancelled, expired]
- *         description: Filter by invitation status
+ *         description: Filter invitations by status
+ *         example: pending
  *     responses:
  *       200:
  *         description: List of invitations with pagination
@@ -334,26 +627,77 @@ router.get(
  *                 invitations:
  *                   type: array
  *                   items:
- *                     type: object
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/RefereeInvitation'
+ *                       - type: object
+ *                         properties:
+ *                           referee:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               firstName:
+ *                                 type: string
+ *                               lastName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
  *                 pagination:
  *                   type: object
  *                   properties:
  *                     total:
  *                       type: integer
+ *                       description: Total number of invitations
  *                     page:
  *                       type: integer
+ *                       description: Current page number
  *                     limit:
  *                       type: integer
+ *                       description: Records per page
  *                     totalPages:
  *                       type: integer
+ *                       description: Total number of pages
  *                     hasNextPage:
  *                       type: boolean
+ *                       description: Whether next page exists
  *                     hasPrevPage:
  *                       type: boolean
+ *                       description: Whether previous page exists
+ *             example:
+ *               invitations:
+ *                 - id: 1
+ *                   tournamentId: 1
+ *                   refereeId: 5
+ *                   invitedBy: 2
+ *                   role: chief
+ *                   status: pending
+ *                   expiresAt: "2024-06-29T12:00:00Z"
+ *                   respondedAt: null
+ *                   rejectionReason: null
+ *                   createdAt: "2024-06-27T12:00:00Z"
+ *                   updatedAt: "2024-06-27T12:00:00Z"
+ *                   referee:
+ *                     id: 5
+ *                     firstName: John
+ *                     lastName: Doe
+ *                     email: john@example.com
+ *               pagination:
+ *                 total: 1
+ *                 page: 1
+ *                 limit: 10
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  *       400:
- *         description: Bad request
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
- *         description: Tournament not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get(
   "/tournament/:tournamentId/invitations",
@@ -367,8 +711,24 @@ router.get(
  * /tournament-referees/my-invitations:
  *   get:
  *     tags: [Tournament Referees]
- *     summary: Get my invitation list
- *     description: Retrieve all invitations sent to the current referee across all tournaments
+ *     summary: Get my invitations
+ *     description: |
+ *       Retrieve all referee invitations sent to the current user across all tournaments.
+ *
+ *       Features:
+ *       - Personal invitation list for authenticated referee
+ *       - Includes complete tournament and organizer information
+ *       - Supports filtering by invitation status (pending, accepted, rejected, cancelled, expired)
+ *       - Supports pagination and sorting (createdAt, status, role, etc.)
+ *       - Shows expiration details and rejection reasons (if applicable)
+ *       - Useful for referee to track pending invitations and respond to them
+ *
+ *       Status meanings:
+ *       - pending: Awaiting referee response, expires after INVITATION_EXPIRY_HOURS (48 hours)
+ *       - accepted: Referee accepted and is now active in tournament
+ *       - rejected: Referee rejected the invitation
+ *       - cancelled: Organizer cancelled the pending invitation
+ *       - expired: Invitation expired without response
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -384,6 +744,7 @@ router.get(
  *         name: sortBy
  *         schema:
  *           type: string
+ *           enum: [createdAt, status, role, expiresAt]
  *           default: createdAt
  *         description: Field to sort by
  *       - in: query
@@ -392,7 +753,7 @@ router.get(
  *           type: string
  *           enum: [ASC, DESC]
  *           default: DESC
- *         description: Sort order
+ *         description: Sort order (ascending or descending)
  *     responses:
  *       200:
  *         description: List of referee invitations with tournament and organizer details
@@ -404,64 +765,37 @@ router.get(
  *                 invitations:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                       tournamentId:
- *                         type: integer
- *                       refereeId:
- *                         type: integer
- *                       invitedBy:
- *                         type: integer
- *                       role:
- *                         type: string
- *                         enum: [chief, referee]
- *                       status:
- *                         type: string
- *                         enum: [pending, accepted, rejected, cancelled, expired]
- *                       expiresAt:
- *                         type: string
- *                         format: date-time
- *                       respondedAt:
- *                         type: string
- *                         format: date-time
- *                         nullable: true
- *                       rejectionReason:
- *                         type: string
- *                         nullable: true
- *                       tournament:
- *                         type: object
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/RefereeInvitation'
+ *                       - type: object
  *                         properties:
- *                           id:
- *                             type: integer
- *                           name:
- *                             type: string
- *                           location:
- *                             type: string
- *                           tier:
- *                             type: integer
- *                           status:
- *                             type: string
- *                           createdBy:
- *                             type: integer
- *                       inviter:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                           firstName:
- *                             type: string
- *                           lastName:
- *                             type: string
- *                           email:
- *                             type: string
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                       updatedAt:
- *                         type: string
- *                         format: date-time
+ *                           tournament:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               name:
+ *                                 type: string
+ *                               location:
+ *                                 type: string
+ *                               tier:
+ *                                 type: integer
+ *                               status:
+ *                                 type: string
+ *                                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
+ *                               createdBy:
+ *                                 type: integer
+ *                           inviter:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               firstName:
+ *                                 type: string
+ *                               lastName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -477,10 +811,42 @@ router.get(
  *                       type: boolean
  *                     hasPrevPage:
  *                       type: boolean
+ *             example:
+ *               invitations:
+ *                 - id: 1
+ *                   tournamentId: 1
+ *                   refereeId: 5
+ *                   invitedBy: 2
+ *                   role: referee
+ *                   status: pending
+ *                   expiresAt: "2024-06-29T12:00:00Z"
+ *                   respondedAt: null
+ *                   rejectionReason: null
+ *                   tournament:
+ *                     id: 1
+ *                     name: "Summer Championship 2024"
+ *                     location: "New York"
+ *                     tier: 2
+ *                     status: registration_open
+ *                     createdBy: 2
+ *                   inviter:
+ *                     id: 2
+ *                     firstName: Admin
+ *                     lastName: User
+ *                     email: admin@example.com
+ *                   createdAt: "2024-06-27T12:00:00Z"
+ *                   updatedAt: "2024-06-27T12:00:00Z"
+ *               pagination:
+ *                 total: 1
+ *                 page: 1
+ *                 limit: 10
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  *       500:
- *         description: Internal server error
+ *         $ref: '#/components/responses/InternalError500'
  */
 router.get(
   "/my-invitations",
