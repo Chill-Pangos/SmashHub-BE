@@ -9,6 +9,11 @@ const router = Router();
  * @swagger
  * /tournaments:
  *   post:
+ *     tags: [Tournaments]
+ *     summary: Create a new tournament
+ *     description: Create a new tournament with optional categories
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -244,15 +249,7 @@ const router = Router();
  *                 error:
  *                   type: object
  *       401:
- *         description: Unauthorized - User not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Unauthorized - User not authenticated"
+ *         $ref: '#/components/responses/Unauthorized401'
  *       500:
  *         description: Internal server error
  *         content:
@@ -1170,6 +1167,8 @@ router.get(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Tournament'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       400:
@@ -1177,6 +1176,7 @@ router.get(
  *   delete:
  *     tags: [Tournaments]
  *     summary: Delete tournament
+ *     description: Delete a tournament by ID
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1184,6 +1184,10 @@ router.get(
  *     responses:
  *       204:
  *         $ref: '#/components/responses/NoContent'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
  */
 router.get("/:id", tournamentController.findByIdWithCategories.bind(tournamentController));
 router.put("/:id", 
