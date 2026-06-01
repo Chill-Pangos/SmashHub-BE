@@ -3,7 +3,6 @@ import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
-import TournamentReferee from "../models/tournamentReferee.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -94,7 +93,7 @@ export class TournamentService {
       hasPrevPage: boolean;
     };
   }> {
-    const { offset = 0, limit, userId, createdBy, ...categoryFilters } = filters as TournamentFilterDto & { offset?: number };
+    const { offset = 0, limit, userId, createdBy, ...categoryFilters } = filters;
 
     // Build where clause for TournamentCategory
     const categoryWhere: WhereOptions<any> = {};
@@ -265,7 +264,7 @@ export class TournamentService {
         where: tournamentWhere,
       }),
       include: includeOptions,
-      offset,
+      offset: offset,
       ...(limit && limit > 0 && { limit }),
       order: [[{ model: ScheduleConfig, as: "scheduleConfig" }, "startDate", "DESC"]],
       distinct: true,
@@ -461,16 +460,16 @@ export class TournamentService {
       statuses.bracketsGeneratedCount += r[0];
     }
 
-    // 4. Edge case: upcoming → registration_closed
-    const lateCloseIds = await getIds({
+    // 4. Edge case: upcoming → registration_closed (skip open phase)
+    const skipCloseIds = await getIds({
       registrationStartDate: { [Op.lte]: now, [Op.not]: null },
       registrationEndDate: { [Op.lte]: now, [Op.not]: null },
       bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
     });
-    if (lateCloseIds.length > 0) {
+    if (skipCloseIds.length > 0) {
       const r = await Tournament.update(
         { status: "registration_closed" },
-        { where: { status: "upcoming", id: { [Op.in]: lateCloseIds } } }
+        { where: { status: "upcoming", id: { [Op.in]: skipCloseIds } } }
       );
       statuses.closedCount += r[0];
     }
@@ -540,106 +539,6 @@ export class TournamentService {
     ]);
 
     return { openingSoon, closingSoon, bracketsSoon };
-  }
-
-  async getTournamentsByOrganizer(
-    organizerId: number,
-    options?: { offset?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
-  ): Promise<{
-    tournaments: Tournament[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-      hasNextPage: boolean;
-      hasPrevPage: boolean;
-    };
-  }> {
-    const { offset = 0, limit = 10, sortBy = "createdAt", sortOrder = "DESC" } = options || {};
-
-    const { count, rows } = await Tournament.findAndCountAll({
-      where: { createdBy: organizerId },
-      include: [
-        {
-          model: TournamentCategory,
-          as: "categories",
-        },
-      ],
-      offset,
-      ...(limit > 0 && { limit }),
-      order: [[sortBy, sortOrder]],
-      distinct: true,
-    });
-
-    const currentLimit = limit > 0 ? limit : count;
-    const currentPage = currentLimit > 0 ? Math.floor(offset / currentLimit) + 1 : 1;
-    const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
-
-    return {
-      tournaments: rows,
-      pagination: {
-        total: count,
-        page: currentPage,
-        limit: currentLimit,
-        totalPages,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
-      },
-    };
-  }
-
-  async getTournamentsByReferee(
-    refereeId: number,
-    options?: { offset?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
-  ): Promise<{
-    tournaments: Tournament[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-      hasNextPage: boolean;
-      hasPrevPage: boolean;
-    };
-  }> {
-    const { offset = 0, limit = 10, sortBy = "createdAt", sortOrder = "DESC" } = options || {};
-
-    const { count, rows } = await Tournament.findAndCountAll({
-      include: [
-        {
-          model: TournamentReferee,
-          as: "referees",
-          where: { refereeId },
-          required: true,
-          attributes: [],
-        },
-        {
-          model: TournamentCategory,
-          as: "categories",
-        },
-      ],
-      offset,
-      ...(limit > 0 && { limit }),
-      order: [[sortBy, sortOrder]],
-      distinct: true,
-    });
-
-    const currentLimit = limit > 0 ? limit : count;
-    const currentPage = currentLimit > 0 ? Math.floor(offset / currentLimit) + 1 : 1;
-    const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
-
-    return {
-      tournaments: rows,
-      pagination: {
-        total: count,
-        page: currentPage,
-        limit: currentLimit,
-        totalPages,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
-      },
-    };
   }
 }
 
