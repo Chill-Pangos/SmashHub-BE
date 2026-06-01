@@ -7,6 +7,8 @@ const router = Router();
 
 /**
  * @swagger
+ * /tournaments:
+ *   post:
  *     requestBody:
  *       required: true
  *       content:
