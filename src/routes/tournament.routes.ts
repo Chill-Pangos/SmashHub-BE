@@ -6,6 +6,7 @@ import { checkPermission, checkAnyPermission } from "../middlewares/permission.m
 const router = Router();
 
 /**
+ * @swagger
  *     requestBody:
  *       required: true
  *       content:
