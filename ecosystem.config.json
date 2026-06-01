@@ -3,7 +3,7 @@
     {
       "name": "SmashHub-BE",
       "script": "dist/server.js",
-      "instances": "4",
+      "instances": "3",
       "exec_mode": "cluster",
       "node_args": "--max-old-space-size=512",
       "autorestart": true,
@@ -20,6 +20,22 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
       "kill_timeout": 5000,
       "listen_timeout": 10000
+    }
+    ,
+    {
+      "name": "SmashHub-cron",
+      "script": "dist/cron.js",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "error_file": "./logs/cron-error.log",
+      "out_file": "./logs/cron-out.log",
+      "merge_logs": true,
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
     }
   ]
 }

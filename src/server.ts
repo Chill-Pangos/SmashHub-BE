@@ -3,8 +3,6 @@ import { createServer } from "http";
 import app from "./app";
 import config from "./config/config";
 import sequelize from "./config/database";
-import { startCleanupCrons } from "./crons/cleanup.cron";
-import { startTournamentCrons } from "./crons/tournament.cron";
 import NotificationService from "./services/notification.service";
 
 const checkConnection = async () => {
@@ -26,9 +24,7 @@ checkConnection().then(() => {
     console.log(`Server is running on port ${config.port}`);
     console.log(`Socket.IO is ready for connections`);
 
-    // Start cron jobs
-    startCleanupCrons();
-    startTournamentCrons();
+    // Cron jobs are started by a dedicated cron process (src/cron.ts)
   });
 
   // Graceful shutdown
