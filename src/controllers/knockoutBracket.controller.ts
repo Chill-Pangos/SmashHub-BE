@@ -1,7 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import knockoutBracketService from "../services/knockoutBracket.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError } from "../utils/errors.helper";
+import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
+
+type CategoryBody = {
+  categoryId?: unknown;
+};
+
+type SaveBracketBody = {
+  categoryId?: unknown;
+  entryIds?: unknown;
+  knockoutAssignments?: unknown;
+  assignments?: unknown;
+};
 
 export class KnockoutBracketController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -10,6 +21,65 @@ export class KnockoutBracketController {
       return null;
     }
     return req.userId;
+  }
+
+  private parsePositiveInt(value: unknown): number | null {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  private parseCategoryId(value: unknown): number {
+    const categoryId = this.parsePositiveInt(value);
+    if (categoryId == null) {
+      throw new BadRequestError("categoryId must be a positive integer");
+    }
+
+    return categoryId;
+  }
+
+  private normalizeEntryIds(value: unknown): number[] | null {
+    if (!Array.isArray(value)) {
+      return null;
+    }
+
+    const entryIds: number[] = [];
+    for (const rawId of value) {
+      const entryId = this.parsePositiveInt(rawId);
+      if (entryId == null) {
+        return null;
+      }
+      entryIds.push(entryId);
+    }
+
+    return entryIds;
+  }
+
+  private parseRequiredEntryIds(body: SaveBracketBody): number[] {
+    const rawEntryIds = body.entryIds ?? body.knockoutAssignments ?? body.assignments;
+    const entryIds = this.normalizeEntryIds(rawEntryIds);
+    if (entryIds == null) {
+      throw new BadRequestError("entryIds must be an array of positive integers");
+    }
+
+    return entryIds;
+  }
+
+  private parseOptionalEntryIds(body: SaveBracketBody): number[] | undefined {
+    const rawEntryIds = body.entryIds ?? body.knockoutAssignments ?? body.assignments;
+    if (rawEntryIds == null) {
+      return undefined;
+    }
+
+    const entryIds = this.normalizeEntryIds(rawEntryIds);
+    if (entryIds == null) {
+      throw new BadRequestError("entryIds must be an array of positive integers");
+    }
+
+    return entryIds;
   }
 
   /**
@@ -23,11 +93,12 @@ export class KnockoutBracketController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const { categoryId } = req.body;
+      const body = req.body as CategoryBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
 
       const result = await knockoutBracketService.previewPlaceholders(
         organizerId,
-        Number(categoryId),
+        categoryId,
       );
 
       res.status(200).json({
@@ -40,30 +111,17 @@ export class KnockoutBracketController {
     }
   }
 
-  private parseEntryIds(value: unknown): number[] | undefined {
-    if (value == null) return undefined;
-    if (!Array.isArray(value)) {
-      throw new Error("entryIds must be an array of positive integers");
-    }
-
-    const entryIds = value.map((id) => Number(id));
-    if (entryIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-      throw new Error("entryIds must be an array of positive integers");
-    }
-
-    return entryIds;
-  }
-
   async generatePlaceholders(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) return;
 
-      const { categoryId } = req.body;
+      const body = req.body as CategoryBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
 
       const result = await knockoutBracketService.generatePlaceholders(
         chiefRefereeId,
-        Number(categoryId),
+        categoryId,
       );
 
       res.status(201).json({
@@ -86,11 +144,12 @@ export class KnockoutBracketController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const { categoryId } = req.body;
+      const body = req.body as CategoryBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
 
       const result = await knockoutBracketService.previewFillQualifiers(
         organizerId,
-        Number(categoryId),
+        categoryId,
       );
 
       res.status(200).json({
@@ -108,12 +167,14 @@ export class KnockoutBracketController {
       const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) return;
 
-      const { categoryId, entryIds } = req.body;
+      const body = req.body as SaveBracketBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
+      const entryIds = this.parseRequiredEntryIds(body);
 
       const result = await knockoutBracketService.fillQualifiers(
         chiefRefereeId,
-        Number(categoryId),
-        this.parseEntryIds(entryIds),
+        categoryId,
+        entryIds,
       );
 
       res.status(200).json({
@@ -136,11 +197,12 @@ export class KnockoutBracketController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const { categoryId } = req.body;
+      const body = req.body as CategoryBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
 
       const result = await knockoutBracketService.previewFromEntries(
         organizerId,
-        Number(categoryId),
+        categoryId,
       );
 
       res.status(200).json({
@@ -158,18 +220,45 @@ export class KnockoutBracketController {
       const chiefRefereeId = this.getAuthenticatedUserId(req, next);
       if (chiefRefereeId == null) return;
 
-      const { categoryId, entryIds } = req.body;
+      const body = req.body as SaveBracketBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
+      const entryIds = this.parseRequiredEntryIds(body);
 
       const result = await knockoutBracketService.generateFromEntries(
         chiefRefereeId,
-        Number(categoryId),
-        this.parseEntryIds(entryIds),
+        categoryId,
+        entryIds,
       );
 
       res.status(201).json({
         success: true,
         data: result,
         message: "Knockout bracket generated successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async saveAssignments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
+
+      const body = req.body as SaveBracketBody;
+      const categoryId = this.parseCategoryId(body.categoryId);
+      const entryIds = this.parseOptionalEntryIds(body);
+
+      const result = await knockoutBracketService.saveAssignments(
+        chiefRefereeId,
+        categoryId,
+        entryIds,
+      );
+
+      res.status(201).json({
+        success: true,
+        data: result,
+        message: "Knockout bracket assignments saved successfully",
       });
     } catch (error) {
       next(error);
