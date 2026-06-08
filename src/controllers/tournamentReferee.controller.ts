@@ -180,7 +180,38 @@ export class TournamentRefereeController {
     }
   }
 
-  // ── 9. Get my invitations (referee) ───────────────────────────────────────
+  // ── 9. Get available referees for tournament invite ─────────────────────
+
+  async getAvailableReferees(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const organizerId = (req as AuthRequest).userId!;
+      const { tournamentId } = req.params;
+      const page = Number(req.query.page) || 1;
+      const limit = Number(req.query.limit) || 10;
+      const offset = Math.max(page - 1, 0) * limit;
+      const role = req.query.role as "referee" | "chief_referee" | undefined;
+      const search = req.query.search as string | undefined;
+      const filters: {
+        role?: "referee" | "chief_referee";
+        search?: string;
+        offset: number;
+        limit: number;
+      } = { offset, limit };
+      if (role) filters.role = role;
+      if (search) filters.search = search;
+
+      const result = await tournamentRefereeService.getAvailableRefereesForTournament(
+        organizerId,
+        Number(tournamentId),
+        filters
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ── 10. Get my invitations (referee) ──────────────────────────────────────
 
   async getMyInvitations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
