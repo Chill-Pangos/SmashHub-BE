@@ -1,40 +1,19 @@
 import { Router } from "express";
 import groupStandingController from "../controllers/groupStanding.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
 
 /**
  * @swagger
- * /group-standings/generate-placeholders:
+ * /group-standings/generate:
  *   post:
  *     tags: [Group Standings]
  *     summary: Generate group preview with random assignments
  *     description: |
- *       Generate a random group stage preview for a tournament category.
- *       Returns optimal group configuration with randomly shuffled entries.
- *       This endpoint does NOT save to database - it's for preview/approval only.
- *
- *       **Authorization**: Only chief referee of the tournament can call this.
- *
- *       **Prerequisites**:
- *       - Registration period must be closed for the tournament
- *       - Minimum 12 eligible entries required
- *       - Category type validation (single/team entries with correct member counts)
- *
- *       **Group Calculation Algorithm**:
- *       - Finds optimal number of groups (4, 8, 16, 32, or 64 - powers of 2)
- *       - Each group has 3-5 teams for balanced competition
- *       - Variance between groups minimized for fairness (all groups differ by at most 1 team)
- *       - Entries randomly shuffled to ensure fair distribution
- *
- *       **Use Case**:
- *       Chief referee reviews preview and either:
- *       1. Approves and calls `/save-assignments` to persist
- *       2. Requests regeneration for different random arrangement
- *       3. Manually modifies assignments before saving
- *
+ *       Generate a random group stage preview for organizer review.
+ *       This endpoint does not save data. Review the returned groups, then call /group-standings/save-assignments with approved assignments.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -43,25 +22,14 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - categoryId
+ *             required: [categoryId]
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament category ID for which to generate groups
  *                 example: 1
- *           examples:
- *             smallTournament:
- *               summary: 16-team tournament (4 groups of 4)
- *               value:
- *                 categoryId: 1
- *             largeTournament:
- *               summary: 32-team tournament (8 groups of 4)
- *               value:
- *                 categoryId: 2
  *     responses:
  *       200:
- *         description: Group preview generated successfully (not saved to database)
+ *         description: Group preview generated successfully
  *         content:
  *           application/json:
  *             schema:
@@ -72,212 +40,37 @@ const router = Router();
  *                   example: true
  *                 data:
  *                   type: array
- *                   description: Array of group previews with shuffled team assignments
  *                   items:
  *                     type: object
  *                     properties:
  *                       groupName:
  *                         type: string
- *                         description: Group identifier (Group A, B, C, etc.)
- *                         example: "Group A"
+ *                         example: Group A
  *                       slots:
  *                         type: integer
- *                         description: Number of teams in this group
  *                         example: 4
  *                       entryIds:
  *                         type: array
- *                         description: Team/entry IDs assigned to this group
  *                         items:
  *                           type: integer
  *                         example: [5, 12, 3, 8]
  *                 message:
  *                   type: string
- *                   example: "Group preview generated successfully"
- *             example:
- *               success: true
- *               data:
- *                 - groupName: "Group A"
- *                   slots: 4
- *                   entryIds: [5, 12, 3, 8]
- *                 - groupName: "Group B"
- *                   slots: 4
- *                   entryIds: [1, 9, 6, 15]
- *                 - groupName: "Group C"
- *                   slots: 4
- *                   entryIds: [2, 10, 7, 14]
- *                 - groupName: "Group D"
- *                   slots: 4
- *                   entryIds: [4, 11, 13, 16]
- *               message: "Group preview generated successfully"
+ *                   example: Group preview generated successfully
  *       400:
- *         description: Invalid request or prerequisites not met
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   enum:
- *                     - "categoryId must be a positive integer"
- *                     - "Category not found"
- *                     - "Not enough eligible entries (X). Minimum required: 12."
- *                     - "Registration must be closed before managing groups"
- *                     - "Cannot generate valid groups for X entries. Supported range: 12–320."
+ *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  *       403:
- *         description: User is not the chief referee of this tournament
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Only the chief referee can perform this action"
+ *         $ref: '#/components/responses/Forbidden403'
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
-  "/generate-placeholders",
+  "/generate",
   authenticate,
-  checkPermission('schedules:create'),
+  checkRole("organizer"),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
-);
-
-/**
- * @swagger
- * /group-standings/random-draw:
- *   post:
- *     tags: [Group Standings]
- *     summary: Random draw preview (backward compatible alias)
- *     description: |
- *       Alias endpoint for `/group-standings/generate-placeholders`.
- *       Generates a random group stage preview for chief referee review.
- *       Identical functionality to generate-placeholders - provided for backward compatibility.
- *
- *       **Response Structure**:
- *       Returns preview of group assignments without saving to database.
- *       Each group contains:
- *       - **groupName**: Unique identifier (Group A, Group B, etc.)
- *       - **slots**: Number of teams assigned to this group
- *       - **entryIds**: Array of team IDs in this group
- *
- *       **Next Steps**:
- *       After reviewing the preview, chief referee should:
- *       1. Call `/group-standings/save-assignments` to persist (if satisfied)
- *       2. Call this endpoint again for different random arrangement
- *       3. Manually modify and send custom assignments to `/save-assignments`
- *
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - categoryId
- *             properties:
- *               categoryId:
- *                 type: integer
- *                 description: Tournament category ID for random draw
- *                 example: 1
- *           examples:
- *             teamEvent:
- *               summary: Team event random draw (20 teams)
- *               value:
- *                 categoryId: 2
- *             malesSingles:
- *               summary: Mens singles draw (24 players)
- *               value:
- *                 categoryId: 3
- *     responses:
- *       200:
- *         description: Random draw completed and preview generated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   description: Group preview with random shuffled team assignments
- *                   items:
- *                     type: object
- *                     properties:
- *                       groupName:
- *                         type: string
- *                         description: Group identifier
- *                         example: "Group A"
- *                       slots:
- *                         type: integer
- *                         description: Number of teams in group
- *                         example: 5
- *                       entryIds:
- *                         type: array
- *                         description: Randomly shuffled team IDs
- *                         items:
- *                           type: integer
- *                         example: [1, 7, 14, 2, 9]
- *                 message:
- *                   type: string
- *                   example: "Group preview generated successfully"
- *             example:
- *               success: true
- *               data:
- *                 - groupName: "Group A"
- *                   slots: 5
- *                   entryIds: [1, 7, 14, 2, 9]
- *                 - groupName: "Group B"
- *                   slots: 5
- *                   entryIds: [3, 11, 18, 6, 20]
- *                 - groupName: "Group C"
- *                   slots: 5
- *                   entryIds: [5, 12, 16, 4, 19]
- *                 - groupName: "Group D"
- *                   slots: 5
- *                   entryIds: [8, 15, 17, 10, 13]
- *               message: "Group preview generated successfully"
- *       400:
- *         description: Invalid request or prerequisites not met
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   enum:
- *                     - "categoryId must be a positive integer"
- *                     - "Category not found"
- *                     - "Not enough eligible entries (X). Minimum required: 12."
- *                     - "Registration must be closed before managing groups"
- *       401:
- *         $ref: '#/components/responses/Unauthorized401'
- *       403:
- *         description: User is not the chief referee of this tournament
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Only the chief referee can perform this action"
- *       500:
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post(
-  "/random-draw",
-  authenticate,
-  checkPermission('schedules:create'),
-  groupStandingController.randomDraw.bind(groupStandingController)
 );
 
 /**
@@ -287,11 +80,11 @@ router.post(
  *     tags: [Group Standings]
  *     summary: Save group assignments to database
  *     description: |
- *       Persist approved group assignments to the database after chief referee confirmation.
+ *       Persist approved group assignments to the database after organizer confirmation.
  *       Creates initial GroupStanding records with all stats at zero (0 matches, 0 sets).
  *
  *       **Workflow**:
- *       1. Chief referee calls `/group-standings/generate-placeholders` to get preview
+ *       1. Organizer calls `/group-standings/generate-placeholders` to get preview
  *       2. Reviews and optionally modifies group assignments
  *       3. Calls this endpoint to finalize - REPLACES any existing standings for category
  *
@@ -307,7 +100,7 @@ router.post(
  *       - All entries must be eligible (closed registration, proper member count)
  *       - Replaces previous standings completely (transaction-safe)
  *
- *       **Authorization**: Only chief referee of the tournament
+ *       **Authorization**: Only organizer of the tournament
  *
  *     security:
  *       - bearerAuth: []
@@ -383,7 +176,7 @@ router.post(
  *                   - groupName: "Group B"
  *                     entryIds: [6, 7, 8, 9]
  *             customModified:
- *               summary: Chief referee manually modified assignments
+ *               summary: organizer manually modified assignments
  *               description: After reviewing preview, assignments were customized
  *               value:
  *                 categoryId: 1
@@ -464,7 +257,7 @@ router.post(
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  *       403:
- *         description: User is not the chief referee of this tournament
+ *         description: User is not the tournament organizer
  *         content:
  *           application/json:
  *             schema:
@@ -472,14 +265,14 @@ router.post(
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Only the chief referee can perform this action"
+ *                   example: "Only the tournament organizer can perform this action"
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/save-assignments",
   authenticate,
-  checkPermission('schedules:create'),
+  checkRole("organizer"),
   groupStandingController.saveAssignments.bind(groupStandingController)
 );
 
@@ -576,7 +369,7 @@ router.post(
 router.post(
   "/calculate",
   authenticate,
-  checkPermission('schedules:update'),
+  checkRole("organizer"),
   groupStandingController.calculateStandings.bind(groupStandingController)
 );
 
@@ -600,7 +393,7 @@ router.post(
  *          - setsDiff recalculated (setsWon - setsLost)
  *       4. Recalculates positions for the group using tiebreaker
  *
- *       **Authorization**: Only chief referee of the tournament can call this
+ *       **Authorization**: Only organizer of the tournament can call this
  *
  *       **Prerequisites**:
  *       - Match must be in group stage (schedule.stage === "group")
@@ -660,14 +453,14 @@ router.post(
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Only the chief referee can perform this action"
+ *                   example: "Only the tournament organizer can perform this action"
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
   "/matches/:matchId/sync",
   authenticate,
-  checkPermission('matches:approve_result'),
+  checkRole("organizer"),
   groupStandingController.updateAfterMatch.bind(groupStandingController)
 );
 

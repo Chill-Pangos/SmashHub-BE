@@ -1,16 +1,20 @@
 // matchSet.service.ts
-import { sequelize } from "../config/database";
 import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import MatchReferee from "../models/matchReferee.model";
+import matchSetScoreCacheService, {
+  LiveMatchSetScoreCache,
+  MatchSetScoreCache,
+} from "./matchSetScoreCache.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SetScoreInput {
   subMatchId: number;
+  setNumber?: number;
   entryAScore: number;
   entryBScore: number;
 }
@@ -19,6 +23,14 @@ interface ScoreValidation {
   isValid: boolean;
   winner: "A" | "B" | null;
   error?: string;
+}
+
+type MatchSetResult = MatchSet | MatchSetScoreCache;
+
+interface LiveSetScoreResult {
+  liveScore: LiveMatchSetScoreCache;
+  isCompleted: boolean;
+  persistedSet?: MatchSet;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,8 +68,33 @@ async function assertMatchReferee(
   if (!ref) throw new Error("Only an assigned referee can perform this action");
 }
 
+async function cacheSetScore(set: MatchSet): Promise<void> {
+  try {
+    await matchSetScoreCacheService.setScore(set);
+  } catch (error) {
+    console.error("Failed to cache match set score:", error);
+  }
+}
+
+async function getCachedOrModel(set: MatchSet): Promise<MatchSetResult> {
+  try {
+    const cachedSet = await matchSetScoreCacheService.getScore(set.id);
+    if (cachedSet) return cachedSet;
+
+    await matchSetScoreCacheService.setScore(set);
+    return set;
+  } catch (error) {
+    console.error("Failed to read match set score cache:", error);
+    return set;
+  }
+}
+
+async function mergeCachedScores(sets: MatchSet[]): Promise<MatchSetResult[]> {
+  return await Promise.all(sets.map(getCachedOrModel));
+}
+
 /**
- * Validate điểm theo luật bóng bàn/cầu lông:
+ * Validate điểm theo luật bóng bàn:
  * - Thắng khi đạt điểm target (11 cho bóng bàn) và dẫn ít nhất 2 điểm
  * - Từ deuce (target-1 : target-1) phải thắng cách 2 điểm
  */
@@ -105,6 +142,70 @@ function validateSetScore(
     winner: null,
     error: `From ${deuce}-${deuce} onwards, must win by 2 points (current diff: ${diff})`,
   };
+}
+
+function validateScoreRange(entryAScore: number, entryBScore: number): void {
+  if (!Number.isInteger(entryAScore) || !Number.isInteger(entryBScore)) {
+    throw new Error("Scores must be integers");
+  }
+  if (entryAScore < 0 || entryBScore < 0) {
+    throw new Error("Score cannot be negative");
+  }
+  if (entryAScore > 30 || entryBScore > 30) {
+    throw new Error("Score cannot exceed 30");
+  }
+}
+
+function isSetCompleted(
+  entryAScore: number,
+  entryBScore: number,
+  targetScore: number
+): boolean {
+  const maxScore = Math.max(entryAScore, entryBScore);
+  const minScore = Math.min(entryAScore, entryBScore);
+  const diff = maxScore - minScore;
+  const deuce = targetScore - 1;
+
+  if (maxScore < targetScore) return false;
+  if (minScore < deuce) return maxScore === targetScore;
+  return diff >= 2;
+}
+
+async function getExistingSets(subMatchId: number): Promise<MatchSet[]> {
+  return await MatchSet.findAll({
+    where: { subMatchId },
+    order: [["setNumber", "ASC"]],
+  });
+}
+
+function getNextSetNumber(existingSets: MatchSet[]): number {
+  return existingSets.length > 0
+    ? existingSets[existingSets.length - 1]!.setNumber + 1
+    : 1;
+}
+
+function assertSubMatchCanAddSet(
+  existingSets: MatchSet[],
+  category: TournamentCategory
+): void {
+  if (existingSets.length >= category.maxSets) {
+    throw new Error(`Cannot create more sets. Maximum is ${category.maxSets}`);
+  }
+
+  const setsToWin = Math.floor(category.maxSets / 2) + 1;
+  const entryASets = existingSets.filter(
+    (s) => s.entryAScore > s.entryBScore
+  ).length;
+  const entryBSets = existingSets.filter(
+    (s) => s.entryBScore > s.entryAScore
+  ).length;
+
+  if (entryASets >= setsToWin) {
+    throw new Error(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
+  }
+  if (entryBSets >= setsToWin) {
+    throw new Error(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
+  }
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -166,12 +267,133 @@ export class MatchSetService {
         ? existingSets[existingSets.length - 1]!.setNumber + 1
         : 1;
 
-    return await MatchSet.create({
+    const set = await MatchSet.create({
       subMatchId: data.subMatchId,
       setNumber: nextSetNumber,
       entryAScore: data.entryAScore,
       entryBScore: data.entryBScore,
     });
+
+    await cacheSetScore(set);
+    return set;
+  }
+
+  async updateLiveSetScore(
+    refereeId: number,
+    data: SetScoreInput
+  ): Promise<LiveSetScoreResult> {
+    validateScoreRange(data.entryAScore, data.entryBScore);
+
+    const { subMatch, category } = await getSubMatchWithCategory(data.subMatchId);
+    await assertMatchReferee(refereeId, subMatch.matchId);
+
+    if (subMatch.status !== "in_progress") {
+      throw new Error(
+        `Cannot update live score. SubMatch status is "${subMatch.status}", must be "in_progress"`
+      );
+    }
+
+    const existingSets = await getExistingSets(data.subMatchId);
+    assertSubMatchCanAddSet(existingSets, category);
+
+    const nextSetNumber = getNextSetNumber(existingSets);
+    const setNumber = data.setNumber ?? nextSetNumber;
+    if (setNumber !== nextSetNumber) {
+      throw new Error(`Can only update current set number ${nextSetNumber}`);
+    }
+
+    const liveScore: LiveMatchSetScoreCache = {
+      subMatchId: data.subMatchId,
+      setNumber,
+      entryAScore: data.entryAScore,
+      entryBScore: data.entryBScore,
+      updatedBy: refereeId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await matchSetScoreCacheService.setLiveScore(liveScore);
+    } catch (error) {
+      console.error("Failed to cache live match set score:", error);
+    }
+
+    if (!isSetCompleted(data.entryAScore, data.entryBScore, 11)) {
+      return { liveScore, isCompleted: false };
+    }
+
+    const persistedSet = await this.submitFinalSetScore(refereeId, {
+      ...data,
+      setNumber,
+    });
+
+    try {
+      await matchSetScoreCacheService.deleteLiveScore(data.subMatchId, setNumber);
+    } catch (error) {
+      console.error("Failed to delete live match set score cache:", error);
+    }
+
+    return { liveScore, isCompleted: true, persistedSet };
+  }
+
+  async submitFinalSetScore(
+    refereeId: number,
+    data: SetScoreInput
+  ): Promise<MatchSet> {
+    const { subMatch, category } = await getSubMatchWithCategory(data.subMatchId);
+    await assertMatchReferee(refereeId, subMatch.matchId);
+
+    if (subMatch.status !== "in_progress") {
+      throw new Error(
+        `Cannot add set. SubMatch status is "${subMatch.status}", must be "in_progress"`
+      );
+    }
+
+    const existingSets = await getExistingSets(data.subMatchId);
+    assertSubMatchCanAddSet(existingSets, category);
+
+    const validation = validateSetScore(data.entryAScore, data.entryBScore, 11);
+    if (!validation.isValid) {
+      throw new Error(validation.error);
+    }
+
+    const nextSetNumber = getNextSetNumber(existingSets);
+    const setNumber = data.setNumber ?? nextSetNumber;
+    if (setNumber !== nextSetNumber) {
+      throw new Error(`Can only submit current set number ${nextSetNumber}`);
+    }
+
+    const set = await MatchSet.create({
+      subMatchId: data.subMatchId,
+      setNumber,
+      entryAScore: data.entryAScore,
+      entryBScore: data.entryBScore,
+    });
+
+    await cacheSetScore(set);
+    try {
+      await matchSetScoreCacheService.deleteLiveScore(data.subMatchId, setNumber);
+    } catch (error) {
+      console.error("Failed to delete live match set score cache:", error);
+    }
+    return set;
+  }
+
+  async getLiveSetScore(
+    subMatchId: number,
+    setNumber?: number
+  ): Promise<LiveMatchSetScoreCache | null> {
+    const existingSets = await getExistingSets(subMatchId);
+    const currentSetNumber = setNumber ?? getNextSetNumber(existingSets);
+
+    try {
+      return await matchSetScoreCacheService.getLiveScore(
+        subMatchId,
+        currentSetNumber
+      );
+    } catch (error) {
+      console.error("Failed to read live match set score cache:", error);
+      return null;
+    }
   }
 
   // ── 2. Sửa điểm set (referee nhập sai) ───────────────────────────────────
@@ -197,12 +419,14 @@ export class MatchSetService {
       throw new Error(validation.error);
     }
 
-    return await set.update({ entryAScore, entryBScore });
+    const updatedSet = await set.update({ entryAScore, entryBScore });
+    await cacheSetScore(updatedSet);
+    return updatedSet;
   }
 
   // ── 3. Queries ────────────────────────────────────────────────────────────
 
-  async getSetsBySubMatch(subMatchId: number, options?: { offset?: number; limit?: number }): Promise<{ sets?: MatchSet[], pagination?: any } | MatchSet[]> {
+  async getSetsBySubMatch(subMatchId: number, options?: { offset?: number; limit?: number }): Promise<{ sets?: MatchSetResult[], pagination?: any } | MatchSetResult[]> {
     const offset = options?.offset || 0;
     const limit = options?.limit || 10;
 
@@ -219,7 +443,7 @@ export class MatchSetService {
       const page = Math.floor(offset / limit) + 1;
 
       return {
-        sets: rows,
+        sets: await mergeCachedScores(rows),
         pagination: {
           total: count,
           page,
@@ -231,15 +455,24 @@ export class MatchSetService {
       };
     }
 
-    return await MatchSet.findAll({
+    const sets = await MatchSet.findAll({
       where: { subMatchId },
       order: [["setNumber", "ASC"]],
     });
+    return await mergeCachedScores(sets);
   }
 
-  async getSetById(setId: number): Promise<MatchSet> {
+  async getSetById(setId: number): Promise<MatchSetResult> {
+    try {
+      const cachedSet = await matchSetScoreCacheService.getScore(setId);
+      if (cachedSet) return cachedSet;
+    } catch (error) {
+      console.error("Failed to read match set score cache:", error);
+    }
+
     const set = await MatchSet.findByPk(setId);
     if (!set) throw new Error("Set not found");
+    await cacheSetScore(set);
     return set;
   }
 
@@ -264,6 +497,12 @@ export class MatchSetService {
     }
 
     await set.destroy();
+
+    try {
+      await matchSetScoreCacheService.deleteScore(set);
+    } catch (error) {
+      console.error("Failed to delete match set score cache:", error);
+    }
   }
 }
 

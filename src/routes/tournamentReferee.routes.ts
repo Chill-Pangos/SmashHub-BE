@@ -628,6 +628,75 @@ router.get(
 
 /**
  * @swagger
+ * /tournament-referees/tournament/{tournamentId}/available:
+ *   get:
+ *     tags: [Tournament Referees]
+ *     summary: Get referees available for invitation
+ *     description: |
+ *       Retrieve referee users who can be invited to this tournament.
+ *
+ *       A referee is available only when:
+ *       - Has referee or chief_referee system role
+ *       - Is not organizer of this tournament
+ *       - Is not competing in this tournament
+ *       - Is not already assigned/invited to this tournament
+ *       - Is not assigned to another non-cancelled tournament whose schedule overlaps this tournament
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tournamentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament ID
+ *       - $ref: '#/components/parameters/pageParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [referee, chief_referee]
+ *         description: Filter by system role. referee includes chief_referee users too.
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by firstName, lastName, or email
+ *     responses:
+ *       200:
+ *         description: Available referees with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 referees:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/tournament/:tournamentId/available",
+  authenticate,
+  checkPermission('tournaments:manage'),
+  tournamentRefereeController.getAvailableReferees.bind(tournamentRefereeController)
+);
+
+/**
+ * @swagger
  * /tournament-referees/my-invitations:
  *   get:
  *     tags: [Tournament Referees]

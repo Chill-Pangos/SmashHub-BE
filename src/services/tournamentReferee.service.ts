@@ -14,6 +14,7 @@ import Role from "../models/role.model";
 import EntryMember from "../models/entryMember.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,9 @@ const REFEREE_INCLUDE = {
   as: "referee",
   attributes: ["id", "firstName", "lastName", "email"],
 };
+
+const USER_ATTRIBUTES = ["id", "firstName", "lastName", "email", "avatarUrl"];
+const REINVITABLE_INVITATION_STATUSES = ["cancelled", "expired"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +45,20 @@ function buildExpiresAt(): Date {
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + INVITATION_EXPIRY_HOURS);
   return expiresAt;
+}
+
+function buildPagination(count: number, offset: number, limit: number) {
+  const totalPages = Math.ceil(count / limit);
+  const page = Math.floor(offset / limit) + 1;
+
+  return {
+    total: count,
+    page,
+    limit,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1,
+  };
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -74,6 +92,7 @@ export class TournamentRefereeService {
 
   // Check không thi đấu trong giải này
   await this.assertNotCompetingInTournament(refereeId, tournamentId);
+  await this.assertNoOverlappingTournament(refereeId, tournamentId);
 
   const existing = await RefereeInvitation.findOne({
     where: { tournamentId, refereeId },
@@ -129,6 +148,7 @@ export class TournamentRefereeService {
     if (invitation.role === "chief") {
       await this.assertNoChiefReferee(invitation.tournamentId, invitation.refereeId);
     }
+    await this.assertNoOverlappingTournament(refereeId, invitation.tournamentId);
 
     return await sequelize.transaction(async (t) => {
       await invitation.update(
@@ -371,6 +391,86 @@ private async assertNotCompetingInTournament(
     });
   }
 
+  async getAvailableRefereesForTournament(
+    organizerId: number,
+    tournamentId: number,
+    filters?: {
+      role?: "referee" | "chief_referee";
+      search?: string;
+      offset?: number;
+      limit?: number;
+    },
+  ): Promise<{
+    referees: User[];
+    pagination: ReturnType<typeof buildPagination>;
+  }> {
+    const tournament = await getTournament(tournamentId);
+    assertOrganizer(organizerId, tournament);
+
+    const offset = filters?.offset ?? 0;
+    const limit = filters?.limit ?? 10;
+    const acceptedSystemRoles =
+      filters?.role === "chief_referee"
+        ? ["chief_referee"]
+        : filters?.role === "referee"
+          ? ["referee", "chief_referee"]
+          : ["referee", "chief_referee"];
+
+    const eligibleRoleRows = await UserRole.findAll({
+      attributes: ["userId"],
+      include: [
+        {
+          model: Role,
+          where: { name: { [Op.in]: acceptedSystemRoles } },
+          required: true,
+          attributes: [],
+        },
+      ],
+    });
+    const roleUserIds = [...new Set(eligibleRoleRows.map((row) => row.userId))];
+    if (roleUserIds.length === 0) {
+      return {
+        referees: [],
+        pagination: buildPagination(0, offset, limit),
+      };
+    }
+
+    const excludedUserIds = await this.getUnavailableRefereeIds(tournamentId);
+    excludedUserIds.add(tournament.createdBy);
+
+    const search = filters?.search?.trim();
+    const where: any = {
+      id: {
+        [Op.in]: roleUserIds,
+        [Op.notIn]: [...excludedUserIds],
+      },
+    };
+    if (search) {
+      where[Op.or] = [
+        { firstName: { [Op.like]: `%${search}%` } },
+        { lastName: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { count, rows } = await User.findAndCountAll({
+      where,
+      attributes: USER_ATTRIBUTES,
+      order: [
+        ["firstName", "ASC"],
+        ["lastName", "ASC"],
+      ],
+      offset,
+      limit,
+      distinct: true,
+    });
+
+    return {
+      referees: rows,
+      pagination: buildPagination(count, offset, limit),
+    };
+  }
+
   // ── 7. Expire invitations (gọi từ cron job) ───────────────────────────────
 
   async expireInvitations(): Promise<number> {
@@ -532,6 +632,115 @@ private async assertNotCompetingInTournament(
     );
   }
 }
+
+  private async assertNoOverlappingTournament(
+    refereeId: number,
+    tournamentId: number
+  ): Promise<void> {
+    const overlappingRefereeIds = await this.getOverlappingTournamentRefereeIds(tournamentId);
+    if (overlappingRefereeIds.includes(refereeId)) {
+      throw new Error("Referee is already assigned to another tournament at this time");
+    }
+  }
+
+  private async getUnavailableRefereeIds(tournamentId: number): Promise<Set<number>> {
+    const unavailableIds = new Set<number>();
+
+    for (const id of await this.getCurrentTournamentBlockedRefereeIds(tournamentId)) {
+      unavailableIds.add(id);
+    }
+    for (const id of await this.getOverlappingTournamentRefereeIds(tournamentId)) {
+      unavailableIds.add(id);
+    }
+    for (const id of await this.getTournamentCompetitorUserIds(tournamentId)) {
+      unavailableIds.add(id);
+    }
+
+    return unavailableIds;
+  }
+
+  private async getCurrentTournamentBlockedRefereeIds(tournamentId: number): Promise<number[]> {
+    const [currentReferees, currentInvitations] = await Promise.all([
+      TournamentReferee.findAll({
+        where: { tournamentId },
+        attributes: ["refereeId"],
+      }),
+      RefereeInvitation.findAll({
+        where: {
+          tournamentId,
+          status: { [Op.notIn]: REINVITABLE_INVITATION_STATUSES },
+        },
+        attributes: ["refereeId"],
+      }),
+    ]);
+
+    return [
+      ...currentReferees.map((row) => row.refereeId),
+      ...currentInvitations.map((row) => row.refereeId),
+    ];
+  }
+
+  private async getOverlappingTournamentRefereeIds(tournamentId: number): Promise<number[]> {
+    const targetConfig = await ScheduleConfig.findOne({ where: { tournamentId } });
+    if (!targetConfig) {
+      throw new Error("Schedule config not found for this tournament");
+    }
+
+    const overlappingConfigs = await ScheduleConfig.findAll({
+      where: {
+        tournamentId: { [Op.ne]: tournamentId },
+        startDate: { [Op.lt]: targetConfig.endDate },
+        endDate: { [Op.gt]: targetConfig.startDate },
+      },
+      attributes: ["tournamentId"],
+    });
+    const overlappingTournamentIds = overlappingConfigs.map((config) => config.tournamentId);
+    if (overlappingTournamentIds.length === 0) return [];
+
+    const activeOverlappingTournaments = await Tournament.findAll({
+      where: {
+        id: { [Op.in]: overlappingTournamentIds },
+        status: { [Op.ne]: "cancelled" },
+      },
+      attributes: ["id"],
+    });
+    const activeOverlappingTournamentIds = activeOverlappingTournaments.map((row) => row.id);
+    if (activeOverlappingTournamentIds.length === 0) return [];
+
+    const busyRefs = await TournamentReferee.findAll({
+      where: { tournamentId: { [Op.in]: activeOverlappingTournamentIds } },
+      attributes: ["refereeId"],
+    });
+
+    return busyRefs.map((row) => row.refereeId);
+  }
+
+  private async getTournamentCompetitorUserIds(tournamentId: number): Promise<number[]> {
+    const categories = await TournamentCategory.findAll({
+      where: { tournamentId },
+      attributes: ["id"],
+    });
+    const categoryIds = categories.map((category) => category.id);
+    if (categoryIds.length === 0) return [];
+
+    const entries = await Entry.findAll({
+      where: { categoryId: { [Op.in]: categoryIds } },
+      attributes: ["id", "captainId"],
+    });
+    const entryIds = entries.map((entry) => entry.id);
+    const captainIds = entries
+      .map((entry) => entry.captainId)
+      .filter((captainId): captainId is number => captainId != null);
+
+    const members = entryIds.length
+      ? await EntryMember.findAll({
+          where: { entryId: { [Op.in]: entryIds } },
+          attributes: ["userId"],
+        })
+      : [];
+
+    return [...captainIds, ...members.map((member) => member.userId)];
+  }
 }
 
 export default new TournamentRefereeService();

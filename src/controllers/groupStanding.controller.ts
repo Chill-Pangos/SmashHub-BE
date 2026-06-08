@@ -151,13 +151,6 @@ export class GroupStandingController {
   }
 
   /**
-   * Alias cho generatePlaceholders để giữ tương thích endpoint cũ
-   */
-  async randomDraw(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    await this.generatePlaceholders(req, res, next);
-  }
-
-  /**
    * Lưu kết quả phân bảng vào DB
    */
   async saveAssignments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

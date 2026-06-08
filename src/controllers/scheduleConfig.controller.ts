@@ -7,9 +7,16 @@ import {
   UpdateScheduleConfigDto,
   ValidateScheduleConfigDto,
 } from "../dto/scheduleConfig.dto";
-import { BadRequestError, NotFoundError } from "../utils/errors.helper";
+import { BadRequestError, NotFoundError, UnauthorizedError } from "../utils/errors.helper";
 
 export class ScheduleConfigController {
+  private getAuthenticatedUserId(req: AuthRequest): number {
+    if (req.userId == null) {
+      throw new UnauthorizedError("Unauthorized");
+    }
+    return req.userId;
+  }
+
   /**
    * Create a new schedule config
    * POST /schedule-configs
@@ -18,6 +25,7 @@ export class ScheduleConfigController {
     try {
       const { tournamentId, ...configData }: CreateScheduleConfigDto =
         req.body;
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (!tournamentId || isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
@@ -25,7 +33,8 @@ export class ScheduleConfigController {
 
       const config = await ScheduleConfigService.createConfig(
         tournamentId,
-        configData
+        configData,
+        organizerId
       );
 
       res.status(201).json(config);
@@ -69,6 +78,7 @@ export class ScheduleConfigController {
   async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId = Number(req.params.tournamentId);
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
@@ -78,7 +88,8 @@ export class ScheduleConfigController {
 
       const config = await ScheduleConfigService.updateConfig(
         tournamentId,
-        updateData
+        updateData,
+        organizerId
       );
 
       if (!config) {
@@ -98,6 +109,7 @@ export class ScheduleConfigController {
   async validate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId = Number(req.params.tournamentId);
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
@@ -113,7 +125,8 @@ export class ScheduleConfigController {
 
       const result = await ScheduleConfigService.validateScheduleConfig(
         tournamentId,
-        totalMatches
+        totalMatches,
+        organizerId
       );
 
       res.status(200).json(result);
@@ -129,6 +142,7 @@ export class ScheduleConfigController {
   async previewCreate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId = Number(req.params.tournamentId);
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
@@ -145,7 +159,8 @@ export class ScheduleConfigController {
       const preview = await ScheduleConfigService.previewCreate(
         tournamentId,
         configData,
-        totalMatches
+        totalMatches,
+        organizerId
       );
 
       res.status(200).json(preview);
@@ -161,6 +176,7 @@ export class ScheduleConfigController {
   async previewUpdate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId = Number(req.params.tournamentId);
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
@@ -177,7 +193,8 @@ export class ScheduleConfigController {
       const preview = await ScheduleConfigService.previewUpdate(
         tournamentId,
         configData,
-        totalMatches
+        totalMatches,
+        organizerId
       );
 
       res.status(200).json(preview);
@@ -206,12 +223,13 @@ export class ScheduleConfigController {
   async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId = Number(req.params.tournamentId);
+      const organizerId = this.getAuthenticatedUserId(req);
 
       if (isNaN(tournamentId) || tournamentId <= 0) {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const deleted = await ScheduleConfigService.deleteConfig(tournamentId);
+      const deleted = await ScheduleConfigService.deleteConfig(tournamentId, organizerId);
 
       if (!deleted) {
         throw new NotFoundError("Schedule config not found");

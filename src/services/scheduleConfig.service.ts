@@ -56,6 +56,12 @@ const DEFAULT_QUALIFIERS_PER_GROUP = 2;
  */
 const DEFAULT_ENTRIES_PER_GROUP = 4;
 
+function assertOrganizer(userId: number, tournament: Tournament): void {
+  if (tournament.createdBy !== userId) {
+    throw new BadRequestError("Only the tournament organizer can perform this action");
+  }
+}
+
 // ─── Match Count Calculator ───────────────────────────────────────────────────
 
 /**
@@ -202,12 +208,14 @@ export class ScheduleConfigService {
   async previewCreate(
     tournamentId: number,
     data: Partial<ScheduleConfig>,
-    totalMatches?: number
+    totalMatches?: number,
+    organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
     if (!tournament) throw new NotFoundError("Tournament not found");
+    if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
     if (existing) {
@@ -228,12 +236,14 @@ export class ScheduleConfigService {
   async previewUpdate(
     tournamentId: number,
     data: Partial<ScheduleConfig>,
-    totalMatches?: number
+    totalMatches?: number,
+    organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
     if (!tournament) throw new NotFoundError("Tournament not found");
+    if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const existing = await this.getConfig(tournamentId);
     if (!existing) throw new NotFoundError("Schedule config not found");
@@ -270,8 +280,15 @@ export class ScheduleConfigService {
    */
   async createConfig(
     tournamentId: number,
-    data: Partial<ScheduleConfig>
+    data: Partial<ScheduleConfig>,
+    organizerId?: number
   ): Promise<ScheduleConfig> {
+    if (organizerId != null) {
+      const tournament = await Tournament.findByPk(tournamentId);
+      if (!tournament) throw new NotFoundError("Tournament not found");
+      assertOrganizer(organizerId, tournament);
+    }
+
     const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
     if (existing) {
       throw new BadRequestError(
@@ -298,8 +315,15 @@ export class ScheduleConfigService {
    */
   async updateConfig(
     tournamentId: number,
-    data: Partial<ScheduleConfig>
+    data: Partial<ScheduleConfig>,
+    organizerId?: number
   ): Promise<ScheduleConfig> {
+    if (organizerId != null) {
+      const tournament = await Tournament.findByPk(tournamentId);
+      if (!tournament) throw new NotFoundError("Tournament not found");
+      assertOrganizer(organizerId, tournament);
+    }
+
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
 
@@ -335,12 +359,14 @@ export class ScheduleConfigService {
    */
   async validateScheduleConfig(
     tournamentId: number,
-    totalMatches?: number
+    totalMatches?: number,
+    organizerId?: number
   ): Promise<ScheduleValidationResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
     if (!tournament) throw new NotFoundError("Tournament not found");
+    if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
@@ -399,7 +425,13 @@ export class ScheduleConfigService {
   /**
    * Xóa schedule config.
    */
-  async deleteConfig(tournamentId: number): Promise<number> {
+  async deleteConfig(tournamentId: number, organizerId?: number): Promise<number> {
+    if (organizerId != null) {
+      const tournament = await Tournament.findByPk(tournamentId);
+      if (!tournament) throw new NotFoundError("Tournament not found");
+      assertOrganizer(organizerId, tournament);
+    }
+
     return await ScheduleConfig.destroy({ where: { tournamentId } });
   }
 
