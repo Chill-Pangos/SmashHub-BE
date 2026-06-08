@@ -69,6 +69,14 @@ const swaggerDefinition = {
           },
         },
       },
+      SuccessResponse: {
+        type: "object",
+        properties: {
+          success: { type: "boolean", example: true },
+          message: { type: "string" },
+          data: { type: "object", nullable: true },
+        },
+      },
       PaginationParams: {
         type: "object",
         properties: {
@@ -93,6 +101,15 @@ const swaggerDefinition = {
           totalPages: { type: "integer", description: "Total number of pages" },
           hasNextPage: { type: "boolean", description: "Whether a next page exists" },
           hasPrevPage: { type: "boolean", description: "Whether a previous page exists" },
+        },
+      },
+      UserSummary: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          firstName: { type: "string" },
+          lastName: { type: "string" },
+          email: { type: "string", format: "email" },
         },
       },
       User: {
@@ -215,26 +232,102 @@ const swaggerDefinition = {
       },
       Tournament: {
         type: "object",
-        required: ["name", "tier", "startDate", "endDate", "registrationStartDate", "registrationEndDate", "bracketGenerationDate", "location", "createdBy"],
+        required: ["name", "tier", "location", "createdBy"],
         properties: {
           id: { type: "integer" },
           name: { type: "string", maxLength: 255 },
+          introduction: {
+            type: "string",
+            nullable: true,
+            description: "Tournament introduction",
+          },
           tier: { type: "integer", minimum: 1, maximum: 5 },
           status: {
             type: "string",
             enum: ["upcoming", "registration_open", "registration_closed", "brackets_generated", "ongoing", "completed", "cancelled"],
             default: "upcoming",
           },
-          startDate: { type: "string", format: "date-time" },
-          endDate: { type: "string", format: "date-time" },
-          registrationStartDate: { type: "string", format: "date-time" },
-          registrationEndDate: { type: "string", format: "date-time" },
-          bracketGenerationDate: { type: "string", format: "date-time" },
           location: { type: "string", maxLength: 100 },
-          numberOfTables: { type: "integer", default: 1 },
           createdBy: { type: "integer" },
+          categories: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TournamentCategory" },
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      CreateTournamentRequest: {
+        type: "object",
+        required: ["name", "tier", "location"],
+        properties: {
+          name: { type: "string", minLength: 3, maxLength: 255 },
+          introduction: {
+            type: "string",
+            nullable: true,
+            description: "Tournament introduction",
+          },
+          tier: { type: "integer", minimum: 1, maximum: 5 },
+          location: { type: "string", maxLength: 100 },
+          status: {
+            type: "string",
+            enum: ["upcoming", "registration_open", "registration_closed", "brackets_generated", "ongoing", "completed", "cancelled"],
+            default: "upcoming",
+          },
+          categories: {
+            type: "array",
+            items: { $ref: "#/components/schemas/CreateTournamentCategoryRequest" },
+          },
+        },
+      },
+      UpdateTournamentRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 3, maxLength: 255 },
+          introduction: {
+            type: "string",
+            nullable: true,
+            description: "Tournament introduction",
+          },
+          tier: { type: "integer", minimum: 1, maximum: 5 },
+          location: { type: "string", maxLength: 100 },
+          status: {
+            type: "string",
+            enum: ["upcoming", "registration_open", "registration_closed", "brackets_generated", "ongoing", "completed", "cancelled"],
+          },
+          categories: {
+            type: "array",
+            description: "If provided, replaces all existing categories.",
+            items: { $ref: "#/components/schemas/CreateTournamentCategoryRequest" },
+          },
+        },
+      },
+      CreateTournamentCategoryRequest: {
+        type: "object",
+        required: ["name", "type", "maxEntries", "maxSets"],
+        properties: {
+          name: { type: "string", maxLength: 100 },
+          type: { type: "string", enum: ["single", "double", "team"] },
+          maxEntries: { type: "integer" },
+          maxSets: { type: "integer", enum: [5, 7] },
+          teamFormat: {
+            type: "string",
+            nullable: true,
+            maxLength: 50,
+            description: "Required for team categories, e.g. S-S-S or S-D-S.",
+          },
+          minAge: { type: "integer", nullable: true, minimum: 0 },
+          maxAge: { type: "integer", nullable: true, minimum: 0 },
+          minElo: { type: "integer", nullable: true, minimum: 0 },
+          maxElo: { type: "integer", nullable: true, minimum: 0 },
+          maxMembersPerEntry: {
+            type: "integer",
+            nullable: true,
+            minimum: 3,
+            description: "Only applicable for team categories. Null means no upper limit.",
+          },
+          gender: { type: "string", nullable: true, enum: ["male", "female", "mixed"] },
+          isGroupStage: { type: "boolean", default: false },
         },
       },
       TournamentCategory: {
@@ -250,28 +343,58 @@ const swaggerDefinition = {
           },
           maxEntries: { type: "integer" },
           maxSets: { type: "integer" },
-          numberOfSingles: { type: "integer" },
-          numberOfDoubles: { type: "integer" },
+          teamFormat: { type: "string", nullable: true, maxLength: 50 },
           minAge: { type: "integer" },
           maxAge: { type: "integer" },
           minElo: { type: "integer" },
           maxElo: { type: "integer" },
+          maxMembersPerEntry: {
+            type: "integer",
+            nullable: true,
+            description: "Only applicable for team categories. Null means no upper limit.",
+          },
           gender: { type: "string", enum: ["male", "female", "mixed"] },
           isGroupStage: { type: "boolean" },
+          entryFee: {
+            type: "number",
+            format: "decimal",
+            nullable: true,
+            default: 0,
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
       },
       Entry: {
         type: "object",
-        required: ["categoryId"],
+        required: ["categoryId", "name"],
         properties: {
           id: { type: "integer" },
           categoryId: { type: "integer" },
-          captainId: { type: "integer" },
-          isAcceptingMembers: { type: "boolean" },
-          requiredMemberCount: { type: "integer" },
-          currentMemberCount: { type: "integer" },
+          captainId: { type: "integer", nullable: true },
+          name: { type: "string", maxLength: 100 },
+          isAcceptingMembers: { type: "boolean", default: false },
+          requiredMemberCount: {
+            type: "integer",
+            nullable: true,
+            minimum: 1,
+            maximum: 100,
+          },
+          currentMemberCount: { type: "integer", minimum: 0, default: 0 },
+          isConfirmed: { type: "boolean", default: false },
+          confirmedAt: { type: "string", format: "date-time", nullable: true },
+          category: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/TournamentCategory" }],
+          },
+          captain: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/UserDetail" }],
+          },
+          members: {
+            type: "array",
+            items: { $ref: "#/components/schemas/EntryMember" },
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -365,12 +488,39 @@ const swaggerDefinition = {
           status: {
             type: "string",
             enum: ["scheduled", "in_progress", "completed", "cancelled"],
+            default: "scheduled",
           },
-          winnerEntryId: { type: "integer" },
-          umpire: { type: "integer" },
-          assistantUmpire: { type: "integer" },
-          resultStatus: { type: "string", enum: ["pending", "approved", "rejected"] },
-          reviewNotes: { type: "string" },
+          winnerEntryId: { type: "integer", nullable: true },
+          resultStatus: {
+            type: "string",
+            enum: ["pending", "approved", "rejected"],
+            nullable: true,
+          },
+          reviewNotes: { type: "string", nullable: true, maxLength: 1000 },
+          schedule: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Schedule" }],
+          },
+          entryA: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
+          entryB: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
+          winnerEntry: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
+          subMatches: {
+            type: "array",
+            items: { $ref: "#/components/schemas/SubMatch" },
+          },
+          matchReferees: {
+            type: "array",
+            items: { $ref: "#/components/schemas/MatchReferee" },
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -381,10 +531,28 @@ const swaggerDefinition = {
         properties: {
           id: { type: "integer" },
           subMatchId: { type: "integer" },
-          matchId: { type: "integer", deprecated: true },
-          setNumber: { type: "integer" },
-          entryAScore: { type: "integer", default: 0 },
-          entryBScore: { type: "integer", default: 0 },
+          setNumber: { type: "integer", minimum: 1, maximum: 7 },
+          entryAScore: { type: "integer", minimum: 0, maximum: 30, default: 0 },
+          entryBScore: { type: "integer", minimum: 0, maximum: 30, default: 0 },
+          subMatch: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/SubMatch" }],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      MatchReferee: {
+        type: "object",
+        required: ["matchId", "refereeId"],
+        properties: {
+          id: { type: "integer" },
+          matchId: { type: "integer" },
+          refereeId: { type: "integer" },
+          referee: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/UserDetail" }],
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -427,7 +595,46 @@ const swaggerDefinition = {
           id: { type: "integer" },
           entryId: { type: "integer" },
           userId: { type: "integer" },
-          eloAtEntry: { type: "integer" },
+          eloAtEntry: { type: "integer", minimum: 0, maximum: 10000 },
+          entry: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
+          user: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/UserDetail" }],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      JoinRequest: {
+        type: "object",
+        required: ["entryId", "userId", "status", "type"],
+        properties: {
+          id: { type: "integer" },
+          type: {
+            type: "string",
+            enum: ["requested", "invited"],
+            default: "requested",
+          },
+          entryId: { type: "integer" },
+          userId: { type: "integer" },
+          status: {
+            type: "string",
+            enum: ["pending", "approved", "rejected"],
+            default: "pending",
+          },
+          rejectionReason: { type: "string", maxLength: 255, nullable: true },
+          respondedAt: { type: "string", format: "date-time", nullable: true },
+          entry: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
+          user: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/UserDetail" }],
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -440,13 +647,21 @@ const swaggerDefinition = {
           categoryId: { type: "integer" },
           groupName: { type: "string", maxLength: 50 },
           entryId: { type: "integer" },
-          matchesPlayed: { type: "integer", default: 0 },
-          matchesWon: { type: "integer", default: 0 },
-          matchesLost: { type: "integer", default: 0 },
-          setsWon: { type: "integer", default: 0 },
-          setsLost: { type: "integer", default: 0 },
-          setsDiff: { type: "integer", default: 0 },
-          position: { type: "integer" },
+          matchesPlayed: { type: "integer", minimum: 0, default: 0 },
+          matchesWon: { type: "integer", minimum: 0, default: 0 },
+          matchesLost: { type: "integer", minimum: 0, default: 0 },
+          setsWon: { type: "integer", minimum: 0, default: 0 },
+          setsLost: { type: "integer", minimum: 0, default: 0 },
+          setsDiff: {
+            type: "integer",
+            default: 0,
+            description: "setsWon - setsLost",
+          },
+          position: { type: "integer", nullable: true, minimum: 1 },
+          entry: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/Entry" }],
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -465,6 +680,31 @@ const swaggerDefinition = {
           },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      TournamentRefereeWithUser: {
+        allOf: [
+          { $ref: "#/components/schemas/TournamentReferee" },
+          {
+            type: "object",
+            properties: {
+              referee: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/UserSummary" }],
+              },
+            },
+          },
+        ],
+      },
+      TournamentRefereesResponse: {
+        type: "object",
+        required: ["referees", "pagination"],
+        properties: {
+          referees: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TournamentRefereeWithUser" },
+          },
+          pagination: { $ref: "#/components/schemas/Pagination" },
         },
       },
       RefereeInvitation: {
@@ -512,61 +752,199 @@ const swaggerDefinition = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
+      RefereeInvitationWithReferee: {
+        allOf: [
+          { $ref: "#/components/schemas/RefereeInvitation" },
+          {
+            type: "object",
+            properties: {
+              referee: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/UserSummary" }],
+              },
+            },
+          },
+        ],
+      },
+      RefereeInvitationWithDetails: {
+        allOf: [
+          { $ref: "#/components/schemas/RefereeInvitation" },
+          {
+            type: "object",
+            properties: {
+              tournament: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/Tournament" }],
+              },
+              inviter: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/UserSummary" }],
+              },
+            },
+          },
+        ],
+      },
+      RefereeInvitationsResponse: {
+        type: "object",
+        required: ["invitations", "pagination"],
+        properties: {
+          invitations: {
+            type: "array",
+            items: { $ref: "#/components/schemas/RefereeInvitationWithReferee" },
+          },
+          pagination: { $ref: "#/components/schemas/Pagination" },
+        },
+      },
+      MyRefereeInvitationsResponse: {
+        type: "object",
+        required: ["invitations", "pagination"],
+        properties: {
+          invitations: {
+            type: "array",
+            items: { $ref: "#/components/schemas/RefereeInvitationWithDetails" },
+          },
+          pagination: { $ref: "#/components/schemas/Pagination" },
+        },
+      },
       KnockoutBracket: {
         type: "object",
-        required: ["categoryId", "roundNumber", "bracketPosition"],
+        required: ["categoryId", "roundNumber", "bracketPosition", "roundName"],
         properties: {
           id: { type: "integer" },
           categoryId: { type: "integer" },
-          roundNumber: { type: "integer" },
-          bracketPosition: { type: "integer" },
-          scheduleId: { type: "integer" },
-          matchId: { type: "integer" },
-          entryAId: { type: "integer" },
-          entryBId: { type: "integer" },
-          winnerEntryId: { type: "integer" },
-          nextBracketId: { type: "integer" },
-          previousBracketAId: { type: "integer" },
-          previousBracketBId: { type: "integer" },
+          roundNumber: { type: "integer", minimum: 1, maximum: 6 },
+          bracketPosition: { type: "integer", minimum: 0 },
+          roundName: {
+            type: "string",
+            enum: ["Round of 64", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"],
+          },
+          scheduleId: { type: "integer", nullable: true },
+          matchId: { type: "integer", nullable: true },
+          entryAId: { type: "integer", nullable: true },
+          entryBId: { type: "integer", nullable: true },
+          winnerEntryId: { type: "integer", nullable: true },
+          nextBracketId: { type: "integer", nullable: true },
+          previousBracketAId: { type: "integer", nullable: true },
+          previousBracketBId: { type: "integer", nullable: true },
           status: {
             type: "string",
             enum: ["pending", "ready", "in_progress", "completed"],
             default: "pending",
           },
-          roundName: { type: "string", maxLength: 50 },
           isByeMatch: { type: "boolean", default: false },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
       },
+      BracketSlotDto: {
+        type: "object",
+        required: ["entryId", "entryName"],
+        properties: {
+          entryId: { type: "integer", nullable: true },
+          entryName: { type: "string", example: "TBD" },
+        },
+      },
+      BracketDto: {
+        type: "object",
+        required: [
+          "id",
+          "roundNumber",
+          "roundName",
+          "bracketPosition",
+          "entryA",
+          "entryB",
+          "winnerEntryId",
+          "status",
+          "isByeMatch",
+          "previousBracketAId",
+          "previousBracketBId",
+          "nextBracketId",
+        ],
+        properties: {
+          id: { type: "integer" },
+          roundNumber: { type: "integer", minimum: 1, maximum: 6 },
+          roundName: {
+            type: "string",
+            enum: ["Round of 64", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"],
+          },
+          bracketPosition: { type: "integer", minimum: 0 },
+          entryA: { $ref: "#/components/schemas/BracketSlotDto" },
+          entryB: { $ref: "#/components/schemas/BracketSlotDto" },
+          winnerEntryId: { type: "integer", nullable: true },
+          status: {
+            type: "string",
+            enum: ["pending", "ready", "in_progress", "completed"],
+          },
+          isByeMatch: { type: "boolean" },
+          previousBracketAId: { type: "integer", nullable: true },
+          previousBracketBId: { type: "integer", nullable: true },
+          nextBracketId: { type: "integer", nullable: true },
+        },
+      },
+      RoundDto: {
+        type: "object",
+        required: ["roundNumber", "roundName", "brackets"],
+        properties: {
+          roundNumber: { type: "integer", minimum: 1, maximum: 6 },
+          roundName: {
+            type: "string",
+            enum: ["Round of 64", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"],
+          },
+          brackets: {
+            type: "array",
+            items: { $ref: "#/components/schemas/BracketDto" },
+          },
+        },
+      },
+      BracketTreeDto: {
+        type: "object",
+        required: ["categoryId", "totalRounds", "totalBrackets", "rounds"],
+        properties: {
+          categoryId: { type: "integer" },
+          totalRounds: { type: "integer" },
+          totalBrackets: { type: "integer" },
+          rounds: {
+            type: "array",
+            items: { $ref: "#/components/schemas/RoundDto" },
+          },
+        },
+      },
       SubMatch: {
         type: "object",
-        required: ["matchId", "subMatchNumber", "matchType"],
+        required: ["matchId", "subMatchNumber", "status"],
         properties: {
           id: { type: "integer", description: "Unique identifier" },
           matchId: { type: "integer", description: "Parent match ID" },
-          subMatchNumber: { type: "integer", description: "Position in team format (1-3 for S-D-S)" },
-          matchType: {
-            type: "string",
-            enum: ["single", "doubles"],
-            description: "Type of sub-match"
-          },
+          subMatchNumber: { type: "integer", minimum: 1, maximum: 10 },
           status: {
             type: "string",
-            enum: ["scheduled", "in_progress", "completed", "cancelled"],
+            enum: ["scheduled", "in_progress", "completed"],
             default: "scheduled",
             description: "Current status of the sub-match"
-          },
-          umpireId: {
-            type: "integer",
-            nullable: true,
-            description: "Referee ID assigned as umpire"
           },
           winnerTeam: {
             type: "string",
             enum: ["A", "B"],
             nullable: true,
             description: "Winning team (A or B)"
+          },
+          umpireId: {
+            type: "integer",
+            nullable: true,
+            description: "Referee ID assigned as umpire"
+          },
+          assistantUmpireId: {
+            type: "integer",
+            nullable: true,
+            description: "Optional assistant umpire ID"
+          },
+          matchSets: {
+            type: "array",
+            items: { $ref: "#/components/schemas/MatchSet" },
+          },
+          subMatchPlayers: {
+            type: "array",
+            items: { $ref: "#/components/schemas/SubMatchPlayer" },
           },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
@@ -583,6 +961,10 @@ const swaggerDefinition = {
             type: "string",
             enum: ["A", "B"],
             description: "Team assignment"
+          },
+          entryMember: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/EntryMember" }],
           },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },

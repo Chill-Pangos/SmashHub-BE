@@ -4,6 +4,7 @@ import { sequelize } from "../config/database";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import MatchSet from "../models/matchSet.model";
+import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
@@ -304,7 +305,7 @@ export class MatchService {
             },
           ],
         },
-        { model: MatchSet, as: "matchSets" },
+        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
       ],
       offset,
       limit,
@@ -379,7 +380,7 @@ export class MatchService {
       include: [
         ...MATCH_DETAIL_INCLUDE,
         { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: MatchSet, as: "matchSets" },
+        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
       ],
       order: [["updatedAt", "DESC"]],
       offset,

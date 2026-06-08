@@ -35,6 +35,10 @@ const router = Router();
  *               action:
  *                 type: string
  *                 enum: [create_team, join_team]
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: Entry/team name. Optional; defaults to current user's full name when creating an entry.
  *               targetEntryId:
  *                 type: integer
  *           examples:
@@ -42,6 +46,7 @@ const router = Router();
  *               value:
  *                 categoryId: 1
  *                 action: create_team
+ *                 name: "Smash Warriors"
  *             joinTeam:
  *               value:
  *                 categoryId: 1
@@ -290,6 +295,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Join request responded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/JoinRequest'
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -381,7 +390,7 @@ router.get(
  *         $ref: '#/components/responses/NotFound404'
  *       500:
  *         $ref: '#/components/responses/InternalError500'
- *   patch:
+ *   put:
  *     tags: [Entries]
  *     summary: Update entry information (captain only)
  *     description: |
@@ -506,43 +515,7 @@ router.delete(
  *                 joinRequests:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                       entryId:
- *                         type: integer
- *                       userId:
- *                         type: integer
- *                       status:
- *                         type: string
- *                         enum: [pending, approved, rejected]
- *                       rejectionReason:
- *                         type: string
- *                         nullable: true
- *                       respondedAt:
- *                         type: string
- *                         format: date-time
- *                         nullable: true
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                       user:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                           firstName:
- *                             type: string
- *                           lastName:
- *                             type: string
- *                           email:
- *                             type: string
- *                           gender:
- *                             type: string
- *                           dob:
- *                             type: string
- *                             format: date
+ *                     $ref: '#/components/schemas/JoinRequest'
  *                 pagination:
  *                   $ref: '#/components/schemas/Pagination'
  *       401:

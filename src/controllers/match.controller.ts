@@ -105,10 +105,18 @@ export class MatchController {
 
   async findPendingMatches(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const chiefRefereeId = (req as AuthRequest).userId;
+      if (!chiefRefereeId) {
+        throw new BadRequestError("User not authenticated");
+      }
+      const tournamentId = Number(req.query.tournamentId);
+      if (isNaN(tournamentId)) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
       const offset = Math.max(page - 1, 0) * limit;
-      const result = await matchService.findPendingMatches(offset, limit);
+      const result = await matchService.findPendingMatches(chiefRefereeId, tournamentId, offset, limit);
       res.status(200).json(result);
     } catch (error) {
       next(error);

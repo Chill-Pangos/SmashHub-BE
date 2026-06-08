@@ -452,7 +452,7 @@ router.get(
  *                     brackets:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/KnockoutBracket'
+ *                         $ref: '#/components/schemas/BracketDto'
  *                     pagination:
  *                       $ref: '#/components/schemas/Pagination'
  *       400:

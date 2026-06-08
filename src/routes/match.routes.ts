@@ -24,6 +24,12 @@ const router = Router();
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: tournamentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament ID used to verify chief referee permission
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer
@@ -869,20 +875,18 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *                             type: array
  *                             items:
  *                               type: object
- *                       matchSets:
+ *                       subMatches:
  *                         type: array
- *                         description: All sets played in this match with scores
+ *                         description: Sub-matches with all sets played in this match
  *                         items:
  *                           type: object
  *                           properties:
  *                             id:
  *                               type: integer
- *                             setNumber:
- *                               type: integer
- *                             entryAScore:
- *                               type: integer
- *                             entryBScore:
- *                               type: integer
+ *                             matchSets:
+ *                               type: array
+ *                               items:
+ *                                 $ref: '#/components/schemas/MatchSet'
  *                       matchReferees:
  *                         type: array
  *                         description: Referees who officiated the match

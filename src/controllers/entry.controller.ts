@@ -16,8 +16,8 @@ export class EntryController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const { categoryId, action, targetEntryId } = req.body;
-      const result = await entryService.register(userId, categoryId, action, targetEntryId);
+      const { categoryId, action, targetEntryId, name } = req.body;
+      const result = await entryService.register(userId, categoryId, action, targetEntryId, name);
       res.status(201).json(result);
     } catch (error) {
       next(error);
@@ -60,7 +60,8 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const { joinRequestId, action, rejectionReason } = req.body;
+      const joinRequestId = Number(req.params.joinRequestId);
+      const { action, rejectionReason } = req.body;
       const result = await entryService.respondToJoinRequest(
         captainId,
         joinRequestId,
@@ -133,7 +134,8 @@ export class EntryController {
     try {
       const currentCaptainId = this.getAuthenticatedUserId(req, next);
       if (currentCaptainId == null) return;
-      const { entryId, newCaptainId } = req.body;
+      const entryId = Number(req.params.entryId);
+      const { newCaptainId } = req.body;
       const entry = await entryService.transferCaptaincy(currentCaptainId, entryId, newCaptainId);
       res.status(200).json(entry);
     } catch (error) {

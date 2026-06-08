@@ -1,6 +1,7 @@
 // Tournament DTOs
 export interface CreateTournamentDto {
   name: string;
+  introduction?: string | null;
   tier: number;
   location: string;
   status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
@@ -25,6 +26,7 @@ export interface CreateTournamentCategoryDto {
 
 export interface UpdateTournamentDto {
   name?: string;
+  introduction?: string | null;
   tier?: number;
   location?: string;
   status?: "upcoming" | "ongoing" | "completed" | "registration_open" | "registration_closed" | "brackets_generated" | "cancelled";
@@ -49,6 +51,7 @@ export interface UpdateTournamentCategoryDto {
 export interface TournamentResponseDto {
   id: number;
   name: string;
+  introduction: string | null;
   tier: number;
   status: "upcoming" | "registration_open" | "registration_closed" | "brackets_generated" | "ongoing" | "completed" | "cancelled";
   location: string;
