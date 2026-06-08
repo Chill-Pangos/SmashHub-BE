@@ -29,6 +29,8 @@ const envSchema = Joi.object({
   SMTP_FROM_NAME: Joi.string().default("SmashHub"),
   AVATAR_UPLOAD_DIR: Joi.string().required(),
   AVATAR_URL_PATH: Joi.string().default("/uploads/avatars"),
+  REDIS_URL: Joi.string().uri().required(),
+  REDIS_MATCH_SET_SCORE_TTL_SECONDS: Joi.number().integer().min(0).required(),
 }).unknown(true);
 
 const { error, value: envVars } = envSchema
@@ -59,6 +61,10 @@ const config = {
     database: envVars.DB_DATABASE,
     username: envVars.DB_USERNAME,
     password: envVars.DB_PASSWORD,
+  },
+  redis: {
+    url: envVars.REDIS_URL,
+    matchSetScoreTtlSeconds: envVars.REDIS_MATCH_SET_SCORE_TTL_SECONDS,
   },
   email: {
     smtp: {
