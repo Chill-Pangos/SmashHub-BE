@@ -1,9 +1,18 @@
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
+import fs from "fs/promises";
+import config from "./config";
 
 const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, "uploads/avatars"),
+  destination: async (_, __, cb) => {
+    try {
+      await fs.mkdir(config.upload.avatarDir, { recursive: true });
+      cb(null, config.upload.avatarDir);
+    } catch (error) {
+      cb(error as Error, config.upload.avatarDir);
+    }
+  },
   filename: (_, file, cb) => {
     const hash = crypto.randomBytes(8).toString("hex");
     cb(null, `${hash}${path.extname(file.originalname)}`);
