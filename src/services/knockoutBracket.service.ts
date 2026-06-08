@@ -52,6 +52,22 @@ interface BracketPreviewResponse {
   bracketTree: BracketTreeDto;
 }
 
+interface QualifierGroup {
+  groupName: string;
+  qualifiers: GroupStanding[];
+}
+
+interface QualifierSeed {
+  entryId: number;
+  groupName: string;
+  rank: 1 | 2;
+}
+
+interface QualifierSeedCandidate {
+  entryIds: number[];
+  keepsGroupsInOppositeHalves: boolean;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const QUALIFIERS_PER_GROUP = 2;
@@ -123,6 +139,195 @@ function assertSameEntrySet(actual: number[], expected: number[]): void {
     if (actualSorted[i] !== expectedSorted[i]) {
       throw new Error("entryIds do not match the previewable entries");
     }
+  }
+}
+
+function getQualifierSeeds(qualifiers: QualifierGroup[]): {
+  firstPlace: QualifierSeed[];
+  secondPlace: QualifierSeed[];
+} {
+  const groupNames = qualifiers.map((g) => g.groupName);
+  if (new Set(groupNames).size !== groupNames.length) {
+    throw new Error("Duplicate group names found in qualifiers");
+  }
+
+  return {
+    firstPlace: qualifiers.map((g) => ({
+      entryId: g.qualifiers[0]!.entryId,
+      groupName: g.groupName,
+      rank: 1,
+    })),
+    secondPlace: qualifiers.map((g) => ({
+      entryId: g.qualifiers[1]!.entryId,
+      groupName: g.groupName,
+      rank: 2,
+    })),
+  };
+}
+
+function buildQualifierSeedEntryIds(qualifiers: QualifierGroup[]): number[] {
+  if (qualifiers.length < 2) {
+    throw new Error("At least two groups are required to seed knockout qualifiers");
+  }
+
+  const { firstPlace, secondPlace } = getQualifierSeeds(qualifiers);
+  const bracketSize = calculateBracketSize(qualifiers.length * QUALIFIERS_PER_GROUP);
+  if (bracketSize === qualifiers.length * QUALIFIERS_PER_GROUP) {
+    return buildOppositeHalfQualifierSeedEntryIds(firstPlace, secondPlace);
+  }
+
+  let fallbackEntryIds: number[] | null = null;
+
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const candidate = buildQualifierSeedCandidate(firstPlace, secondPlace);
+    if (!candidate) continue;
+
+    if (candidate.keepsGroupsInOppositeHalves) {
+      return candidate.entryIds;
+    }
+
+    fallbackEntryIds ??= candidate.entryIds;
+  }
+
+  if (fallbackEntryIds) return fallbackEntryIds;
+
+  throw new Error("Cannot seed qualifiers without same-group first-round rematches");
+}
+
+function buildOppositeHalfQualifierSeedEntryIds(
+  firstPlace: QualifierSeed[],
+  secondPlace: QualifierSeed[],
+): number[] {
+  const halfSize = firstPlace.length / 2;
+  if (!Number.isInteger(halfSize)) {
+    throw new Error("Cannot split qualifier groups evenly across bracket halves");
+  }
+
+  const shuffledFirstPlace = shuffleArray(firstPlace);
+  const topHalfWinners = shuffledFirstPlace.slice(0, halfSize);
+  const bottomHalfWinners = shuffledFirstPlace.slice(halfSize);
+  const secondPlaceByGroup = new Map(secondPlace.map((seed) => [seed.groupName, seed]));
+
+  const topHalfRunnerUps = shuffleArray(
+    bottomHalfWinners.map((winner) => secondPlaceByGroup.get(winner.groupName)!),
+  );
+  const bottomHalfRunnerUps = shuffleArray(
+    topHalfWinners.map((winner) => secondPlaceByGroup.get(winner.groupName)!),
+  );
+
+  return [
+    ...pairWinnersWithRunnerUps(topHalfWinners, topHalfRunnerUps),
+    ...pairWinnersWithRunnerUps(bottomHalfWinners, bottomHalfRunnerUps),
+  ];
+}
+
+function pairWinnersWithRunnerUps(
+  winners: QualifierSeed[],
+  runnerUps: QualifierSeed[],
+): number[] {
+  return winners.flatMap((winner, index) => {
+    const runnerUp = runnerUps[index]!;
+    if (winner.groupName === runnerUp.groupName) {
+      throw new Error("Cannot seed qualifiers without same-group first-round rematches");
+    }
+
+    return [winner.entryId, runnerUp.entryId];
+  });
+}
+
+function buildQualifierSeedCandidate(
+  firstPlace: QualifierSeed[],
+  secondPlace: QualifierSeed[],
+): QualifierSeedCandidate | null {
+  const shuffledFirstPlace = shuffleArray(firstPlace);
+  const availableSecondPlace = shuffleArray(secondPlace);
+  const seedPairs: [QualifierSeed, QualifierSeed][] = [];
+
+  for (const winner of shuffledFirstPlace) {
+    const runnerUpIndex = availableSecondPlace.findIndex(
+      (seed) => seed.groupName !== winner.groupName,
+    );
+    if (runnerUpIndex === -1) return null;
+
+    const runnerUp = availableSecondPlace.splice(runnerUpIndex, 1)[0]!;
+    seedPairs.push([winner, runnerUp]);
+  }
+
+  const entryIds = seedPairs.flatMap(([winner, runnerUp]) => [
+    winner.entryId,
+    runnerUp.entryId,
+  ]);
+
+  return {
+    entryIds,
+    keepsGroupsInOppositeHalves: keepsSameGroupQualifiersInOppositeHalves(
+      entryIds,
+      [...firstPlace, ...secondPlace],
+    ),
+  };
+}
+
+function keepsSameGroupQualifiersInOppositeHalves(
+  entryIds: number[],
+  seeds: QualifierSeed[],
+): boolean {
+  const bracketSize = calculateBracketSize(entryIds.length);
+  const halfBoundary = bracketSize / 2;
+  const seedByEntryId = new Map(seeds.map((seed) => [seed.entryId, seed]));
+  const halfByGroup = new Map<string, boolean>();
+
+  for (let slotIndex = 0; slotIndex < entryIds.length; slotIndex++) {
+    const seed = seedByEntryId.get(entryIds[slotIndex]!);
+    if (!seed) return false;
+
+    const isTopHalf = slotIndex < halfBoundary;
+    const existingHalf = halfByGroup.get(seed.groupName);
+    if (existingHalf == null) {
+      halfByGroup.set(seed.groupName, isTopHalf);
+      continue;
+    }
+
+    if (existingHalf === isTopHalf) return false;
+  }
+
+  return true;
+}
+
+function validateQualifierSeedEntryIds(
+  entryIds: number[],
+  qualifiers: QualifierGroup[],
+): void {
+  const { firstPlace, secondPlace } = getQualifierSeeds(qualifiers);
+  const expectedEntryIds = [...firstPlace, ...secondPlace].map((seed) => seed.entryId);
+  assertSameEntrySet(entryIds, expectedEntryIds);
+
+  const seedByEntryId = new Map<number, QualifierSeed>();
+  const allSeeds = [...firstPlace, ...secondPlace];
+  for (const seed of allSeeds) {
+    seedByEntryId.set(seed.entryId, seed);
+  }
+
+  for (let i = 0; i < entryIds.length; i += 2) {
+    const entryASeed = seedByEntryId.get(entryIds[i]!);
+    const entryBSeed = seedByEntryId.get(entryIds[i + 1]!);
+
+    if (!entryASeed || !entryBSeed) {
+      throw new Error("entryIds do not match the previewable entries");
+    }
+    if (entryASeed.groupName === entryBSeed.groupName) {
+      throw new Error("First knockout round cannot pair qualifiers from the same group");
+    }
+    if (entryASeed.rank === entryBSeed.rank) {
+      throw new Error("Each first-round qualifier match must pair a group winner with a runner-up");
+    }
+  }
+
+  const bracketSize = calculateBracketSize(entryIds.length);
+  if (
+    bracketSize === entryIds.length &&
+    !keepsSameGroupQualifiersInOppositeHalves(entryIds, allSeeds)
+  ) {
+    throw new Error("Same-group qualifiers must be seeded into opposite bracket halves");
   }
 }
 
@@ -512,7 +717,7 @@ export class KnockoutBracketService {
   /**
    * Fill entryId thật vào bracket round 1 sau khi vòng bảng kết thúc.
    * Gọi sau generatePlaceholders() khi đã có kết quả đầy đủ.
-   * Đội nhất vào top half, đội nhì vào bottom half để tránh gặp nhau sớm.
+   * Mỗi trận vòng đầu là nhất bảng này gặp nhì bảng khác.
    */
   async previewFillQualifiers(
     organizerId: number,
@@ -551,9 +756,7 @@ export class KnockoutBracketService {
       );
     }
 
-    const firstPlace = qualifiers.map((g) => g.qualifiers[0]!.entryId);
-    const secondPlace = qualifiers.map((g) => g.qualifiers[1]!.entryId);
-    const entryIds = [...shuffleArray(firstPlace), ...shuffleArray(secondPlace)];
+    const entryIds = buildQualifierSeedEntryIds(qualifiers);
 
     const entries = await Entry.findAll({
       where: { id: { [Op.in]: entryIds } },
@@ -607,16 +810,8 @@ export class KnockoutBracketService {
       );
     }
 
-    // Đội nhất vào top half, đội nhì vào bottom half
-    // → đảm bảo đội nhất và nhì cùng bảng không gặp nhau cho đến Final
-    const firstPlace = qualifiers.map((g) => g.qualifiers[0]!.entryId);
-    const secondPlace = qualifiers.map((g) => g.qualifiers[1]!.entryId);
-
-    const defaultEntryIds = [...firstPlace, ...secondPlace];
     const entryIds = previewEntryIds;
-    assertSameEntrySet(entryIds, defaultEntryIds);
-    assertSameEntrySet(entryIds.slice(0, firstPlace.length), firstPlace);
-    assertSameEntrySet(entryIds.slice(firstPlace.length), secondPlace);
+    validateQualifierSeedEntryIds(entryIds, qualifiers);
 
     await sequelize.transaction(async (t) => {
       for (let i = 0; i < round1Brackets.length; i++) {
