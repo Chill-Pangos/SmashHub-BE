@@ -1,7 +1,7 @@
 import { Router } from "express";
 import scheduleController from "../controllers/schedule.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -12,6 +12,8 @@ const router = Router();
  *     tags: [Schedules]
  *     summary: Generate full tournament schedule (group + knockout)
  *     description: |
+ *       Authorization: Only the tournament organizer can perform this action.
+ *
  *       Tạo lịch toàn bộ tournament theo thứ tự: xong hết category này mới đến category khác.
  *       Trong mỗi category: group stage trước, knockout sau (kể cả TBD placeholders).
  *       Slot time được tính liên tục theo scheduleConfig của tournament.
@@ -76,7 +78,7 @@ const router = Router();
 router.post(
   "/generate-tournament",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   scheduleController.generateTournamentSchedule.bind(scheduleController),
 );
 
@@ -87,6 +89,8 @@ router.post(
  *     tags: [Schedules]
  *     summary: Generate group stage schedule for a category
  *     description: |
+ *       Authorization: Only the tournament organizer can perform this action.
+ *
  *       Tạo lịch vòng bảng (round-robin) cho 1 category dựa trên groupStandings.
  *       Slot time tính từ scheduleConfig của tournament.
  *       tableNumber KHÔNG được gán — sẽ gán động khi trận bắt đầu.
@@ -151,7 +155,7 @@ router.post(
 router.post(
   "/generate-group-stage",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   scheduleController.generateGroupStageSchedule.bind(scheduleController),
 );
 
@@ -162,6 +166,8 @@ router.post(
  *     tags: [Schedules]
  *     summary: Generate knockout schedule for a category
  *     description: |
+ *       Authorization: Only the tournament organizer can perform this action.
+ *
  *       Tạo lịch knockout cho 1 category dựa trên knockoutBrackets.
  *       Lấy tất cả brackets kể cả TBD placeholder (trừ bye matches).
  *       Match với TBD sẽ có entryAId / entryBId = null — fill sau khi fillQualifiers().
@@ -232,7 +238,7 @@ router.post(
 router.post(
   "/generate-knockout",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   scheduleController.generateKnockoutSchedule.bind(scheduleController),
 );
 
@@ -243,6 +249,8 @@ router.post(
  *     tags: [Schedules]
  *     summary: Sync match entries from brackets after fillQualifiers
  *     description: |
+ *       Authorization: Only the tournament organizer can perform this action.
+ *
  *       Sau khi fillQualifiers() fill entryId thật vào knockoutBrackets,
  *       gọi endpoint này để cập nhật lại entryAId / entryBId trong match tương ứng.
  *     security:
@@ -284,7 +292,7 @@ router.post(
 router.post(
   "/sync-match-entries",
   authenticate,
-  checkPermission("schedules:update"),
+  checkRole("organizer"),
   scheduleController.syncMatchEntries.bind(scheduleController),
 );
 
@@ -388,6 +396,7 @@ router.get(
  *   put:
  *     tags: [Schedules]
  *     summary: Update schedule (scheduledAt or tableNumber)
+ *     description: Only the tournament organizer can perform this action.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -431,6 +440,7 @@ router.get(
  *   delete:
  *     tags: [Schedules]
  *     summary: Delete schedule
+ *     description: Only the tournament organizer can perform this action.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -455,13 +465,13 @@ router.get("/:id", scheduleController.findById.bind(scheduleController));
 router.put(
   "/:id",
   authenticate,
-  checkPermission("schedules:update"),
+  checkRole("organizer"),
   scheduleController.update.bind(scheduleController),
 );
 router.delete(
   "/:id",
   authenticate,
-  checkPermission("schedules:update"),
+  checkRole("organizer"),
   scheduleController.delete.bind(scheduleController),
 );
 

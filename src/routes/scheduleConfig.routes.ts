@@ -1,7 +1,7 @@
 import { Router } from "express";
 import scheduleConfigController from "../controllers/scheduleConfig.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkRole } from "../middlewares/permission.middleware";
 
 const router = Router({ mergeParams: true });
 
@@ -245,7 +245,7 @@ const router = Router({ mergeParams: true });
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  *       403:
- *         description: Permission denied - user does not have tournaments:create permission
+ *         description: Only the tournament organizer can perform this action
  *         $ref: '#/components/responses/Forbidden403'
  *       500:
  *         $ref: '#/components/responses/InternalError500'
@@ -253,7 +253,7 @@ const router = Router({ mergeParams: true });
 router.post(
   "/",
   authenticate,
-  checkPermission("tournaments:create"),
+  checkRole("organizer"),
   scheduleConfigController.create.bind(scheduleConfigController)
 );
 
@@ -526,6 +526,9 @@ router.get(
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Only the tournament organizer can perform this action
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
  *         $ref: '#/components/responses/NotFound404'
  *       500:
@@ -534,7 +537,7 @@ router.get(
 router.patch(
   "/:tournamentId/schedule-config",
   authenticate,
-  checkPermission("tournaments:update"),
+  checkRole("organizer"),
   scheduleConfigController.update.bind(scheduleConfigController)
 );
 
@@ -595,6 +598,9 @@ router.patch(
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Only the tournament organizer can perform this action
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
  *         $ref: '#/components/responses/NotFound404'
  *       500:
@@ -603,7 +609,7 @@ router.patch(
 router.post(
   "/:tournamentId/schedule-config/validate",
   authenticate,
-  checkPermission("tournaments:view"),
+  checkRole("organizer"),
   scheduleConfigController.validate.bind(scheduleConfigController)
 );
 
@@ -751,6 +757,9 @@ router.post(
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Only the tournament organizer can perform this action
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
  *         $ref: '#/components/responses/NotFound404'
  *       500:
@@ -759,7 +768,7 @@ router.post(
 router.post(
   "/:tournamentId/schedule-config/preview-create",
   authenticate,
-  checkPermission("tournaments:view"),
+  checkRole("organizer"),
   scheduleConfigController.previewCreate.bind(scheduleConfigController)
 );
 
@@ -899,6 +908,9 @@ router.post(
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Only the tournament organizer can perform this action
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
  *         $ref: '#/components/responses/NotFound404'
  *       500:
@@ -907,7 +919,7 @@ router.post(
 router.post(
   "/:tournamentId/schedule-config/preview-update",
   authenticate,
-  checkPermission("tournaments:view"),
+  checkRole("organizer"),
   scheduleConfigController.previewUpdate.bind(scheduleConfigController)
 );
 
@@ -942,6 +954,9 @@ router.post(
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         description: Only the tournament organizer can perform this action
+ *         $ref: '#/components/responses/Forbidden403'
  *       404:
  *         description: Tournament or schedule configuration not found
  *         $ref: '#/components/responses/NotFound404'
@@ -951,7 +966,7 @@ router.post(
 router.delete(
   "/:tournamentId/schedule-config",
   authenticate,
-  checkPermission("tournaments:delete"),
+  checkRole("organizer"),
   scheduleConfigController.delete.bind(scheduleConfigController)
 );
 

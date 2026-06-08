@@ -4,7 +4,6 @@ import { sequelize } from "../config/database";
 import GroupStanding from "../models/groupStanding.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
-import TournamentReferee from "../models/tournamentReferee.model";
 import Entry from "../models/entry.model";
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
@@ -84,15 +83,15 @@ async function getCategoryWithTournament(
   return category;
 }
 
-async function assertChiefReferee(
+async function assertOrganizer(
   userId: number,
   tournamentId: number
 ): Promise<void> {
-  const ref = await TournamentReferee.findOne({
-    where: { refereeId: userId, tournamentId, role: "chief" },
+  const tournament = await Tournament.findByPk(tournamentId, {
+    attributes: ["id", "createdBy"],
   });
-  if (!ref) {
-    throw new Error("Only the chief referee can perform this action");
+  if (!tournament || tournament.createdBy !== userId) {
+    throw new Error("Only the tournament organizer can perform this action");
   }
 }
 
@@ -189,7 +188,7 @@ export class GroupStandingService {
     categoryId: number
   ): Promise<GroupPreview[]> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertChiefReferee(chiefRefereeId, category.tournamentId);
+    await assertOrganizer(chiefRefereeId, category.tournamentId);
     await assertRegistrationClosed(category.tournament!);
 
     const entries = await this.getEligibleEntries(category);
@@ -231,7 +230,7 @@ export class GroupStandingService {
     assignments: GroupAssignment[]
   ): Promise<GroupStanding[]> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertChiefReferee(chiefRefereeId, category.tournamentId);
+    await assertOrganizer(chiefRefereeId, category.tournamentId);
     await assertRegistrationClosed(category.tournament!);
     await this.validateAssignments(categoryId, assignments);
 
@@ -544,7 +543,7 @@ export class GroupStandingService {
     if (!match) throw new Error("Match not found");
 
     const category = await getCategoryWithTournament(match.schedule!.categoryId);
-    await assertChiefReferee(chiefRefereeId, category.tournamentId);
+    await assertOrganizer(chiefRefereeId, category.tournamentId);
   }
 }
 

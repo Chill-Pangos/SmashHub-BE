@@ -17,12 +17,67 @@ export class MatchSetController {
         throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
       }
 
-      const matchSet = await matchSetService.createSet(refereeId, {
+      const matchSet = await matchSetService.submitFinalSetScore(refereeId, {
         subMatchId,
         entryAScore,
         entryBScore,
       });
       res.status(201).json(matchSet);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateLiveSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const refereeId = req.userId!;
+      const { subMatchId, setNumber, entryAScore, entryBScore } = req.body;
+
+      if (!subMatchId || entryAScore === undefined || entryBScore === undefined) {
+        throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
+      }
+
+      const result = await matchSetService.updateLiveSetScore(refereeId, {
+        subMatchId,
+        setNumber,
+        entryAScore,
+        entryBScore,
+      });
+      res.status(result.isCompleted ? 201 : 200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async submitFinalSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const refereeId = req.userId!;
+      const { subMatchId, setNumber, entryAScore, entryBScore } = req.body;
+
+      if (!subMatchId || entryAScore === undefined || entryBScore === undefined) {
+        throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
+      }
+
+      const matchSet = await matchSetService.submitFinalSetScore(refereeId, {
+        subMatchId,
+        setNumber,
+        entryAScore,
+        entryBScore,
+      });
+      res.status(201).json(matchSet);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getLiveSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const subMatchId = Number(req.params.subMatchId);
+      const setNumber =
+        req.query.setNumber !== undefined ? Number(req.query.setNumber) : undefined;
+
+      const liveScore = await matchSetService.getLiveSetScore(subMatchId, setNumber);
+      res.status(200).json({ liveScore });
     } catch (error) {
       next(error);
     }
