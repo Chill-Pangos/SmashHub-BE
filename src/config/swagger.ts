@@ -113,6 +113,30 @@ const swaggerDefinition = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
+      UserDetail: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          firstName: { type: "string", maxLength: 50 },
+          lastName: { type: "string", maxLength: 50 },
+          email: { type: "string", maxLength: 100 },
+          isEmailVerified: { type: "boolean" },
+          gender: { type: "string", enum: ["male", "female", "other"] },
+          avatarUrl: { type: "string", maxLength: 255 },
+          dob: { type: "string", format: "date" },
+          phoneNumber: { type: "string", maxLength: 20 },
+          roles: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Role" },
+          },
+          eloScore: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/EloScore" }],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
       AccessToken: {
         type: "object",
         required: ["userId", "token", "expiresAt"],
