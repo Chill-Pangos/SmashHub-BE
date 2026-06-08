@@ -58,6 +58,128 @@ router.post(
 
 /**
  * @swagger
+ * /match-sets/live-score:
+ *   put:
+ *     tags: [Match Sets]
+ *     summary: Update live set score in Redis
+ *     description: Stores point-by-point score in Redis. When score completes a set, persists it to DB.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subMatchId, entryAScore, entryBScore]
+ *             properties:
+ *               subMatchId:
+ *                 type: integer
+ *                 example: 1
+ *               setNumber:
+ *                 type: integer
+ *                 description: Optional current set number. Defaults to next unfinished set.
+ *                 example: 1
+ *               entryAScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 30
+ *                 example: 7
+ *               entryBScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 30
+ *                 example: 5
+ *     responses:
+ *       200:
+ *         description: Live score cached, set not completed
+ *       201:
+ *         description: Set completed and persisted to DB
+ */
+router.put(
+  "/live-score",
+  authenticate,
+  checkPermission('matches:update'),
+  matchSetController.updateLiveSetScore.bind(matchSetController)
+);
+
+/**
+ * @swagger
+ * /match-sets/final-score:
+ *   post:
+ *     tags: [Match Sets]
+ *     summary: Submit final set score
+ *     description: Fallback API when Redis live score is missing. Validates final score and persists to DB.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subMatchId, entryAScore, entryBScore]
+ *             properties:
+ *               subMatchId:
+ *                 type: integer
+ *                 example: 1
+ *               setNumber:
+ *                 type: integer
+ *                 description: Optional current set number. Defaults to next unfinished set.
+ *                 example: 1
+ *               entryAScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 30
+ *                 example: 11
+ *               entryBScore:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 30
+ *                 example: 9
+ *     responses:
+ *       201:
+ *         description: Final set score persisted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MatchSet'
+ */
+router.post(
+  "/final-score",
+  authenticate,
+  checkPermission('matches:update'),
+  matchSetController.submitFinalSetScore.bind(matchSetController)
+);
+
+/**
+ * @swagger
+ * /match-sets/sub-match/{subMatchId}/live-score:
+ *   get:
+ *     tags: [Match Sets]
+ *     summary: Get live set score from Redis
+ *     parameters:
+ *       - in: path
+ *         name: subMatchId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: setNumber
+ *         schema:
+ *           type: integer
+ *         description: Optional set number. Defaults to next unfinished set.
+ *     responses:
+ *       200:
+ *         description: Current live score or null if cache missing
+ */
+router.get(
+  "/sub-match/:subMatchId/live-score",
+  matchSetController.getLiveSetScore.bind(matchSetController)
+);
+
+/**
+ * @swagger
  * /match-sets/{id}:
  *   get:
  *     tags: [Match Sets]

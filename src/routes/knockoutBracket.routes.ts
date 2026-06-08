@@ -1,9 +1,60 @@
 import { Router } from "express";
 import knockoutBracketController from "../controllers/knockoutBracket.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
+import { checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
+
+/**
+ * @swagger
+ * /knockout-brackets/preview-placeholders:
+ *   post:
+ *     tags: [Knockout Brackets]
+ *     summary: Preview TBD placeholder bracket tree
+ *     description: Preview bracket placeholders without saving to database. Use /knockout-brackets/placeholders to persist after organizer review.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [categoryId]
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Bracket placeholder preview generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/BracketTreeDto'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/preview-placeholders",
+  authenticate,
+  checkRole("organizer"),
+  knockoutBracketController.previewPlaceholders.bind(knockoutBracketController),
+);
 
 /**
  * @swagger
@@ -58,8 +109,67 @@ const router = Router();
 router.post(
   "/placeholders",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   knockoutBracketController.generatePlaceholders.bind(knockoutBracketController),
+);
+
+/**
+ * @swagger
+ * /knockout-brackets/preview-fill-qualifiers:
+ *   post:
+ *     tags: [Knockout Brackets]
+ *     summary: Preview filling qualifiers into brackets
+ *     description: Preview shuffled qualifier placement without saving. Response includes entryIds; send same entryIds to /knockout-brackets/fill-qualifiers to persist exactly what organizer reviewed.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [categoryId]
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Qualifier placement preview generated successfully. data.entryIds contains save order and data.bracketTree contains preview tree.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     entryIds:
+ *                       type: array
+ *                       items:
+ *                         type: integer
+ *                       example: [5, 9, 2, 12]
+ *                     bracketTree:
+ *                       $ref: '#/components/schemas/BracketTreeDto'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/preview-fill-qualifiers",
+  authenticate,
+  checkRole("organizer"),
+  knockoutBracketController.previewFillQualifiers.bind(knockoutBracketController),
 );
 
 /**
@@ -88,6 +198,12 @@ router.post(
  *               categoryId:
  *                 type: integer
  *                 example: 1
+ *               entryIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Optional order returned by /preview-fill-qualifiers. Use it to save the exact reviewed bracket.
+ *                 example: [5, 9, 2, 12]
  *     responses:
  *       200:
  *         description: Qualifiers filled into bracket successfully
@@ -116,8 +232,67 @@ router.post(
 router.post(
   "/fill-qualifiers",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   knockoutBracketController.fillQualifiers.bind(knockoutBracketController),
+);
+
+/**
+ * @swagger
+ * /knockout-brackets/preview-from-entries:
+ *   post:
+ *     tags: [Knockout Brackets]
+ *     summary: Preview knockout bracket from eligible entries
+ *     description: Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/from-entries to persist exactly what organizer reviewed.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [categoryId]
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Knockout bracket preview generated successfully. data.entryIds contains save order and data.bracketTree contains preview tree.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     entryIds:
+ *                       type: array
+ *                       items:
+ *                         type: integer
+ *                       example: [8, 3, 12, 6]
+ *                     bracketTree:
+ *                       $ref: '#/components/schemas/BracketTreeDto'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/preview-from-entries",
+  authenticate,
+  checkRole("organizer"),
+  knockoutBracketController.previewFromEntries.bind(knockoutBracketController),
 );
 
 /**
@@ -144,6 +319,12 @@ router.post(
  *               categoryId:
  *                 type: integer
  *                 example: 1
+ *               entryIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Optional order returned by /preview-from-entries. Use it to save the exact reviewed bracket.
+ *                 example: [8, 3, 12, 6]
  *     responses:
  *       201:
  *         description: Knockout bracket generated successfully
@@ -172,7 +353,7 @@ router.post(
 router.post(
   "/from-entries",
   authenticate,
-  checkPermission("schedules:create"),
+  checkRole("organizer"),
   knockoutBracketController.generateFromEntries.bind(knockoutBracketController),
 );
 
@@ -238,7 +419,7 @@ router.post(
 router.post(
   "/:id/advance-winner",
   authenticate,
-  checkPermission("schedules:update"),
+  checkRole("organizer"),
   knockoutBracketController.advanceWinner.bind(knockoutBracketController),
 );
 
@@ -295,7 +476,7 @@ router.post(
 router.get(
   "/validate/:categoryId",
   authenticate,
-  checkPermission("schedules:update"),
+  checkRole("organizer"),
   knockoutBracketController.validateBracketIntegrity.bind(knockoutBracketController),
 );
 
