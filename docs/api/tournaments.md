@@ -6,9 +6,9 @@ Total endpoints: 10
 
 ## POST /api/tournaments
 Tag: Tournaments
-Summary: Create a new tournament with categories
+Summary: Create a new tournament
 
-Create a tournament along with its tournament categories in a single transaction.
+Create a new tournament with optional categories
 
 Auth: bearerAuth
 
@@ -18,44 +18,26 @@ None
 Request body:
 Required: yes
 Type: object
-Fields:
-  - name: string | required | Name of the tournament
-  - tier: integer | required | Tournament tier level (1-5)
-  - location: string | required | Tournament venue location
-  - status: string | Tournament status (default is 'upcoming') | choices: upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled
-  - categories: array | Array of tournament categories
-    - items: object
-      - name: string | required | Name of the tournament category (e.g., Men's Singles, Women's Doubles)
-      - type: string | required | Type of tournament category | choices: single, team, double
-      - maxEntries: integer | required | Maximum number of entries allowed
-      - maxSets: integer | required | Maximum number of sets per match
-      - numberOfSingles: integer | Number of singles matches
-      - numberOfDoubles: integer | Number of doubles matches
-      - minAge: integer | Minimum age requirement
-      - maxAge: integer | Maximum age requirement
-      - minElo: integer | Minimum ELO rating requirement
-      - maxElo: integer | Maximum ELO rating requirement
-      - gender: string | Gender requirement for the tournament category | choices: male, female, mixed
-      - isGroupStage: boolean | Whether this category has a group stage (optional)
 Example payload:
 ```json
 {
-  "name": "Spring Championship 2026",
-  "tier": 3,
-  "location": "National Stadium",
+  "name": "string",
+  "introduction": "string",
+  "tier": 1,
+  "location": "string",
   "status": "upcoming",
   "categories": [
     {
-      "name": "Men's Singles",
+      "name": "string",
       "type": "single",
-      "maxEntries": 32,
-      "maxSets": 3,
-      "numberOfSingles": 3,
-      "numberOfDoubles": 2,
-      "minAge": 18,
-      "maxAge": 65,
-      "minElo": 1000,
-      "maxElo": 2000,
+      "maxEntries": 1,
+      "maxSets": 5,
+      "teamFormat": "string",
+      "minAge": 1,
+      "maxAge": 1,
+      "minElo": 1,
+      "maxElo": 1,
+      "maxMembersPerEntry": 1,
       "gender": "male",
       "isGroupStage": false
     }
@@ -67,64 +49,44 @@ Responses:
 ### 201
 Description: Tournament created successfully with all related categories
 Type: object
-Body:
-  - id: integer
-  - name: string
-  - tier: integer
-  - location: string
-  - status: string
-  - createdBy: integer | ID of the user who created this tournament
-  - createdAt: string
-  - updatedAt: string
-  - categories: array
-    - items: object
-      - id: integer
-      - tournamentId: integer
-      - name: string
-      - type: string | choices: single, team, double
-      - maxEntries: integer
-      - maxSets: integer
-      - numberOfSingles: integer
-      - numberOfDoubles: integer
-      - minAge: integer
-      - maxAge: integer
-      - minElo: integer
-      - maxElo: integer
-      - gender: string | choices: male, female, mixed
-      - isGroupStage: boolean
-      - createdAt: string
-      - updatedAt: string
 Example response:
 ```json
 {
   "id": 1,
-  "name": "Spring Championship 2026",
-  "tier": 3,
-  "location": "National Stadium",
+  "name": "string",
+  "introduction": "string",
+  "tier": 1,
   "status": "upcoming",
-  "createdBy": 5,
-  "createdAt": "2026-02-10T14:30:00Z",
-  "updatedAt": "2026-02-10T14:30:00Z",
+  "location": "string",
+  "createdBy": 1,
   "categories": [
     {
       "id": 1,
       "tournamentId": 1,
-      "name": "Men's Singles",
+      "name": "string",
       "type": "single",
-      "maxEntries": 32,
-      "maxSets": 3,
-      "numberOfSingles": 3,
-      "numberOfDoubles": 0,
-      "minAge": 18,
-      "maxAge": 65,
-      "minElo": 1000,
-      "maxElo": 2500,
+      "maxEntries": 1,
+      "maxSets": 1,
+      "teamFormat": "string",
+      "minAge": 1,
+      "maxAge": 1,
+      "minElo": 1,
+      "maxElo": 1,
+      "maxMembersPerEntry": 1,
       "gender": "male",
-      "isGroupStage": false,
-      "createdAt": "2026-02-10T14:30:00Z",
-      "updatedAt": "2026-02-10T14:30:00Z"
+      "isGroupStage": true,
+      "entryFee": 0,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "numberOfSingles": 1,
+      "numberOfDoubles": 1
     }
-  ]
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "startDate": "2026-05-27T00:00:00Z",
+  "endDate": "2026-05-27T00:00:00Z",
+  "numberOfTables": 1
 }
 ```
 
@@ -143,14 +105,12 @@ Example response:
 ```
 
 ### 401
-Description: Unauthorized - User not authenticated
+Description: Authentication required or token invalid
 Type: object
-Body:
-  - message: string
 Example response:
 ```json
 {
-  "message": "Unauthorized - User not authenticated"
+  "message": "Unauthorized access"
 }
 ```
 
@@ -189,32 +149,39 @@ Type: object
 Body:
   - tournaments: array
     - items: object
-      - id: integer
-      - name: string
-      - tier: integer
-      - status: string | choices: upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled
-      - location: string
-      - createdBy: integer
-      - createdAt: string
-      - updatedAt: string
+      - id: integer | Tournament ID
+      - name: string | required | Tournament name
+      - introduction: string | Tournament introduction
+      - tier: integer | required | Tournament tier level
+      - status: string | Current status of the tournament | choices: upcoming, ongoing, completed, brackets_generated, ongoing, completed, cancelled | default: "upcoming"
+      - location: string | required | Tournament venue location
+      - createdBy: integer | required | ID of the user who created this tournament
       - categories: array
         - items: object
-          - id: integer
-          - tournamentId: integer
-          - name: string
-          - type: string | choices: single, team, double
-          - maxEntries: integer
-          - maxSets: integer
-          - numberOfSingles: integer
-          - numberOfDoubles: integer
-          - minAge: integer
-          - maxAge: integer
-          - minElo: integer
-          - maxElo: integer
-          - gender: string | choices: male, female, mixed
-          - isGroupStage: boolean
+          - id: integer | Category ID
+          - tournamentId: integer | required | ID of the tournament this category belongs to
+          - name: string | required | Name of the tournament category (e.g., Men's Singles, Women's Doubles)
+          - type: string | required | Type of tournament category | choices: single, team, double
+          - maxEntries: integer | required | Maximum number of entries allowed
+          - maxSets: integer | required | Maximum number of sets per match
+          - teamFormat: string
+          - minAge: integer | Minimum age requirement
+          - maxAge: integer | Maximum age requirement
+          - minElo: integer | Minimum ELO requirement
+          - maxElo: integer | Maximum ELO requirement
+          - maxMembersPerEntry: integer | Only applicable for team categories. Null means no upper limit.
+          - gender: string | Gender requirement (male, female, or mixed) | choices: male, female, mixed
+          - isGroupStage: boolean | Whether this category has a group stage
+          - entryFee: number | default: 0
           - createdAt: string
           - updatedAt: string
+          - numberOfSingles: integer | Number of singles matches (for team type)
+          - numberOfDoubles: integer | Number of doubles matches (for team type)
+      - createdAt: string
+      - updatedAt: string
+      - startDate: string | required | Tournament start date and time
+      - endDate: string | Tournament end date and time (optional)
+      - numberOfTables: integer | Number of tables available for concurrent matches | default: 1
   - pagination: object
     - total: integer
     - page: integer
@@ -228,33 +195,40 @@ Example response:
   "tournaments": [
     {
       "id": 1,
-      "name": "Spring Championship 2026",
-      "tier": 3,
+      "name": "string",
+      "introduction": "string",
+      "tier": 1,
       "status": "upcoming",
-      "location": "National Stadium",
-      "createdBy": 5,
-      "createdAt": "2026-02-10T14:30:00Z",
-      "updatedAt": "2026-02-10T14:30:00Z",
+      "location": "string",
+      "createdBy": 1,
       "categories": [
         {
           "id": 1,
           "tournamentId": 1,
-          "name": "Men's Singles",
+          "name": "string",
           "type": "single",
-          "maxEntries": 32,
-          "maxSets": 3,
-          "numberOfSingles": 3,
-          "numberOfDoubles": 0,
-          "minAge": 18,
-          "maxAge": 65,
-          "minElo": 1000,
-          "maxElo": 2500,
+          "maxEntries": 1,
+          "maxSets": 1,
+          "teamFormat": "string",
+          "minAge": 1,
+          "maxAge": 1,
+          "minElo": 1,
+          "maxElo": 1,
+          "maxMembersPerEntry": 1,
           "gender": "male",
-          "isGroupStage": false,
-          "createdAt": "2026-02-10T14:30:00Z",
-          "updatedAt": "2026-02-10T14:30:00Z"
+          "isGroupStage": true,
+          "entryFee": 0,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z",
+          "numberOfSingles": 1,
+          "numberOfDoubles": 1
         }
-      ]
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "startDate": "2026-05-27T00:00:00Z",
+      "endDate": "2026-05-27T00:00:00Z",
+      "numberOfTables": 1
     }
   ],
   "pagination": {
@@ -301,37 +275,39 @@ Type: object
 Body:
   - tournaments: array
     - items: object
-      - id: integer
-      - name: string
-      - tier: integer
-      - status: string | choices: upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled
-      - startDate: string
-      - endDate: string
-      - registrationStartDate: string
-      - registrationEndDate: string
-      - bracketGenerationDate: string
-      - location: string
-      - numberOfTables: integer
-      - createdBy: integer
-      - createdAt: string
-      - updatedAt: string
+      - id: integer | Tournament ID
+      - name: string | required | Tournament name
+      - introduction: string | Tournament introduction
+      - tier: integer | required | Tournament tier level
+      - status: string | Current status of the tournament | choices: upcoming, ongoing, completed, brackets_generated, ongoing, completed, cancelled | default: "upcoming"
+      - location: string | required | Tournament venue location
+      - createdBy: integer | required | ID of the user who created this tournament
       - categories: array
         - items: object
-          - id: integer
-          - name: string
-          - type: string | choices: single, team, double
-          - maxEntries: integer
-          - maxSets: integer
-          - numberOfSingles: integer
-          - numberOfDoubles: integer
-          - minAge: integer
-          - maxAge: integer
-          - minElo: integer
-          - maxElo: integer
-          - gender: string | choices: male, female, mixed
-          - isGroupStage: boolean
+          - id: integer | Category ID
+          - tournamentId: integer | required | ID of the tournament this category belongs to
+          - name: string | required | Name of the tournament category (e.g., Men's Singles, Women's Doubles)
+          - type: string | required | Type of tournament category | choices: single, team, double
+          - maxEntries: integer | required | Maximum number of entries allowed
+          - maxSets: integer | required | Maximum number of sets per match
+          - teamFormat: string
+          - minAge: integer | Minimum age requirement
+          - maxAge: integer | Maximum age requirement
+          - minElo: integer | Minimum ELO requirement
+          - maxElo: integer | Maximum ELO requirement
+          - maxMembersPerEntry: integer | Only applicable for team categories. Null means no upper limit.
+          - gender: string | Gender requirement (male, female, or mixed) | choices: male, female, mixed
+          - isGroupStage: boolean | Whether this category has a group stage
+          - entryFee: number | default: 0
           - createdAt: string
           - updatedAt: string
+          - numberOfSingles: integer | Number of singles matches (for team type)
+          - numberOfDoubles: integer | Number of doubles matches (for team type)
+      - createdAt: string
+      - updatedAt: string
+      - startDate: string | required | Tournament start date and time
+      - endDate: string | Tournament end date and time (optional)
+      - numberOfTables: integer | Number of tables available for concurrent matches | default: 1
   - pagination: object
     - total: integer | Total number of tournaments matching the filters
     - page: integer | Current page number
@@ -345,38 +321,40 @@ Example response:
   "tournaments": [
     {
       "id": 1,
-      "name": "Spring Championship 2026",
-      "tier": 3,
+      "name": "string",
+      "introduction": "string",
+      "tier": 1,
       "status": "upcoming",
-      "startDate": "2026-03-15T09:00:00Z",
-      "endDate": "2026-03-20T18:00:00Z",
-      "registrationStartDate": "2026-02-15T00:00:00Z",
-      "registrationEndDate": "2026-03-10T23:59:59Z",
-      "bracketGenerationDate": "2026-03-12T10:00:00Z",
-      "location": "National Stadium",
-      "numberOfTables": 4,
-      "createdBy": 5,
-      "createdAt": "2026-02-10T14:30:00Z",
-      "updatedAt": "2026-02-10T14:30:00Z",
+      "location": "string",
+      "createdBy": 1,
       "categories": [
         {
           "id": 1,
-          "name": "Men's Singles",
+          "tournamentId": 1,
+          "name": "string",
           "type": "single",
-          "maxEntries": 32,
-          "maxSets": 3,
-          "numberOfSingles": 3,
-          "numberOfDoubles": 0,
-          "minAge": 18,
-          "maxAge": 65,
-          "minElo": 1000,
-          "maxElo": 2500,
+          "maxEntries": 1,
+          "maxSets": 1,
+          "teamFormat": "string",
+          "minAge": 1,
+          "maxAge": 1,
+          "minElo": 1,
+          "maxElo": 1,
+          "maxMembersPerEntry": 1,
           "gender": "male",
-          "isGroupStage": false,
-          "createdAt": "2026-02-10T14:30:00Z",
-          "updatedAt": "2026-02-10T14:30:00Z"
+          "isGroupStage": true,
+          "entryFee": 0,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z",
+          "numberOfSingles": 1,
+          "numberOfDoubles": 1
         }
-      ]
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "startDate": "2026-05-27T00:00:00Z",
+      "endDate": "2026-05-27T00:00:00Z",
+      "numberOfTables": 1
     }
   ],
   "pagination": {
@@ -481,20 +459,23 @@ Body:
       - items: object
         - id: integer
         - name: string
-        - registrationStartDate: string
         - status: string
+        - scheduleConfig: object
+          - registrationStartDate: string
     - closingSoon: array | Tournaments that will close registration soon
       - items: object
         - id: integer
         - name: string
-        - registrationEndDate: string
         - status: string
+        - scheduleConfig: object
+          - registrationEndDate: string
     - bracketsSoon: array | Tournaments that will generate brackets soon
       - items: object
         - id: integer
         - name: string
-        - bracketGenerationDate: string
         - status: string
+        - scheduleConfig: object
+          - bracketGenerationDate: string
   - metadata: object
     - lookAheadHours: integer
     - timestamp: string
@@ -507,24 +488,30 @@ Example response:
       {
         "id": 1,
         "name": "string",
-        "registrationStartDate": "2026-05-27T00:00:00Z",
-        "status": "upcoming"
+        "status": "upcoming",
+        "scheduleConfig": {
+          "registrationStartDate": "2026-05-27T00:00:00Z"
+        }
       }
     ],
     "closingSoon": [
       {
         "id": 1,
         "name": "string",
-        "registrationEndDate": "2026-05-27T00:00:00Z",
-        "status": "registration_open"
+        "status": "registration_open",
+        "scheduleConfig": {
+          "registrationEndDate": "2026-05-27T00:00:00Z"
+        }
       }
     ],
     "bracketsSoon": [
       {
         "id": 1,
         "name": "string",
-        "bracketGenerationDate": "2026-05-27T00:00:00Z",
-        "status": "registration_closed"
+        "status": "registration_closed",
+        "scheduleConfig": {
+          "bracketGenerationDate": "2026-05-27T00:00:00Z"
+        }
       }
     ]
   },
@@ -574,16 +561,39 @@ Type: object
 Body:
   - tournaments: array
     - items: object
-      - id: integer
-      - name: string
-      - tier: integer
-      - status: string
-      - location: string
-      - createdBy: integer
-      - createdAt: string
-      - updatedAt: string
+      - id: integer | Tournament ID
+      - name: string | required | Tournament name
+      - introduction: string | Tournament introduction
+      - tier: integer | required | Tournament tier level
+      - status: string | Current status of the tournament | choices: upcoming, ongoing, completed, brackets_generated, ongoing, completed, cancelled | default: "upcoming"
+      - location: string | required | Tournament venue location
+      - createdBy: integer | required | ID of the user who created this tournament
       - categories: array
         - items: object
+          - id: integer | Category ID
+          - tournamentId: integer | required | ID of the tournament this category belongs to
+          - name: string | required | Name of the tournament category (e.g., Men's Singles, Women's Doubles)
+          - type: string | required | Type of tournament category | choices: single, team, double
+          - maxEntries: integer | required | Maximum number of entries allowed
+          - maxSets: integer | required | Maximum number of sets per match
+          - teamFormat: string
+          - minAge: integer | Minimum age requirement
+          - maxAge: integer | Maximum age requirement
+          - minElo: integer | Minimum ELO requirement
+          - maxElo: integer | Maximum ELO requirement
+          - maxMembersPerEntry: integer | Only applicable for team categories. Null means no upper limit.
+          - gender: string | Gender requirement (male, female, or mixed) | choices: male, female, mixed
+          - isGroupStage: boolean | Whether this category has a group stage
+          - entryFee: number | default: 0
+          - createdAt: string
+          - updatedAt: string
+          - numberOfSingles: integer | Number of singles matches (for team type)
+          - numberOfDoubles: integer | Number of doubles matches (for team type)
+      - createdAt: string
+      - updatedAt: string
+      - startDate: string | required | Tournament start date and time
+      - endDate: string | Tournament end date and time (optional)
+      - numberOfTables: integer | Number of tables available for concurrent matches | default: 1
   - pagination: object
     - total: integer
     - page: integer
@@ -597,16 +607,40 @@ Example response:
   "tournaments": [
     {
       "id": 1,
-      "name": "Spring Championship 2026",
-      "tier": 3,
+      "name": "string",
+      "introduction": "string",
+      "tier": 1,
       "status": "upcoming",
-      "location": "National Stadium",
-      "createdBy": 5,
+      "location": "string",
+      "createdBy": 1,
+      "categories": [
+        {
+          "id": 1,
+          "tournamentId": 1,
+          "name": "string",
+          "type": "single",
+          "maxEntries": 1,
+          "maxSets": 1,
+          "teamFormat": "string",
+          "minAge": 1,
+          "maxAge": 1,
+          "minElo": 1,
+          "maxElo": 1,
+          "maxMembersPerEntry": 1,
+          "gender": "male",
+          "isGroupStage": true,
+          "entryFee": 0,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z",
+          "numberOfSingles": 1,
+          "numberOfDoubles": 1
+        }
+      ],
       "createdAt": "2026-05-27T00:00:00Z",
       "updatedAt": "2026-05-27T00:00:00Z",
-      "categories": [
-        null
-      ]
+      "startDate": "2026-05-27T00:00:00Z",
+      "endDate": "2026-05-27T00:00:00Z",
+      "numberOfTables": 1
     }
   ],
   "pagination": {
@@ -659,16 +693,39 @@ Type: object
 Body:
   - tournaments: array
     - items: object
-      - id: integer
-      - name: string
-      - tier: integer
-      - status: string
-      - location: string
-      - createdBy: integer
-      - createdAt: string
-      - updatedAt: string
+      - id: integer | Tournament ID
+      - name: string | required | Tournament name
+      - introduction: string | Tournament introduction
+      - tier: integer | required | Tournament tier level
+      - status: string | Current status of the tournament | choices: upcoming, ongoing, completed, brackets_generated, ongoing, completed, cancelled | default: "upcoming"
+      - location: string | required | Tournament venue location
+      - createdBy: integer | required | ID of the user who created this tournament
       - categories: array
         - items: object
+          - id: integer | Category ID
+          - tournamentId: integer | required | ID of the tournament this category belongs to
+          - name: string | required | Name of the tournament category (e.g., Men's Singles, Women's Doubles)
+          - type: string | required | Type of tournament category | choices: single, team, double
+          - maxEntries: integer | required | Maximum number of entries allowed
+          - maxSets: integer | required | Maximum number of sets per match
+          - teamFormat: string
+          - minAge: integer | Minimum age requirement
+          - maxAge: integer | Maximum age requirement
+          - minElo: integer | Minimum ELO requirement
+          - maxElo: integer | Maximum ELO requirement
+          - maxMembersPerEntry: integer | Only applicable for team categories. Null means no upper limit.
+          - gender: string | Gender requirement (male, female, or mixed) | choices: male, female, mixed
+          - isGroupStage: boolean | Whether this category has a group stage
+          - entryFee: number | default: 0
+          - createdAt: string
+          - updatedAt: string
+          - numberOfSingles: integer | Number of singles matches (for team type)
+          - numberOfDoubles: integer | Number of doubles matches (for team type)
+      - createdAt: string
+      - updatedAt: string
+      - startDate: string | required | Tournament start date and time
+      - endDate: string | Tournament end date and time (optional)
+      - numberOfTables: integer | Number of tables available for concurrent matches | default: 1
   - pagination: object
     - total: integer
     - page: integer
@@ -682,16 +739,40 @@ Example response:
   "tournaments": [
     {
       "id": 1,
-      "name": "Spring Championship 2026",
-      "tier": 3,
-      "status": "ongoing",
-      "location": "National Stadium",
-      "createdBy": 5,
+      "name": "string",
+      "introduction": "string",
+      "tier": 1,
+      "status": "upcoming",
+      "location": "string",
+      "createdBy": 1,
+      "categories": [
+        {
+          "id": 1,
+          "tournamentId": 1,
+          "name": "string",
+          "type": "single",
+          "maxEntries": 1,
+          "maxSets": 1,
+          "teamFormat": "string",
+          "minAge": 1,
+          "maxAge": 1,
+          "minElo": 1,
+          "maxElo": 1,
+          "maxMembersPerEntry": 1,
+          "gender": "male",
+          "isGroupStage": true,
+          "entryFee": 0,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z",
+          "numberOfSingles": 1,
+          "numberOfDoubles": 1
+        }
+      ],
       "createdAt": "2026-05-27T00:00:00Z",
       "updatedAt": "2026-05-27T00:00:00Z",
-      "categories": [
-        null
-      ]
+      "startDate": "2026-05-27T00:00:00Z",
+      "endDate": "2026-05-27T00:00:00Z",
+      "numberOfTables": 1
     }
   ],
   "pagination": {
@@ -736,76 +817,44 @@ Responses:
 ### 200
 Description: Tournament details with categories
 Type: object
-Body:
-  - id: integer
-  - name: string
-  - tier: integer
-  - status: string | choices: upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled
-  - startDate: string
-  - endDate: string
-  - registrationStartDate: string
-  - registrationEndDate: string
-  - bracketGenerationDate: string
-  - location: string
-  - numberOfTables: integer
-  - createdBy: integer
-  - createdAt: string
-  - updatedAt: string
-  - categories: array
-    - items: object
-      - id: integer
-      - tournamentId: integer
-      - name: string
-      - type: string | choices: single, team, double
-      - maxEntries: integer
-      - maxSets: integer
-      - numberOfSingles: integer
-      - numberOfDoubles: integer
-      - minAge: integer
-      - maxAge: integer
-      - minElo: integer
-      - maxElo: integer
-      - gender: string | choices: male, female, mixed
-      - isGroupStage: boolean
-      - createdAt: string
-      - updatedAt: string
 Example response:
 ```json
 {
   "id": 1,
-  "name": "Spring Championship 2026",
-  "tier": 3,
+  "name": "string",
+  "introduction": "string",
+  "tier": 1,
   "status": "upcoming",
-  "startDate": "2026-03-15T09:00:00Z",
-  "endDate": "2026-03-20T18:00:00Z",
-  "registrationStartDate": "2026-02-15T00:00:00Z",
-  "registrationEndDate": "2026-03-10T23:59:59Z",
-  "bracketGenerationDate": "2026-03-12T10:00:00Z",
-  "location": "National Stadium",
-  "numberOfTables": 4,
-  "createdBy": 5,
-  "createdAt": "2026-02-10T14:30:00Z",
-  "updatedAt": "2026-02-10T14:30:00Z",
+  "location": "string",
+  "createdBy": 1,
   "categories": [
     {
       "id": 1,
       "tournamentId": 1,
-      "name": "Men's Singles",
+      "name": "string",
       "type": "single",
-      "maxEntries": 32,
-      "maxSets": 3,
-      "numberOfSingles": 3,
-      "numberOfDoubles": 0,
-      "minAge": 18,
-      "maxAge": 65,
-      "minElo": 1000,
-      "maxElo": 2500,
+      "maxEntries": 1,
+      "maxSets": 1,
+      "teamFormat": "string",
+      "minAge": 1,
+      "maxAge": 1,
+      "minElo": 1,
+      "maxElo": 1,
+      "maxMembersPerEntry": 1,
       "gender": "male",
-      "isGroupStage": false,
-      "createdAt": "2026-02-10T14:30:00Z",
-      "updatedAt": "2026-02-10T14:30:00Z"
+      "isGroupStage": true,
+      "entryFee": 0,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "numberOfSingles": 1,
+      "numberOfDoubles": 1
     }
-  ]
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "startDate": "2026-05-27T00:00:00Z",
+  "endDate": "2026-05-27T00:00:00Z",
+  "numberOfTables": 1
 }
 ```
 
@@ -825,7 +874,7 @@ Example response:
 Tag: Tournaments
 Summary: Update tournament with categories
 
-Update a tournament and optionally its categories. If categories are provided, all existing categories will be replaced.
+Update a tournament and optionally replace its categories.
 
 Auth: bearerAuth
 
@@ -835,56 +884,26 @@ Request parameters:
 Request body:
 Required: yes
 Type: object
-Fields:
-  - name: string
-  - tier: integer
-  - startDate: string
-  - endDate: string
-  - registrationStartDate: string | Registration opens at this date
-  - registrationEndDate: string | Registration closes at this date (must be before startDate)
-  - bracketGenerationDate: string | Date when brackets are generated (must be at least 2 days before startDate)
-  - location: string
-  - status: string | choices: upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled
-  - numberOfTables: integer | Number of tables available for concurrent matches
-  - categories: array | Array of tournament categories (optional). If provided, replaces all existing categories.
-    - items: object
-      - name: string | required
-      - type: string | required | choices: single, team, double
-      - maxEntries: integer | required
-      - maxSets: integer | required
-      - numberOfSingles: integer
-      - numberOfDoubles: integer
-      - minAge: integer
-      - maxAge: integer
-      - minElo: integer
-      - maxElo: integer
-      - gender: string | choices: male, female, mixed
-      - isGroupStage: boolean
 Example payload:
 ```json
 {
-  "name": "Spring Championship 2026 - Updated",
-  "tier": 3,
-  "startDate": "2026-03-15T09:00:00Z",
-  "endDate": "2026-03-20T18:00:00Z",
-  "registrationStartDate": "2026-02-15T00:00:00Z",
-  "registrationEndDate": "2026-03-10T23:59:59Z",
-  "bracketGenerationDate": "2026-03-12T10:00:00Z",
-  "location": "National Stadium",
-  "status": "ongoing",
-  "numberOfTables": 6,
+  "name": "string",
+  "introduction": "string",
+  "tier": 1,
+  "location": "string",
+  "status": "upcoming",
   "categories": [
     {
-      "name": "Men's Singles",
+      "name": "string",
       "type": "single",
-      "maxEntries": 32,
-      "maxSets": 3,
-      "numberOfSingles": 3,
-      "numberOfDoubles": 2,
-      "minAge": 18,
-      "maxAge": 65,
-      "minElo": 1000,
-      "maxElo": 2500,
+      "maxEntries": 1,
+      "maxSets": 5,
+      "teamFormat": "string",
+      "minAge": 1,
+      "maxAge": 1,
+      "minElo": 1,
+      "maxElo": 1,
+      "maxMembersPerEntry": 1,
       "gender": "male",
       "isGroupStage": false
     }
@@ -901,23 +920,54 @@ Example response:
 {
   "id": 1,
   "name": "string",
+  "introduction": "string",
   "tier": 1,
   "status": "upcoming",
+  "location": "string",
+  "createdBy": 1,
+  "categories": [
+    {
+      "id": 1,
+      "tournamentId": 1,
+      "name": "string",
+      "type": "single",
+      "maxEntries": 1,
+      "maxSets": 1,
+      "teamFormat": "string",
+      "minAge": 1,
+      "maxAge": 1,
+      "minElo": 1,
+      "maxElo": 1,
+      "maxMembersPerEntry": 1,
+      "gender": "male",
+      "isGroupStage": true,
+      "entryFee": 0,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "numberOfSingles": 1,
+      "numberOfDoubles": 1
+    }
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
   "startDate": "2026-05-27T00:00:00Z",
   "endDate": "2026-05-27T00:00:00Z",
-  "registrationStartDate": "2026-05-27T00:00:00Z",
-  "registrationEndDate": "2026-05-27T00:00:00Z",
-  "bracketGenerationDate": "2026-05-27T00:00:00Z",
-  "location": "string",
-  "numberOfTables": 1,
-  "createdBy": 1,
-  "createdAt": "2026-05-27T00:00:00Z",
-  "updatedAt": "2026-05-27T00:00:00Z"
+  "numberOfTables": 1
 }
 ```
 
 ### 400
 Bad request
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -935,6 +985,8 @@ Example response:
 Tag: Tournaments
 Summary: Delete tournament
 
+Delete a tournament by ID
+
 Auth: bearerAuth
 
 Request parameters:
@@ -946,5 +998,25 @@ None
 Responses:
 ### 204
 Successfully deleted, no content returned
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
 
 ---

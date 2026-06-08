@@ -2,27 +2,72 @@
 
 Match management endpoints
 
-Total endpoints: 16
+Total endpoints: 8
 
-## POST /api/matches
+## GET /api/matches/pending
 Tag: Matches
-Summary: Create a new match
+Summary: Get all pending matches awaiting chief referee approval
+
+Retrieve list of matches with resultStatus = 'pending' that require chief referee approval.
+These matches have been completed by referees and submitted for review but not yet approved.
+
+Business Logic:
+- Only returns matches where status = 'completed' AND resultStatus = 'pending'
+- Chief referee can then approve or reject these results
+- Approval updates standings/brackets and Elo scores
+- Rejection resets match to 'in_progress' for referee resubmission
 
 Auth: bearerAuth
 
 Request parameters:
-None
+- tournamentId (query) | type: integer | required | Tournament ID used to verify chief referee permission
+- page (query) | type: integer | Page number for pagination (1-indexed) | default: 1
+- limit (query) | type: integer | Maximum number of records per page | default: 10
 
 Request body:
-Required: yes
-Type: object
+None
 
 Responses:
-### 201
-Match created successfully
+### 200
+Description: Successfully retrieved pending matches with pagination
+Type: object
+Body:
+  - matches: array
+    - items: object
+      - id: integer
+      - scheduleId: integer
+      - entryAId: integer
+      - entryBId: integer
+      - status: string | choices: scheduled, in_progress, completed, cancelled
+      - winnerEntryId: integer
+      - resultStatus: string | choices: pending, approved, rejected
+      - reviewNotes: string
+      - createdAt: string
+      - updatedAt: string
+  - count: integer
+Example response:
+```json
+{
+  "matches": [
+    {
+      "id": 42,
+      "scheduleId": 15,
+      "entryAId": 101,
+      "entryBId": 102,
+      "status": "completed",
+      "winnerEntryId": 101,
+      "resultStatus": "pending",
+      "reviewNotes": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "count": 5
+}
+```
 
 ### 400
-Description: Bad request
+Description: Invalid request data
 Type: object
 Example response:
 ```json
@@ -31,148 +76,119 @@ Example response:
 }
 ```
 
----
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
-## GET /api/matches
-Tag: Matches
-Summary: Get all matches
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
-Request parameters:
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-List of matches
-
----
-
-## GET /api/matches/pending
-Tag: Matches
-Summary: Get all pending matches waiting for approval (Chief Referee)
-
-Get list of matches with resultStatus = 'pending' that need chief referee approval.
-These are matches where referees have submitted results but not yet approved.
-
-Auth: bearerAuth
-
-Request parameters:
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-List of pending matches
-
----
-
-## GET /api/matches/schedule/{scheduleId}
-Tag: Matches
-Summary: Get matches by schedule ID
-
-Request parameters:
-- scheduleId (path) | type: integer | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-List of matches for schedule
-
----
-
-## GET /api/matches/status/{status}
-Tag: Matches
-Summary: Get matches by status
-
-Request parameters:
-- status (path) | type: string | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-List of matches with specified status
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## POST /api/matches/{id}/start
 Tag: Matches
-Summary: Start a match
+Summary: Start a match and assign referees dynamically
 
-Automatically assign 2 available referees and change match status from scheduled to in_progress
+Transition match from 'scheduled' to 'in_progress' status.
+Automatically assigns a table (if available) and dynamically assigns available referees from tournament pool.
+
+Business Logic:
+- Match must be in 'scheduled' status
+- Assigns available table dynamically (rotates through assigned tables)
+- Assigns 1-2 available referees from tournament referee pool (least busy first)
+- Only assigned referees can finalize the match result
+- Changes match status to 'in_progress'
 
 Auth: bearerAuth
 
 Request parameters:
-- id (path) | type: integer | required | Resource ID
+- id (path) | type: integer | required | Match ID to start
 
 Request body:
-None
-
-Responses:
-### 200
-Match started successfully with referees assigned
-
-### 400
-Bad request - Match is not in scheduled status or not enough available referees
-
-### 404
-Description: Resource not found
+Required: no
 Type: object
-Example response:
-```json
-{
-  "message": "Resource not found"
-}
-```
-
----
-
-## GET /api/matches/{id}/pending-with-elo
-Tag: Matches
-Summary: Get pending match with ELO preview (Chief Referee)
-
-Get match details with pending status and preview of ELO changes.
-This helps chief referee review the result and see how ELO will change before approval.
-
-Auth: bearerAuth
-
-Request parameters:
-- id (path) | type: integer | required | Resource ID
-
-Request body:
-None
 
 Responses:
 ### 200
-Description: Pending match with ELO preview
+Description: Match started successfully with referees and table assigned
 Type: object
 Body:
-  - match: object | Match details
-  - eloPreview: object | Preview of ELO changes for all players
+  - id: integer
+  - scheduleId: integer
+  - entryAId: integer
+  - entryBId: integer
+  - status: string | choices: scheduled, in_progress, completed, cancelled
+  - winnerEntryId: integer
+  - resultStatus: string | choices: pending, approved, rejected
+  - createdAt: string
+  - updatedAt: string
 Example response:
 ```json
 {
-  "match": null,
-  "eloPreview": null
+  "id": 42,
+  "scheduleId": 15,
+  "entryAId": 101,
+  "entryBId": 102,
+  "status": "in_progress",
+  "winnerEntryId": null,
+  "resultStatus": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
 }
 ```
 
 ### 400
-Bad request - Match is not in pending status
+Description: Bad request - Match not in scheduled status or insufficient referees available
+Type: object
+Example response:
+```json
+{
+  "message": "Cannot start match. Status is \"in_progress\", must be \"scheduled\""
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -181,6 +197,16 @@ Example response:
 ```json
 {
   "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -188,27 +214,94 @@ Example response:
 
 ## POST /api/matches/{id}/finalize
 Tag: Matches
-Summary: Submit match result for approval (Referee)
+Summary: Submit match result for chief referee approval
 
-Referee submits match result which will be in pending status:
-- Check if a team has won enough sets (maxSets/2 + 1)
-- Set match status to completed with resultStatus = pending
-- Chief referee must approve before standings/brackets and Elo are updated
+Assigned referee submits the final match result. Match transitions to 'completed' with 'pending' resultStatus.
+Result will be reviewed and approved/rejected by chief referee before affecting standings and Elo.
+
+Business Logic:
+- Match must be in 'in_progress' status
+- Only assigned referees can finalize
+- Validates that at least one team won enough sets: floor(maxSets/2) + 1
+- Sets winner automatically based on sets won
+- Changes match status to 'completed', resultStatus to 'pending'
+- Chief referee must approve before standings/ELO are updated
+- If rejected by chief referee, match returns to 'in_progress' for re-submission
 
 Auth: bearerAuth
 
 Request parameters:
-- id (path) | type: integer | required | Resource ID
+- id (path) | type: integer | required | Match ID to finalize
 
 Request body:
-None
+Required: no
+Type: object
 
 Responses:
 ### 200
-Match result submitted, waiting for chief referee approval
+Description: Match result submitted successfully, awaiting chief referee approval
+Type: object
+Body:
+  - message: string
+  - match: object
+    - id: integer
+    - scheduleId: integer
+    - entryAId: integer
+    - entryBId: integer
+    - status: string | choices: scheduled, in_progress, completed, cancelled
+    - winnerEntryId: integer
+    - resultStatus: string | choices: pending, approved, rejected
+    - reviewNotes: string
+    - createdAt: string
+    - updatedAt: string
+Example response:
+```json
+{
+  "message": "Match result submitted successfully. Waiting for chief referee approval.",
+  "match": {
+    "id": 42,
+    "scheduleId": 15,
+    "entryAId": 101,
+    "entryBId": 102,
+    "status": "completed",
+    "winnerEntryId": 101,
+    "resultStatus": "pending",
+    "reviewNotes": null,
+    "createdAt": "2026-05-27T00:00:00Z",
+    "updatedAt": "2026-05-27T00:00:00Z"
+  }
+}
+```
 
 ### 400
-Bad request - Match not in_progress or not enough sets completed
+Description: Bad request - Match not in_progress status or not enough sets completed
+Type: object
+Example response:
+```json
+{
+  "message": "Match not complete. Need 2 sets to win. Entry A: 1, Entry B: 1"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -217,6 +310,16 @@ Example response:
 ```json
 {
   "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -226,15 +329,21 @@ Example response:
 Tag: Matches
 Summary: Approve match result (Chief Referee only)
 
-Chief referee approves the pending match result:
-- Update resultStatus to approved
-- Update group standings or knockout brackets
-- Calculate and update Elo scores for all players
+Chief referee approves a pending match result. This triggers final updates to standings/brackets and Elo scores.
+
+Business Logic:
+- Match must be in 'completed' status with resultStatus = 'pending'
+- Only chief referee of the tournament can approve
+- Changes resultStatus to 'approved'
+- For group stage: Updates group standings (win/loss counts, sets won/lost)
+- For knockout stage: Advances winner to next round bracket
+- Calculates and updates Elo scores for all participating players
+- Approved results are permanent and affect tournament progression
 
 Auth: bearerAuth
 
 Request parameters:
-- id (path) | type: integer | required | Resource ID
+- id (path) | type: integer | required | Match ID to approve
 
 Request body:
 Required: no
@@ -250,10 +359,69 @@ Example payload:
 
 Responses:
 ### 200
-Match result approved, standings/brackets and Elo updated
+Description: Match result approved successfully, standings/brackets and Elo updated
+Type: object
+Body:
+  - message: string
+  - match: object
+    - id: integer
+    - scheduleId: integer
+    - entryAId: integer
+    - entryBId: integer
+    - status: string | choices: scheduled, in_progress, completed, cancelled
+    - winnerEntryId: integer
+    - resultStatus: string | choices: pending, approved, rejected
+    - reviewNotes: string
+    - createdAt: string
+    - updatedAt: string
+Example response:
+```json
+{
+  "message": "Match result approved successfully. Standings and Elo scores updated.",
+  "match": {
+    "id": 42,
+    "scheduleId": 15,
+    "entryAId": 101,
+    "entryBId": 102,
+    "status": "completed",
+    "winnerEntryId": 101,
+    "resultStatus": "approved",
+    "reviewNotes": "Match approved. Set scores verified.",
+    "createdAt": "2026-05-27T00:00:00Z",
+    "updatedAt": "2026-05-27T00:00:00Z"
+  }
+}
+```
 
 ### 400
-Bad request - Invalid match state
+Description: Bad request - Invalid match state (must be completed with pending result)
+Type: object
+Example response:
+```json
+{
+  "message": "Cannot approve. Result status is \"approved\", must be \"pending\""
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Forbidden - User is not the chief referee of the tournament
+Type: object
+Example response:
+```json
+{
+  "message": "Only the chief referee can perform this action"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -262,6 +430,16 @@ Example response:
 ```json
 {
   "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -271,21 +449,27 @@ Example response:
 Tag: Matches
 Summary: Reject match result (Chief Referee only)
 
-Chief referee rejects the pending match result:
-- Update resultStatus to rejected
-- Reset match to in_progress status
-- Clear winner so referee can resubmit
+Chief referee rejects a pending match result and sends it back for resubmission.
+
+Business Logic:
+- Match must be in 'completed' status with resultStatus = 'pending'
+- Only chief referee of the tournament can reject
+- Changes resultStatus to 'rejected'
+- Resets match status to 'in_progress' so referee can resubmit
+- Clears winner entry so referee must resubmit scores
+- Review notes explaining rejection are recorded
+- Referee must submit the match result again after rejection
 
 Auth: bearerAuth
 
 Request parameters:
-- id (path) | type: integer | required | Resource ID
+- id (path) | type: integer | required | Match ID to reject
 
 Request body:
 Required: yes
 Type: object
 Fields:
-  - reviewNotes: string | required | Required notes explaining why the result was rejected
+  - reviewNotes: string | required | Required explanation for why the result was rejected
 Example payload:
 ```json
 {
@@ -295,10 +479,69 @@ Example payload:
 
 Responses:
 ### 200
-Match result rejected, referee needs to resubmit
+Description: Match result rejected successfully, match returned to in_progress status
+Type: object
+Body:
+  - message: string
+  - match: object
+    - id: integer
+    - scheduleId: integer
+    - entryAId: integer
+    - entryBId: integer
+    - status: string | choices: scheduled, in_progress, completed, cancelled
+    - winnerEntryId: integer
+    - resultStatus: string | choices: pending, approved, rejected
+    - reviewNotes: string
+    - createdAt: string
+    - updatedAt: string
+Example response:
+```json
+{
+  "message": "Match result rejected. Referee needs to resubmit the result.",
+  "match": {
+    "id": 42,
+    "scheduleId": 15,
+    "entryAId": 101,
+    "entryBId": 102,
+    "status": "in_progress",
+    "winnerEntryId": null,
+    "resultStatus": "rejected",
+    "reviewNotes": "Set scores don't match the recorded points. Please resubmit with correct scores.",
+    "createdAt": "2026-05-27T00:00:00Z",
+    "updatedAt": "2026-05-27T00:00:00Z"
+  }
+}
+```
 
 ### 400
-Bad request - Review notes required or invalid state
+Description: Bad request - Invalid match state or missing review notes
+Type: object
+Example response:
+```json
+{
+  "message": "Review notes are required when rejecting a match result"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Forbidden - User is not the chief referee of the tournament
+Type: object
+Example response:
+```json
+{
+  "message": "Only the chief referee can perform this action"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -307,6 +550,16 @@ Example response:
 ```json
 {
   "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -314,61 +567,94 @@ Example response:
 
 ## GET /api/matches/{id}/elo-preview
 Tag: Matches
-Summary: Preview Elo changes for a match
+Summary: Preview Elo score changes for a match
 
 Calculate and preview how Elo scores will change for all players after match completion.
-Useful for checking expected Elo changes before finalizing the match.
+Displays expected vs actual scores and per-player Elo deltas.
+
+Business Logic:
+- Works on any match status (can preview before match is completed)
+- Calculates based on current match state and set scores
+- Shows average Elo for each entry
+- Calculates expected win probability for each entry
+- Shows actual match outcome (1 for winner, 0 for loser)
+- Margin multiplier adjusts Elo change based on match difficulty
+- Returns per-player Elo changes including:
+  - userId: player ID
+  - currentElo: current Elo rating
+  - expectedElo: Elo if match had expected outcome
+  - change: actual Elo change based on result
 
 Auth: bearerAuth
 
 Request parameters:
-- id (path) | type: integer | required | Resource ID
+- id (path) | type: integer | required | Match ID to preview Elo changes
 
 Request body:
 None
 
 Responses:
 ### 200
-Description: Elo changes preview
+Description: Elo changes preview for match
 Type: object
 Body:
   - entryA: object
     - averageElo: number
-    - expectedScore: number
-    - actualScore: number
+    - expectedScore: number | Probability of winning (0-1)
+    - actualScore: number | 1 if won, 0 if lost
   - entryB: object
     - averageElo: number
-    - expectedScore: number
-    - actualScore: number
-  - marginMultiplier: number
-  - changes: array
+    - expectedScore: number | Probability of winning (0-1)
+    - actualScore: number | 1 if won, 0 if lost
+  - marginMultiplier: number | Adjustment factor based on match margin/difficulty
+  - changes: array | Elo changes for each player in both entries
     - items: object
-      - userId: number
-      - currentElo: number
-      - expectedElo: number
-      - change: number
+      - userId: integer
+      - currentElo: integer
+      - expectedElo: integer
+      - change: integer | Actual Elo change (positive for winner, negative for loser)
 Example response:
 ```json
 {
   "entryA": {
-    "averageElo": 1,
-    "expectedScore": 1,
+    "averageElo": 1200.5,
+    "expectedScore": 0.65,
     "actualScore": 1
   },
   "entryB": {
-    "averageElo": 1,
-    "expectedScore": 1,
-    "actualScore": 1
+    "averageElo": 1150.3,
+    "expectedScore": 0.35,
+    "actualScore": 0
   },
-  "marginMultiplier": 1,
+  "marginMultiplier": 1.2,
   "changes": [
     {
-      "userId": 1,
-      "currentElo": 1,
-      "expectedElo": 1,
-      "change": 1
+      "userId": 10,
+      "currentElo": 1200,
+      "expectedElo": 1215,
+      "change": 18
     }
   ]
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
 }
 ```
 
@@ -379,6 +665,16 @@ Example response:
 ```json
 {
   "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -388,47 +684,136 @@ Example response:
 Tag: Matches
 Summary: Get upcoming matches for an athlete
 
-Get list of scheduled and in-progress matches that an athlete is participating in
+Retrieve list of matches that an athlete is participating in with status 'scheduled' or 'in_progress'.
+These are matches the athlete will compete in soon or are currently being played.
+
+Business Logic:
+- Returns matches where user is member of either entryA or entryB
+- Only includes matches with status 'scheduled' or 'in_progress'
+- Sorted chronologically by scheduled time (ascending)
+- Includes full match details: schedule, both entries with members, assigned referees
+- Useful for athlete dashboard to see what matches are coming up
 
 Auth: bearerAuth
 
 Request parameters:
-- userId (path) | type: number | required | ID of the athlete/user
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
+- userId (path) | type: integer | required | ID of the athlete/user
+- page (query) | type: integer | Page number for pagination (1-indexed) | default: 1
+- limit (query) | type: integer | Maximum number of records per page | default: 10
 
 Request body:
 None
 
 Responses:
 ### 200
-Description: List of upcoming matches
+Description: List of upcoming matches for the athlete
 Type: object
 Body:
-  - matches: array
+  - matches: array | Array of upcoming matches (scheduled or in_progress)
     - items: object
-  - count: number
-  - offset: number
-  - limit: number
+      - id: integer
+      - scheduleId: integer
+      - entryAId: integer
+      - entryBId: integer
+      - status: string | choices: scheduled, in_progress, completed, cancelled
+      - winnerEntryId: integer
+      - resultStatus: string | choices: pending, approved, rejected
+      - schedule: object
+        - id: integer
+        - scheduledAt: string
+      - entryA: object
+        - id: integer
+        - members: array
+          - items: object
+      - entryB: object
+        - id: integer
+        - members: array
+          - items: object
+      - matchReferees: array | Assigned referees for the match
+        - items: object
+      - createdAt: string
+      - updatedAt: string
+  - count: integer | Total count of upcoming matches for this user
+  - offset: integer | Records offset for this page
+  - limit: integer | Maximum records per page
 Example response:
 ```json
 {
   "matches": [
-    null
+    {
+      "id": 42,
+      "scheduleId": 1,
+      "entryAId": 1,
+      "entryBId": 1,
+      "status": "scheduled",
+      "winnerEntryId": 1,
+      "resultStatus": "pending",
+      "schedule": {
+        "id": 1,
+        "scheduledAt": "2026-05-27T00:00:00Z"
+      },
+      "entryA": {
+        "id": 1,
+        "members": [
+          null
+        ]
+      },
+      "entryB": {
+        "id": 1,
+        "members": [
+          null
+        ]
+      },
+      "matchReferees": [
+        null
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
   ],
-  "count": 1,
-  "offset": 1,
-  "limit": 1
+  "count": 5,
+  "offset": 0,
+  "limit": 10
 }
 ```
 
 ### 400
-Description: Bad request
+Description: Invalid request data
 Type: object
 Example response:
 ```json
 {
   "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
 }
 ```
 
@@ -438,14 +823,22 @@ Example response:
 Tag: Matches
 Summary: Get match history for an athlete
 
-Get list of completed matches that an athlete has participated in
+Retrieve list of completed and approved matches that an athlete has participated in.
+Provides a complete history of all finished matches with final results and winners.
+
+Business Logic:
+- Returns matches where user is member of either entryA or entryB
+- Only includes matches with status 'completed' AND resultStatus 'approved'
+- Sorted by most recent first (newest matches first)
+- Includes complete match details: all entries with members, set information, winner details
+- Useful for athlete profile to show career history and past results
 
 Auth: bearerAuth
 
 Request parameters:
-- userId (path) | type: number | required | ID of the athlete/user
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
+- userId (path) | type: integer | required | ID of the athlete/user
+- page (query) | type: integer | Page number for pagination (1-indexed) | default: 1
+- limit (query) | type: integer | Maximum number of records per page | default: 10
 
 Request body:
 None
@@ -455,25 +848,123 @@ Responses:
 Description: List of completed matches (match history)
 Type: object
 Body:
-  - matches: array
+  - matches: array | Array of completed and approved matches
     - items: object
-  - count: number
-  - offset: number
-  - limit: number
+      - id: integer
+      - scheduleId: integer
+      - entryAId: integer
+      - entryBId: integer
+      - status: string | choices: scheduled, in_progress, completed, cancelled
+      - winnerEntryId: integer
+      - resultStatus: string | choices: pending, approved, rejected
+      - reviewNotes: string
+      - schedule: object
+        - id: integer
+        - scheduledAt: string
+        - roundNumber: integer
+        - stage: string | choices: group, knockout
+      - entryA: object
+        - id: integer
+        - members: array
+          - items: object
+      - entryB: object
+        - id: integer
+        - members: array
+          - items: object
+      - winnerEntry: object | The winning entry with members
+        - id: integer
+        - members: array
+          - items: object
+      - subMatches: array | Sub-matches with all sets played in this match
+        - items: object
+          - id: integer
+          - matchSets: array
+            - items: object
+              - id: integer
+              - subMatchId: integer | required
+              - setNumber: integer | required
+              - entryAScore: integer | default: 0
+              - entryBScore: integer | default: 0
+              - subMatch: object
+              - createdAt: string
+              - updatedAt: string
+              - matchId: integer
+      - matchReferees: array | Referees who officiated the match
+      - createdAt: string
+      - updatedAt: string
+  - count: integer | Total count of history matches for this user
+  - offset: integer | Records offset for this page
+  - limit: integer | Maximum records per page
 Example response:
 ```json
 {
   "matches": [
-    null
+    {
+      "id": 42,
+      "scheduleId": 1,
+      "entryAId": 1,
+      "entryBId": 1,
+      "status": "completed",
+      "winnerEntryId": 101,
+      "resultStatus": "approved",
+      "reviewNotes": "string",
+      "schedule": {
+        "id": 1,
+        "scheduledAt": "2026-05-27T00:00:00Z",
+        "roundNumber": 1,
+        "stage": "group"
+      },
+      "entryA": {
+        "id": 1,
+        "members": [
+          null
+        ]
+      },
+      "entryB": {
+        "id": 1,
+        "members": [
+          null
+        ]
+      },
+      "winnerEntry": {
+        "id": 1,
+        "members": [
+          null
+        ]
+      },
+      "subMatches": [
+        {
+          "id": 1,
+          "matchSets": [
+            {
+              "id": 1,
+              "subMatchId": 1,
+              "setNumber": 1,
+              "entryAScore": 0,
+              "entryBScore": 0,
+              "subMatch": null,
+              "createdAt": "2026-05-27T00:00:00Z",
+              "updatedAt": "2026-05-27T00:00:00Z",
+              "matchId": 1
+            }
+          ]
+        }
+      ],
+      "matchReferees": [
+        null
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
   ],
-  "count": 1,
-  "offset": 1,
-  "limit": 1
+  "count": 15,
+  "offset": 0,
+  "limit": 10
 }
 ```
 
 ### 400
-Description: Bad request
+Description: Invalid request data
 Type: object
 Example response:
 ```json
@@ -482,21 +973,15 @@ Example response:
 }
 ```
 
----
-
-## GET /api/matches/{id}
-Tag: Matches
-Summary: Get match by ID
-
-Request parameters:
-- id (path) | type: integer | required | Resource ID
-
-Request body:
-None
-
-Responses:
-### 200
-Match details
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -508,50 +993,14 @@ Example response:
 }
 ```
 
----
-
-## PUT /api/matches/{id}
-Tag: Matches
-Summary: Update match
-
-Auth: bearerAuth
-
-Request parameters:
-- id (path) | type: integer | required | Resource ID
-
-Request body:
-None
-
-Responses:
-### 200
-Match updated
-
-### 404
-Description: Resource not found
+### 500
+Description: Internal server error
 Type: object
 Example response:
 ```json
 {
-  "message": "Resource not found"
+  "message": "Internal server error"
 }
 ```
-
----
-
-## DELETE /api/matches/{id}
-Tag: Matches
-Summary: Delete match
-
-Auth: bearerAuth
-
-Request parameters:
-- id (path) | type: integer | required | Resource ID
-
-Request body:
-None
-
-Responses:
-### 204
-Successfully deleted, no content returned
 
 ---

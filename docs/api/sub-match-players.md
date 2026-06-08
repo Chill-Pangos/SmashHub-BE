@@ -18,7 +18,49 @@ None
 
 Responses:
 ### 200
-List of players with team assignments
+Description: List of players with team assignments
+Type: object
+Body:
+  - players: array
+    - items: object
+      - id: integer | Unique identifier
+      - subMatchId: integer | required | Sub-match ID
+      - entryMemberId: integer | required | Entry member ID (player)
+      - team: string | required | Team assignment | choices: A, B
+      - entryMember: object
+      - createdAt: string
+      - updatedAt: string
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "players": [
+    {
+      "id": 1,
+      "subMatchId": 1,
+      "entryMemberId": 1,
+      "team": "A",
+      "entryMember": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 1,
+    "totalPages": 1,
+    "hasNextPage": true,
+    "hasPrevPage": true
+  }
+}
+```
 
 ### 500
 
@@ -39,7 +81,49 @@ None
 
 Responses:
 ### 200
-List of players in the specified team
+Description: List of players in the specified team
+Type: object
+Body:
+  - players: array
+    - items: object
+      - id: integer | Unique identifier
+      - subMatchId: integer | required | Sub-match ID
+      - entryMemberId: integer | required | Entry member ID (player)
+      - team: string | required | Team assignment | choices: A, B
+      - entryMember: object
+      - createdAt: string
+      - updatedAt: string
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "players": [
+    {
+      "id": 1,
+      "subMatchId": 1,
+      "entryMemberId": 1,
+      "team": "A",
+      "entryMember": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 1,
+    "totalPages": 1,
+    "hasNextPage": true,
+    "hasPrevPage": true
+  }
+}
+```
 
 ### 400
 Invalid team parameter
@@ -64,7 +148,49 @@ None
 
 Responses:
 ### 200
-List of sub-matches the member participated in
+Description: List of sub-matches the member participated in
+Type: object
+Body:
+  - matches: array
+    - items: object
+      - id: integer | Unique identifier
+      - subMatchId: integer | required | Sub-match ID
+      - entryMemberId: integer | required | Entry member ID (player)
+      - team: string | required | Team assignment | choices: A, B
+      - entryMember: object
+      - createdAt: string
+      - updatedAt: string
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "matches": [
+    {
+      "id": 1,
+      "subMatchId": 1,
+      "entryMemberId": 1,
+      "team": "A",
+      "entryMember": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 1,
+    "totalPages": 1,
+    "hasNextPage": true,
+    "hasPrevPage": true
+  }
+}
+```
 
 ### 500
 

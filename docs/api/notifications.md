@@ -1,6 +1,6 @@
 # Notifications
 
-Real-time notification management endpoints
+Real-time notifications endpoints
 
 Total endpoints: 6
 

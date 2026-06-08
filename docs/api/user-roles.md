@@ -1,6 +1,6 @@
 # User Roles
 
-User-role mapping endpoints
+User role assignment endpoints
 
 Total endpoints: 6
 

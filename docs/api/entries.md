@@ -2,11 +2,20 @@
 
 Entry management endpoints
 
-Total endpoints: 22
+Total endpoints: 14
 
 ## POST /api/entries/register
 Tag: Entries
-Summary: Register for tournament
+Summary: Register for tournament (create team or join existing)
+
+Register a user for a tournament category. For single entries, a team is automatically created.
+For double/team entries, user can either create a new team or request to join an existing team.
+
+Validation rules:
+- User must pass category eligibility checks (gender, age, ELO)
+- User cannot already be registered in this category (as captain or member)
+- Registration window must be open for the tournament
+- When joining, target team must be accepting members and not full
 
 Auth: bearerAuth
 
@@ -17,32 +26,124 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - categoryId: integer
-  - action: string | choices: create_team, join_team
+  - categoryId: integer | required
+  - action: string | required | choices: create_team, join_team
+  - name: string | Entry/team name. Optional; defaults to current user's full name when creating an entry.
   - targetEntryId: integer
 Example payload:
 ```json
 {
   "categoryId": 1,
   "action": "create_team",
+  "name": "string",
   "targetEntryId": 1
 }
 ```
 
 Responses:
 ### 201
-Registration successful
+Description: Registration successful
+Type: object
+Body:
+  - entry: object
+    - id: integer | Entry ID
+    - categoryId: integer | required | ID of the tournament category this entry belongs to
+    - captainId: integer | ID of the team captain
+    - name: string | required
+    - isAcceptingMembers: boolean | Whether the entry is accepting new members | default: false
+    - requiredMemberCount: integer | Number of members required
+    - currentMemberCount: integer | Current number of members | default: 0
+    - isConfirmed: boolean | default: false
+    - confirmedAt: string
+    - category: object
+    - captain: object
+    - members: array
+      - items: object
+        - id: integer
+        - entryId: integer | required
+        - userId: integer | required
+        - eloAtEntry: integer | required | Player ELO snapshot at registration time
+        - entry: object
+        - user: object
+        - createdAt: string
+        - updatedAt: string
+    - createdAt: string
+    - updatedAt: string
+  - message: string
+Example response:
+```json
+{
+  "entry": {
+    "id": 1,
+    "categoryId": 1,
+    "captainId": 1,
+    "name": "string",
+    "isAcceptingMembers": false,
+    "requiredMemberCount": 1,
+    "currentMemberCount": 0,
+    "isConfirmed": false,
+    "confirmedAt": "2026-05-27T00:00:00Z",
+    "category": null,
+    "captain": null,
+    "members": [
+      {
+        "id": 1,
+        "entryId": 1,
+        "userId": 1,
+        "eloAtEntry": 1,
+        "entry": null,
+        "user": null,
+        "createdAt": "2026-05-27T00:00:00Z",
+        "updatedAt": "2026-05-27T00:00:00Z"
+      }
+    ],
+    "createdAt": "2026-05-27T00:00:00Z",
+    "updatedAt": "2026-05-27T00:00:00Z"
+  },
+  "message": "string"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## GET /api/entries/category/{categoryId}
 Tag: Entries
-Summary: Get entries by category with filters
+Summary: Get entries by category with pagination and filters
 
 Request parameters:
 - categoryId (path) | type: integer | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
 - isFull (query) | type: boolean
 - isAcceptingMembers (query) | type: boolean
 - captainName (query) | type: string
@@ -52,42 +153,80 @@ None
 
 Responses:
 ### 200
-List of entries
+Description: List of entries with pagination
+Type: object
+Body:
+  - rows: array
+    - items: object
+      - id: integer | Entry ID
+      - categoryId: integer | required | ID of the tournament category this entry belongs to
+      - captainId: integer | ID of the team captain
+      - name: string | required
+      - isAcceptingMembers: boolean | Whether the entry is accepting new members | default: false
+      - requiredMemberCount: integer | Number of members required
+      - currentMemberCount: integer | Current number of members | default: 0
+      - isConfirmed: boolean | default: false
+      - confirmedAt: string
+      - category: object
+      - captain: object
+      - members: array
+        - items: object
+          - id: integer
+          - entryId: integer | required
+          - userId: integer | required
+          - eloAtEntry: integer | required | Player ELO snapshot at registration time
+          - entry: object
+          - user: object
+          - createdAt: string
+          - updatedAt: string
+      - createdAt: string
+      - updatedAt: string
+  - count: integer
+Example response:
+```json
+{
+  "rows": [
+    {
+      "id": 1,
+      "categoryId": 1,
+      "captainId": 1,
+      "name": "string",
+      "isAcceptingMembers": false,
+      "requiredMemberCount": 1,
+      "currentMemberCount": 0,
+      "isConfirmed": false,
+      "confirmedAt": "2026-05-27T00:00:00Z",
+      "category": null,
+      "captain": null,
+      "members": [
+        {
+          "id": 1,
+          "entryId": 1,
+          "userId": 1,
+          "eloAtEntry": 1,
+          "entry": null,
+          "user": null,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z"
+        }
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "count": 1
+}
+```
 
----
-
-## GET /api/entries/me
-Tag: Entries
-Summary: Get current user's entries with role (captain or member)
-
-Auth: bearerAuth
-
-Request parameters:
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-List of user's entries with role information
-
----
-
-## GET /api/entries/{entryId}
-Tag: Entries
-Summary: Get entry by ID
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-None
-
-Responses:
-### 200
-Entry details
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
 
 ### 404
 Description: Resource not found
@@ -99,130 +238,165 @@ Example response:
 }
 ```
 
----
-
-## PUT /api/entries/{entryId}
-Tag: Entries
-Summary: Update entry (captain only)
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-Required: yes
+### 500
+Description: Internal server error
 Type: object
-
-Responses:
-### 200
-Entry updated
-
----
-
-## DELETE /api/entries/{entryId}
-Tag: Entries
-Summary: Delete entry (captain only)
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-None
-
-Responses:
-### 204
-Successfully deleted, no content returned
-
----
-
-## POST /api/entries/{entryId}/add-member
-Tag: Entries
-Summary: Add member to entry (captain only)
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-Required: yes
-Type: object
-Fields:
-  - newMemberId: integer
-Example payload:
-```json
-{
-  "newMemberId": 1
-}
-```
-
-Responses:
-### 201
-Member added
-
----
-
-## POST /api/entries/{entryId}/remove-member
-Tag: Entries
-Summary: Remove member from entry (captain only)
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-Required: yes
-Type: object
-Fields:
-  - memberId: integer
-Example payload:
-```json
-{
-  "memberId": 1
-}
-```
-
-Responses:
-### 204
-Member removed
-
----
-
-## GET /api/entries/{entryId}/members
-Tag: Entries
-Summary: Get all members of entry with pagination
-
-Request parameters:
-- entryId (path) | type: integer | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-Description: List of members with pagination
-Type: object
-Body:
-  - members: array
-    - items: object
-  - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
 Example response:
 ```json
 {
-  "members": [
-    null
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/entries/category/{categoryId}/eligible
+Tag: Entries
+Summary: Get eligible and ineligible entries for competition
+
+Entry is ELIGIBLE when:
+1. Has sufficient members (currentMemberCount >= requiredMemberCount)
+2. Captain confirmed the lineup (isConfirmed = true)
+3. Entry fee paid (if applicable)
+
+Request parameters:
+- categoryId (path) | type: integer | required
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Eligible and ineligible entries with pagination
+Type: object
+Body:
+  - eligible: array
+    - items: object
+      - id: integer | Entry ID
+      - categoryId: integer | required | ID of the tournament category this entry belongs to
+      - captainId: integer | ID of the team captain
+      - name: string | required
+      - isAcceptingMembers: boolean | Whether the entry is accepting new members | default: false
+      - requiredMemberCount: integer | Number of members required
+      - currentMemberCount: integer | Current number of members | default: 0
+      - isConfirmed: boolean | default: false
+      - confirmedAt: string
+      - category: object
+      - captain: object
+      - members: array
+        - items: object
+          - id: integer
+          - entryId: integer | required
+          - userId: integer | required
+          - eloAtEntry: integer | required | Player ELO snapshot at registration time
+          - entry: object
+          - user: object
+          - createdAt: string
+          - updatedAt: string
+      - createdAt: string
+      - updatedAt: string
+  - ineligible: array
+    - items: object
+      - entry: object
+        - id: integer | Entry ID
+        - categoryId: integer | required | ID of the tournament category this entry belongs to
+        - captainId: integer | ID of the team captain
+        - name: string | required
+        - isAcceptingMembers: boolean | Whether the entry is accepting new members | default: false
+        - requiredMemberCount: integer | Number of members required
+        - currentMemberCount: integer | Current number of members | default: 0
+        - isConfirmed: boolean | default: false
+        - confirmedAt: string
+        - category: object
+        - captain: object
+        - members: array
+          - items: object
+            - id: integer
+            - entryId: integer | required
+            - userId: integer | required
+            - eloAtEntry: integer | required | Player ELO snapshot at registration time
+            - entry: object
+            - user: object
+            - createdAt: string
+            - updatedAt: string
+        - createdAt: string
+        - updatedAt: string
+      - reasons: array
+        - items: string
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "eligible": [
+    {
+      "id": 1,
+      "categoryId": 1,
+      "captainId": 1,
+      "name": "string",
+      "isAcceptingMembers": false,
+      "requiredMemberCount": 1,
+      "currentMemberCount": 0,
+      "isConfirmed": false,
+      "confirmedAt": "2026-05-27T00:00:00Z",
+      "category": null,
+      "captain": null,
+      "members": [
+        {
+          "id": 1,
+          "entryId": 1,
+          "userId": 1,
+          "eloAtEntry": 1,
+          "entry": null,
+          "user": null,
+          "createdAt": "2026-05-27T00:00:00Z",
+          "updatedAt": "2026-05-27T00:00:00Z"
+        }
+      ],
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "ineligible": [
+    {
+      "entry": {
+        "id": 1,
+        "categoryId": 1,
+        "captainId": 1,
+        "name": "string",
+        "isAcceptingMembers": false,
+        "requiredMemberCount": 1,
+        "currentMemberCount": 0,
+        "isConfirmed": false,
+        "confirmedAt": "2026-05-27T00:00:00Z",
+        "category": null,
+        "captain": null,
+        "members": [
+          {
+            "id": 1,
+            "entryId": 1,
+            "userId": 1,
+            "eloAtEntry": 1,
+            "entry": null,
+            "user": null,
+            "createdAt": "2026-05-27T00:00:00Z",
+            "updatedAt": "2026-05-27T00:00:00Z"
+          }
+        ],
+        "createdAt": "2026-05-27T00:00:00Z",
+        "updatedAt": "2026-05-27T00:00:00Z"
+      },
+      "reasons": [
+        "string"
+      ]
+    }
   ],
   "pagination": {
     "total": 1,
@@ -235,11 +409,450 @@ Example response:
 }
 ```
 
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
 ---
 
-## POST /api/entries/{entryId}/leave
+## POST /api/entries/category/{categoryId}/disqualify
 Tag: Entries
-Summary: Leave entry (member only)
+Summary: Disqualify ineligible entries (organizer only)
+
+Mass remove all ineligible entries after registration closes.
+Only tournament organizer can perform. Operation is permanent.
+
+Auth: bearerAuth
+
+Request parameters:
+- categoryId (path) | type: integer | required
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Ineligible entries disqualified
+Type: object
+Body:
+  - deletedCount: integer
+  - deleted: array
+    - items: object
+      - entryId: integer
+      - reasons: array
+        - items: string
+Example response:
+```json
+{
+  "deletedCount": 1,
+  "deleted": [
+    {
+      "entryId": 1,
+      "reasons": [
+        "string"
+      ]
+    }
+  ]
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## POST /api/entries/join-requests/{joinRequestId}/respond
+Tag: Entries
+Summary: Respond to join request (captain only)
+
+On Approval: user added to team, member count incremented, team closes if full.
+On Rejection: request marked rejected with optional reason.
+
+Auth: bearerAuth
+
+Request parameters:
+- joinRequestId (path) | type: integer | required
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - action: string | required | choices: approve, reject
+  - rejectionReason: string
+Example payload:
+```json
+{
+  "action": "approve",
+  "rejectionReason": "string"
+}
+```
+
+Responses:
+### 200
+Description: Join request responded
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "type": "requested",
+  "entryId": 1,
+  "userId": 1,
+  "status": "pending",
+  "rejectionReason": "string",
+  "respondedAt": "2026-05-27T00:00:00Z",
+  "entry": null,
+  "user": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/entries/me
+Tag: Entries
+Summary: Get current user's entries with role information
+
+Auth: bearerAuth
+
+Request parameters:
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
+
+Request body:
+None
+
+Responses:
+### 200
+Description: User's entries with role information
+Type: object
+Body:
+  - rows: array
+    - items: object & object
+  - count: integer
+Example response:
+```json
+{
+  "rows": [
+    null
+  ],
+  "count": 1
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/entries/{entryId}
+Tag: Entries
+Summary: Get entry details by ID
+
+Request parameters:
+- entryId (path) | type: integer | required
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Entry details
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "categoryId": 1,
+  "captainId": 1,
+  "name": "string",
+  "isAcceptingMembers": false,
+  "requiredMemberCount": 1,
+  "currentMemberCount": 0,
+  "isConfirmed": false,
+  "confirmedAt": "2026-05-27T00:00:00Z",
+  "category": null,
+  "captain": null,
+  "members": [
+    {
+      "id": 1,
+      "entryId": 1,
+      "userId": 1,
+      "eloAtEntry": 1,
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## PUT /api/entries/{entryId}
+Tag: Entries
+Summary: Update entry information (captain only)
+
+Updateable fields: name, requiredMemberCount, isAcceptingMembers.
+Cannot set requiredMemberCount < currentMemberCount or exceed maxMembersPerEntry.
+
+Auth: bearerAuth
+
+Request parameters:
+- entryId (path) | type: integer | required
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - name: string
+  - requiredMemberCount: integer
+  - isAcceptingMembers: boolean
+Example payload:
+```json
+{
+  "name": "string",
+  "requiredMemberCount": 1,
+  "isAcceptingMembers": true
+}
+```
+
+Responses:
+### 200
+Description: Entry updated successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "categoryId": 1,
+  "captainId": 1,
+  "name": "string",
+  "isAcceptingMembers": false,
+  "requiredMemberCount": 1,
+  "currentMemberCount": 0,
+  "isConfirmed": false,
+  "confirmedAt": "2026-05-27T00:00:00Z",
+  "category": null,
+  "captain": null,
+  "members": [
+    {
+      "id": 1,
+      "entryId": 1,
+      "userId": 1,
+      "eloAtEntry": 1,
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## DELETE /api/entries/{entryId}
+Tag: Entries
+Summary: Delete entry (captain only, during registration)
+
+Deletes all entry members and join requests. Cannot be undone.
 
 Auth: bearerAuth
 
@@ -251,74 +864,70 @@ None
 
 Responses:
 ### 204
-Left entry
+Request processed successfully, no content returned
 
----
-
-## POST /api/entries/{entryId}/set-required-members
-Tag: Entries
-Summary: Set required member count (captain only, team entries)
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-Required: yes
+### 400
+Description: Invalid request data
 Type: object
-Fields:
-  - count: integer
-Example payload:
+Example response:
 ```json
 {
-  "count": 1
+  "message": "Invalid request data"
 }
 ```
 
-Responses:
-### 200
-Required member count set
-
----
-
-## POST /api/entries/{entryId}/transfer-captaincy
-Tag: Entries
-Summary: Transfer captaincy to another member
-
-Auth: bearerAuth
-
-Request parameters:
-- entryId (path) | type: integer | required
-
-Request body:
-Required: yes
+### 401
+Description: Authentication required or token invalid
 Type: object
-Fields:
-  - newCaptainId: integer
-Example payload:
+Example response:
 ```json
 {
-  "newCaptainId": 1
+  "message": "Unauthorized access"
 }
 ```
 
-Responses:
-### 200
-Captaincy transferred
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## GET /api/entries/{entryId}/join-requests
 Tag: Entries
-Summary: Get join requests for entry with pagination
+Summary: Get join requests for entry (captain only)
 
 Auth: bearerAuth
 
 Request parameters:
 - entryId (path) | type: integer | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
 - status (query) | type: string | choices: pending, approved, rejected
 
 Request body:
@@ -331,18 +940,41 @@ Type: object
 Body:
   - joinRequests: array
     - items: object
+      - id: integer
+      - type: string | required | choices: requested, invited | default: "requested"
+      - entryId: integer | required
+      - userId: integer | required
+      - status: string | required | choices: pending, approved, rejected | default: "pending"
+      - rejectionReason: string
+      - respondedAt: string
+      - entry: object
+      - user: object
+      - createdAt: string
+      - updatedAt: string
   - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
 Example response:
 ```json
 {
   "joinRequests": [
-    null
+    {
+      "id": 1,
+      "type": "requested",
+      "entryId": 1,
+      "userId": 1,
+      "status": "pending",
+      "rejectionReason": "string",
+      "respondedAt": "2026-05-27T00:00:00Z",
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
   ],
   "pagination": {
     "total": 1,
@@ -355,34 +987,266 @@ Example response:
 }
 ```
 
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
 ---
 
-## POST /api/entries/join-requests/{joinRequestId}/respond
+## POST /api/entries/{entryId}/transfer-captaincy
 Tag: Entries
-Summary: Respond to join request (captain only)
+Summary: Transfer captaincy to another member
+
+New captain must be an existing member of the team.
 
 Auth: bearerAuth
 
 Request parameters:
-- joinRequestId (path) | type: integer | required
+- entryId (path) | type: integer | required
 
 Request body:
 Required: yes
 Type: object
 Fields:
-  - action: string | choices: approve, reject
-  - rejectionReason: string
+  - newCaptainId: integer | required
 Example payload:
 ```json
 {
-  "action": "approve",
-  "rejectionReason": "string"
+  "newCaptainId": 1
 }
 ```
 
 Responses:
 ### 200
-Join request responded
+Description: Captaincy transferred successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "categoryId": 1,
+  "captainId": 1,
+  "name": "string",
+  "isAcceptingMembers": false,
+  "requiredMemberCount": 1,
+  "currentMemberCount": 0,
+  "isConfirmed": false,
+  "confirmedAt": "2026-05-27T00:00:00Z",
+  "category": null,
+  "captain": null,
+  "members": [
+    {
+      "id": 1,
+      "entryId": 1,
+      "userId": 1,
+      "eloAtEntry": 1,
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## PATCH /api/entries/{entryId}/required-members
+Tag: Entries
+Summary: Set required member count (captain only, team entries)
+
+count >= currentMemberCount and <= category.maxMembersPerEntry.
+Only applicable to "team" category entries.
+
+Auth: bearerAuth
+
+Request parameters:
+- entryId (path) | type: integer | required
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - count: integer | required
+Example payload:
+```json
+{
+  "count": 1
+}
+```
+
+Responses:
+### 200
+Description: Required member count set successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "categoryId": 1,
+  "captainId": 1,
+  "name": "string",
+  "isAcceptingMembers": false,
+  "requiredMemberCount": 1,
+  "currentMemberCount": 0,
+  "isConfirmed": false,
+  "confirmedAt": "2026-05-27T00:00:00Z",
+  "category": null,
+  "captain": null,
+  "members": [
+    {
+      "id": 1,
+      "entryId": 1,
+      "userId": 1,
+      "eloAtEntry": 1,
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -390,6 +1254,9 @@ Join request responded
 Tag: Entries
 Summary: Confirm lineup (captain only)
 
+Locks in the team for competition. Requirements:
+currentMemberCount >= requiredMemberCount, during registration window, can only confirm once.
+
 Auth: bearerAuth
 
 Request parameters:
@@ -400,75 +1267,88 @@ None
 
 Responses:
 ### 200
-Lineup confirmed
-
----
-
-## GET /api/entries/category/{categoryId}/eligible
-Tag: Entries
-Summary: Get eligible entries for competition with pagination
-
-Request parameters:
-- categoryId (path) | type: integer | required
-- page (query) | type: integer | Page number for pagination | default: 1
-- limit (query) | type: integer | Maximum number of records to return | default: 10
-
-Request body:
-None
-
-Responses:
-### 200
-Description: Eligible and ineligible entries with pagination
+Description: Lineup confirmed successfully
 Type: object
-Body:
-  - eligible: array
-    - items: object
-  - ineligible: array
-    - items: object
-  - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
 Example response:
 ```json
 {
-  "eligible": [
-    null
+  "id": 1,
+  "categoryId": 1,
+  "captainId": 1,
+  "name": "string",
+  "isAcceptingMembers": false,
+  "requiredMemberCount": 1,
+  "currentMemberCount": 0,
+  "isConfirmed": false,
+  "confirmedAt": "2026-05-27T00:00:00Z",
+  "category": null,
+  "captain": null,
+  "members": [
+    {
+      "id": 1,
+      "entryId": 1,
+      "userId": 1,
+      "eloAtEntry": 1,
+      "entry": null,
+      "user": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
   ],
-  "ineligible": [
-    null
-  ],
-  "pagination": {
-    "total": 1,
-    "page": 1,
-    "limit": 1,
-    "totalPages": 1,
-    "hasNextPage": true,
-    "hasPrevPage": true
-  }
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z"
 }
 ```
 
----
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
 
-## POST /api/entries/category/{categoryId}/disqualify
-Tag: Entries
-Summary: Disqualify ineligible entries (organizer only)
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
-Auth: bearerAuth
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
-Request parameters:
-- categoryId (path) | type: integer | required
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
 
-Request body:
-None
-
-Responses:
-### 200
-Ineligible entries disqualified
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -476,6 +1356,8 @@ Ineligible entries disqualified
 Tag: Entries
 Summary: Get current user's role in a specific entry
 
+Returns "captain", "member", or null if user is not part of this entry.
+
 Auth: bearerAuth
 
 Request parameters:
@@ -486,265 +1368,49 @@ None
 
 Responses:
 ### 200
-User's role (captain, member, or null)
-
----
-
-## POST /api/entries/import/preview
-Tag: Entries
-Summary: Preview Excel import data for single entries
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
-Type: object
-Fields:
-  - file: string | required | Excel file (.xlsx or .xls) containing entries data
-  - categoryId: integer | required | ID of the tournament category (must be type 'single')
-Example payload:
-```json
-{
-  "file": "string",
-  "categoryId": 1
-}
-```
-
-Responses:
-### 200
-Description: Excel file parsed and validated successfully
+Description: User's role in this entry
 Type: object
 Body:
-  - success: boolean
-  - data: object
-    - valid: boolean
-    - entries: array
-      - items: object
-        - name: string
-        - userId: number
-        - email: string
-        - rowNumber: number
-    - errors: array
-      - items: object
-        - rowNumber: number
-        - field: string
-        - message: string
-        - value: string
-    - summary: object
-      - totalEntries: number
-      - entriesWithErrors: number
-      - contentType: string
-      - maxEntries: number
-      - currentEntries: number
-      - availableSlots: number
+  - entryId: integer
+  - userId: integer
+  - role: string | choices: captain, member
 Example response:
 ```json
 {
-  "success": true,
-  "data": {
-    "valid": true,
-    "entries": [
-      {
-        "name": "John Doe",
-        "userId": 1,
-        "email": "john@example.com",
-        "rowNumber": 2
-      }
-    ],
-    "errors": [
-      {
-        "rowNumber": 5,
-        "field": "email",
-        "message": "Invalid email format",
-        "value": "invalid-email"
-      }
-    ],
-    "summary": {
-      "totalEntries": 10,
-      "entriesWithErrors": 0,
-      "contentType": "single",
-      "maxEntries": 32,
-      "currentEntries": 5,
-      "availableSlots": 27
-    }
-  }
+  "entryId": 1,
+  "userId": 1,
+  "role": "captain"
 }
 ```
-
-### 400
-Invalid file or validation errors
 
 ### 401
-Unauthorized
-
----
-
-## POST /api/entries/import/confirm
-Tag: Entries
-Summary: Confirm and save imported entries
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
+Description: Authentication required or token invalid
 Type: object
-Fields:
-  - categoryId: number | required
-  - entries: array | required
-    - items: object
-      - name: string
-      - userId: number
-      - email: string
-      - rowNumber: number
-Example payload:
-```json
-{
-  "categoryId": 1,
-  "entries": [
-    {
-      "name": "John Doe",
-      "userId": 1,
-      "email": "john@example.com",
-      "rowNumber": 2
-    }
-  ]
-}
-```
-
-Responses:
-### 201
-Description: Entries created successfully
-Type: object
-Body:
-  - success: boolean
-  - message: string
-  - data: object
-    - success: boolean
-    - createdEntries: number
-    - entryIds: array
-      - items: number
 Example response:
 ```json
 {
-  "success": true,
-  "message": "Entries imported successfully",
-  "data": {
-    "success": true,
-    "createdEntries": 10,
-    "entryIds": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10
-    ]
-  }
+  "message": "Unauthorized access"
 }
 ```
 
-### 400
-Invalid data or import failed
-
-### 401
-Unauthorized
-
----
-
-## POST /api/entries/import/double/preview
-Tag: Entries
-Summary: Preview Excel import data for double entries
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
+### 404
+Description: Resource not found
 Type: object
-Fields:
-  - file: string | required | Excel file (.xlsx or .xls) with double entries (5 columns STT, Player1 Name, Email, Player2 Name, Email)
-  - categoryId: integer | required | ID of the tournament category (must be type 'double')
-Example payload:
+Example response:
 ```json
 {
-  "file": "string",
-  "categoryId": 2
+  "message": "Resource not found"
 }
 ```
 
-Responses:
-### 200
-Excel file parsed and validated successfully
-
-### 400
-Invalid file or validation errors
-
-### 401
-Unauthorized
-
----
-
-## POST /api/entries/import/double/confirm
-Tag: Entries
-Summary: Confirm and save imported double entries
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
+### 500
+Description: Internal server error
 Type: object
-Fields:
-  - categoryId: number | required
-  - entries: array | required
-    - items: object
-      - player1Name: string
-      - player1UserId: number
-      - player1Email: string
-      - player2Name: string
-      - player2UserId: number
-      - player2Email: string
-      - rowNumber: number
-Example payload:
+Example response:
 ```json
 {
-  "categoryId": 2,
-  "entries": [
-    {
-      "player1Name": "John Doe",
-      "player1UserId": 1,
-      "player1Email": "john@example.com",
-      "player2Name": "Jane Smith",
-      "player2UserId": 2,
-      "player2Email": "jane@example.com",
-      "rowNumber": 2
-    }
-  ]
+  "message": "Internal server error"
 }
 ```
-
-Responses:
-### 201
-Double entries created successfully
-
-### 400
-Invalid data or import failed
-
-### 401
-Unauthorized
 
 ---

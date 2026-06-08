@@ -33,7 +33,22 @@ Example payload:
 
 Responses:
 ### 201
-Match set created successfully
+Description: Match set created successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 0,
+  "entryBScore": 0,
+  "subMatch": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "matchId": 1
+}
+```
 
 ### 400
 Description: Bad request
@@ -59,7 +74,22 @@ None
 
 Responses:
 ### 200
-Match set details
+Description: Match set details
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 0,
+  "entryBScore": 0,
+  "subMatch": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "matchId": 1
+}
+```
 
 ### 404
 Description: Resource not found
@@ -100,7 +130,22 @@ Example payload:
 
 Responses:
 ### 200
-Match set updated
+Description: Match set updated
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 0,
+  "entryBScore": 0,
+  "subMatch": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "matchId": 1
+}
+```
 
 ### 404
 Description: Resource not found
@@ -148,6 +193,52 @@ None
 
 Responses:
 ### 200
-List of match sets ordered by set number
+Description: List of match sets ordered by set number
+Type: object
+Body:
+  - sets: array
+    - items: object
+      - id: integer
+      - subMatchId: integer | required
+      - setNumber: integer | required
+      - entryAScore: integer | default: 0
+      - entryBScore: integer | default: 0
+      - subMatch: object
+      - createdAt: string
+      - updatedAt: string
+      - matchId: integer
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "sets": [
+    {
+      "id": 1,
+      "subMatchId": 1,
+      "setNumber": 1,
+      "entryAScore": 0,
+      "entryBScore": 0,
+      "subMatch": null,
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z",
+      "matchId": 1
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 1,
+    "totalPages": 1,
+    "hasNextPage": true,
+    "hasPrevPage": true
+  }
+}
+```
 
 ---

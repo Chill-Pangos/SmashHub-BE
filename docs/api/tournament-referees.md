@@ -1,6 +1,6 @@
 # Tournament Referees
 
-Tournament referee assignment endpoints
+Tournament referee management endpoints
 
 Total endpoints: 9
 
@@ -8,7 +8,15 @@ Total endpoints: 9
 Tag: Tournament Referees
 Summary: Send invitation to referee
 
-Organizer invites a referee to join tournament
+Organizer invites a referee to join tournament with a specific role.
+
+Key constraints:
+- Organizer cannot invite themselves
+- Referee must have required system role (referee or chief_referee)
+- Referee cannot be competing in the same tournament
+- Only 1 chief referee allowed per tournament
+- Each referee can only have 1 active invitation per tournament
+- Invitation expires after INVITATION_EXPIRY_HOURS (default: 48 hours)
 
 Auth: bearerAuth
 
@@ -19,9 +27,9 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - tournamentId: integer | required
-  - refereeId: integer | required
-  - role: string | required | choices: referee, chief
+  - tournamentId: integer | required | Tournament ID
+  - refereeId: integer | required | User ID of the referee to invite
+  - role: string | required | Role for the referee in this tournament | choices: referee, chief
 Example payload:
 ```json
 {
@@ -33,10 +41,84 @@ Example payload:
 
 Responses:
 ### 201
-Invitation sent successfully
+Description: Invitation sent successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "tournamentId": 1,
+  "refereeId": 5,
+  "invitedBy": 2,
+  "role": "referee",
+  "status": "pending",
+  "expiresAt": "2024-06-29T12:00:00Z",
+  "respondedAt": null,
+  "rejectionReason": null,
+  "createdAt": "2024-06-27T12:00:00Z",
+  "updatedAt": "2024-06-27T12:00:00Z"
+}
+```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 409
+Description: Conflict - resource already exists or state conflict
+Type: object
+Example response:
+```json
+{
+  "message": "Resource already exists"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -44,7 +126,14 @@ Bad request
 Tag: Tournament Referees
 Summary: Accept referee invitation
 
-Referee accepts an invitation
+Referee accepts a pending invitation and becomes an active referee for the tournament.
+
+Key behaviors:
+- Only pending invitations can be accepted
+- Expired invitations are automatically rejected
+- Accepts chief role only if no other chief referee exists
+- Creates active TournamentReferee record
+- Updates invitation status and respondedAt timestamp
 
 Auth: bearerAuth
 
@@ -55,7 +144,7 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - invitationId: integer | required
+  - invitationId: integer | required | ID of the invitation to accept
 Example payload:
 ```json
 {
@@ -65,13 +154,69 @@ Example payload:
 
 Responses:
 ### 200
-Invitation accepted
+Description: Invitation accepted successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "tournamentId": 1,
+  "refereeId": 5,
+  "role": "referee",
+  "createdAt": "2024-06-27T12:00:00Z",
+  "updatedAt": "2024-06-27T12:00:00Z"
+}
+```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
 ### 404
-Invitation not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 409
+Description: Conflict - resource already exists or state conflict
+Type: object
+Example response:
+```json
+{
+  "message": "Resource already exists"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -79,7 +224,14 @@ Invitation not found
 Tag: Tournament Referees
 Summary: Reject referee invitation
 
-Referee rejects an invitation
+Referee rejects a pending invitation with optional reason.
+
+Key behaviors:
+- Only pending invitations can be rejected
+- Expired invitations cannot be manually rejected
+- Rejection reason is optional (max 255 characters)
+- Updates invitation status and respondedAt timestamp
+- Rejected invitations cannot be re-sent (must be cancelled first if organizer wants to reinvite)
 
 Auth: bearerAuth
 
@@ -90,8 +242,8 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - invitationId: integer | required
-  - rejectionReason: string
+  - invitationId: integer | required | ID of the invitation to reject
+  - rejectionReason: string | Optional reason for rejection
 Example payload:
 ```json
 {
@@ -102,13 +254,64 @@ Example payload:
 
 Responses:
 ### 200
-Invitation rejected
+Description: Invitation rejected successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "tournamentId": 1,
+  "refereeId": 5,
+  "invitedBy": 2,
+  "role": "referee",
+  "status": "rejected",
+  "expiresAt": "2024-06-29T12:00:00Z",
+  "respondedAt": "2024-06-27T12:30:00Z",
+  "rejectionReason": "Not available at that time",
+  "createdAt": "2024-06-27T12:00:00Z",
+  "updatedAt": "2024-06-27T12:30:00Z"
+}
+```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
 
 ### 404
-Invitation not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -116,7 +319,13 @@ Invitation not found
 Tag: Tournament Referees
 Summary: Cancel pending invitation
 
-Organizer cancels a pending invitation
+Organizer cancels a pending invitation before referee responds.
+
+Key behaviors:
+- Only pending invitations can be cancelled
+- Only tournament organizer can cancel
+- Updates invitation status and respondedAt timestamp
+- After cancellation, organizer can send a new invitation to same referee
 
 Auth: bearerAuth
 
@@ -127,7 +336,7 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - invitationId: integer | required
+  - invitationId: integer | required | ID of the invitation to cancel
 Example payload:
 ```json
 {
@@ -137,13 +346,74 @@ Example payload:
 
 Responses:
 ### 200
-Invitation cancelled
+Description: Invitation cancelled successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "tournamentId": 1,
+  "refereeId": 5,
+  "invitedBy": 2,
+  "role": "referee",
+  "status": "cancelled",
+  "expiresAt": "2024-06-29T12:00:00Z",
+  "respondedAt": "2024-06-27T13:00:00Z",
+  "rejectionReason": null,
+  "createdAt": "2024-06-27T12:00:00Z",
+  "updatedAt": "2024-06-27T13:00:00Z"
+}
+```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
-Invitation not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -151,7 +421,13 @@ Invitation not found
 Tag: Tournament Referees
 Summary: Remove referee from tournament
 
-Organizer removes a referee from tournament
+Organizer removes an active referee from tournament.
+
+Key behaviors:
+- Only organizer can remove referees
+- Removes from active referees (TournamentReferee record)
+- Does not affect past invitations or rejections
+- Returns no content on success (204)
 
 Auth: bearerAuth
 
@@ -162,8 +438,8 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - tournamentId: integer | required
-  - refereeId: integer | required
+  - tournamentId: integer | required | Tournament ID
+  - refereeId: integer | required | Referee user ID to remove
 Example payload:
 ```json
 {
@@ -174,13 +450,57 @@ Example payload:
 
 Responses:
 ### 204
-Referee removed
+Request processed successfully, no content returned
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
-Not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
@@ -188,7 +508,13 @@ Not found
 Tag: Tournament Referees
 Summary: Update referee role
 
-Organizer updates a referee's role in tournament
+Organizer changes a referee's role in tournament (PATCH route but uses POST).
+
+Key constraints:
+- Only organizer can update role
+- Referee must exist in tournament
+- When promoting to chief: must have chief_referee system role and no other chief exists
+- Returns updated TournamentReferee record
 
 Auth: bearerAuth
 
@@ -199,9 +525,9 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - tournamentId: integer | required
-  - refereeId: integer | required
-  - newRole: string | required | choices: referee, chief
+  - tournamentId: integer | required | Tournament ID
+  - refereeId: integer | required | Referee user ID to update
+  - newRole: string | required | New role for the referee | choices: referee, chief
 Example payload:
 ```json
 {
@@ -213,27 +539,99 @@ Example payload:
 
 Responses:
 ### 200
-Role updated
+Description: Role updated successfully
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "tournamentId": 1,
+  "refereeId": 5,
+  "role": "chief",
+  "createdAt": "2024-06-27T12:00:00Z",
+  "updatedAt": "2024-06-27T13:15:00Z"
+}
+```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
-Not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 409
+Description: Conflict - resource already exists or state conflict
+Type: object
+Example response:
+```json
+{
+  "message": "Resource already exists"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## GET /api/tournament-referees/tournament/{tournamentId}
 Tag: Tournament Referees
-Summary: Get referees by tournament with pagination
+Summary: Get referees by tournament
 
-Get all referees assigned to a tournament
+Retrieve all active referees assigned to a tournament with optional role filtering.
+
+Features:
+- Supports pagination with page/limit query parameters
+- Optional role filter (referee or chief)
+- Returns referees with basic user information
+- Public endpoint (no authentication required)
 
 Request parameters:
 - tournamentId (path) | type: integer | required | Tournament ID
 - page (query) | type: integer | Page number for pagination | default: 1
 - limit (query) | type: integer | Maximum number of records to return | default: 10
-- role (query) | type: string | Filter by role | choices: referee, chief
+- role (query) | type: string | Filter referees by role | choices: referee, chief
 
 Request body:
 None
@@ -242,43 +640,94 @@ Responses:
 ### 200
 Description: List of referees with pagination
 Type: object
-Body:
-  - referees: array
-    - items: object
-  - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
 Example response:
 ```json
 {
   "referees": [
-    null
+    {
+      "id": 1,
+      "tournamentId": 1,
+      "refereeId": 5,
+      "role": "chief",
+      "createdAt": "2024-06-27T12:00:00Z",
+      "updatedAt": "2024-06-27T12:00:00Z",
+      "referee": {
+        "id": 5,
+        "firstName": "John",
+        "lastName": "Doe",
+        "email": "john@example.com"
+      }
+    },
+    {
+      "id": 2,
+      "tournamentId": 1,
+      "refereeId": 6,
+      "role": "referee",
+      "createdAt": "2024-06-27T12:05:00Z",
+      "updatedAt": "2024-06-27T12:05:00Z",
+      "referee": {
+        "id": 6,
+        "firstName": "Jane",
+        "lastName": "Smith",
+        "email": "jane@example.com"
+      }
+    }
   ],
   "pagination": {
-    "total": 1,
+    "total": 2,
     "page": 1,
-    "limit": 1,
+    "limit": 10,
     "totalPages": 1,
-    "hasNextPage": true,
-    "hasPrevPage": true
+    "hasNextPage": false,
+    "hasPrevPage": false
   }
 }
 ```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## GET /api/tournament-referees/tournament/{tournamentId}/invitations
 Tag: Tournament Referees
-Summary: Get invitations by tournament with pagination
+Summary: Get invitations by tournament
 
-Get all referee invitations for a tournament (organizer only)
+Retrieve all referee invitations for a tournament (organizer only).
+
+Features:
+- Organizer can track pending, accepted, rejected, cancelled, and expired invitations
+- Supports pagination with page/limit query parameters
+- Optional status filter
+- Returns invitation details with invited referee information
+- Only accessible to tournament organizer
 
 Auth: bearerAuth
 
@@ -286,7 +735,7 @@ Request parameters:
 - tournamentId (path) | type: integer | required | Tournament ID
 - page (query) | type: integer | Page number for pagination | default: 1
 - limit (query) | type: integer | Maximum number of records to return | default: 10
-- status (query) | type: string | Filter by invitation status | choices: pending, accepted, rejected, cancelled, expired
+- status (query) | type: string | Filter invitations by status | choices: pending, accepted, rejected, cancelled, expired
 
 Request body:
 None
@@ -295,46 +744,113 @@ Responses:
 ### 200
 Description: List of invitations with pagination
 Type: object
-Body:
-  - invitations: array
-    - items: object
-  - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
 Example response:
 ```json
 {
   "invitations": [
-    null
+    {
+      "id": 1,
+      "tournamentId": 1,
+      "refereeId": 5,
+      "invitedBy": 2,
+      "role": "chief",
+      "status": "pending",
+      "expiresAt": "2024-06-29T12:00:00Z",
+      "respondedAt": null,
+      "rejectionReason": null,
+      "createdAt": "2024-06-27T12:00:00Z",
+      "updatedAt": "2024-06-27T12:00:00Z",
+      "referee": {
+        "id": 5,
+        "firstName": "John",
+        "lastName": "Doe",
+        "email": "john@example.com"
+      }
+    }
   ],
   "pagination": {
     "total": 1,
     "page": 1,
-    "limit": 1,
+    "limit": 10,
     "totalPages": 1,
-    "hasNextPage": true,
-    "hasPrevPage": true
+    "hasNextPage": false,
+    "hasPrevPage": false
   }
 }
 ```
 
 ### 400
-Bad request
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
 
 ### 404
-Tournament not found
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
 
 ## GET /api/tournament-referees/my-invitations
 Tag: Tournament Referees
-Summary: Get my invitation list
+Summary: Get my invitations
 
-Retrieve all invitations sent to the current referee across all tournaments
+Retrieve all referee invitations sent to the current user across all tournaments.
+
+Features:
+- Personal invitation list for authenticated referee
+- Includes complete tournament and organizer information
+- Supports filtering by invitation status (pending, accepted, rejected, cancelled, expired)
+- Supports pagination and sorting (createdAt, status, role, etc.)
+- Shows expiration details and rejection reasons (if applicable)
+- Useful for referee to track pending invitations and respond to them
+
+Status meanings:
+- pending: Awaiting referee response, expires after INVITATION_EXPIRY_HOURS (48 hours)
+- accepted: Referee accepted and is now active in tournament
+- rejected: Referee rejected the invitation
+- cancelled: Organizer cancelled the pending invitation
+- expired: Invitation expired without response
 
 Auth: bearerAuth
 
@@ -342,8 +858,8 @@ Request parameters:
 - status (query) | type: string | Filter by invitation status | choices: pending, accepted, rejected, cancelled, expired
 - page (query) | type: integer | Page number for pagination | default: 1
 - limit (query) | type: integer | Maximum number of records to return | default: 10
-- sortBy (query) | type: string | Field to sort by | default: createdAt
-- sortOrder (query) | type: string | Sort order | choices: ASC, DESC | default: DESC
+- sortBy (query) | type: string | Field to sort by | choices: createdAt, status, role, expiresAt | default: createdAt
+- sortOrder (query) | type: string | Sort order (ascending or descending) | choices: ASC, DESC | default: DESC
 
 Request body:
 None
@@ -352,39 +868,6 @@ Responses:
 ### 200
 Description: List of referee invitations with tournament and organizer details
 Type: object
-Body:
-  - invitations: array
-    - items: object
-      - id: integer
-      - tournamentId: integer
-      - refereeId: integer
-      - invitedBy: integer
-      - role: string | choices: chief, referee
-      - status: string | choices: pending, accepted, rejected, cancelled, expired
-      - expiresAt: string
-      - respondedAt: string
-      - rejectionReason: string
-      - tournament: object
-        - id: integer
-        - name: string
-        - location: string
-        - tier: integer
-        - status: string
-        - createdBy: integer
-      - inviter: object
-        - id: integer
-        - firstName: string
-        - lastName: string
-        - email: string
-      - createdAt: string
-      - updatedAt: string
-  - pagination: object
-    - total: integer
-    - page: integer
-    - limit: integer
-    - totalPages: integer
-    - hasNextPage: boolean
-    - hasPrevPage: boolean
 Example response:
 ```json
 {
@@ -392,38 +875,38 @@ Example response:
     {
       "id": 1,
       "tournamentId": 1,
-      "refereeId": 1,
-      "invitedBy": 1,
-      "role": "chief",
+      "refereeId": 5,
+      "invitedBy": 2,
+      "role": "referee",
       "status": "pending",
-      "expiresAt": "2026-05-27T00:00:00Z",
-      "respondedAt": "2026-05-27T00:00:00Z",
-      "rejectionReason": "string",
+      "expiresAt": "2024-06-29T12:00:00Z",
+      "respondedAt": null,
+      "rejectionReason": null,
       "tournament": {
         "id": 1,
-        "name": "string",
-        "location": "string",
-        "tier": 1,
-        "status": "string",
-        "createdBy": 1
+        "name": "Summer Championship 2024",
+        "location": "New York",
+        "tier": 2,
+        "status": "registration_open",
+        "createdBy": 2
       },
       "inviter": {
-        "id": 1,
-        "firstName": "string",
-        "lastName": "string",
-        "email": "string"
+        "id": 2,
+        "firstName": "Admin",
+        "lastName": "User",
+        "email": "admin@example.com"
       },
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z"
+      "createdAt": "2024-06-27T12:00:00Z",
+      "updatedAt": "2024-06-27T12:00:00Z"
     }
   ],
   "pagination": {
     "total": 1,
     "page": 1,
-    "limit": 1,
+    "limit": 10,
     "totalPages": 1,
-    "hasNextPage": true,
-    "hasPrevPage": true
+    "hasNextPage": false,
+    "hasPrevPage": false
   }
 }
 ```
@@ -439,6 +922,13 @@ Example response:
 ```
 
 ### 500
-Internal server error
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
 
 ---
