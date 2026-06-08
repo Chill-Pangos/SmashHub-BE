@@ -3,6 +3,7 @@ import { createServer } from "http";
 import app from "./app";
 import config from "./config/config";
 import sequelize from "./config/database";
+import { connectRedis, disconnectRedis } from "./config/redis";
 import NotificationService from "./services/notification.service";
 
 const checkConnection = async () => {
@@ -16,6 +17,12 @@ const checkConnection = async () => {
 };
 
 checkConnection().then(() => {
+  connectRedis().then((client) => {
+    if (client?.isReady) {
+      console.log("Redis connected successfully");
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Initialize Socket.IO
@@ -31,11 +38,15 @@ checkConnection().then(() => {
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
-    process.exit(0);
+    disconnectRedis().finally(() => {
+      process.exit(0);
+    });
   });
 
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully');
-    process.exit(0);
+    disconnectRedis().finally(() => {
+      process.exit(0);
+    });
   });
 });
