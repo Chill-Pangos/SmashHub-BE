@@ -4,6 +4,9 @@ import EloScore from "../models/eloScore.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { Op } from "sequelize";
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
@@ -156,6 +159,34 @@ export class UserService {
 
     return { referees: rows };
   }
+
+  async uploadAvatar(userId: number, file: Express.Multer.File): Promise<User | null> {
+  const user = await User.findByPk(userId);
+  if (!user) {
+    await fs.unlink(file.path); // cleanup orphan
+    return null;
+  }
+
+  // Xóa avatar cũ
+  if (user.avatarUrl) {
+    const oldPath = path.join("uploads/avatars", path.basename(user.avatarUrl));
+    await fs.unlink(oldPath).catch(() => {}); // ignore if not found
+  }
+
+  // Resize → webp
+  const outputFilename = `${path.basename(file.filename, path.extname(file.filename))}.webp`;
+  const outputPath = path.join("uploads/avatars", outputFilename);
+
+  await sharp(file.path)
+    .resize(256, 256, { fit: "cover" })
+    .webp({ quality: 80 })
+    .toFile(outputPath);
+
+  await fs.unlink(file.path); // xóa file gốc
+
+  const avatarUrl = `/uploads/avatars/${outputFilename}`;
+  return await user.update({ avatarUrl });
+}
 }
 
 export default new UserService();
