@@ -1,57 +1,26 @@
 import { Router } from "express";
 import scheduleController from "../controllers/schedule.controller";
-import userController from "../controllers/user.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
-
 /**
  * @swagger
- * /schedules:
+ * /schedules/generate-tournament:
  *   post:
  *     tags: [Schedules]
- *     summary: Create a new schedule
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *     responses:
- *       201:
- *         description: Schedule created successfully
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- *   get:
- *     tags: [Schedules]
- *     summary: Get all schedules
- *     parameters:
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of schedules ordered by scheduled time
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- */
-
-/**
- * @swagger
- * /schedules/generate:
- *   post:
- *     tags: [Schedules]
- *     summary: Generate tournament schedules automatically
+ *     summary: Generate full tournament schedule (group + knockout)
  *     description: |
- *       Automatically generates schedules for all matches in a tournament category.
- *       - Singles and Doubles matches: 20 minutes each
- *       - Team matches: 60 minutes each
- *       - Includes lunch break from 12:00 to 14:00 by default
+ *       Tạo lịch toàn bộ tournament theo thứ tự: xong hết category này mới đến category khác.
+ *       Trong mỗi category: group stage trước, knockout sau (kể cả TBD placeholders).
+ *       Slot time được tính liên tục theo scheduleConfig của tournament.
+ *       tableNumber KHÔNG được gán ở đây — sẽ gán động khi trận bắt đầu.
+ *
+ *       Yêu cầu:
+ *       - scheduleConfig đã được tạo cho tournament
+ *       - groupStandings đã có (nếu category có vòng bảng)
+ *       - knockoutBrackets đã được generate (generatePlaceholders hoặc generateFromEntries)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -61,148 +30,54 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - categoryId
- *               - startDate
+ *               - tournamentId
  *             properties:
- *               categoryId:
+ *               tournamentId:
  *                 type: integer
- *                 description: Tournament category ID
  *                 example: 1
- *               startDate:
- *                 type: string
- *                 format: date
- *                 description: First day of the tournament
- *                 example: "2024-06-01"
- *               startTime:
- *                 type: string
- *                 description: Daily start time (HH:MM format)
- *                 default: "08:00"
- *                 example: "08:00"
- *               endTime:
- *                 type: string
- *                 description: Daily end time (HH:MM format)
- *                 default: "22:00"
- *                 example: "22:00"
- *               lunchBreakStart:
- *                 type: string
- *                 description: Lunch break start time (HH:MM format)
- *                 default: "12:00"
- *                 example: "12:00"
- *               lunchBreakEnd:
- *                 type: string
- *                 description: Lunch break end time (HH:MM format)
- *                 default: "14:00"
- *                 example: "14:00"
- *               roundNumber:
- *                 type: integer
- *                 description: Optional round number
- *                 example: 1
- *               groupName:
- *                 type: string
- *                 description: Optional group name (used when not in group stage mode)
- *                 example: "Group A"
- *               isGroupStage:
- *                 type: boolean
- *                 description: Enable group stage format (divides entries into multiple groups)
- *                 default: false
- *                 example: true
- *               numberOfGroups:
- *                 type: integer
- *                 description: Number of groups (auto-calculated if not provided)
- *                 example: 4
- *               teamsPerGroup:
- *                 type: integer
- *                 description: Number of teams per group (auto-calculated if not provided)
- *                 example: 4
- *               includeKnockout:
- *                 type: boolean
- *                 description: Generate knockout stage after group stage
- *                 default: false
- *                 example: true
- *               teamsAdvancePerGroup:
- *                 type: integer
- *                 description: Number of teams advancing from each group to knockout
- *                 default: 2
- *                 example: 2
- *               knockoutStartDate:
- *                 type: string
- *                 format: date
- *                 description: Start date for knockout stage (auto day after group stage if not provided)
- *                 example: "2024-06-10"
  *     responses:
  *       201:
- *         description: Schedules generated successfully
+ *         description: Tournament schedule generated successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
  *                 message:
  *                   type: string
- *                 totalMatches:
- *                   type: integer
- *                 schedules:
+ *                 warnings:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Overflow warnings nếu lịch vượt quá thời gian cho phép
+ *                 data:
  *                   type: array
  *                   items:
  *                     type: object
- *       400:
- *         $ref: '#/components/responses/BadRequest'
- */
-router.post("/generate",
-  authenticate,
-  checkPermission('schedules:create'),
-  scheduleController.generateSchedule.bind(scheduleController)
-);
-
-/**
- * @swagger
- * /schedules/update-knockout:
- *   post:
- *     tags: [Schedules]
- *     summary: Update knockout stage match entries
- *     description: |
- *       Updates knockout stage matches with qualified teams from group stage.
- *       Call this endpoint after group stage results are finalized.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - categoryId
- *               - groupResults
- *             properties:
- *               categoryId:
- *                 type: integer
- *                 description: Tournament category ID
- *                 example: 1
- *               groupResults:
- *                 type: array
- *                 description: Array of group results with qualified teams
- *                 items:
- *                   type: object
- *                   properties:
- *                     groupName:
- *                       type: string
- *                       example: "Group A"
- *                     qualifiedEntryIds:
- *                       type: array
- *                       items:
+ *                     properties:
+ *                       categoryId:
  *                         type: integer
- *                       example: [1, 2]
- *     responses:
- *       200:
- *         description: Knockout entries updated successfully
+ *                       totalSchedules:
+ *                         type: integer
+ *                       totalMatches:
+ *                         type: integer
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
-router.post("/update-knockout",
+router.post(
+  "/generate-tournament",
   authenticate,
-  checkPermission('schedules:update'),
-  scheduleController.updateKnockoutEntries.bind(scheduleController)
+  checkPermission("schedules:create"),
+  scheduleController.generateTournamentSchedule.bind(scheduleController),
 );
 
 /**
@@ -210,14 +85,15 @@ router.post("/update-knockout",
  * /schedules/generate-group-stage:
  *   post:
  *     tags: [Schedules]
- *     summary: Generate group stage schedules
+ *     summary: Generate group stage schedule for a category
  *     description: |
- *       Tạo schedule cho vòng bảng dựa trên group standings đã có.
- *       Điều kiện:
- *       - Khung giờ: 8h-11h30 (sáng), 13h30-17h (chiều), 18h30-22h (tối)
- *       - Thời gian mỗi trận: Single/Double 30 phút, Team 60 phút
- *       - Các đội không đấu liên tiếp 2 trận trong cùng buổi
- *       - Round-robin: Tất cả đội đấu với nhau trong mỗi bảng
+ *       Tạo lịch vòng bảng (round-robin) cho 1 category dựa trên groupStandings.
+ *       Slot time tính từ scheduleConfig của tournament.
+ *       tableNumber KHÔNG được gán — sẽ gán động khi trận bắt đầu.
+ *
+ *       Yêu cầu:
+ *       - scheduleConfig đã được tạo
+ *       - groupStandings đã có (saveGroupAssignments đã chạy)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -228,27 +104,257 @@ router.post("/update-knockout",
  *             type: object
  *             required:
  *               - categoryId
- *               - startDate
  *             properties:
  *               categoryId:
  *                 type: integer
- *                 description: Tournament category ID
  *                 example: 1
- *               startDate:
- *                 type: string
- *                 format: date
- *                 description: Ngày bắt đầu thi đấu (YYYY-MM-DD)
- *                 example: "2026-02-01"
  *     responses:
  *       201:
- *         description: Group stage schedules generated successfully
+ *         description: Group stage schedule generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                 warning:
+ *                   type: string
+ *                   description: Có nếu lịch vượt quá thời gian cho phép
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalSchedules:
+ *                       type: integer
+ *                     totalMatches:
+ *                       type: integer
+ *                     schedules:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Schedule'
+ *                     matches:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Match'
  *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
-router.post("/generate-group-stage",
+router.post(
+  "/generate-group-stage",
   authenticate,
-  checkPermission('schedules:create'),
-  scheduleController.generateGroupStageSchedule.bind(scheduleController)
+  checkPermission("schedules:create"),
+  scheduleController.generateGroupStageSchedule.bind(scheduleController),
+);
+
+/**
+ * @swagger
+ * /schedules/generate-knockout:
+ *   post:
+ *     tags: [Schedules]
+ *     summary: Generate knockout schedule for a category
+ *     description: |
+ *       Tạo lịch knockout cho 1 category dựa trên knockoutBrackets.
+ *       Lấy tất cả brackets kể cả TBD placeholder (trừ bye matches).
+ *       Match với TBD sẽ có entryAId / entryBId = null — fill sau khi fillQualifiers().
+ *
+ *       Nếu truyền roundName → chỉ tạo lịch cho vòng đó (không xóa vòng khác).
+ *       Nếu không truyền → tạo lịch cho tất cả vòng, xóa lịch knockout cũ.
+ *
+ *       Yêu cầu:
+ *       - knockoutBrackets đã được generate (generatePlaceholders hoặc generateFromEntries)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - categoryId
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 example: 1
+ *               roundName:
+ *                 type: string
+ *                 enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final]
+ *                 description: Chỉ generate cho vòng này (optional)
+ *                 example: Quarter-final
+ *     responses:
+ *       201:
+ *         description: Knockout schedule generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                 warning:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalSchedules:
+ *                       type: integer
+ *                     totalMatches:
+ *                       type: integer
+ *                     schedules:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Schedule'
+ *                     matches:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Match'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/generate-knockout",
+  authenticate,
+  checkPermission("schedules:create"),
+  scheduleController.generateKnockoutSchedule.bind(scheduleController),
+);
+
+/**
+ * @swagger
+ * /schedules/sync-match-entries:
+ *   post:
+ *     tags: [Schedules]
+ *     summary: Sync match entries from brackets after fillQualifiers
+ *     description: |
+ *       Sau khi fillQualifiers() fill entryId thật vào knockoutBrackets,
+ *       gọi endpoint này để cập nhật lại entryAId / entryBId trong match tương ứng.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - categoryId
+ *             properties:
+ *               categoryId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Match entries synced successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/sync-match-entries",
+  authenticate,
+  checkPermission("schedules:update"),
+  scheduleController.syncMatchEntries.bind(scheduleController),
+);
+
+/**
+ * @swagger
+ * /schedules/category/{categoryId}:
+ *   get:
+ *     tags: [Schedules]
+ *     summary: Get schedules by category
+ *     description: |
+ *       Lấy danh sách schedules của 1 category, có pagination và filter.
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: stage
+ *         schema:
+ *           type: string
+ *           enum: [group, knockout]
+ *       - in: query
+ *         name: groupName
+ *         schema:
+ *           type: string
+ *         description: "Filter theo tên bảng (vd: Group A)"
+ *       - in: query
+ *         name: knockoutRound
+ *         schema:
+ *           type: string
+ *           enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final]
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: List of schedules
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     schedules:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Schedule'
+ *                     pagination:
+ *                       $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/category/:categoryId",
+  scheduleController.getSchedulesByCategoryId.bind(scheduleController),
 );
 
 /**
@@ -258,61 +364,14 @@ router.post("/generate-group-stage",
  *     tags: [Schedules]
  *     summary: Get schedule by ID
  *     parameters:
- *       - $ref: '#/components/parameters/idParam'
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
  *     responses:
  *       200:
  *         description: Schedule details
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   put:
- *     tags: [Schedules]
- *     summary: Update schedule
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       200:
- *         description: Schedule updated
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *   delete:
- *     tags: [Schedules]
- *     summary: Delete schedule
- *     parameters:
- *       - $ref: '#/components/parameters/idParam'
- *     responses:
- *       204:
- *         $ref: '#/components/responses/NoContent'
- */
-router.get("/:id", scheduleController.findById.bind(scheduleController));
-router.put("/:id", scheduleController.update.bind(scheduleController));
-router.delete("/:id", scheduleController.delete.bind(scheduleController));
-
-/**
- * @swagger
- * /schedules/category/{categoryId}:
- *   get:
- *     tags: [Schedules]
- *     summary: Get schedules by tournament category ID
- *     description: Retrieve all schedules for a specific tournament category, with optional filtering by stage
- *     parameters:
- *       - in: path
- *         name: categoryId
- *         required: true
- *         schema:
- *           type: number
- *         description: ID of the tournament category
- *       - in: query
- *         name: stage
- *         required: false
- *         schema:
- *           type: string
- *           enum: [group, knockout]
- *         description: Filter by stage (group or knockout)
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: List of schedules for the tournament category
  *         content:
  *           application/json:
  *             schema:
@@ -321,21 +380,89 @@ router.delete("/:id", scheduleController.delete.bind(scheduleController));
  *                 success:
  *                   type: boolean
  *                 data:
- *                   type: object
- *                   properties:
- *                     schedules:
- *                       type: array
- *                       items:
- *                         type: object
- *                     count:
- *                       type: number
- *                     offset:
- *                       type: number
- *                     limit:
- *                       type: number
- *       400:
- *         $ref: '#/components/responses/BadRequest'
+ *                   $ref: '#/components/schemas/Schedule'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ *   put:
+ *     tags: [Schedules]
+ *     summary: Update schedule (scheduledAt or tableNumber)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               scheduledAt:
+ *                 type: string
+ *                 format: date-time
+ *               tableNumber:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Schedule updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Schedule'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ *   delete:
+ *     tags: [Schedules]
+ *     summary: Delete schedule
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       204:
+ *         $ref: '#/components/responses/NoContent204'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
  */
-router.get("/category/:categoryId", scheduleController.getSchedulesByCategoryId.bind(scheduleController));
+router.get("/:id", scheduleController.findById.bind(scheduleController));
+router.put(
+  "/:id",
+  authenticate,
+  checkPermission("schedules:update"),
+  scheduleController.update.bind(scheduleController),
+);
+router.delete(
+  "/:id",
+  authenticate,
+  checkPermission("schedules:update"),
+  scheduleController.delete.bind(scheduleController),
+);
 
 export default router;

@@ -89,17 +89,49 @@ export class EntryMemberController {
   // ─── Business logic ────────────────────────────────────────────────────────
 
   /**
-   * Thêm thành viên vào đội (captain only)
-   * POST /entries/:entryId/members
+   * Captain mời thành viên vào đội (tạo invitation, chờ invitee confirm)
+   * POST /entries/:entryId/members/invite
    */
-  async addMember(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async inviteMember(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
       const entryId = Number(req.params.entryId);
-      const { newMemberId } = req.body;
-      const member = await entryMemberService.addMember(captainId, entryId, newMemberId);
+      const { inviteeId } = req.body;
+      const invitation = await entryMemberService.inviteMember(captainId, entryId, inviteeId);
+      res.status(201).json(invitation);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Invitee chấp nhận lời mời
+   * POST /entries/:entryId/members/invitations/:invitationId/accept
+   */
+  async acceptInvitation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
+      const invitationId = Number(req.params.invitationId);
+      const member = await entryMemberService.acceptInvitation(userId, invitationId);
       res.status(201).json(member);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Invitee từ chối lời mời
+   * POST /entries/:entryId/members/invitations/:invitationId/reject
+   */
+  async rejectInvitation(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
+      const invitationId = Number(req.params.invitationId);
+      await entryMemberService.rejectInvitation(userId, invitationId);
+      res.status(204).send();
     } catch (error) {
       next(error);
     }
