@@ -2,6 +2,7 @@ import { config as dotenvConfig } from '@dotenvx/dotenvx';
 dotenvConfig({ path: `.env.${process.env.NODE_ENV || 'development'}` });
 
 import Joi from "joi";
+import path from "path";
 
 const envSchema = Joi.object({
   NODE_ENV: Joi.string().valid("development", "production", "test").required(),
@@ -26,6 +27,8 @@ const envSchema = Joi.object({
   SMTP_PASSWORD: Joi.string().required(),
   SMTP_FROM_EMAIL: Joi.string().email().required(),
   SMTP_FROM_NAME: Joi.string().default("SmashHub"),
+  AVATAR_UPLOAD_DIR: Joi.string().required(),
+  AVATAR_URL_PATH: Joi.string().default("/uploads/avatars"),
 }).unknown(true);
 
 const { error, value: envVars } = envSchema
@@ -40,6 +43,10 @@ const config = {
   env: envVars.NODE_ENV,
   port: envVars.PORT,
   host: envVars.HOST,
+  upload: {
+    avatarDir: path.resolve(envVars.AVATAR_UPLOAD_DIR),
+    avatarUrlPath: envVars.AVATAR_URL_PATH,
+  },
   jwt: {
     secret: envVars.JWT_SECRET,
     expiresIn: envVars.JWT_EXPIRES_IN,

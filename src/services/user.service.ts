@@ -4,17 +4,24 @@ import EloScore from "../models/eloScore.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { Op } from "sequelize";
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
+import config from "../config/config";
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
     return await User.create(userData as any);
   }
 
-  async findAll(offset: number = 0, limit: number = 10): Promise<{ users: User[], pagination: any }> {
+  async findAll(
+    offset: number = 0,
+    limit: number = 10,
+  ): Promise<{ users: User[]; pagination: any }> {
     const { count, rows } = await User.findAndCountAll({
       offset,
       limit,
-      order: [['createdAt', 'DESC']]
+      order: [["createdAt", "DESC"]],
     });
 
     const totalPages = Math.ceil(count / limit);
@@ -28,8 +35,8 @@ export class UserService {
         limit,
         totalPages,
         hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      }
+        hasPrevPage: page > 1,
+      },
     };
   }
 
@@ -60,7 +67,7 @@ export class UserService {
 
   async update(
     id: number,
-    userData: Partial<UpdateUserDto>
+    userData: Partial<UpdateUserDto>,
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
@@ -74,7 +81,7 @@ export class UserService {
       dob?: Date;
       phoneNumber?: string;
       gender?: string;
-    }
+    },
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
@@ -86,16 +93,19 @@ export class UserService {
     return deletedCount > 0;
   }
 
-  async findAvailableChiefReferees(offset: number = 0, limit: number = 10): Promise<{ referees: User[]; pagination?: any }> {
+  async findAvailableChiefReferees(
+    offset: number = 0,
+    limit: number = 10,
+  ): Promise<{ referees: User[]; pagination?: any }> {
     const assignedRefereeIds = await TournamentReferee.findAll({
-      attributes: ['refereeId'],
+      attributes: ["refereeId"],
       where: {
-        role: 'main'
+        role: "main",
       },
-      raw: true
+      raw: true,
     });
 
-    const assignedIds = assignedRefereeIds.map(ref => ref.refereeId);
+    const assignedIds = assignedRefereeIds.map((ref) => ref.refereeId);
 
     // If pagination is requested
     if (offset !== undefined || limit !== undefined) {
@@ -103,21 +113,24 @@ export class UserService {
         include: [
           {
             model: Role,
-            as: 'roles',
+            as: "roles",
             where: {
-              name: 'chief_referee'
+              name: "chief_referee",
             },
-            through: { attributes: [] }
-          }
+            through: { attributes: [] },
+          },
         ],
-        where: assignedIds.length > 0 ? {
-          id: {
-            [Op.notIn]: assignedIds
-          }
-        } : {},
+        where:
+          assignedIds.length > 0
+            ? {
+                id: {
+                  [Op.notIn]: assignedIds,
+                },
+              }
+            : {},
         offset,
         limit: limit,
-        order: [['createdAt', 'DESC']]
+        order: [["createdAt", "DESC"]],
       });
 
       const totalPages = Math.ceil(count / limit);
@@ -131,8 +144,8 @@ export class UserService {
           limit,
           totalPages,
           hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
+          hasPrevPage: page > 1,
+        },
       };
     }
 
@@ -140,21 +153,60 @@ export class UserService {
       include: [
         {
           model: Role,
-          as: 'roles',
+          as: "roles",
           where: {
-            name: 'chief_referee'
+            name: "chief_referee",
           },
-          through: { attributes: [] }
-        }
+          through: { attributes: [] },
+        },
       ],
-      where: assignedIds.length > 0 ? {
-        id: {
-          [Op.notIn]: assignedIds
-        }
-      } : {}
+      where:
+        assignedIds.length > 0
+          ? {
+              id: {
+                [Op.notIn]: assignedIds,
+              },
+            }
+          : {},
     });
 
     return { referees: rows };
+  }
+
+  async uploadAvatar(
+    userId: number,
+    file: Express.Multer.File,
+  ): Promise<User | null> {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      await fs.unlink(file.path); // cleanup orphan
+      return null;
+    }
+
+    // Xóa avatar cũ
+    if (user.avatarUrl) {
+      const oldPath = path.join(
+        config.upload.avatarDir,
+        path.basename(user.avatarUrl),
+      );
+      await fs.unlink(oldPath).catch(() => {}); // ignore if not found
+    }
+
+    // Resize → webp
+    const outputFilename = `${path.basename(file.filename, path.extname(file.filename))}.webp`;
+    const outputPath = path.join(config.upload.avatarDir, outputFilename);
+
+    await fs.mkdir(config.upload.avatarDir, { recursive: true });
+
+    await sharp(file.path)
+      .resize(256, 256, { fit: "cover" })
+      .webp({ quality: 80 })
+      .toFile(outputPath);
+
+    await fs.unlink(file.path); // xóa file gốc
+
+    const avatarUrl = `${config.upload.avatarUrlPath}/${outputFilename}`;
+    return await user.update({ avatarUrl });
   }
 }
 

@@ -22,6 +22,9 @@ export type JoinRequestStatus = (typeof JOIN_REQUEST_STATUSES)[number];
 
 const REJECTION_REASON_MAX_LENGTH = 255;
 
+export const JOIN_REQUEST_TYPES = ["requested", "invited"] as const;
+export type JoinRequestType = (typeof JOIN_REQUEST_TYPES)[number];
+
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
@@ -32,10 +35,6 @@ const REJECTION_REASON_MAX_LENGTH = 255;
     { fields: ["userId"] },
     { fields: ["status"] },
     { fields: ["entryId", "status"] },
-    {
-      unique: true,
-      fields: ["entryId", "userId"], // 1 user chỉ có 1 request pending cho 1 entry
-    },
   ],
 })
 export default class JoinRequest extends Model {
@@ -46,6 +45,21 @@ export default class JoinRequest extends Model {
   })
   declare id: number;
 
+  @Column({
+    type: DataType.ENUM(...JOIN_REQUEST_TYPES),
+    allowNull: false,
+    defaultValue: "requested" satisfies JoinRequestType,
+    comment: "requested = user tự xin vào, invited = captain mời",
+  })
+  declare type: JoinRequestType;
+
+  @Column({
+    type: DataType.INTEGER.UNSIGNED,
+    allowNull: true,
+    // Không khai báo thêm gì — để Sequelize không map column này
+  })
+  // Không declare field này trong model luôn, Sequelize sẽ bỏ qua
+  
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -99,14 +113,16 @@ export default class JoinRequest extends Model {
     if (rejectionReason == null) return;
 
     if (status !== "rejected") {
-      throw new Error("Rejection reason can only be set when status is rejected");
+      throw new Error(
+        "Rejection reason can only be set when status is rejected",
+      );
     }
     if (rejectionReason.trim().length === 0) {
       throw new Error("Rejection reason must not be empty or whitespace only");
     }
     if (rejectionReason.length > REJECTION_REASON_MAX_LENGTH) {
       throw new Error(
-        `Rejection reason must not exceed ${REJECTION_REASON_MAX_LENGTH} characters`
+        `Rejection reason must not exceed ${REJECTION_REASON_MAX_LENGTH} characters`,
       );
     }
   }

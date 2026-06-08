@@ -19,11 +19,7 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - firstName
- *               - lastName
- *               - email
- *               - password
+ *             required: [firstName, lastName, email, password]
  *             properties:
  *               firstName:
  *                 type: string
@@ -33,8 +29,6 @@ const router = Router();
  *                 type: string
  *               password:
  *                 type: string
- *               avatarUrl:
- *                 type: string
  *               dob:
  *                 type: string
  *                 format: date
@@ -42,7 +36,7 @@ const router = Router();
  *                 type: string
  *               gender:
  *                 type: string
- *                 enum: [male, female, other]
+ *                 enum: [male, female]
  *     responses:
  *       201:
  *         description: User created successfully
@@ -65,64 +59,11 @@ const router = Router();
  *                 users:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       firstName:
- *                         type: string
- *                         example: "John"
- *                       lastName:
- *                         type: string
- *                         example: "Doe"
- *                       email:
- *                         type: string
- *                         example: "john@example.com"
- *                       avatarUrl:
- *                         type: string
- *                       dob:
- *                         type: string
- *                         format: date
- *                       phoneNumber:
- *                         type: string
- *                       gender:
- *                         type: string
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                       updatedAt:
- *                         type: string
- *                         format: date-time
+ *                     $ref: '#/components/schemas/User'
  *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: integer
- *                       example: 50
- *                     page:
- *                       type: integer
- *                       example: 1
- *                     limit:
- *                       type: integer
- *                       example: 10
- *                     totalPages:
- *                       type: integer
- *                       example: 5
- *                     hasNextPage:
- *                       type: boolean
- *                       example: true
- *                     hasPrevPage:
- *                       type: boolean
- *                       example: false
- *       500:
- *         $ref: '#/components/responses/InternalError'
+ *                   $ref: '#/components/schemas/Pagination'
  */
-router.post("/",
-  authenticate,
-  checkPermission("users:create"),
-  userController.create.bind(userController)
-);
+router.post("/", authenticate, checkPermission("users:create"), userController.create.bind(userController));
 router.get("/", userController.findAll.bind(userController));
 
 /**
@@ -136,6 +77,10 @@ router.get("/", userController.findAll.bind(userController));
  *     responses:
  *       200:
  *         description: Current user profile with roles and ELO score
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserDetail'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  */
@@ -152,11 +97,15 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *     responses:
  *       200:
  *         description: User details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
  *     tags: [Users]
- *     summary: Update user
+ *     summary: Update user (admin)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -176,8 +125,6 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *                 type: string
  *               password:
  *                 type: string
- *               avatarUrl:
- *                 type: string
  *               dob:
  *                 type: string
  *                 format: date
@@ -185,7 +132,7 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *                 type: string
  *               gender:
  *                 type: string
- *                 enum: [male, female, other]
+ *                 enum: [male, female]
  *     responses:
  *       200:
  *         description: User updated successfully
@@ -205,23 +152,15 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *         $ref: '#/components/responses/NotFound'
  */
 router.get("/:id", userController.findById.bind(userController));
-router.put("/:id",
-  authenticate,
-  checkPermission("users:update"),
-  userController.update.bind(userController)
-);
-router.delete("/:id",
-  authenticate,
-  checkPermission("users:delete"),
-  userController.delete.bind(userController)
-);
+router.put("/:id", authenticate, checkPermission("users:update"), userController.update.bind(userController));
+router.delete("/:id", authenticate, checkPermission("users:delete"), userController.delete.bind(userController));
 
 /**
  * @swagger
  * /users/{id}/profile:
  *   put:
  *     tags: [Users]
- *     summary: Update user profile (avatarUrl, dob, phoneNumber, gender)
+ *     summary: Update user profile fields
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -233,25 +172,71 @@ router.delete("/:id",
  *           schema:
  *             type: object
  *             properties:
- *               avatarUrl:
- *                 type: string
  *               dob:
  *                 type: string
  *                 format: date
+ *                 example: "1995-08-20"
  *               phoneNumber:
  *                 type: string
+ *                 example: "+84901234567"
  *               gender:
  *                 type: string
- *                 enum: [male, female, other]
+ *                 enum: [male, female]
  *     responses:
  *       200:
- *         description: User profile updated successfully
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.put("/:id/profile",
-  authenticate,
-  userController.updateProfile.bind(userController)
-);
+router.put("/:id/profile", authenticate, userController.updateProfile.bind(userController));
+
+/**
+ * @swagger
+ * /users/{id}/avatar:
+ *   post:
+ *     tags: [Users]
+ *     summary: Upload user avatar
+ *     description: Upload image file. Auto-resized to 256x256 and converted to WebP.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [avatar]
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *                 description: Image file (jpeg, jpg, png, webp). Max 5MB.
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 avatarUrl:
+ *                   type: string
+ *                   example: "/uploads/avatars/a1b2c3d4.webp"
+ *       400:
+ *         description: No file uploaded or invalid file type
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/avatar", authenticate, ...userController.uploadAvatar);
 
 export default router;

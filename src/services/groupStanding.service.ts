@@ -43,7 +43,7 @@ const MIN_ENTRIES_FOR_GROUPS = 12;
 const MIN_TEAMS_PER_GROUP = 3;
 const MAX_TEAMS_PER_GROUP = 5;
 const POSSIBLE_GROUP_COUNTS = [4, 8, 16, 32, 64];
-const DEFAULT_QUALIFIERS_PER_GROUP = 2;
+const QUALIFIERS_PER_GROUP = 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -325,78 +325,77 @@ export class GroupStandingService {
    * @param qualifiersPerGroup - Số đội/bảng vào vòng sau (default = 2)
    */
   async getQualifiers(
-    categoryId: number,
-    qualifiersPerGroup = DEFAULT_QUALIFIERS_PER_GROUP,
-    options?: { offset?: number; limit?: number }
-  ): Promise<{
-    qualifiers?: { groupName: string; qualifiers: GroupStanding[] }[],
-    pagination?: any
-  } | { groupName: string; qualifiers: GroupStanding[] }[]> {
-    if (qualifiersPerGroup < 1) {
-      throw new Error("qualifiersPerGroup must be at least 1");
-    }
+  categoryId: number,
+  qualifiersPerGroup = QUALIFIERS_PER_GROUP,
+  options?: { offset?: number; limit?: number }
+): Promise<{
+  qualifiers?: { groupName: string; qualifiers: GroupStanding[] }[];
+  pagination?: any;
+} | { groupName: string; qualifiers: GroupStanding[] }[]> {
+  const standings = await GroupStanding.findAll({
+    where: { categoryId },
+    order: [
+      ["groupName", "ASC"],
+      ["position", "ASC"],
+    ],
+  });
 
-    const standings = await GroupStanding.findAll({
-      where: { categoryId },
-      order: [
-        ["groupName", "ASC"],
-        ["position", "ASC"],
-      ],
-    });
+  if (standings.length === 0) throw new Error("No standings found for this category");
 
-    if (standings.length === 0) throw new Error("No standings found for this category");
-
-    if (standings.some((s) => s.position == null)) {
-      throw new Error("Some standings have not been ranked yet");
-    }
-
-    // Group by groupName
-    const groupMap = new Map<string, GroupStanding[]>();
-    for (const standing of standings) {
-      const group = groupMap.get(standing.groupName) ?? [];
-      group.push(standing);
-      groupMap.set(standing.groupName, group);
-    }
-
-    const results = Array.from(groupMap.entries()).map(([groupName, groupStandings]) => {
-      const qualifiers = groupStandings.filter(
-        (s) => s.position != null && s.position <= qualifiersPerGroup
-      );
-
-      if (qualifiers.length < qualifiersPerGroup) {
-        throw new Error(
-          `Group ${groupName} does not have enough ranked entries for ${qualifiersPerGroup} qualifiers`
-        );
-      }
-
-      return { groupName, qualifiers };
-    });
-
-    // If pagination is requested
-    const offset = options?.offset || 0;
-    const limit = options?.limit || 10;
-
-    if (options && (options.offset !== undefined || options.limit !== undefined)) {
-      const total = results.length;
-      const paginatedResults = results.slice(offset, offset + limit);
-      const totalPages = Math.ceil(total / limit);
-      const page = Math.floor(offset / limit) + 1;
-
-      return {
-        qualifiers: paginatedResults,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      };
-    }
-
-    return results;
+  if (standings.some((s) => s.position == null)) {
+    throw new Error("Some standings have not been ranked yet");
   }
+
+  if (!Number.isInteger(qualifiersPerGroup) || qualifiersPerGroup < 1) {
+    throw new Error("qualifiersPerGroup must be a positive integer");
+  }
+
+  const groupMap = new Map<string, GroupStanding[]>();
+  for (const standing of standings) {
+    const group = groupMap.get(standing.groupName) ?? [];
+    group.push(standing);
+    groupMap.set(standing.groupName, group);
+  }
+
+  const results = Array.from(groupMap.entries()).map(([groupName, groupStandings]) => {
+    const qualifiers = groupStandings.filter(
+      (s) => s.position != null && s.position <= qualifiersPerGroup
+    );
+
+    if (qualifiers.length < qualifiersPerGroup) {
+      throw new Error(
+        `Group ${groupName} does not have enough ranked entries for ${qualifiersPerGroup} qualifiers`
+      );
+    }
+
+    return { groupName, qualifiers };
+  });
+
+  // pagination
+  const offset = options?.offset ?? 0;
+  const limit = options?.limit ?? 10;
+
+  if (options && (options.offset !== undefined || options.limit !== undefined)) {
+    const total = results.length;
+    const paginatedResults = results.slice(offset, offset + limit);
+    const totalPages = Math.ceil(total / limit);
+    const page = Math.floor(offset / limit) + 1;
+
+    return {
+      qualifiers: paginatedResults,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  return results;
+}
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
 

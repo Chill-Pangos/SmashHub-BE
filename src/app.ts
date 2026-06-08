@@ -7,6 +7,7 @@ import swaggerUi from "swagger-ui-express";
 import routes from "./routes";
 import swaggerSpec from "./config/swagger";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.middleware";
+import config from "./config/config";
 
 const app: Application = express();
 
@@ -16,6 +17,7 @@ app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(config.upload.avatarUrlPath, express.static(config.upload.avatarDir));
 
 // Swagger Documentation
 app.use(

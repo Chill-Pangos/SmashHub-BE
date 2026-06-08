@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import userService from "../services/user.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { NotFoundError } from "../utils/errors.helper";
+import { avatarUpload } from "../config/multer";
 
 export class UserController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -28,18 +29,11 @@ export class UserController {
   async me(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Unauthorized",
-        });
+        res.status(401).json({ success: false, message: "Unauthorized" });
         return;
       }
-
       const user = await userService.findMe(req.userId);
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
-
+      if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
       next(error);
@@ -49,9 +43,7 @@ export class UserController {
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.findById(Number(req.params.id));
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
+      if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
       next(error);
@@ -61,24 +53,17 @@ export class UserController {
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await userService.update(Number(req.params.id), req.body);
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
+      if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
       next(error);
     }
   }
 
-  async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async updateProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await userService.updateProfile(
-        Number(req.params.id),
-        req.body
-      );
-      if (!user) {
-        throw new NotFoundError("User not found");
-      }
+      const user = await userService.updateProfile(Number(req.params.id), req.body);
+      if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
       next(error);
@@ -88,9 +73,7 @@ export class UserController {
   async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const deleted = await userService.delete(Number(req.params.id));
-      if (!deleted) {
-        throw new NotFoundError("User not found");
-      }
+      if (!deleted) throw new NotFoundError("User not found");
       res.status(204).send();
     } catch (error) {
       next(error);
@@ -108,6 +91,27 @@ export class UserController {
       next(error);
     }
   }
+
+  uploadAvatar = [
+    avatarUpload.single("avatar"),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        if (!req.file) {
+          res.status(400).json({ message: "No file uploaded" });
+          return;
+        }
+        if (!req.userId) {
+          res.status(401).json({ message: "Unauthorized" });
+          return;
+        }
+        const updated = await userService.uploadAvatar(req.userId, req.file);
+        if (!updated) throw new NotFoundError("User not found");
+        res.status(200).json({ avatarUrl: updated.avatarUrl });
+      } catch (error) {
+        next(error);
+      }
+    },
+  ];
 }
 
 export default new UserController();

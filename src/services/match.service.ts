@@ -1,15 +1,14 @@
 // match.service.ts
-import { Op, Transaction } from "sequelize";
+import { Op } from "sequelize";
 import { sequelize } from "../config/database";
-import Match, { MatchStatus } from "../models/match.model";
+import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
-import SubMatch from "../models/subMatch.model";
 import MatchSet from "../models/matchSet.model";
 import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
 import TournamentReferee from "../models/tournamentReferee.model";
-import GroupStanding from "../models/groupStanding.model";
+
 import KnockoutBracket from "../models/knockoutBracket.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
@@ -389,6 +388,42 @@ export class MatchService {
     });
 
     return { matches, count };
+  }
+
+  /**
+   * Bắt đầu nhiều trận cùng lúc.
+   * Dùng khi tournament có nhiều bàn thi đấu chạy song song.
+   * Mỗi trận vẫn assign bàn và trọng tài động độc lập.
+   * Trận nào fail sẽ ghi vào errors, không rollback toàn bộ.
+   */
+  async bulkStartMatches(
+    refereeId: number,
+    matchIds: number[],
+  ): Promise<{
+    succeeded: Match[];
+    failed: { matchId: number; reason: string }[];
+  }> {
+    if (matchIds.length === 0) throw new Error("matchIds must not be empty");
+
+    const succeeded: Match[] = [];
+    const failed: { matchId: number; reason: string }[] = [];
+
+    // Xử lý song song nhưng không để 1 trận fail ảnh hưởng trận khác
+    await Promise.allSettled(
+      matchIds.map(async (matchId) => {
+        try {
+          const match = await this.startMatch(matchId, refereeId);
+          succeeded.push(match);
+        } catch (err) {
+          failed.push({
+            matchId,
+            reason: err instanceof Error ? err.message : "Unknown error",
+          });
+        }
+      }),
+    );
+
+    return { succeeded, failed };
   }
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────

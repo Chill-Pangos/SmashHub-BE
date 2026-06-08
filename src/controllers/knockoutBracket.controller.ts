@@ -1,31 +1,89 @@
 import { Request, Response, NextFunction } from "express";
 import knockoutBracketService from "../services/knockoutBracket.service";
-import {
-  CreateKnockoutBracketDto,
-  UpdateKnockoutBracketDto,
-  AdvanceWinnerDto,
-} from "../dto/knockoutBracket.dto";
+import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
 
 export class KnockoutBracketController {
+  private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
+    if (req.userId == null) {
+      next(new UnauthorizedError("Unauthorized"));
+      return null;
+    }
+    return req.userId;
+  }
+
   /**
-   * Generate knockout bracket từ danh sách entries (không có vòng bảng)
-   * POST /knockout-brackets/generate
+   * Tạo bracket placeholders toàn TBD dựa trên số bảng hiện có.
+   * Dùng để tạo schedule trước khi vòng bảng kết thúc.
+   * POST /knockout-brackets/placeholders
    * Body: { categoryId: number }
    */
-  async generateFromEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async generatePlaceholders(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.body;
-      const chiefRefereeId = (req as any).user?.id;
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
 
-      if (!chiefRefereeId) {
-        throw new UnauthorizedError("Unauthorized");
-      }
+      const { categoryId } = req.body;
+
+      const result = await knockoutBracketService.generatePlaceholders(
+        chiefRefereeId,
+        Number(categoryId),
+      );
+
+      res.status(201).json({
+        success: true,
+        data: result,
+        message: "Bracket placeholders generated successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Fill entryId thật vào bracket round 1 sau khi vòng bảng kết thúc.
+   * POST /knockout-brackets/fill-qualifiers
+   * Body: { categoryId: number }
+   */
+  async fillQualifiers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
+
+      const { categoryId } = req.body;
+
+      const result = await knockoutBracketService.fillQualifiers(
+        chiefRefereeId,
+        Number(categoryId),
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: "Qualifiers filled into bracket successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Generate knockout bracket từ danh sách entries (không có vòng bảng).
+   * POST /knockout-brackets/from-entries
+   * Body: { categoryId: number }
+   */
+  async generateFromEntries(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
+
+      const { categoryId } = req.body;
 
       const result = await knockoutBracketService.generateFromEntries(
         chiefRefereeId,
-        categoryId
+        Number(categoryId),
       );
+
       res.status(201).json({
         success: true,
         data: result,
@@ -37,60 +95,28 @@ export class KnockoutBracketController {
   }
 
   /**
-   * Advance winner sang vòng tiếp theo
+   * Advance winner sang vòng tiếp theo.
    * POST /knockout-brackets/:id/advance-winner
    * Body: { winnerEntryId: number }
    */
-  async advanceWinner(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async advanceWinner(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { id } = req.params;
-      const { winnerEntryId } = req.body;
-      const chiefRefereeId = (req as any).user?.id;
-      const bracketId = Number(id);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
 
-      if (!chiefRefereeId) {
-        throw new UnauthorizedError("Unauthorized");
-      }
+      const bracketId = Number(req.params.id);
+      const { winnerEntryId } = req.body;
 
       const result = await knockoutBracketService.advanceWinner(
         chiefRefereeId,
         bracketId,
-        winnerEntryId
+        Number(winnerEntryId),
       );
 
       res.status(200).json({
         success: true,
-        message: "Winner updated and advanced to the next round successfully",
-        data: result
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * Generate knockout bracket từ kết quả vòng bảng
-   * POST /knockout-brackets/generate-from-group-stage
-   * Body: { categoryId: number, qualifiersPerGroup?: number }
-   */
-  async generateFromGroupStage(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { categoryId, qualifiersPerGroup } = req.body;
-      const chiefRefereeId = (req as any).user?.id;
-
-      if (!chiefRefereeId) {
-        throw new UnauthorizedError("Unauthorized");
-      }
-
-      const result = await knockoutBracketService.generateFromGroupStage(
-        chiefRefereeId,
-        categoryId,
-        qualifiersPerGroup
-      );
-      res.status(201).json({
-        success: true,
         data: result,
-        message: "Knockout bracket generated from group stage results successfully",
+        message: "Winner advanced to the next round successfully",
       });
     } catch (error) {
       next(error);
@@ -98,26 +124,25 @@ export class KnockoutBracketController {
   }
 
   /**
-   * Lấy brackets theo entry ID hoặc entry name
+   * Lấy brackets theo entryId hoặc entryName.
    * GET /knockout-brackets/category/:categoryId/entry?entryId=5 hoặc ?entryName=Team+Alpha
    */
   async getBracketsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.params;
+      const categoryId = Number(req.params.categoryId);
       const { entryId, entryName } = req.query;
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
       const offset = Math.max(page - 1, 0) * limit;
 
       const filter: { entryId?: number; entryName?: string } = {};
-
-      if (entryId) filter.entryId = parseInt(entryId as string);
+      if (entryId) filter.entryId = Number(entryId);
       if (entryName) filter.entryName = entryName as string;
 
       const result = await knockoutBracketService.getBracketsByEntry(
-        parseInt(categoryId as string),
+        categoryId,
         filter,
-        { offset, limit }
+        { offset, limit },
       );
 
       res.status(200).json({
@@ -130,15 +155,13 @@ export class KnockoutBracketController {
   }
 
   /**
-   * Lấy toàn bộ bracket tree của 1 category
-   * GET /knockout-brackets/category/:categoryId/tree
+   * Lấy toàn bộ bracket tree của 1 category.
+   * GET /knockout-brackets/tree/:categoryId
    */
   async getBracketTree(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.params;
-      const result = await knockoutBracketService.getBracketTree(
-        parseInt(categoryId as string)
-      );
+      const categoryId = Number(req.params.categoryId);
+      const result = await knockoutBracketService.getBracketTree(categoryId);
 
       res.status(200).json({
         success: true,
@@ -150,22 +173,19 @@ export class KnockoutBracketController {
   }
 
   /**
-   * Validate bracket integrity trước khi bắt đầu giải
+   * Validate bracket integrity trước khi bắt đầu giải.
    * GET /knockout-brackets/validate/:categoryId
    */
-  async validateBracketIntegrity(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async validateBracketIntegrity(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.params;
-      const chiefRefereeId = (req as any).user?.id;
-      const parsedCategoryId = Number(categoryId);
+      const chiefRefereeId = this.getAuthenticatedUserId(req, next);
+      if (chiefRefereeId == null) return;
 
-      if (!chiefRefereeId) {
-        throw new UnauthorizedError("Unauthorized");
-      }
+      const categoryId = Number(req.params.categoryId);
 
       const result = await knockoutBracketService.validateBracketIntegrity(
         chiefRefereeId,
-        parsedCategoryId
+        categoryId,
       );
 
       res.status(200).json({
@@ -178,15 +198,13 @@ export class KnockoutBracketController {
   }
 
   /**
-   * Lấy kết quả xếp hạng cuối giải knockout
-   * GET /knockout-brackets/category/:categoryId/standings
+   * Lấy kết quả xếp hạng cuối giải knockout.
+   * GET /knockout-brackets/standings/:categoryId
    */
   async getStandings(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { categoryId } = req.params;
-      const result = await knockoutBracketService.getStandings(
-        parseInt(categoryId as string)
-      );
+      const categoryId = Number(req.params.categoryId);
+      const result = await knockoutBracketService.getStandings(categoryId);
 
       res.status(200).json({
         success: true,

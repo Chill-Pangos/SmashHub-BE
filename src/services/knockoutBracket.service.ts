@@ -8,21 +8,37 @@ import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import Entry from "../models/entry.model";
-import User from "../models/user.model";
+import GroupStanding from "../models/groupStanding.model";
 import groupStandingService from "./groupStanding.service";
 import entryService from "./entry.service";
-import { KnockoutRound, KNOCKOUT_ROUNDS } from "../models/schedule.model";
+import { KnockoutRound } from "../models/schedule.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface BracketSlot {
-  entryId: number | null; // null = bye
+interface BracketSlotDto {
+  entryId: number | null;
+  entryName: string; // "TBD" nếu chưa có entryId
+}
+
+interface BracketDto {
+  id: number;
+  roundNumber: number;
+  roundName: string;
+  bracketPosition: number;
+  entryA: BracketSlotDto;
+  entryB: BracketSlotDto;
+  winnerEntryId: number | null;
+  status: BracketStatus;
+  isByeMatch: boolean;
+  previousBracketAId: number | null;
+  previousBracketBId: number | null;
+  nextBracketId: number | null;
 }
 
 interface RoundDto {
   roundNumber: number;
   roundName: string;
-  brackets: KnockoutBracket[];
+  brackets: BracketDto[];
 }
 
 interface BracketTreeDto {
@@ -34,11 +50,11 @@ interface BracketTreeDto {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const QUALIFIERS_PER_GROUP = 2;
 const MIN_ENTRIES = 4;
 const MAX_BRACKET_SIZE = 256;
 const POSSIBLE_BRACKET_SIZES = [4, 8, 16, 32, 64, 128, 256];
 
-// roundNumber → roundName mapping (dựa trên bracket size)
 const ROUND_NAME_MAP: Record<number, KnockoutRound> = {
   2: "Final",
   4: "Semi-final",
@@ -48,7 +64,39 @@ const ROUND_NAME_MAP: Record<number, KnockoutRound> = {
   64: "Round of 64",
 };
 
+const BRACKET_INCLUDE = [
+  { model: Entry, as: "entryA", attributes: ["id", "name"] },
+  { model: Entry, as: "entryB", attributes: ["id", "name"] },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatSlot(
+  entryId: number | null | undefined,
+  entryName: string | null | undefined,
+): BracketSlotDto {
+  if (entryId == null) {
+    return { entryId: null, entryName: "TBD" };
+  }
+  return { entryId, entryName: entryName ?? "TBD" };
+}
+
+function formatBracket(b: KnockoutBracket): BracketDto {
+  return {
+    id: b.id,
+    roundNumber: b.roundNumber,
+    roundName: b.roundName,
+    bracketPosition: b.bracketPosition,
+    entryA: formatSlot(b.entryAId, b.entryA?.name),
+    entryB: formatSlot(b.entryBId, b.entryB?.name),
+    winnerEntryId: b.winnerEntryId ?? null,
+    status: b.status,
+    isByeMatch: b.isByeMatch,
+    previousBracketAId: b.previousBracketAId ?? null,
+    previousBracketBId: b.previousBracketBId ?? null,
+    nextBracketId: b.nextBracketId ?? null,
+  };
+}
 
 function shuffleArray<T>(arr: T[]): T[] {
   const result = [...arr];
@@ -92,30 +140,6 @@ async function assertChiefReferee(
   if (!ref) throw new Error("Only the chief referee can perform this action");
 }
 
-/**
- * Tạo danh sách slots từ entries + bye slots.
- * Bye slots được phân bổ đều ở 2 nửa bracket.
- */
-function buildSlots(entryIds: number[], bracketSize: number): BracketSlot[] {
-  const numByes = bracketSize - entryIds.length;
-  const shuffled = shuffleArray(entryIds);
-
-  // Xen kẽ bye vào giữa các entries để phân bổ đều
-  const slots: BracketSlot[] = shuffled.map((id) => ({ entryId: id }));
-  const byeSlots: BracketSlot[] = Array(numByes).fill({ entryId: null });
-
-  // Phân bổ bye đều vào 2 nửa
-  const topEntries = slots.slice(0, Math.ceil(shuffled.length / 2));
-  const bottomEntries = slots.slice(Math.ceil(shuffled.length / 2));
-  const topByes = byeSlots.slice(0, Math.ceil(numByes / 2));
-  const bottomByes = byeSlots.slice(Math.ceil(numByes / 2));
-
-  const topHalf = shuffleArray([...topEntries, ...topByes]);
-  const bottomHalf = shuffleArray([...bottomEntries, ...bottomByes]);
-
-  return [...topHalf, ...bottomHalf];
-}
-
 function formatBracketTree(
   categoryId: number,
   brackets: KnockoutBracket[],
@@ -132,9 +156,9 @@ function formatBracketTree(
     .map(([roundNumber, roundBrackets]) => ({
       roundNumber,
       roundName: roundBrackets[0]?.roundName ?? `Round ${roundNumber}`,
-      brackets: roundBrackets.sort(
-        (a, b) => a.bracketPosition - b.bracketPosition,
-      ),
+      brackets: roundBrackets
+        .sort((a, b) => a.bracketPosition - b.bracketPosition)
+        .map(formatBracket),
     }));
 
   return {
@@ -149,24 +173,30 @@ function formatBracketTree(
 
 /**
  * Tạo toàn bộ bracket tree từ danh sách slots.
+ * Nhận (number | null)[] — null = TBD placeholder.
  * Xóa brackets cũ trước khi tạo mới.
  */
-async function buildBracketTree(
+async function buildBracketTreeWithSlots(
   categoryId: number,
-  entryIds: number[],
+  slots: (number | null)[],
   t: Transaction,
 ): Promise<KnockoutBracket[]> {
-  if (entryIds.length < MIN_ENTRIES) {
+  if (slots.length < MIN_ENTRIES) {
     throw new Error(
       `At least ${MIN_ENTRIES} entries are required for knockout bracket`,
     );
   }
 
-  const bracketSize = calculateBracketSize(entryIds.length);
-  const slots = buildSlots(entryIds, bracketSize);
+  const bracketSize = calculateBracketSize(slots.length);
+
+  // Pad thêm null nếu slots chưa đủ bracketSize
+  const paddedSlots: (number | null)[] = [
+    ...slots,
+    ...Array(bracketSize - slots.length).fill(null),
+  ];
+
   const totalRounds = Math.log2(bracketSize);
 
-  // Xóa brackets cũ
   await KnockoutBracket.destroy({ where: { categoryId }, transaction: t });
 
   const allBrackets: KnockoutBracket[] = [];
@@ -174,32 +204,34 @@ async function buildBracketTree(
   // ── Round 1 ────────────────────────────────────────────────────────────────
   const round1Brackets: KnockoutBracket[] = [];
   const numRound1 = bracketSize / 2;
-  const playersInRound1 = bracketSize;
 
   for (let i = 0; i < numRound1; i++) {
-    const slotA = slots[i * 2]!;
-    const slotB = slots[i * 2 + 1]!;
+    const entryAId = paddedSlots[i * 2] ?? undefined;
+    const entryBId = paddedSlots[i * 2 + 1] ?? undefined;
 
-    const isByeMatch = !slotA.entryId || !slotB.entryId;
-    const winnerEntryId = isByeMatch
-      ? (slotA.entryId ?? slotB.entryId ?? undefined)
-      : undefined;
+    const isByeMatch = (entryAId == null) !== (entryBId == null);
+    const isTBDMatch = entryAId == null && entryBId == null;
+
+    const winnerEntryId = isByeMatch ? (entryAId ?? entryBId) : undefined;
+
     const status: BracketStatus = isByeMatch
       ? "completed"
-      : slotA.entryId && slotB.entryId
-        ? "ready"
-        : "pending";
+      : isTBDMatch
+        ? "pending"
+        : entryAId && entryBId
+          ? "ready"
+          : "pending";
 
     const bracket = await KnockoutBracket.create(
       {
         categoryId,
         roundNumber: 1,
         bracketPosition: i,
-        entryAId: slotA.entryId ?? undefined,
-        entryBId: slotB.entryId ?? undefined,
+        entryAId,
+        entryBId,
         winnerEntryId,
         status,
-        roundName: getRoundName(playersInRound1),
+        roundName: getRoundName(bracketSize),
         isByeMatch,
       },
       { transaction: t },
@@ -221,7 +253,6 @@ async function buildBracketTree(
       const prevA = prevRound[i * 2]!;
       const prevB = prevRound[i * 2 + 1]!;
 
-      // Nếu cả 2 bracket cha đều là bye → fill winner ngay
       const entryAId =
         prevA.status === "completed" ? prevA.winnerEntryId : undefined;
       const entryBId =
@@ -245,7 +276,6 @@ async function buildBracketTree(
         { transaction: t },
       );
 
-      // Cập nhật nextBracketId cho 2 bracket cha
       await prevA.update({ nextBracketId: bracket.id }, { transaction: t });
       await prevB.update({ nextBracketId: bracket.id }, { transaction: t });
 
@@ -262,71 +292,159 @@ async function buildBracketTree(
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class KnockoutBracketService {
-  // ── 1. Generate từ kết quả vòng bảng ─────────────────────────────────────
+  // ── 1. Generate placeholders (có vòng bảng) ───────────────────────────────
 
   /**
-   * Generate knockout bracket từ danh sách đội vào vòng trong (có vòng bảng).
-   * Đội nhất và đội nhì được xếp khác nhánh để tránh gặp nhau sớm.
+   * Tạo bracket placeholders dựa trên số bảng đấu hiện có.
+   * Tất cả slots đều là TBD — dùng để tạo schedule trước khi vòng bảng kết thúc.
+   * Fill entryId thật sau khi vòng bảng kết thúc qua fillQualifiers().
    */
-  async generateFromGroupStage(
+  async generatePlaceholders(
     chiefRefereeId: number,
     categoryId: number,
-    qualifiersPerGroup = 2,
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertChiefReferee(chiefRefereeId, category.tournamentId);
 
-    const qualifiersResult = await groupStandingService.getQualifiers(
-      categoryId,
-      qualifiersPerGroup,
+    // Đếm số bảng hiện có để tính số slots = numGroups * QUALIFIERS_PER_GROUP
+    const groupNames = await GroupStanding.findAll({
+      where: { categoryId },
+      attributes: [
+        [sequelize.fn("DISTINCT", sequelize.col("groupName")), "groupName"],
+      ],
+    });
+
+    if (groupNames.length === 0) {
+      throw new Error("No groups found. Save group assignments first.");
+    }
+
+    const numSlots = groupNames.length * QUALIFIERS_PER_GROUP;
+    const slots: (number | null)[] = Array(numSlots).fill(null); // tất cả TBD
+
+    await sequelize.transaction((t) =>
+      buildBracketTreeWithSlots(categoryId, slots, t),
     );
 
-    // Handle union return type: could be array or object with pagination
+    const bracketsWithEntries = await KnockoutBracket.findAll({
+      where: { categoryId },
+      include: BRACKET_INCLUDE,
+      order: [
+        ["roundNumber", "ASC"],
+        ["bracketPosition", "ASC"],
+      ],
+    });
+
+    return formatBracketTree(categoryId, bracketsWithEntries);
+  }
+
+  // ── 2. Fill qualifiers vào placeholders ───────────────────────────────────
+
+  /**
+   * Fill entryId thật vào bracket round 1 sau khi vòng bảng kết thúc.
+   * Gọi sau generatePlaceholders() khi đã có kết quả đầy đủ.
+   * Đội nhất vào top half, đội nhì vào bottom half để tránh gặp nhau sớm.
+   */
+  async fillQualifiers(
+    chiefRefereeId: number,
+    categoryId: number,
+  ): Promise<BracketTreeDto> {
+    const category = await getCategoryWithTournament(categoryId);
+    await assertChiefReferee(chiefRefereeId, category.tournamentId);
+
+    const qualifiersResult =
+      await groupStandingService.getQualifiers(categoryId);
     const qualifiers = Array.isArray(qualifiersResult)
       ? qualifiersResult
       : qualifiersResult.qualifiers || [];
 
     if (qualifiers.length === 0) {
-      throw new Error("No qualifiers found. Run getQualifiers first.");
+      throw new Error("No qualifiers found.");
     }
 
-    // Tách đội nhất và đội nhì để xếp khác nhánh
-    const firstPlace = qualifiers
-      .map((g) => g.qualifiers[0])
-      .filter((s): s is NonNullable<typeof s> => s != null)
-      .map((s) => s.entryId);
-
-    const secondPlace = qualifiers
-      .map((g) => g.qualifiers[1])
-      .filter((s): s is NonNullable<typeof s> => s != null)
-      .map((s) => s.entryId);
-
-    // Shuffle mỗi nhóm riêng
-    const shuffledFirst = shuffleArray(firstPlace);
-    const shuffledSecond = shuffleArray(secondPlace);
-
-    // Xen kẽ đội nhất và đội nhì vào 2 nửa bracket khác nhau
-    // Nửa trên: đội nhất bảng A, B, C... (index chẵn)
-    // Nửa dưới: đội nhì bảng A, B, C... (đối diện với đội nhất)
-    const topHalf = shuffleArray([
-      ...shuffledFirst.filter((_, i) => i % 2 === 0),
-      ...shuffledSecond.filter((_, i) => i % 2 !== 0),
-    ]);
-    const bottomHalf = shuffleArray([
-      ...shuffledFirst.filter((_, i) => i % 2 !== 0),
-      ...shuffledSecond.filter((_, i) => i % 2 === 0),
-    ]);
-
-    const entryIds = [...topHalf, ...bottomHalf];
-
-    const brackets = await sequelize.transaction((t) =>
-      buildBracketTree(categoryId, entryIds, t),
+    // Kiểm tra tất cả bảng đã có đủ nhất + nhì chưa
+    const incomplete = qualifiers.filter(
+      (g) => g.qualifiers.length < QUALIFIERS_PER_GROUP,
     );
+    if (incomplete.length > 0) {
+      throw new Error(
+        `Groups not fully ranked yet: ${incomplete.map((g) => g.groupName).join(", ")}`,
+      );
+    }
 
-    return formatBracketTree(categoryId, brackets);
+    // Lấy round 1 brackets hiện tại (đang là TBD)
+    const round1Brackets = await KnockoutBracket.findAll({
+      where: { categoryId, roundNumber: 1 },
+      order: [["bracketPosition", "ASC"]],
+    });
+
+    if (round1Brackets.length === 0) {
+      throw new Error(
+        "No placeholder brackets found. Run generatePlaceholders() first.",
+      );
+    }
+
+    // Đội nhất vào top half, đội nhì vào bottom half
+    // → đảm bảo đội nhất và nhì cùng bảng không gặp nhau cho đến Final
+    const firstPlace = qualifiers.map((g) => g.qualifiers[0]!.entryId);
+    const secondPlace = qualifiers.map((g) => g.qualifiers[1]!.entryId);
+
+    const entryIds = [...shuffleArray(firstPlace), ...shuffleArray(secondPlace)];
+
+    await sequelize.transaction(async (t) => {
+      for (let i = 0; i < round1Brackets.length; i++) {
+        const bracket = round1Brackets[i]!;
+        const entryAId = entryIds[i * 2] ?? undefined;
+        const entryBId = entryIds[i * 2 + 1] ?? undefined;
+
+        const isByeMatch = (entryAId == null) !== (entryBId == null);
+        const winnerEntryId = isByeMatch ? (entryAId ?? entryBId) : undefined;
+        const status: BracketStatus = isByeMatch
+          ? "completed"
+          : entryAId && entryBId
+            ? "ready"
+            : "pending";
+
+        await bracket.update(
+          { entryAId, entryBId, winnerEntryId, status, isByeMatch },
+          { transaction: t },
+        );
+
+        // Nếu bye → fill luôn vào bracket vòng sau
+        if (isByeMatch && bracket.nextBracketId && winnerEntryId) {
+          const next = await KnockoutBracket.findByPk(bracket.nextBracketId, {
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          });
+          if (next) {
+            const isSlotA = next.previousBracketAId === bracket.id;
+            const updateData = isSlotA
+              ? { entryAId: winnerEntryId }
+              : { entryBId: winnerEntryId };
+            const willHaveBoth = isSlotA
+              ? next.entryBId != null
+              : next.entryAId != null;
+            await next.update(
+              { ...updateData, status: willHaveBoth ? "ready" : "pending" },
+              { transaction: t },
+            );
+          }
+        }
+      }
+    });
+
+    const bracketsWithEntries = await KnockoutBracket.findAll({
+      where: { categoryId },
+      include: BRACKET_INCLUDE,
+      order: [
+        ["roundNumber", "ASC"],
+        ["bracketPosition", "ASC"],
+      ],
+    });
+
+    return formatBracketTree(categoryId, bracketsWithEntries);
   }
 
-  // ── 2. Generate từ danh sách entry (không có vòng bảng) ──────────────────
+  // ── 3. Generate từ danh sách entry (không có vòng bảng) ──────────────────
 
   /**
    * Generate knockout bracket từ danh sách entry đủ điều kiện.
@@ -341,7 +459,7 @@ export class KnockoutBracketService {
 
     if (category.isGroupStage) {
       throw new Error(
-        "This category has a group stage. Use generateFromGroupStage instead.",
+        "This category has a group stage. Use generatePlaceholders + fillQualifiers instead.",
       );
     }
 
@@ -356,18 +474,27 @@ export class KnockoutBracketService {
 
     const entryIds = eligible.map((e) => e.id);
 
-    const brackets = await sequelize.transaction((t) =>
-      buildBracketTree(categoryId, entryIds, t),
+    await sequelize.transaction((t) =>
+      buildBracketTreeWithSlots(categoryId, entryIds, t),
     );
 
-    return formatBracketTree(categoryId, brackets);
+    const bracketsWithEntries = await KnockoutBracket.findAll({
+      where: { categoryId },
+      include: BRACKET_INCLUDE,
+      order: [
+        ["roundNumber", "ASC"],
+        ["bracketPosition", "ASC"],
+      ],
+    });
+
+    return formatBracketTree(categoryId, bracketsWithEntries);
   }
 
-  // ── 3. Cập nhật kết quả trận đấu ─────────────────────────────────────────
+  // ── 4. Cập nhật kết quả trận đấu ─────────────────────────────────────────
 
   /**
    * Cập nhật đội thắng vào bracket và điền vào bracket tiếp theo.
-   * Nếu bracket tiếp theo chưa có đối thủ → placeholder (entryId set, status = pending).
+   * Nếu bracket tiếp theo chưa có đối thủ → status = pending cho đến khi đủ cả 2.
    */
   async advanceWinner(
     chiefRefereeId: number,
@@ -395,13 +522,11 @@ export class KnockoutBracketService {
     }
 
     return await sequelize.transaction(async (t: Transaction) => {
-      // Cập nhật bracket hiện tại
       await bracket.update(
         { winnerEntryId, status: "completed" },
         { transaction: t },
       );
 
-      // Điền vào bracket tiếp theo nếu có
       if (bracket.nextBracketId) {
         const next = await KnockoutBracket.findByPk(bracket.nextBracketId, {
           transaction: t,
@@ -418,7 +543,6 @@ export class KnockoutBracketService {
           ? { entryAId: winnerEntryId }
           : { entryBId: winnerEntryId };
 
-        // Kiểm tra nếu cả 2 slot đã có → ready
         const willHaveBoth = isSlotA
           ? next.entryBId != null
           : next.entryAId != null;
@@ -432,7 +556,7 @@ export class KnockoutBracketService {
     });
   }
 
-  // ── 4. Get bracket theo entryId hoặc entryName ────────────────────────────
+  // ── 5. Get bracket theo entryId hoặc entryName ────────────────────────────
 
   /**
    * Lấy tất cả brackets liên quan đến 1 entry (theo id hoặc tên entry).
@@ -440,15 +564,14 @@ export class KnockoutBracketService {
   async getBracketsByEntry(
     categoryId: number,
     filter: { entryId?: number; entryName?: string },
-    options?: { offset?: number; limit?: number }
-  ): Promise<{ brackets?: KnockoutBracket[], pagination?: any } | KnockoutBracket[]> {
+    options?: { offset?: number; limit?: number },
+  ): Promise<{ brackets?: BracketDto[]; pagination?: any } | BracketDto[]> {
     if (!filter.entryId && !filter.entryName) {
       throw new Error("Provide either entryId or entryName");
     }
 
     let targetEntryId = filter.entryId;
 
-    // Resolve entryId từ entryName
     if (!targetEntryId && filter.entryName) {
       const trimmed = filter.entryName.trim();
       const entry = await Entry.findOne({
@@ -461,61 +584,61 @@ export class KnockoutBracketService {
       targetEntryId = entry.id;
     }
 
-    const offset = options?.offset || 0;
-    const limit = options?.limit || 10;
+    const where = {
+      categoryId,
+      [Op.or]: [
+        { entryAId: targetEntryId },
+        { entryBId: targetEntryId },
+        { winnerEntryId: targetEntryId },
+      ],
+    };
 
-    // If pagination is requested
-    if (options && (options.offset !== undefined || options.limit !== undefined)) {
+    const order: any = [
+      ["roundNumber", "ASC"],
+      ["bracketPosition", "ASC"],
+    ];
+
+    if (
+      options &&
+      (options.offset !== undefined || options.limit !== undefined)
+    ) {
+      const offset = options.offset ?? 0;
+      const limit = options.limit ?? 10;
+
       const { count, rows } = await KnockoutBracket.findAndCountAll({
-        where: {
-          categoryId,
-          [Op.or]: [
-            { entryAId: targetEntryId },
-            { entryBId: targetEntryId },
-            { winnerEntryId: targetEntryId },
-          ],
-        },
-        order: [
-          ["roundNumber", "ASC"],
-          ["bracketPosition", "ASC"],
-        ],
+        where,
+        include: BRACKET_INCLUDE,
+        order,
         offset,
-        limit: limit,
+        limit,
       });
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
 
       return {
-        brackets: rows,
+        brackets: rows.map(formatBracket),
         pagination: {
           total: count,
           page,
           limit,
           totalPages,
           hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
+          hasPrevPage: page > 1,
+        },
       };
     }
 
-    return await KnockoutBracket.findAll({
-      where: {
-        categoryId,
-        [Op.or]: [
-          { entryAId: targetEntryId },
-          { entryBId: targetEntryId },
-          { winnerEntryId: targetEntryId },
-        ],
-      },
-      order: [
-        ["roundNumber", "ASC"],
-        ["bracketPosition", "ASC"],
-      ],
+    const brackets = await KnockoutBracket.findAll({
+      where,
+      include: BRACKET_INCLUDE,
+      order,
     });
+
+    return brackets.map(formatBracket);
   }
 
-  // ── 5. Get toàn bộ bracket tree ───────────────────────────────────────────
+  // ── 6. Get toàn bộ bracket tree ───────────────────────────────────────────
 
   /**
    * Lấy toàn bộ bracket tree của 1 category.
@@ -523,26 +646,24 @@ export class KnockoutBracketService {
   async getBracketTree(categoryId: number): Promise<BracketTreeDto> {
     const brackets = await KnockoutBracket.findAll({
       where: { categoryId },
+      include: BRACKET_INCLUDE,
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
       ],
     });
 
-    if (brackets.length === 0) {
+    if (brackets.length === 0)
       throw new Error("No bracket found for this category");
-    }
 
     return formatBracketTree(categoryId, brackets);
   }
 
-  // Thêm vào knockoutBracket.service.ts
-
-  // ── 6. Validate bracket integrity ─────────────────────────────────────────
+  // ── 7. Validate bracket integrity ─────────────────────────────────────────
 
   /**
    * Kiểm tra bracket tree có hợp lệ trước khi bắt đầu giải:
-   * - Tất cả bracket round 1 đã có đủ entries hoặc là bye
+   * - Tất cả bracket round 1 đã có đủ entries hoặc là bye (không còn TBD)
    * - Không có entry nào xuất hiện 2 lần
    * - Bracket tree liên kết đúng (nextBracketId / previousBracketId)
    * - Số lượng brackets đúng với bracket size
@@ -571,7 +692,7 @@ export class KnockoutBracketService {
     // ── Check 1: Số lượng brackets đúng ───────────────────────────────────
     const totalRounds = Math.max(...brackets.map((b) => b.roundNumber));
     const bracketSize = Math.pow(2, totalRounds);
-    const expectedTotal = bracketSize - 1; // cây nhị phân hoàn chỉnh
+    const expectedTotal = bracketSize - 1;
 
     if (brackets.length !== expectedTotal) {
       errors.push(
@@ -579,12 +700,13 @@ export class KnockoutBracketService {
       );
     }
 
-    // ── Check 2: Round 1 không có bracket nào thiếu cả 2 entry ───────────
+    // ── Check 2: Round 1 không còn TBD (fillQualifiers phải đã chạy) ──────
+    // isByeMatch được bỏ qua vì bye là trạng thái hợp lệ
     const round1 = brackets.filter((b) => b.roundNumber === 1);
     for (const b of round1) {
-      if (!b.entryAId && !b.entryBId) {
+      if (!b.entryAId && !b.entryBId && !b.isByeMatch) {
         errors.push(
-          `Bracket [round=1, position=${b.bracketPosition}] has no entries assigned`,
+          `Bracket [round=1, position=${b.bracketPosition}] still has TBD entries. Run fillQualifiers() first.`,
         );
       }
     }
@@ -610,7 +732,6 @@ export class KnockoutBracketService {
     const bracketMap = new Map(brackets.map((b) => [b.id, b]));
 
     for (const b of brackets) {
-      // Final không có nextBracket
       if (b.roundNumber === totalRounds) {
         if (b.nextBracketId) {
           errors.push(
@@ -681,94 +802,82 @@ export class KnockoutBracketService {
     return { valid: errors.length === 0, errors };
   }
 
-  // ── 7. Get standings ───────────────────────────────────────────────────────
+  // ── 8. Get standings ───────────────────────────────────────────────────────
 
   /**
    * Lấy kết quả xếp hạng cuối giải knockout:
    * - Vô địch: winner của Final
    * - Á quân: loser của Final
    * - Hạng 3: loser của 2 Semi-final (đồng hạng 3)
+   * - Eliminated: danh sách bị loại theo từng vòng
    */
   async getStandings(categoryId: number): Promise<{
-  champion?: number;
-  runnerUp?: number;
-  thirdPlace?: number[];  // đồng hạng 3
-  eliminated: { entryId: number; eliminatedAt: string }[];
-}> {
-  const brackets = await KnockoutBracket.findAll({
-    where: { categoryId },
-    order: [["roundNumber", "DESC"]],
-  });
+    champion?: number;
+    runnerUp?: number;
+    thirdPlace?: number[];
+    eliminated: { entryId: number; eliminatedAt: string }[];
+  }> {
+    const brackets = await KnockoutBracket.findAll({
+      where: { categoryId },
+      order: [["roundNumber", "DESC"]],
+    });
 
-  if (brackets.length === 0) throw new Error("No brackets found");
+    if (brackets.length === 0) throw new Error("No brackets found");
 
-  const totalRounds = Math.max(...brackets.map((b) => b.roundNumber));
+    const totalRounds = Math.max(...brackets.map((b) => b.roundNumber));
 
-  // ── Vô địch & Á quân từ Final ──────────────────────────────────────────
-  const final = brackets.find(
-    (b) => b.roundNumber === totalRounds && b.bracketPosition === 0
-  );
+    // ── Vô địch & Á quân từ Final ──────────────────────────────────────────
+    const final = brackets.find(
+      (b) => b.roundNumber === totalRounds && b.bracketPosition === 0,
+    );
 
-  if (!final || final.status !== "completed") {
-    throw new Error("Tournament is not completed yet");
-  }
-
-  const champion = final.winnerEntryId;
-  const runnerUp =
-    champion === final.entryAId ? final.entryBId : final.entryAId;
-
-  // ── Đồng hạng 3: cả 2 loser của Semi-final ────────────────────────────
-  const semiFinals = brackets.filter(
-    (b) => b.roundNumber === totalRounds - 1
-  );
-
-  const thirdPlace: number[] = semiFinals
-    .filter((b) => b.status === "completed" && b.winnerEntryId)
-    .map((b) =>
-      b.winnerEntryId === b.entryAId ? b.entryBId : b.entryAId
-    )
-    .filter((id): id is number => id != null);
-
-  // ── Danh sách bị loại theo từng vòng ──────────────────────────────────
-  const eliminated: { entryId: number; eliminatedAt: string }[] = [];
-
-  for (const b of brackets) {
-    if (b.status !== "completed" || !b.winnerEntryId || b.isByeMatch) continue;
-    if (b.roundNumber >= totalRounds - 1) continue; // bỏ qua Final và Semi
-
-    const loserId =
-      b.winnerEntryId === b.entryAId ? b.entryBId : b.entryAId;
-
-    if (loserId) {
-      eliminated.push({ entryId: loserId, eliminatedAt: b.roundName });
+    if (!final || final.status !== "completed") {
+      throw new Error("Tournament is not completed yet");
     }
-  }
 
-  const standings: {
+    const champion = final.winnerEntryId;
+    const runnerUp =
+      champion === final.entryAId ? final.entryBId : final.entryAId;
+
+    // ── Đồng hạng 3: cả 2 loser của Semi-final ────────────────────────────
+    const semiFinals = brackets.filter(
+      (b) => b.roundNumber === totalRounds - 1,
+    );
+
+    const thirdPlace: number[] = semiFinals
+      .filter((b) => b.status === "completed" && b.winnerEntryId)
+      .map((b) => (b.winnerEntryId === b.entryAId ? b.entryBId : b.entryAId))
+      .filter((id): id is number => id != null);
+
+    // ── Danh sách bị loại theo từng vòng ──────────────────────────────────
+    const eliminated: { entryId: number; eliminatedAt: string }[] = [];
+
+    for (const b of brackets) {
+      if (b.status !== "completed" || !b.winnerEntryId || b.isByeMatch)
+        continue;
+      if (b.roundNumber >= totalRounds - 1) continue; // bỏ qua Final và Semi
+
+      const loserId =
+        b.winnerEntryId === b.entryAId ? b.entryBId : b.entryAId;
+
+      if (loserId) {
+        eliminated.push({ entryId: loserId, eliminatedAt: b.roundName });
+      }
+    }
+
+    const standings: {
       champion?: number;
       runnerUp?: number;
       thirdPlace?: number[];
       eliminated: { entryId: number; eliminatedAt: string }[];
-    } = {
-      eliminated,
-    };
+    } = { eliminated };
 
     if (champion != null) standings.champion = champion;
     if (runnerUp != null) standings.runnerUp = runnerUp;
-    if (thirdPlace != null) standings.thirdPlace = thirdPlace;
+    if (thirdPlace.length > 0) standings.thirdPlace = thirdPlace;
 
     return standings;
+  }
 }
-}
-
-// // match.service.ts
-// async finalizeMatch(matchId: number): Promise<void> {
-//   // ... cập nhật match
-//   await knockoutBracketService.advanceWinner(
-//     chiefRefereeId,
-//     bracket.id,
-//     winnerEntryId
-//   );
-// }
 
 export default new KnockoutBracketService();

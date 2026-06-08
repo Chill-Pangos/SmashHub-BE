@@ -3,7 +3,7 @@ import entryMemberController from "../controllers/entryMember.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
 
-const router = Router({ mergeParams: true }); // mergeParams để nhận :entryId từ parent route
+const router = Router({ mergeParams: true });
 
 /**
  * @swagger
@@ -45,10 +45,20 @@ const router = Router({ mergeParams: true }); // mergeParams để nhận :entry
  *         $ref: '#/components/responses/NotFound404'
  *       500:
  *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/",
+  entryMemberController.getAllMembers.bind(entryMemberController),
+);
+
+/**
+ * @swagger
+ * /entries/{entryId}/members/invite:
  *   post:
  *     tags: [Entry Members]
- *     summary: Add member to entry (captain only)
+ *     summary: Invite a user to join the team (captain only)
  *     description: |
+ *       Captain sends an invitation to a user. The user must confirm before being added.
  *       User must be eligible (gender, age, ELO), not already registered in category,
  *       team must not be full, registration window must be open.
  *     security:
@@ -65,21 +75,21 @@ const router = Router({ mergeParams: true }); // mergeParams để nhận :entry
  *         application/json:
  *           schema:
  *             type: object
- *             required: [newMemberId]
+ *             required: [inviteeId]
  *             properties:
- *               newMemberId:
+ *               inviteeId:
  *                 type: integer
  *           examples:
  *             example1:
  *               value:
- *                 newMemberId: 42
+ *                 inviteeId: 42
  *     responses:
  *       201:
- *         description: Member added successfully
+ *         description: Invitation created successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/EntryMember'
+ *               $ref: '#/components/schemas/JoinRequest'
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -91,12 +101,90 @@ const router = Router({ mergeParams: true }); // mergeParams để nhận :entry
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
-router.get("/", entryMemberController.getAllMembers.bind(entryMemberController));
 router.post(
-  "/",
+  "/invite",
   authenticate,
   checkPermission("entries:update"),
-  entryMemberController.addMember.bind(entryMemberController),
+  entryMemberController.inviteMember.bind(entryMemberController),
+);
+
+/**
+ * @swagger
+ * /entries/{entryId}/members/invitations/{invitationId}/accept:
+ *   post:
+ *     tags: [Entry Members]
+ *     summary: Accept an invitation to join the team (invitee only)
+ *     description: |
+ *       Invited user accepts the invitation. Eligibility is re-checked at this point.
+ *       User is added to the team immediately upon acceptance.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: invitationId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       201:
+ *         description: Invitation accepted, member added to team
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EntryMember'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/invitations/:invitationId/accept",
+  authenticate,
+  entryMemberController.acceptInvitation.bind(entryMemberController),
+);
+
+/**
+ * @swagger
+ * /entries/{entryId}/members/invitations/{invitationId}/reject:
+ *   post:
+ *     tags: [Entry Members]
+ *     summary: Reject an invitation to join the team (invitee only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: invitationId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       204:
+ *         $ref: '#/components/responses/NoContent204'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/invitations/:invitationId/reject",
+  authenticate,
+  entryMemberController.rejectInvitation.bind(entryMemberController),
 );
 
 /**
