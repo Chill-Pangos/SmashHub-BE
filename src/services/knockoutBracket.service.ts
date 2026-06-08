@@ -570,7 +570,7 @@ export class KnockoutBracketService {
   async fillQualifiers(
     chiefRefereeId: number,
     categoryId: number,
-    previewEntryIds?: number[],
+    previewEntryIds: number[],
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
@@ -613,7 +613,7 @@ export class KnockoutBracketService {
     const secondPlace = qualifiers.map((g) => g.qualifiers[1]!.entryId);
 
     const defaultEntryIds = [...firstPlace, ...secondPlace];
-    const entryIds = previewEntryIds ?? defaultEntryIds;
+    const entryIds = previewEntryIds;
     assertSameEntrySet(entryIds, defaultEntryIds);
     assertSameEntrySet(entryIds.slice(0, firstPlace.length), firstPlace);
     assertSameEntrySet(entryIds.slice(firstPlace.length), secondPlace);
@@ -712,7 +712,7 @@ export class KnockoutBracketService {
   async generateFromEntries(
     chiefRefereeId: number,
     categoryId: number,
-    previewEntryIds?: number[],
+    previewEntryIds: number[],
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
@@ -733,7 +733,7 @@ export class KnockoutBracketService {
     }
 
     const defaultEntryIds = eligible.map((e) => e.id);
-    const entryIds = previewEntryIds ?? defaultEntryIds;
+    const entryIds = previewEntryIds;
     assertSameEntrySet(entryIds, defaultEntryIds);
 
     await sequelize.transaction((t) =>
@@ -750,6 +750,28 @@ export class KnockoutBracketService {
     });
 
     return formatBracketTree(categoryId, bracketsWithEntries);
+  }
+
+  async saveAssignments(
+    chiefRefereeId: number,
+    categoryId: number,
+    previewEntryIds?: number[],
+  ): Promise<BracketTreeDto> {
+    const category = await getCategoryWithTournament(categoryId);
+
+    if (category.isGroupStage) {
+      if (previewEntryIds == null) {
+        return this.generatePlaceholders(chiefRefereeId, categoryId);
+      }
+
+      return this.fillQualifiers(chiefRefereeId, categoryId, previewEntryIds);
+    }
+
+    if (previewEntryIds == null) {
+      throw new Error("entryIds must be an array of positive integers");
+    }
+
+    return this.generateFromEntries(chiefRefereeId, categoryId, previewEntryIds);
   }
 
   // ── 4. Cập nhật kết quả trận đấu ─────────────────────────────────────────

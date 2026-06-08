@@ -11,7 +11,7 @@ const router = Router();
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Preview TBD placeholder bracket tree
- *     description: Preview bracket placeholders without saving to database. Use /knockout-brackets/placeholders to persist after organizer review.
+ *     description: Preview bracket placeholders without saving to database. Use /knockout-brackets/save-assignments with categoryId only to persist after organizer review.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -58,68 +58,11 @@ router.post(
 
 /**
  * @swagger
- * /knockout-brackets/placeholders:
- *   post:
- *     tags: [Knockout Brackets]
- *     summary: Generate TBD placeholders based on number of groups
- *     description: |
- *       Tạo bracket với toàn bộ slots là TBD dựa trên số bảng hiện có.
- *       Dùng để tạo schedule trước khi vòng bảng kết thúc.
- *       Số slots = số bảng × 2 (nhất + nhì mỗi bảng).
- *       Sau khi vòng bảng kết thúc, gọi /fill-qualifiers để fill entryId thật.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - categoryId
- *             properties:
- *               categoryId:
- *                 type: integer
- *                 example: 1
- *     responses:
- *       201:
- *         description: Bracket placeholders generated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/BracketTreeDto'
- *                 message:
- *                   type: string
- *                   example: Bracket placeholders generated successfully
- *       400:
- *         $ref: '#/components/responses/BadRequest400'
- *       401:
- *         $ref: '#/components/responses/Unauthorized401'
- *       403:
- *         $ref: '#/components/responses/Forbidden403'
- *       500:
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post(
-  "/placeholders",
-  authenticate,
-  checkRole("organizer"),
-  knockoutBracketController.generatePlaceholders.bind(knockoutBracketController),
-);
-
-/**
- * @swagger
  * /knockout-brackets/preview-fill-qualifiers:
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Preview filling qualifiers into brackets
- *     description: Preview shuffled qualifier placement without saving. Response includes entryIds; send same entryIds to /knockout-brackets/fill-qualifiers to persist exactly what organizer reviewed.
+ *     description: Preview shuffled qualifier placement without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -174,75 +117,11 @@ router.post(
 
 /**
  * @swagger
- * /knockout-brackets/fill-qualifiers:
- *   post:
- *     tags: [Knockout Brackets]
- *     summary: Fill real qualifiers into TBD placeholder brackets
- *     description: |
- *       Fill entryId thật vào bracket round 1 sau khi vòng bảng kết thúc.
- *       Yêu cầu tất cả bảng đã có đủ kết quả xếp hạng (nhất + nhì).
- *       Đội nhất các bảng vào top half, đội nhì vào bottom half
- *       để đảm bảo đội nhất và nhì cùng bảng không gặp nhau trước Final.
- *       Bracket bye sẽ được tự động fill vào vòng tiếp theo.
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - categoryId
- *             properties:
- *               categoryId:
- *                 type: integer
- *                 example: 1
- *               entryIds:
- *                 type: array
- *                 items:
- *                   type: integer
- *                 description: Optional order returned by /preview-fill-qualifiers. Use it to save the exact reviewed bracket.
- *                 example: [5, 9, 2, 12]
- *     responses:
- *       200:
- *         description: Qualifiers filled into bracket successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/BracketTreeDto'
- *                 message:
- *                   type: string
- *                   example: Qualifiers filled into bracket successfully
- *       400:
- *         $ref: '#/components/responses/BadRequest400'
- *       401:
- *         $ref: '#/components/responses/Unauthorized401'
- *       403:
- *         $ref: '#/components/responses/Forbidden403'
- *       500:
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post(
-  "/fill-qualifiers",
-  authenticate,
-  checkRole("organizer"),
-  knockoutBracketController.fillQualifiers.bind(knockoutBracketController),
-);
-
-/**
- * @swagger
  * /knockout-brackets/preview-from-entries:
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Preview knockout bracket from eligible entries
- *     description: Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/from-entries to persist exactly what organizer reviewed.
+ *     description: Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -297,14 +176,23 @@ router.post(
 
 /**
  * @swagger
- * /knockout-brackets/from-entries:
+ * /knockout-brackets/save-assignments:
  *   post:
  *     tags: [Knockout Brackets]
- *     summary: Generate knockout bracket from eligible entries (no group stage)
+ *     summary: Save knockout bracket assignments
  *     description: |
- *       Tạo bracket trực tiếp từ danh sách entry đủ điều kiện.
- *       Chỉ dùng cho giải đấu không có vòng bảng (isGroupStage = false).
- *       Tự động tính bracket size (lũy thừa 2), phân bổ bye đều 2 nửa.
+ *       Persist approved knockout preview to database after organizer confirmation.
+ *
+ *       **Workflow**:
+ *       1. Preview TBD placeholders: gọi `/knockout-brackets/preview-placeholders`, rồi save body chỉ cần `categoryId`
+ *       2. Preview qualifiers: gọi `/knockout-brackets/preview-fill-qualifiers`, rồi save body có `categoryId` + `entryIds`
+ *       3. Preview direct knockout: gọi `/knockout-brackets/preview-from-entries`, rồi save body có `categoryId` + `entryIds`
+ *
+ *       **Validation**:
+ *       - `categoryId` luôn bắt buộc
+ *       - `entryIds` optional khi save placeholders
+ *       - `entryIds` bắt buộc khi save qualifiers hoặc direct knockout
+ *       - Nếu có `entryIds`, danh sách phải là positive integer và khớp các entry có thể preview
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -323,11 +211,32 @@ router.post(
  *                 type: array
  *                 items:
  *                   type: integer
- *                 description: Optional order returned by /preview-from-entries. Use it to save the exact reviewed bracket.
+ *                 description: Optional for preview-placeholders save. Required order returned by preview-fill-qualifiers or preview-from-entries.
  *                 example: [8, 3, 12, 6]
+ *               assignments:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Backward-compatible alias for entryIds.
+ *                 example: [8, 3, 12, 6]
+ *           examples:
+ *             savePlaceholders:
+ *               summary: Save preview-placeholders
+ *               value:
+ *                 categoryId: 1
+ *             saveQualifiers:
+ *               summary: Save preview-fill-qualifiers
+ *               value:
+ *                 categoryId: 1
+ *                 entryIds: [5, 9, 2, 12]
+ *             saveFromEntries:
+ *               summary: Save preview-from-entries
+ *               value:
+ *                 categoryId: 2
+ *                 entryIds: [8, 3, 12, 6]
  *     responses:
  *       201:
- *         description: Knockout bracket generated successfully
+ *         description: Knockout bracket assignments saved successfully
  *         content:
  *           application/json:
  *             schema:
@@ -340,7 +249,7 @@ router.post(
  *                   $ref: '#/components/schemas/BracketTreeDto'
  *                 message:
  *                   type: string
- *                   example: Knockout bracket generated successfully
+ *                   example: Knockout bracket assignments saved successfully
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -351,10 +260,10 @@ router.post(
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
-  "/from-entries",
+  "/save-assignments",
   authenticate,
   checkRole("organizer"),
-  knockoutBracketController.generateFromEntries.bind(knockoutBracketController),
+  knockoutBracketController.saveAssignments.bind(knockoutBracketController),
 );
 
 /**

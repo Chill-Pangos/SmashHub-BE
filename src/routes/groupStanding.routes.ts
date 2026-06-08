@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * @swagger
- * /group-standings/generate-placeholders:
+ * /group-standings/generate:
  *   post:
  *     tags: [Group Standings]
  *     summary: Generate group preview with random assignments
@@ -67,7 +67,7 @@ const router = Router();
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
-  "/generate-placeholders",
+  "/generate",
   authenticate,
   checkRole("organizer"),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
