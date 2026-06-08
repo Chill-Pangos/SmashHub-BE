@@ -35,6 +35,12 @@ const router = Router();
  *     responses:
  *       201:
  *         description: Sub-matches created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SubMatch'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -59,6 +65,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Sub-match started successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubMatch'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -83,6 +93,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Sub-match finalized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubMatch'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -131,6 +145,12 @@ router.post(
  *     responses:
  *       200:
  *         description: Players assigned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/SubMatchPlayer'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -158,6 +178,17 @@ router.post(
  *     responses:
  *       200:
  *         description: List of sub-matches
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 subMatches:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/SubMatch'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
@@ -178,6 +209,10 @@ router.get(
  *     responses:
  *       200:
  *         description: Sub-match details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SubMatch'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */

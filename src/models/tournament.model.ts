@@ -55,6 +55,12 @@ export default class Tournament extends Model {
   declare name: string;
 
   @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare introduction: string | null;
+
+  @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })

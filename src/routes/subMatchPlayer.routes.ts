@@ -20,6 +20,17 @@ const router = Router();
  *     responses:
  *       200:
  *         description: List of players with team assignments
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/SubMatchPlayer'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
@@ -52,6 +63,17 @@ router.get(
  *     responses:
  *       200:
  *         description: List of players in the specified team
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/SubMatchPlayer'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  *       400:
  *         description: Invalid team parameter
  *       500:
@@ -81,6 +103,17 @@ router.get(
  *     responses:
  *       200:
  *         description: List of sub-matches the member participated in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/SubMatchPlayer'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */

@@ -499,47 +499,7 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 referees:
- *                   type: array
- *                   items:
- *                     allOf:
- *                       - $ref: '#/components/schemas/TournamentReferee'
- *                       - type: object
- *                         properties:
- *                           referee:
- *                             type: object
- *                             properties:
- *                               id:
- *                                 type: integer
- *                               firstName:
- *                                 type: string
- *                               lastName:
- *                                 type: string
- *                               email:
- *                                 type: string
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: integer
- *                       description: Total number of referees
- *                     page:
- *                       type: integer
- *                       description: Current page number
- *                     limit:
- *                       type: integer
- *                       description: Records per page
- *                     totalPages:
- *                       type: integer
- *                       description: Total number of pages
- *                     hasNextPage:
- *                       type: boolean
- *                       description: Whether next page exists
- *                     hasPrevPage:
- *                       type: boolean
- *                       description: Whether previous page exists
+ *               $ref: '#/components/schemas/TournamentRefereesResponse'
  *             example:
  *               referees:
  *                 - id: 1
@@ -622,47 +582,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 invitations:
- *                   type: array
- *                   items:
- *                     allOf:
- *                       - $ref: '#/components/schemas/RefereeInvitation'
- *                       - type: object
- *                         properties:
- *                           referee:
- *                             type: object
- *                             properties:
- *                               id:
- *                                 type: integer
- *                               firstName:
- *                                 type: string
- *                               lastName:
- *                                 type: string
- *                               email:
- *                                 type: string
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: integer
- *                       description: Total number of invitations
- *                     page:
- *                       type: integer
- *                       description: Current page number
- *                     limit:
- *                       type: integer
- *                       description: Records per page
- *                     totalPages:
- *                       type: integer
- *                       description: Total number of pages
- *                     hasNextPage:
- *                       type: boolean
- *                       description: Whether next page exists
- *                     hasPrevPage:
- *                       type: boolean
- *                       description: Whether previous page exists
+ *               $ref: '#/components/schemas/RefereeInvitationsResponse'
  *             example:
  *               invitations:
  *                 - id: 1
@@ -760,57 +680,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 invitations:
- *                   type: array
- *                   items:
- *                     allOf:
- *                       - $ref: '#/components/schemas/RefereeInvitation'
- *                       - type: object
- *                         properties:
- *                           tournament:
- *                             type: object
- *                             properties:
- *                               id:
- *                                 type: integer
- *                               name:
- *                                 type: string
- *                               location:
- *                                 type: string
- *                               tier:
- *                                 type: integer
- *                               status:
- *                                 type: string
- *                                 enum: [upcoming, registration_open, registration_closed, brackets_generated, ongoing, completed, cancelled]
- *                               createdBy:
- *                                 type: integer
- *                           inviter:
- *                             type: object
- *                             properties:
- *                               id:
- *                                 type: integer
- *                               firstName:
- *                                 type: string
- *                               lastName:
- *                                 type: string
- *                               email:
- *                                 type: string
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: integer
- *                     page:
- *                       type: integer
- *                     limit:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *                     hasNextPage:
- *                       type: boolean
- *                     hasPrevPage:
- *                       type: boolean
+ *               $ref: '#/components/schemas/MyRefereeInvitationsResponse'
  *             example:
  *               invitations:
  *                 - id: 1

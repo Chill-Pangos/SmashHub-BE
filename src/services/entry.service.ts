@@ -155,6 +155,7 @@ export class EntryService {
     categoryId: number,
     action: "create_team" | "join_team",
     targetEntryId?: number, // chỉ dùng khi action = "join_team"
+    entryName?: string,
   ): Promise<{ entry: Entry; message: string }> {
     const category = await getCategoryWithTournament(categoryId);
     const tournament = category.tournament!;
@@ -163,6 +164,8 @@ export class EntryService {
 
     const user = await User.findByPk(userId);
     if (!user) throw new Error("User not found");
+    const defaultEntryName = `${user.firstName} ${user.lastName}`.trim() || `Entry ${user.id}`;
+    const name = entryName?.trim() || defaultEntryName;
 
     await assertUserEligible(user, category);
     await assertNotAlreadyRegistered(userId, categoryId);
@@ -174,6 +177,7 @@ export class EntryService {
           {
             categoryId,
             captainId: userId,
+            name,
             isAcceptingMembers: false,
             requiredMemberCount: 1,
             currentMemberCount: 1,
@@ -206,6 +210,7 @@ export class EntryService {
           {
             categoryId,
             captainId: userId,
+            name,
             isAcceptingMembers: true,
             requiredMemberCount,
             currentMemberCount: 1,

@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS `elo_scores` (
 CREATE TABLE IF NOT EXISTS `tournaments` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(255) NOT NULL,
+  `introduction` TEXT NULL,
   `tier` INT UNSIGNED NOT NULL,
   `status` ENUM('upcoming', 'registration_open', 'registration_closed', 'brackets_generated', 'ongoing', 'completed', 'cancelled') NOT NULL DEFAULT 'upcoming',
   `location` VARCHAR(100) NOT NULL,

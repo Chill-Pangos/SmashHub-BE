@@ -42,6 +42,10 @@ const router = Router();
  *     responses:
  *       201:
  *         description: Match set created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MatchSet'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -63,6 +67,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Match set details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MatchSet'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
@@ -94,6 +102,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Match set updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MatchSet'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   delete:
@@ -139,6 +151,17 @@ router.delete(
  *     responses:
  *       200:
  *         description: List of match sets ordered by set number
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 sets:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/MatchSet'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  */
 router.get(
   "/sub-match/:subMatchId",

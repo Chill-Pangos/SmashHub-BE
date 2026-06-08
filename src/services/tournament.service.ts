@@ -23,6 +23,7 @@ export class TournamentService {
       const tournament = await Tournament.create(
         {
           name: data.name,
+          introduction: data.introduction ?? null,
           tier: data.tier,
           location: data.location,
           status: data.status || "upcoming",
@@ -330,6 +331,7 @@ export class TournamentService {
       await tournament.update(
         {
           name: data.name,
+          introduction: data.introduction,
           location: data.location,
           status: data.status,
         },
