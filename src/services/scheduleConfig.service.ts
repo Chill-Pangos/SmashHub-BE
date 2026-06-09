@@ -40,6 +40,11 @@ export interface ScheduleValidationResponse {
   };
 }
 
+export interface ScheduleValidationCategoryInput {
+  maxEntries: number;
+  isGroupStage?: boolean;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SINGLE_DAY_THRESHOLD_HOURS = 20;
@@ -189,6 +194,59 @@ async function runModelValidation(
       error instanceof Error ? error.message : "Schedule config is invalid";
     throw new BadRequestError(message);
   }
+}
+
+function assertValidCategoryInput(
+  category: ScheduleValidationCategoryInput
+): void {
+  const { maxEntries, isGroupStage = false } = category;
+
+  if (!Number.isInteger(maxEntries) || maxEntries <= 0) {
+    throw new BadRequestError("category.maxEntries must be a positive integer");
+  }
+  if (
+    category.isGroupStage !== undefined &&
+    typeof category.isGroupStage !== "boolean"
+  ) {
+    throw new BadRequestError("category.isGroupStage must be a boolean");
+  }
+
+  if (maxEntries % 4 !== 0) {
+    throw new BadRequestError("category.maxEntries must be a multiple of 4");
+  }
+
+  const minEntries = isGroupStage ? 16 : 32;
+  if (maxEntries < minEntries) {
+    throw new BadRequestError(
+      `category.maxEntries must be at least ${minEntries} for ${isGroupStage ? "group stage" : "knockout"} categories`
+    );
+  }
+}
+
+function normalizeScheduleConfigDates(
+  data: Partial<ScheduleConfig>
+): Partial<ScheduleConfig> {
+  const normalized = { ...data } as any;
+  const dateFields = [
+    "startDate",
+    "endDate",
+    "registrationStartDate",
+    "registrationEndDate",
+    "bracketGenerationDate",
+  ];
+
+  for (const field of dateFields) {
+    const value = normalized[field];
+    if (value == null || value instanceof Date) continue;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestError(`${field} must be a valid date`);
+    }
+    normalized[field] = date;
+  }
+
+  return normalized;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -423,6 +481,26 @@ export class ScheduleConfigService {
   }
 
   /**
+   * Validate raw category + unsaved schedule config from client input.
+   * Does not require tournamentId and does not read persisted schedule config.
+   */
+  async validateScheduleConfigInput(
+    category: ScheduleValidationCategoryInput,
+    scheduleConfig: Partial<ScheduleConfig>
+  ): Promise<ScheduleValidationResponse> {
+    assertValidCategoryInput(category);
+    const normalizedConfig = normalizeScheduleConfigDates(scheduleConfig);
+    await runModelValidation(1, normalizedConfig);
+
+    const totalMatches = calculateMatchesForCategory({
+      maxEntries: category.maxEntries,
+      isGroupStage: category.isGroupStage ?? false,
+    });
+
+    return this._buildValidation(normalizedConfig, totalMatches);
+  }
+
+  /**
    * Xóa schedule config.
    */
   async deleteConfig(tournamentId: number, organizerId?: number): Promise<number> {
@@ -467,6 +545,63 @@ export class ScheduleConfigService {
     }
 
     return calculateTotalMatchesFromCategories(categories);
+  }
+
+  private _buildValidation(
+    data: Partial<ScheduleConfig>,
+    totalMatches: number
+  ): ScheduleValidationResponse {
+    const {
+      matchDurationMinutes = 60,
+      breakDurationMinutes = 10,
+      dailyStartHour = 8,
+      dailyStartMinute = 0,
+      dailyEndHour = 22,
+      dailyEndMinute = 0,
+      numberOfTables = 1,
+      startDate,
+      endDate,
+    } = data;
+
+    if (!startDate || !endDate) {
+      throw new BadRequestError("startDate and endDate are required");
+    }
+
+    const availableMinutes = calculateAvailableMinutes(
+      startDate, endDate,
+      dailyStartHour, dailyStartMinute,
+      dailyEndHour, dailyEndMinute
+    );
+    const totalSlots = Math.ceil(totalMatches / numberOfTables);
+    const neededMinutes = calculateNeededMinutes(
+      totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+    );
+    const estimatedEndTime = calculateEstimatedEndTime(
+      startDate, totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+    );
+
+    const isValid = neededMinutes <= availableMinutes;
+    const details = {
+      totalMatches,
+      totalSlots,
+      estimatedEndTime,
+      tournamentEndTime: endDate,
+      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+    };
+
+    if (isValid) {
+      return {
+        isValid: true,
+        message: `Schedule is valid. It is expected to finish at ${estimatedEndTime.toISOString()}, ${Math.floor((endDate.getTime() - estimatedEndTime.getTime()) / 60000)} minutes before the deadline.`,
+        details,
+      };
+    }
+
+    return {
+      isValid: false,
+      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${endDate.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
+      details,
+    };
   }
 
   /**

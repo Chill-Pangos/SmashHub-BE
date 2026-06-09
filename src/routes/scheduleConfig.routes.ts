@@ -37,7 +37,7 @@ const router = Router({ mergeParams: true });
  *
  *       **Schedule Fit Analysis:**
  *       After creation, verify the schedule can accommodate all matches using the
- *       validate endpoint (POST /schedule-configs/{tournamentId}/validate)
+ *       validate endpoint (POST /schedule-configs/validate)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -543,49 +543,164 @@ router.patch(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}/validate:
+ * /schedule-configs/validate:
  *   post:
  *     tags: [Schedule Config]
  *     summary: Validate schedule configuration
  *     description: |
- *       Validate the current schedule configuration against a specific number of matches.
+ *       Validate an unsaved schedule configuration against a category input.
  *       This endpoint checks if the configured schedule (tables, durations, daily hours) can
- *       accommodate all matches within the tournament timeframe.
+ *       accommodate all matches calculated from category.maxEntries and category.isGroupStage.
  *
  *       **Validation Checks:**
  *       - Available time = (end date - start date) × daily operating hours
- *       - Total slots needed = ceil(totalMatches / numberOfTables)
+ *       - Total matches calculated from category information
+ *       - Total slots needed = ceil(calculatedMatches / numberOfTables)
  *       - Time needed = totalSlots × (matchDuration + breakDuration)
  *       - Valid if: timeNeeded <= availableTime
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: tournamentId
- *         required: true
- *         schema:
- *           type: integer
- *           minimum: 1
- *         description: Tournament ID
- *         example: 1
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [totalMatches]
+ *             required: [category, scheduleConfig]
  *             properties:
- *               totalMatches:
- *                 type: integer
- *                 minimum: 1
- *                 example: 127
- *                 description: Total number of matches to schedule (calculated from tournament categories)
+ *               category:
+ *                 type: object
+ *                 required: [maxEntries]
+ *                 properties:
+ *                   maxEntries:
+ *                     type: integer
+ *                     minimum: 1
+ *                     example: 32
+ *                     description: Maximum entries for the category
+ *                   isGroupStage:
+ *                     type: boolean
+ *                     default: false
+ *                     example: false
+ *                     description: Whether category uses group stage before knockout
+ *               scheduleConfig:
+ *                 type: object
+ *                 required: [startDate, endDate, registrationStartDate, registrationEndDate, bracketGenerationDate]
+ *                 properties:
+ *                   startDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2026-06-15T08:00:00Z"
+ *                   endDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2026-06-20T22:00:00Z"
+ *                   registrationStartDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2026-05-15T00:00:00Z"
+ *                   registrationEndDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2026-06-12T23:59:59Z"
+ *                   bracketGenerationDate:
+ *                     type: string
+ *                     format: date-time
+ *                     example: "2026-06-13T00:00:00Z"
+ *                   numberOfTables:
+ *                     type: integer
+ *                     minimum: 1
+ *                     default: 1
+ *                   matchDurationMinutes:
+ *                     type: integer
+ *                     minimum: 30
+ *                     maximum: 90
+ *                     default: 60
+ *                   breakDurationMinutes:
+ *                     type: integer
+ *                     minimum: 5
+ *                     maximum: 30
+ *                     default: 10
+ *                   dailyStartHour:
+ *                     type: integer
+ *                     minimum: 0
+ *                     maximum: 23
+ *                     default: 8
+ *                   dailyStartMinute:
+ *                     type: integer
+ *                     minimum: 0
+ *                     maximum: 59
+ *                     default: 0
+ *                   dailyEndHour:
+ *                     type: integer
+ *                     minimum: 0
+ *                     maximum: 23
+ *                     default: 22
+ *                   dailyEndMinute:
+ *                     type: integer
+ *                     minimum: 0
+ *                     maximum: 59
+ *                     default: 0
+ *                   lunchBreakStartHour:
+ *                     type: integer
+ *                     nullable: true
+ *                     minimum: 0
+ *                     maximum: 23
+ *                     example: 12
+ *                   lunchBreakStartMinute:
+ *                     type: integer
+ *                     nullable: true
+ *                     minimum: 0
+ *                     maximum: 59
+ *                     default: 0
+ *                     example: 0
+ *                   lunchBreakEndHour:
+ *                     type: integer
+ *                     nullable: true
+ *                     minimum: 0
+ *                     maximum: 23
+ *                     example: 13
+ *                   lunchBreakEndMinute:
+ *                     type: integer
+ *                     nullable: true
+ *                     minimum: 0
+ *                     maximum: 59
+ *                     default: 0
+ *                     example: 0
+ *                   lunchBreakDurationMinutes:
+ *                     type: integer
+ *                     nullable: true
+ *                     minimum: 0
+ *                     example: 60
+ *                   notes:
+ *                     type: string
+ *                     nullable: true
+ *                     example: "Main hall schedule"
  *           examples:
  *             example1:
- *               summary: Validate for 127 matches
+ *               summary: Validate category and unsaved schedule config
  *               value:
- *                 totalMatches: 127
+ *                 category:
+ *                   maxEntries: 32
+ *                   isGroupStage: false
+ *                 scheduleConfig:
+ *                   startDate: "2026-06-15T08:00:00Z"
+ *                   endDate: "2026-06-20T22:00:00Z"
+ *                   registrationStartDate: "2026-05-15T00:00:00Z"
+ *                   registrationEndDate: "2026-06-12T23:59:59Z"
+ *                   bracketGenerationDate: "2026-06-13T00:00:00Z"
+ *                   numberOfTables: 4
+ *                   matchDurationMinutes: 60
+ *                   breakDurationMinutes: 10
+ *                   dailyStartHour: 8
+ *                   dailyStartMinute: 0
+ *                   dailyEndHour: 22
+ *                   dailyEndMinute: 0
+ *                   lunchBreakStartHour: 12
+ *                   lunchBreakStartMinute: 0
+ *                   lunchBreakEndHour: 13
+ *                   lunchBreakEndMinute: 0
+ *                   lunchBreakDurationMinutes: 60
+ *                   notes: "Main hall schedule"
  *     responses:
  *       200:
  *         description: Validation result with schedule fit analysis
@@ -607,7 +722,7 @@ router.patch(
  *         $ref: '#/components/responses/InternalError500'
  */
 router.post(
-  "/:tournamentId/schedule-config/validate",
+  "/validate",
   authenticate,
   checkRole("organizer"),
   scheduleConfigController.validate.bind(scheduleConfigController)
