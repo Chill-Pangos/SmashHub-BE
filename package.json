@@ -5,6 +5,7 @@
   "scripts": {
     "prepare": "husky install",
     "dev": "dotenvx run -f .env.development -- ts-node-dev --respawn --transpile-only src/server.ts",
+    "test": "cross-env TS_NODE_TRANSPILE_ONLY=true node --test -r ts-node/register tests/refereeChiefReferee.workflow.test.ts",
     "build": "tsc",
     "start": "pm2 startOrReload ecosystem.config.json"
   },
