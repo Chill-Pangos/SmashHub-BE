@@ -1,5 +1,5 @@
 // match.service.ts
-import { Op } from "sequelize";
+import { Op, Transaction } from "sequelize";
 import { sequelize } from "../config/database";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
@@ -17,6 +17,8 @@ import User from "../models/user.model";
 import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
+import { Stage, STAGES } from "../models/schedule.model";
+import { MATCH_STATUSES, MatchStatus, RESULT_STATUSES, ResultStatus } from "../models/match.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,30 @@ interface MatchWithContext {
   instance: Match;
   category: TournamentCategory;
   tournament: Tournament;
+}
+
+interface CategoryMatchesFilters {
+  stage?: Stage;
+  status?: MatchStatus;
+  resultStatus?: ResultStatus;
+  offset?: number;
+  limit?: number;
+}
+
+interface RefereeAssignedMatchesFilters {
+  categoryId: number;
+  statuses?: MatchStatus[];
+  offset?: number;
+  limit?: number;
+}
+
+interface MatchFinalizeSummary {
+  match: Match;
+  entryASubMatchWins: number;
+  entryBSubMatchWins: number;
+  winsToFinalize: number;
+  matchReadyToFinalize: boolean;
+  winnerEntryId?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -110,6 +136,20 @@ async function assertMatchReferee(
   if (!ref) throw new Error("Only an assigned referee can perform this action");
 }
 
+async function assertTournamentReferee(
+  userId: number,
+  tournamentId: number,
+): Promise<void> {
+  const ref = await TournamentReferee.findOne({
+    where: {
+      refereeId: userId,
+      tournamentId,
+      role: { [Op.in]: ["referee", "chief"] },
+    },
+  });
+  if (!ref) throw new Error("Only a tournament referee can perform this action");
+}
+
 function countSetsWon(sets: MatchSet[]): {
   entryASets: number;
   entryBSets: number;
@@ -124,6 +164,96 @@ function countSetsWon(sets: MatchSet[]): {
   );
 }
 
+function countSubMatchWins(subMatches: SubMatch[]): {
+  entryASubMatchWins: number;
+  entryBSubMatchWins: number;
+} {
+  return subMatches.reduce(
+    (acc, subMatch) => {
+      if (subMatch.winnerTeam === "A") acc.entryASubMatchWins++;
+      else if (subMatch.winnerTeam === "B") acc.entryBSubMatchWins++;
+      return acc;
+    },
+    { entryASubMatchWins: 0, entryBSubMatchWins: 0 },
+  );
+}
+
+function assertValidStage(stage?: string): asserts stage is Stage | undefined {
+  if (stage && !STAGES.includes(stage as Stage)) {
+    throw new Error(`Invalid stage. Must be one of: ${STAGES.join(", ")}`);
+  }
+}
+
+function assertValidMatchStatus(
+  status?: string,
+): asserts status is MatchStatus | undefined {
+  if (status && !MATCH_STATUSES.includes(status as MatchStatus)) {
+    throw new Error(
+      `Invalid match status. Must be one of: ${MATCH_STATUSES.join(", ")}`,
+    );
+  }
+}
+
+function assertValidMatchStatuses(statuses?: string[]): asserts statuses is MatchStatus[] | undefined {
+  const invalidStatus = statuses?.find(
+    (status) => !MATCH_STATUSES.includes(status as MatchStatus),
+  );
+  if (invalidStatus) {
+    throw new Error(
+      `Invalid match status "${invalidStatus}". Must be one of: ${MATCH_STATUSES.join(", ")}`,
+    );
+  }
+}
+
+function assertValidResultStatus(
+  resultStatus?: string,
+): asserts resultStatus is ResultStatus | undefined {
+  if (resultStatus && !RESULT_STATUSES.includes(resultStatus as ResultStatus)) {
+    throw new Error(
+      `Invalid result status. Must be one of: ${RESULT_STATUSES.join(", ")}`,
+    );
+  }
+}
+
+async function assignUmpiresToSubMatches(
+  matchId: number,
+  t: Transaction,
+): Promise<void> {
+  const matchReferees = await MatchReferee.findAll({
+    where: { matchId },
+    attributes: ["refereeId"],
+    order: [["id", "ASC"]],
+    transaction: t,
+  });
+
+  const refereeIds = matchReferees.map((ref) => ref.refereeId);
+  if (refereeIds.length === 0) return;
+
+  const hasAssistant = refereeIds.length >= 2;
+  const firstRefereeId =
+    hasAssistant && Math.random() < 0.5 ? refereeIds[1]! : refereeIds[0]!;
+  const secondRefereeId =
+    hasAssistant && firstRefereeId === refereeIds[0]!
+      ? refereeIds[1]!
+      : refereeIds[0]!;
+
+  const subMatches = await SubMatch.findAll({
+    where: { matchId },
+    order: [["subMatchNumber", "ASC"]],
+    transaction: t,
+  });
+
+  for (const subMatch of subMatches) {
+    await subMatch.update(
+      {
+        umpireId: firstRefereeId,
+        assistantUmpireId: hasAssistant ? secondRefereeId : null,
+      },
+      { transaction: t },
+    );
+  }
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class MatchService {
@@ -136,7 +266,7 @@ export class MatchService {
    */
   async startMatch(matchId: number, refereeId: number): Promise<Match> {
     const { instance, tournament } = await getMatchWithContext(matchId);
-    await assertMatchReferee(refereeId, matchId);
+    await assertTournamentReferee(refereeId, tournament.id);
 
     if (instance.status !== "scheduled") {
       throw new Error(
@@ -152,6 +282,9 @@ export class MatchService {
 
       // Assign trọng tài động (chọn người rảnh nhất)
       await scheduleService.assignRefereeDynamic(matchId, tournament.id, t);
+
+      // Assign umpire/assistantUmpire cho các sub-match vừa có referee
+      await assignUmpiresToSubMatches(matchId, t);
 
       return instance.reload({ transaction: t });
     });
@@ -316,6 +449,122 @@ export class MatchService {
     return { matches, count };
   }
 
+  // ── 5.1 Category schedules & matches (chief referee dashboard) ───────────
+
+  async findCategorySchedulesAndMatchesForChiefReferee(
+    chiefRefereeId: number,
+    categoryId: number,
+    filters: CategoryMatchesFilters = {},
+  ): Promise<{ matches: Match[]; count: number }> {
+    assertValidStage(filters.stage);
+    assertValidMatchStatus(filters.status);
+    assertValidResultStatus(filters.resultStatus);
+
+    const category = await TournamentCategory.findByPk(categoryId);
+    if (!category) throw new Error("Category not found");
+
+    await assertChiefReferee(chiefRefereeId, category.tournamentId);
+
+    const matchWhere: Record<string, unknown> = {};
+    if (filters.status) matchWhere.status = filters.status;
+    if (filters.resultStatus) matchWhere.resultStatus = filters.resultStatus;
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: matchWhere,
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          where: {
+            categoryId,
+            ...(filters.stage && { stage: filters.stage }),
+          },
+          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
+          required: true,
+        },
+        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        {
+          model: MatchReferee,
+          as: "matchReferees",
+          include: [
+            {
+              model: User,
+              as: "referee",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+        {
+          model: SubMatch,
+          as: "subMatches",
+          include: [{ model: MatchSet, as: "matchSets" }],
+        },
+      ],
+      offset: filters.offset ?? 0,
+      limit: filters.limit ?? 10,
+      order: [
+        [{ model: Schedule, as: "schedule" }, "scheduledAt", "ASC"],
+        ["id", "ASC"],
+      ],
+      distinct: true,
+    });
+
+    return { matches, count };
+  }
+
+  // ── 5.2 Assigned matches (referee dashboard) ─────────────────────────────
+
+  async findAssignedMatchesForReferee(
+    refereeId: number,
+    filters: RefereeAssignedMatchesFilters,
+  ): Promise<{ matches: Match[]; count: number }> {
+    assertValidMatchStatuses(filters.statuses);
+
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: filters.statuses ? { status: { [Op.in]: filters.statuses } } : {},
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          where: { categoryId: filters.categoryId },
+          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
+          required: true,
+        },
+        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        {
+          model: MatchReferee,
+          as: "matchReferees",
+          where: { refereeId },
+          required: true,
+          include: [
+            {
+              model: User,
+              as: "referee",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+        {
+          model: SubMatch,
+          as: "subMatches",
+          include: [{ model: MatchSet, as: "matchSets" }],
+        },
+      ],
+      offset: filters.offset ?? 0,
+      limit: filters.limit ?? 10,
+      order: [
+        ["status", "DESC"],
+        ["updatedAt", "DESC"],
+      ],
+      distinct: true,
+    });
+
+    return { matches, count };
+  }
+
   async getPendingMatch(
     matchId: number,
     chiefRefereeId: number,
@@ -330,6 +579,73 @@ export class MatchService {
     }
 
     return { match: instance };
+  }
+
+  async getFinalizeSummary(
+    matchId: number,
+    refereeId: number,
+  ): Promise<MatchFinalizeSummary> {
+    await assertMatchReferee(refereeId, matchId);
+
+    const match = await Match.findByPk(matchId, {
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
+        },
+        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
+        {
+          model: MatchReferee,
+          as: "matchReferees",
+          include: [
+            {
+              model: User,
+              as: "referee",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+        {
+          model: SubMatch,
+          as: "subMatches",
+          include: [{ model: MatchSet, as: "matchSets" }],
+        },
+      ],
+      order: [
+        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
+        [
+          { model: SubMatch, as: "subMatches" },
+          { model: MatchSet, as: "matchSets" },
+          "setNumber",
+          "ASC",
+        ],
+      ],
+    });
+    if (!match) throw new Error("Match not found");
+
+    const subMatches = match.subMatches ?? [];
+    const { entryASubMatchWins, entryBSubMatchWins } =
+      countSubMatchWins(subMatches);
+    const winsToFinalize = Math.floor(subMatches.length / 2) + 1;
+    const matchReadyToFinalize =
+      entryASubMatchWins >= winsToFinalize ||
+      entryBSubMatchWins >= winsToFinalize;
+    const winnerEntryId = entryASubMatchWins >= winsToFinalize
+      ? match.entryAId
+      : entryBSubMatchWins >= winsToFinalize
+        ? match.entryBId
+        : undefined;
+
+    return {
+      match,
+      entryASubMatchWins,
+      entryBSubMatchWins,
+      winsToFinalize,
+      matchReadyToFinalize,
+      ...(winnerEntryId && { winnerEntryId }),
+    };
   }
 
   // ── 6. Upcoming & history cho athlete ────────────────────────────────────
@@ -409,20 +725,17 @@ export class MatchService {
     const succeeded: Match[] = [];
     const failed: { matchId: number; reason: string }[] = [];
 
-    // Xử lý song song nhưng không để 1 trận fail ảnh hưởng trận khác
-    await Promise.allSettled(
-      matchIds.map(async (matchId) => {
-        try {
-          const match = await this.startMatch(matchId, refereeId);
-          succeeded.push(match);
-        } catch (err) {
-          failed.push({
-            matchId,
-            reason: err instanceof Error ? err.message : "Unknown error",
-          });
-        }
-      }),
-    );
+    for (const matchId of matchIds) {
+      try {
+        const match = await this.startMatch(matchId, refereeId);
+        succeeded.push(match);
+      } catch (err) {
+        failed.push({
+          matchId,
+          reason: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    }
 
     return { succeeded, failed };
   }

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import matchController from "../controllers/match.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission, checkAnyPermission } from "../middlewares/permission.middleware";
+import { checkPermission, checkRole } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -100,6 +100,332 @@ const router = Router();
  *         $ref: '#/components/responses/InternalError500'
  */
 router.get("/pending", authenticate, checkPermission('matches:approve_result'), matchController.findPendingMatches.bind(matchController));
+
+/**
+ * @swagger
+ * /matches/category/{categoryId}:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get schedules and matches by category for chief referee
+ *     description: |
+ *       Chief referee retrieves all schedules in a category with their matches.
+ *       Only chief referee assigned to the category tournament can access this endpoint.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: stage
+ *         schema:
+ *           type: string
+ *           enum: [group, knockout]
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [scheduled, in_progress, completed, cancelled]
+ *       - in: query
+ *         name: resultStatus
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Schedules with nested matches
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/category/:categoryId",
+  authenticate,
+  checkRole('chief_referee'),
+  matchController.findCategorySchedulesAndMatchesForChiefReferee.bind(matchController),
+);
+
+/**
+ * @swagger
+ * /matches/bulk-start:
+ *   post:
+ *     tags: [Matches]
+ *     summary: Start multiple matches
+ *     description: |
+ *       Start many scheduled matches in one request.
+ *       Each match is processed independently; failed matches are returned with reasons.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - matchIds
+ *             properties:
+ *               matchIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 minItems: 1
+ *           example:
+ *             matchIds: [1, 2, 3]
+ *     responses:
+ *       200:
+ *         description: Bulk start completed
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/bulk-start",
+  authenticate,
+  checkPermission('matches:start'),
+  matchController.bulkStartMatches.bind(matchController),
+);
+
+/**
+ * @swagger
+ * /matches/referee/my:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get matches assigned to current referee
+ *     description: |
+ *       Referee retrieves matches assigned to them.
+ *       If status is omitted, returns all statuses.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Filter matches by tournament category
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           example: in_progress,completed
+ *         description: Optional comma-separated statuses
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Assigned matches with schedule, entries, referees, sub-matches, and sets
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [message, categoryId, statuses, matches, count, offset, limit]
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 categoryId:
+ *                   type: integer
+ *                 statuses:
+ *                   type: array
+ *                   nullable: true
+ *                   items:
+ *                     type: string
+ *                     enum: [scheduled, in_progress, completed, cancelled]
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       scheduleId:
+ *                         type: integer
+ *                       entryAId:
+ *                         type: integer
+ *                       entryBId:
+ *                         type: integer
+ *                       winnerEntryId:
+ *                         type: integer
+ *                         nullable: true
+ *                       status:
+ *                         type: string
+ *                         enum: [scheduled, in_progress, completed, cancelled]
+ *                       resultStatus:
+ *                         type: string
+ *                         enum: [pending, approved, rejected]
+ *                         nullable: true
+ *                       reviewNotes:
+ *                         type: string
+ *                         nullable: true
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       schedule:
+ *                         type: object
+ *                         nullable: true
+ *                       entryA:
+ *                         type: object
+ *                         nullable: true
+ *                       entryB:
+ *                         type: object
+ *                         nullable: true
+ *                       winnerEntry:
+ *                         type: object
+ *                         nullable: true
+ *                       matchReferees:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                       subMatches:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                 count:
+ *                   type: integer
+ *                 offset:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *             example:
+ *               message: Assigned matches retrieved successfully
+ *               categoryId: 1
+ *               statuses: null
+ *               count: 1
+ *               offset: 0
+ *               limit: 10
+ *               matches:
+ *                 - id: 42
+ *                   scheduleId: 15
+ *                   entryAId: 101
+ *                   entryBId: 102
+ *                   winnerEntryId: null
+ *                   status: in_progress
+ *                   resultStatus: null
+ *                   reviewNotes: null
+ *                   createdAt: "2026-06-09T08:00:00.000Z"
+ *                   updatedAt: "2026-06-09T08:30:00.000Z"
+ *                   schedule:
+ *                     id: 15
+ *                     tournamentId: 3
+ *                     categoryId: 1
+ *                     stage: group
+ *                     scheduledAt: "2026-06-09T09:00:00.000Z"
+ *                     tournamentCategory:
+ *                       id: 1
+ *                       tournamentId: 3
+ *                       categoryType: singles
+ *                       name: Men's Singles
+ *                       maxSets: 3
+ *                       teamFormat: null
+ *                   entryA:
+ *                     id: 101
+ *                     tournamentId: 3
+ *                     categoryId: 1
+ *                     seed: 1
+ *                     members:
+ *                       - id: 301
+ *                         entryId: 101
+ *                         userId: 11
+ *                         user:
+ *                           id: 11
+ *                           firstName: Nguyen
+ *                           lastName: An
+ *                           email: an@example.com
+ *                           avatarUrl: null
+ *                   entryB:
+ *                     id: 102
+ *                     tournamentId: 3
+ *                     categoryId: 1
+ *                     seed: 2
+ *                     members:
+ *                       - id: 302
+ *                         entryId: 102
+ *                         userId: 12
+ *                         user:
+ *                           id: 12
+ *                           firstName: Tran
+ *                           lastName: Binh
+ *                           email: binh@example.com
+ *                           avatarUrl: null
+ *                   winnerEntry: null
+ *                   matchReferees:
+ *                     - id: 7
+ *                       matchId: 42
+ *                       refereeId: 21
+ *                       referee:
+ *                         id: 21
+ *                         firstName: Le
+ *                         lastName: Referee
+ *                         email: referee@example.com
+ *                   subMatches:
+ *                     - id: 88
+ *                       matchId: 42
+ *                       subMatchNumber: 1
+ *                       status: in_progress
+ *                       winnerTeam: null
+ *                       umpireId: 21
+ *                       assistantUmpireId: 22
+ *                       matchSets:
+ *                         - id: 501
+ *                           subMatchId: 88
+ *                           setNumber: 1
+ *                           entryAScore: 21
+ *                           entryBScore: 18
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/referee/my",
+  authenticate,
+  checkPermission('matches:view'),
+  matchController.findAssignedMatchesForReferee.bind(matchController),
+);
+
+router.get(
+  "/:id/finalize-summary",
+  authenticate,
+  checkPermission('matches:report_result'),
+  matchController.getFinalizeSummary.bind(matchController),
+);
 
 /**
  * @swagger

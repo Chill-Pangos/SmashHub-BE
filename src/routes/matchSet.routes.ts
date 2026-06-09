@@ -61,8 +61,8 @@ router.post(
  * /match-sets/live-score:
  *   put:
  *     tags: [Match Sets]
- *     summary: Update live set score in Redis
- *     description: Stores point-by-point score in Redis. When score completes a set, persists it to DB.
+ *     summary: Update live set score
+ *     description: Stores point-by-point score in Redis. System calculates current set number. When score completes a set, persists it to DB and returns details if referee must finalize/submit.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -75,10 +75,6 @@ router.post(
  *             properties:
  *               subMatchId:
  *                 type: integer
- *                 example: 1
- *               setNumber:
- *                 type: integer
- *                 description: Optional current set number. Defaults to next unfinished set.
  *                 example: 1
  *               entryAScore:
  *                 type: integer
@@ -94,7 +90,7 @@ router.post(
  *       200:
  *         description: Live score cached, set not completed
  *       201:
- *         description: Set completed and persisted to DB
+ *         description: Set completed and persisted to DB; may require referee finalize/submit
  */
 router.put(
   "/live-score",
@@ -180,6 +176,75 @@ router.get(
 
 /**
  * @swagger
+ * /match-sets/sub-match/{subMatchId}:
+ *   get:
+ *     tags: [Match Sets]
+ *     summary: Get match sets by sub-match ID
+ *     description: Retrieve all sets for a specific sub-match ordered by set number
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: subMatchId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the sub-match
+ *     responses:
+ *       200:
+ *         description: List of match sets ordered by set number
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [message, subMatchId, count, sets]
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Match sets retrieved successfully
+ *                 subMatchId:
+ *                   type: integer
+ *                   example: 88
+ *                 count:
+ *                   type: integer
+ *                   example: 2
+ *                 sets:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *               example:
+ *                 message: Match sets retrieved successfully
+ *                 subMatchId: 88
+ *                 count: 2
+ *                 sets:
+ *                   - id: 501
+ *                     subMatchId: 88
+ *                     setNumber: 1
+ *                     entryAScore: 21
+ *                     entryBScore: 18
+ *                     createdAt: "2026-06-09T08:10:00.000Z"
+ *                     updatedAt: "2026-06-09T08:10:00.000Z"
+ *                   - id: 502
+ *                     subMatchId: 88
+ *                     setNumber: 2
+ *                     entryAScore: 19
+ *                     entryBScore: 21
+ *                     createdAt: "2026-06-09T08:20:00.000Z"
+ *                     updatedAt: "2026-06-09T08:20:00.000Z"
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get(
+  "/sub-match/:subMatchId",
+  authenticate,
+  checkPermission('matches:view'),
+  matchSetController.getBySubMatchId.bind(matchSetController)
+);
+
+/**
+ * @swagger
  * /match-sets/{id}:
  *   get:
  *     tags: [Match Sets]
@@ -254,40 +319,6 @@ router.delete(
   authenticate,
   checkPermission('matches:update'),
   matchSetController.deleteSet.bind(matchSetController)
-);
-
-/**
- * @swagger
- * /match-sets/sub-match/{subMatchId}:
- *   get:
- *     tags: [Match Sets]
- *     summary: Get match sets by sub-match ID
- *     description: Retrieve all sets for a specific sub-match ordered by set number
- *     parameters:
- *       - in: path
- *         name: subMatchId
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID of the sub-match
- *     responses:
- *       200:
- *         description: List of match sets ordered by set number
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 sets:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/MatchSet'
- *                 pagination:
- *                   $ref: '#/components/schemas/Pagination'
- */
-router.get(
-  "/sub-match/:subMatchId",
-  matchSetController.getBySubMatchId.bind(matchSetController)
 );
 
 export default router;
