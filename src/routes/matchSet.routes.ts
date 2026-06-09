@@ -62,7 +62,7 @@ router.post(
  *   put:
  *     tags: [Match Sets]
  *     summary: Update live set score
- *     description: Stores point-by-point score in Redis. System calculates current set number. When score completes a set, persists it to DB and returns details if referee must finalize/submit.
+ *     description: Stores point-by-point score in Redis. System calculates current set number unless setNumber is provided. Sending the same setNumber again overwrites the live score, so referees can correct mistyped points. If the set was already persisted, this corrects the saved set while the sub-match is still in progress.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -76,11 +76,15 @@ router.post(
  *               subMatchId:
  *                 type: integer
  *                 example: 1
+ *               setNumber:
+ *                 type: integer
+ *                 description: Optional set number to correct. Defaults to current unfinished set.
+ *                 example: 1
  *               entryAScore:
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 30
- *                 example: 7
+ *                 example: 8
  *               entryBScore:
  *                 type: integer
  *                 minimum: 0

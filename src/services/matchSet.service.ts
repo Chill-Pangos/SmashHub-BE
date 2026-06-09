@@ -386,10 +386,78 @@ export class MatchSetService {
     }
 
     const existingSets = await getExistingSets(data.subMatchId);
-    assertSubMatchCanAddSet(existingSets, category);
 
     const nextSetNumber = getNextSetNumber(existingSets);
-    const setNumber = nextSetNumber;
+    const setNumber = data.setNumber ?? nextSetNumber;
+    if (!Number.isInteger(setNumber) || setNumber <= 0) {
+      throw new Error("setNumber must be a positive integer");
+    }
+    if (setNumber > nextSetNumber) {
+      throw new Error(`Can only update current set number ${nextSetNumber}`);
+    }
+
+    const setToCorrect = existingSets.find((set) => set.setNumber === setNumber);
+    if (setToCorrect) {
+      if (!isSetCompleted(data.entryAScore, data.entryBScore, 11)) {
+        if (setNumber !== nextSetNumber - 1) {
+          throw new Error("Can only reopen the latest persisted set");
+        }
+
+        const reopenedLiveScore: LiveMatchSetScoreCache = {
+          subMatchId: data.subMatchId,
+          setNumber,
+          entryAScore: data.entryAScore,
+          entryBScore: data.entryBScore,
+          updatedBy: refereeId,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await setToCorrect.destroy();
+
+        try {
+          await matchSetScoreCacheService.deleteScore(setToCorrect);
+          await matchSetScoreCacheService.setLiveScore(reopenedLiveScore);
+        } catch (error) {
+          console.error("Failed to reopen persisted set as live score:", error);
+        }
+
+        return {
+          message: "Persisted set reopened as live score.",
+          liveScore: reopenedLiveScore,
+          isCompleted: false,
+          nextSetNumber: setNumber,
+        };
+      }
+
+      const updatedSet = await this.updateSetScore(
+        refereeId,
+        setToCorrect.id,
+        data.entryAScore,
+        data.entryBScore,
+      );
+
+      try {
+        await matchSetScoreCacheService.deleteLiveScore(data.subMatchId, setNumber);
+      } catch (error) {
+        console.error("Failed to delete live match set score cache:", error);
+      }
+
+      return {
+        message: "Persisted set score corrected.",
+        liveScore: {
+          subMatchId: data.subMatchId,
+          setNumber,
+          entryAScore: data.entryAScore,
+          entryBScore: data.entryBScore,
+          updatedBy: refereeId,
+          updatedAt: new Date().toISOString(),
+        },
+        isCompleted: true,
+        persistedSet: updatedSet,
+      };
+    }
+
+    assertSubMatchCanAddSet(existingSets, category);
 
     const liveScore: LiveMatchSetScoreCache = {
       subMatchId: data.subMatchId,
