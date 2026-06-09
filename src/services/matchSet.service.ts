@@ -28,9 +28,27 @@ interface ScoreValidation {
 type MatchSetResult = MatchSet | MatchSetScoreCache;
 
 interface LiveSetScoreResult {
+  message: string;
   liveScore: LiveMatchSetScoreCache;
   isCompleted: boolean;
   persistedSet?: MatchSet;
+  nextSetNumber?: number;
+  subMatchReadyToFinalize?: boolean;
+  winningTeam?: "A" | "B";
+  finalizationNotice?: FinalizationNotice;
+}
+
+interface FinalizationNotice {
+  subMatchId: number;
+  matchId: number;
+  completedSetNumber: number;
+  entryAScore: number;
+  entryBScore: number;
+  entryASets: number;
+  entryBSets: number;
+  winningTeam: "A" | "B";
+  matchWillBeCompleted: boolean;
+  winnerEntryId?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,6 +226,80 @@ function assertSubMatchCanAddSet(
   }
 }
 
+function countSetsWon(sets: MatchSet[]): {
+  entryASets: number;
+  entryBSets: number;
+} {
+  return sets.reduce(
+    (acc, set) => {
+      if (set.entryAScore > set.entryBScore) acc.entryASets++;
+      else if (set.entryBScore > set.entryAScore) acc.entryBSets++;
+      return acc;
+    },
+    { entryASets: 0, entryBSets: 0 },
+  );
+}
+
+function getWinningTeamFromSets(
+  sets: MatchSet[],
+  category: TournamentCategory,
+): "A" | "B" | null {
+  const setsToWin = Math.floor(category.maxSets / 2) + 1;
+  const { entryASets, entryBSets } = countSetsWon(sets);
+  if (entryASets >= setsToWin) return "A";
+  if (entryBSets >= setsToWin) return "B";
+  return null;
+}
+
+async function buildFinalizationNotice(
+  subMatch: SubMatch,
+  category: TournamentCategory,
+  completedSet: MatchSet,
+): Promise<FinalizationNotice | null> {
+  const sets = await getExistingSets(subMatch.id);
+  const winningTeam = getWinningTeamFromSets(sets, category);
+  if (!winningTeam) return null;
+
+  const { entryASets, entryBSets } = countSetsWon(sets);
+  const match = await Match.findByPk(subMatch.matchId);
+  if (!match) throw new Error("Match not found");
+
+  const siblingSubMatches = await SubMatch.findAll({
+    where: { matchId: subMatch.matchId },
+    order: [["subMatchNumber", "ASC"]],
+  });
+
+  const winsToWinMatch = Math.floor(siblingSubMatches.length / 2) + 1;
+  const entryAWins =
+    siblingSubMatches.filter((item) => item.winnerTeam === "A").length +
+    (winningTeam === "A" && subMatch.winnerTeam !== "A" ? 1 : 0);
+  const entryBWins =
+    siblingSubMatches.filter((item) => item.winnerTeam === "B").length +
+    (winningTeam === "B" && subMatch.winnerTeam !== "B" ? 1 : 0);
+
+  const matchWinnerTeam =
+    entryAWins >= winsToWinMatch ? "A" : entryBWins >= winsToWinMatch ? "B" : null;
+  const winnerEntryId =
+    matchWinnerTeam === "A"
+      ? match.entryAId
+      : matchWinnerTeam === "B"
+        ? match.entryBId
+        : undefined;
+
+  return {
+    subMatchId: subMatch.id,
+    matchId: subMatch.matchId,
+    completedSetNumber: completedSet.setNumber,
+    entryAScore: completedSet.entryAScore,
+    entryBScore: completedSet.entryBScore,
+    entryASets,
+    entryBSets,
+    winningTeam,
+    matchWillBeCompleted: matchWinnerTeam !== null,
+    ...(winnerEntryId && { winnerEntryId }),
+  };
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class MatchSetService {
@@ -297,10 +389,7 @@ export class MatchSetService {
     assertSubMatchCanAddSet(existingSets, category);
 
     const nextSetNumber = getNextSetNumber(existingSets);
-    const setNumber = data.setNumber ?? nextSetNumber;
-    if (setNumber !== nextSetNumber) {
-      throw new Error(`Can only update current set number ${nextSetNumber}`);
-    }
+    const setNumber = nextSetNumber;
 
     const liveScore: LiveMatchSetScoreCache = {
       subMatchId: data.subMatchId,
@@ -318,7 +407,12 @@ export class MatchSetService {
     }
 
     if (!isSetCompleted(data.entryAScore, data.entryBScore, 11)) {
-      return { liveScore, isCompleted: false };
+      return {
+        message: "success",
+        liveScore,
+        isCompleted: false,
+        nextSetNumber: setNumber,
+      };
     }
 
     const persistedSet = await this.submitFinalSetScore(refereeId, {
@@ -332,7 +426,27 @@ export class MatchSetService {
       console.error("Failed to delete live match set score cache:", error);
     }
 
-    return { liveScore, isCompleted: true, persistedSet };
+    const notice = await buildFinalizationNotice(
+      subMatch,
+      category,
+      persistedSet,
+    );
+    const winningTeam = notice?.winningTeam;
+    const subMatchReadyToFinalize = notice !== null;
+    const message = subMatchReadyToFinalize
+      ? "Set completed and saved. Referee must finalize and submit match."
+      : "Set completed and saved. Start next set.";
+
+    return {
+      message,
+      liveScore,
+      isCompleted: true,
+      persistedSet,
+      ...(!subMatchReadyToFinalize && { nextSetNumber: setNumber + 1 }),
+      subMatchReadyToFinalize,
+      ...(winningTeam && { winningTeam }),
+      ...(notice && { finalizationNotice: notice }),
+    };
   }
 
   async submitFinalSetScore(
@@ -426,34 +540,9 @@ export class MatchSetService {
 
   // ── 3. Queries ────────────────────────────────────────────────────────────
 
-  async getSetsBySubMatch(subMatchId: number, options?: { offset?: number; limit?: number }): Promise<{ sets?: MatchSetResult[], pagination?: any } | MatchSetResult[]> {
-    const offset = options?.offset || 0;
-    const limit = options?.limit || 10;
-
-    // If pagination is requested
-    if (options && (options.offset !== undefined || options.limit !== undefined)) {
-      const { count, rows } = await MatchSet.findAndCountAll({
-        where: { subMatchId },
-        order: [["setNumber", "ASC"]],
-        offset,
-        limit: limit,
-      });
-
-      const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(offset / limit) + 1;
-
-      return {
-        sets: await mergeCachedScores(rows),
-        pagination: {
-          total: count,
-          page,
-          limit,
-          totalPages,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      };
-    }
+  async getSetsBySubMatch(subMatchId: number): Promise<MatchSetResult[]> {
+    const subMatch = await SubMatch.findByPk(subMatchId, { attributes: ["id"] });
+    if (!subMatch) throw new Error("SubMatch not found");
 
     const sets = await MatchSet.findAll({
       where: { subMatchId },

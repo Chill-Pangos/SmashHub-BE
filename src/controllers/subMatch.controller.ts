@@ -34,11 +34,18 @@ export class SubMatchController {
    */
   async start(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refereeId = req.userId!;
-      const subMatchId = Number(req.params.id);
+      const refereeId = req.userId;
+      if (!refereeId) {
+        throw new BadRequestError("User not authenticated");
+      }
 
-      const subMatch = await subMatchService.startSubMatch(refereeId, subMatchId);
-      res.status(200).json(subMatch);
+      const subMatchId = Number(req.params.id);
+      if (!Number.isInteger(subMatchId) || subMatchId <= 0) {
+        throw new BadRequestError("Invalid sub-match ID");
+      }
+
+      const result = await subMatchService.startSubMatch(refereeId, subMatchId);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -50,11 +57,18 @@ export class SubMatchController {
    */
   async finalize(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refereeId = req.userId!;
-      const subMatchId = Number(req.params.id);
+      const refereeId = req.userId;
+      if (!refereeId) {
+        throw new BadRequestError("User not authenticated");
+      }
 
-      const subMatch = await subMatchService.finalizeSubMatch(refereeId, subMatchId);
-      res.status(200).json(subMatch);
+      const subMatchId = Number(req.params.id);
+      if (!Number.isInteger(subMatchId) || subMatchId <= 0) {
+        throw new BadRequestError("Invalid sub-match ID");
+      }
+
+      const result = await subMatchService.finalizeSubMatch(refereeId, subMatchId);
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -88,11 +102,18 @@ export class SubMatchController {
   async getByMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const matchId = Number(req.params.matchId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const result = await subMatchService.getSubMatchesByMatch(matchId, { offset, limit });
-      res.status(200).json(result);
+      if (!Number.isInteger(matchId) || matchId <= 0) {
+        throw new BadRequestError("Invalid match ID");
+      }
+
+      const subMatches = await subMatchService.getSubMatchesByMatch(matchId);
+
+      res.status(200).json({
+        message: "Sub-matches retrieved successfully",
+        matchId,
+        count: subMatches.length,
+        subMatches,
+      });
     } catch (error) {
       next(error);
     }

@@ -4,7 +4,10 @@ import { sequelize } from "../config/database";
 import Schedule, { Stage, KnockoutRound } from "../models/schedule.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
+import SubMatch, { SubMatchStatus } from "../models/subMatch.model";
+import SubMatchPlayer from "../models/subMatchPlayer.model";
 import Entry from "../models/entry.model";
+import EntryMember from "../models/entryMember.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
@@ -231,10 +234,6 @@ async function findAvailableTable(
 
 // ─── Referee Assignment ───────────────────────────────────────────────────────
 
-function buildWorkloads(referees: TournamentReferee[]): RefereeWorkload[] {
-  return referees.map((r) => ({ refereeId: r.refereeId, assignedCount: 0 }));
-}
-
 function assignReferees(workloads: RefereeWorkload[], count: number): number[] {
   if (workloads.length === 0) return [];
   const sorted = [...workloads].sort((a, b) => a.assignedCount - b.assignedCount);
@@ -243,11 +242,6 @@ function assignReferees(workloads: RefereeWorkload[], count: number): number[] {
     if (selected.includes(w.refereeId)) w.assignedCount += 1;
   }
   return selected;
-}
-
-function calcRefsPerMatch(totalMatches: number, totalRefs: number): number {
-  if (totalRefs === 0) return 0;
-  return totalMatches * 2 <= totalRefs * 3 ? 2 : 1;
 }
 
 async function bulkCreateMatchReferees(
@@ -260,6 +254,56 @@ async function bulkCreateMatchReferees(
     refereeIds.map((refereeId) => ({ matchId, refereeId })),
     { transaction: t },
   );
+}
+
+function getSubMatchCount(category: TournamentCategory): number {
+  if (category.type !== "team") return 1;
+  if (!category.teamFormat) {
+    throw new Error("Team category must have teamFormat to create sub-matches");
+  }
+  return category.teamFormat.split("-").length;
+}
+
+async function createSubMatchesForMatch(
+  match: Match,
+  category: TournamentCategory,
+  t: Transaction,
+): Promise<void> {
+  const count = getSubMatchCount(category);
+  const subMatches = await SubMatch.bulkCreate(
+    Array.from({ length: count }, (_, i) => ({
+      matchId: match.id,
+      subMatchNumber: i + 1,
+      status: "scheduled" satisfies SubMatchStatus,
+    })),
+    { transaction: t },
+  );
+
+  if (category.type === "team") return;
+
+  const firstSubMatch = subMatches[0];
+  if (!firstSubMatch) return;
+
+  const entryIds = [match.entryAId, match.entryBId].filter(
+    (id): id is number => id != null,
+  );
+  if (entryIds.length === 0) return;
+
+  const entryMembers = await EntryMember.findAll({
+    where: { entryId: { [Op.in]: entryIds } },
+    order: [["id", "ASC"]],
+    transaction: t,
+  });
+
+  const rows = entryMembers.map((member) => ({
+    subMatchId: firstSubMatch.id,
+    entryMemberId: member.id,
+    team: member.entryId === match.entryAId ? "A" : "B",
+  }));
+
+  if (rows.length > 0) {
+    await SubMatchPlayer.bulkCreate(rows, { transaction: t });
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -442,10 +486,6 @@ export class ScheduleService {
     const allocator = createAllocator(config);
     const { warning } = allocator.validate(pairs.length, config.numberOfTables);
 
-    const referees = await getTournamentReferees(tournament.id);
-    const workloads = buildWorkloads(referees);
-    const refsPerMatch = calcRefsPerMatch(pairs.length, referees.length);
-
     const result = await sequelize.transaction(async (t) => {
       await clearExistingSchedules(categoryId, "group", t);
 
@@ -477,11 +517,7 @@ export class ScheduleService {
           { transaction: t },
         );
 
-        await bulkCreateMatchReferees(
-          match.id,
-          assignReferees(workloads, refsPerMatch),
-          t,
-        );
+        await createSubMatchesForMatch(match, category, t);
 
         schedules.push(schedule);
         matches.push(match);
@@ -516,10 +552,6 @@ export class ScheduleService {
     const pairs = await buildKnockoutPairs(categoryId, roundName);
     const allocator = createAllocator(config);
     const { warning } = allocator.validate(pairs.length, config.numberOfTables);
-
-    const referees = await getTournamentReferees(tournament.id);
-    const workloads = buildWorkloads(referees);
-    const refsPerMatch = calcRefsPerMatch(pairs.length, referees.length);
 
     const result = await sequelize.transaction(async (t) => {
       // Nếu generate toàn bộ → xóa knockout schedule cũ
@@ -560,16 +592,12 @@ export class ScheduleService {
           { transaction: t },
         );
 
+        await createSubMatchesForMatch(match, category, t);
+
         // Link bracket → schedule và match
         await KnockoutBracket.update(
           { scheduleId: schedule.id, matchId: match.id },
           { where: { id: pair.bracketId }, transaction: t },
-        );
-
-        await bulkCreateMatchReferees(
-          match.id,
-          assignReferees(workloads, refsPerMatch),
-          t,
         );
 
         schedules.push(schedule);

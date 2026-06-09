@@ -291,7 +291,7 @@ function keepsSameGroupQualifiersInOppositeHalves(
   }
 
   return true;
-}
+} 
 
 function validateQualifierSeedEntryIds(
   entryIds: number[],
