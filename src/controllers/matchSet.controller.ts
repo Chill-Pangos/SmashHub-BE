@@ -31,7 +31,7 @@ export class MatchSetController {
   async updateLiveSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = req.userId!;
-      const { subMatchId, setNumber, entryAScore, entryBScore } = req.body;
+      const { subMatchId, entryAScore, entryBScore } = req.body;
 
       if (!subMatchId || entryAScore === undefined || entryBScore === undefined) {
         throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
@@ -39,7 +39,6 @@ export class MatchSetController {
 
       const result = await matchSetService.updateLiveSetScore(refereeId, {
         subMatchId,
-        setNumber,
         entryAScore,
         entryBScore,
       });
@@ -116,11 +115,17 @@ export class MatchSetController {
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const subMatchId = Number(req.params.subMatchId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const result = await matchSetService.getSetsBySubMatch(subMatchId, { offset, limit });
-      res.status(200).json(result);
+      if (!Number.isInteger(subMatchId) || subMatchId <= 0) {
+        throw new BadRequestError("Invalid sub-match ID");
+      }
+
+      const sets = await matchSetService.getSetsBySubMatch(subMatchId);
+      res.status(200).json({
+        message: "Match sets retrieved successfully",
+        subMatchId,
+        count: sets.length,
+        sets,
+      });
     } catch (error) {
       next(error);
     }

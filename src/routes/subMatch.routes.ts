@@ -57,7 +57,10 @@ router.post(
  *   post:
  *     tags: [Sub Matches]
  *     summary: Start a sub-match
- *     description: Start a sub-match and assign the requesting referee as umpire
+ *     description: |
+ *       Start a scheduled sub-match.
+ *       Only assigned umpire or assistant umpire can start.
+ *       Match must be in_progress and both teams must have approved lineups.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -68,7 +71,48 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SubMatch'
+ *               type: object
+ *               required: [message, subMatch, lineupReady]
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Sub-match started successfully
+ *                 lineupReady:
+ *                   type: boolean
+ *                   example: true
+ *                 subMatch:
+ *                   type: object
+ *               example:
+ *                 message: Sub-match started successfully
+ *                 lineupReady: true
+ *                 subMatch:
+ *                   id: 88
+ *                   matchId: 42
+ *                   subMatchNumber: 1
+ *                   status: in_progress
+ *                   winnerTeam: null
+ *                   umpireId: 21
+ *                   assistantUmpireId: 22
+ *                   createdAt: "2026-06-09T08:00:00.000Z"
+ *                   updatedAt: "2026-06-09T08:30:00.000Z"
+ *                   matchSets: []
+ *                   subMatchPlayers:
+ *                     - id: 900
+ *                       subMatchId: 88
+ *                       entryMemberId: 301
+ *                       team: A
+ *                       entryMember:
+ *                         id: 301
+ *                         entryId: 101
+ *                         userId: 11
+ *                     - id: 901
+ *                       subMatchId: 88
+ *                       entryMemberId: 302
+ *                       team: B
+ *                       entryMember:
+ *                         id: 302
+ *                         entryId: 102
+ *                         userId: 12
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -85,7 +129,11 @@ router.post(
  *   post:
  *     tags: [Sub Matches]
  *     summary: Finalize a sub-match
- *     description: Complete a sub-match and determine winner based on sets won
+ *     description: |
+ *       Complete a sub-match and determine winner based on sets won.
+ *       Only assigned umpire or assistant umpire can finalize.
+ *       This endpoint only finalizes sub-match. It does not submit/finalize match.
+ *       When enough sub-matches are won, response returns matchReadyToFinalize = true.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -96,7 +144,30 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SubMatch'
+ *               type: object
+ *               required: [message, subMatch, matchReadyToFinalize]
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Sub-match finalized. Match is ready to finalize.
+ *                 matchReadyToFinalize:
+ *                   type: boolean
+ *                   example: true
+ *                 subMatch:
+ *                   type: object
+ *               example:
+ *                 message: Sub-match finalized. Match is ready to finalize.
+ *                 matchReadyToFinalize: true
+ *                 subMatch:
+ *                   id: 88
+ *                   matchId: 42
+ *                   subMatchNumber: 1
+ *                   status: completed
+ *                   winnerTeam: A
+ *                   umpireId: 21
+ *                   assistantUmpireId: 22
+ *                   createdAt: "2026-06-09T08:00:00.000Z"
+ *                   updatedAt: "2026-06-09T08:45:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  */
@@ -168,6 +239,8 @@ router.post(
  *     tags: [Sub Matches]
  *     summary: Get sub-matches by match ID
  *     description: Retrieve all sub-matches for a specific match with sets and player assignments
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: matchId
@@ -182,18 +255,84 @@ router.post(
  *           application/json:
  *             schema:
  *               type: object
+ *               required: [message, matchId, count, subMatches]
  *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Sub-matches retrieved successfully
+ *                 matchId:
+ *                   type: integer
+ *                   example: 42
+ *                 count:
+ *                   type: integer
+ *                   example: 2
  *                 subMatches:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/SubMatch'
- *                 pagination:
- *                   $ref: '#/components/schemas/Pagination'
+ *                     type: object
+ *               example:
+ *                 message: Sub-matches retrieved successfully
+ *                 matchId: 42
+ *                 count: 2
+ *                 subMatches:
+ *                   - id: 88
+ *                     matchId: 42
+ *                     subMatchNumber: 1
+ *                     status: completed
+ *                     winnerTeam: A
+ *                     umpireId: 21
+ *                     assistantUmpireId: 22
+ *                     createdAt: "2026-06-09T08:00:00.000Z"
+ *                     updatedAt: "2026-06-09T08:30:00.000Z"
+ *                     umpire:
+ *                       id: 21
+ *                       firstName: Le
+ *                       lastName: Referee
+ *                       email: referee@example.com
+ *                     assistantUmpire:
+ *                       id: 22
+ *                       firstName: Pham
+ *                       lastName: Assistant
+ *                       email: assistant@example.com
+ *                     matchSets:
+ *                       - id: 501
+ *                         subMatchId: 88
+ *                         setNumber: 1
+ *                         entryAScore: 21
+ *                         entryBScore: 18
+ *                         createdAt: "2026-06-09T08:10:00.000Z"
+ *                         updatedAt: "2026-06-09T08:10:00.000Z"
+ *                     subMatchPlayers:
+ *                       - id: 900
+ *                         subMatchId: 88
+ *                         entryMemberId: 301
+ *                         team: A
+ *                         entryMember:
+ *                           id: 301
+ *                           entryId: 101
+ *                           userId: 11
+ *                           user:
+ *                             id: 11
+ *                             firstName: Nguyen
+ *                             lastName: An
+ *                   - id: 89
+ *                     matchId: 42
+ *                     subMatchNumber: 2
+ *                     status: scheduled
+ *                     winnerTeam: null
+ *                     umpireId: 21
+ *                     assistantUmpireId: 22
+ *                     matchSets: []
+ *                     subMatchPlayers: []
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
 router.get(
   "/match/:matchId",
+  authenticate,
+  checkPermission('matches:view'),
   subMatchController.getByMatchId.bind(subMatchController)
 );
 

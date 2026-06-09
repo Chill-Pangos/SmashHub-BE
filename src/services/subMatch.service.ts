@@ -5,6 +5,8 @@ import SubMatchPlayer from "../models/subMatchPlayer.model";
 import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
+import Schedule from "../models/schedule.model";
+import TournamentCategory from "../models/tournamentCategory.model";
 import EntryMember from "../models/entryMember.model";
 import Entry from "../models/entry.model";
 import User from "../models/user.model";
@@ -25,6 +27,85 @@ async function getSubMatchWithMatch(subMatchId: number): Promise<SubMatch> {
   });
   if (!subMatch) throw new Error("SubMatch not found");
   return subMatch;
+}
+
+async function getSubMatchWithCategory(subMatchId: number): Promise<{
+  subMatch: SubMatch;
+  match: Match;
+  category: TournamentCategory;
+}> {
+  const subMatch = await SubMatch.findByPk(subMatchId, {
+    include: [
+      {
+        model: Match,
+        as: "match",
+        include: [
+          {
+            model: Schedule,
+            as: "schedule",
+            include: [{ model: TournamentCategory, as: "tournamentCategory" }],
+          },
+        ],
+      },
+    ],
+  });
+  if (!subMatch) throw new Error("SubMatch not found");
+  if (!subMatch.match) throw new Error("Match not found");
+
+  const category = subMatch.match.schedule?.tournamentCategory;
+  if (!category) throw new Error("Match category not found");
+
+  return { subMatch, match: subMatch.match, category };
+}
+
+async function assertSubMatchHasBothLineups(subMatchId: number): Promise<void> {
+  const players = await SubMatchPlayer.findAll({
+    where: { subMatchId },
+    attributes: ["team"],
+  });
+
+  const hasTeamA = players.some((player) => player.team === "A");
+  const hasTeamB = players.some((player) => player.team === "B");
+
+  if (!hasTeamA || !hasTeamB) {
+    throw new Error("Both teams must have approved lineup before sub-match starts");
+  }
+}
+
+function assertAssignedUmpire(subMatch: SubMatch, userId: number): void {
+  if (subMatch.umpireId !== userId && subMatch.assistantUmpireId !== userId) {
+    throw new Error("Only assigned umpire can perform this action");
+  }
+}
+
+function getWinningTeamFromSets(
+  sets: MatchSet[],
+  category: TournamentCategory,
+): Team | null {
+  const setsToWin = Math.floor(category.maxSets / 2) + 1;
+  let teamASets = 0;
+  let teamBSets = 0;
+
+  for (const set of sets) {
+    if (set.entryAScore > set.entryBScore) teamASets++;
+    else if (set.entryBScore > set.entryAScore) teamBSets++;
+  }
+
+  if (teamASets >= setsToWin) return "A";
+  if (teamBSets >= setsToWin) return "B";
+  return null;
+}
+
+async function isMatchReadyToFinalize(matchId: number): Promise<boolean> {
+  const subMatches = await SubMatch.findAll({
+    where: { matchId },
+    order: [["subMatchNumber", "ASC"]],
+  });
+
+  const winsToWinMatch = Math.floor(subMatches.length / 2) + 1;
+  const entryAWins = subMatches.filter((item) => item.winnerTeam === "A").length;
+  const entryBWins = subMatches.filter((item) => item.winnerTeam === "B").length;
+  return entryAWins >= winsToWinMatch || entryBWins >= winsToWinMatch;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -78,9 +159,18 @@ export class SubMatchService {
   async startSubMatch(
     refereeId: number,
     subMatchId: number
-  ): Promise<SubMatch> {
+  ): Promise<{
+    message: string;
+    subMatch: SubMatch;
+    lineupReady: boolean;
+  }> {
     const subMatch = await getSubMatchWithMatch(subMatchId);
     await assertMatchReferee(refereeId, subMatch.matchId);
+    assertAssignedUmpire(subMatch, refereeId);
+
+    if (subMatch.match?.status !== "in_progress") {
+      throw new Error("Match must be in_progress before sub-match starts");
+    }
 
     if (subMatch.status !== "scheduled") {
       throw new Error(
@@ -88,12 +178,23 @@ export class SubMatchService {
       );
     }
 
-    // Lấy danh sách referees của match — 2 người tự thỏa thuận ai là umpire
-    // Người gọi API này chính là umpire
-    return await subMatch.update({
+    if (!subMatch.umpireId) {
+      throw new Error("Umpire must be assigned before sub-match starts");
+    }
+
+    await assertSubMatchHasBothLineups(subMatchId);
+
+    await subMatch.update({
       status: "in_progress" satisfies SubMatchStatus,
-      umpireId: refereeId,
     });
+
+    const updatedSubMatch = await this.getSubMatchById(subMatchId);
+
+    return {
+      message: "Sub-match started successfully",
+      subMatch: updatedSubMatch,
+      lineupReady: true,
+    };
   }
 
   // ── 3. Kết thúc sub-match ─────────────────────────────────────────────────
@@ -101,9 +202,14 @@ export class SubMatchService {
   async finalizeSubMatch(
     refereeId: number,
     subMatchId: number
-  ): Promise<SubMatch> {
-    const subMatch = await getSubMatchWithMatch(subMatchId);
+  ): Promise<{
+    message: string;
+    subMatch: SubMatch;
+    matchReadyToFinalize: boolean;
+  }> {
+    const { subMatch, match, category } = await getSubMatchWithCategory(subMatchId);
     await assertMatchReferee(refereeId, subMatch.matchId);
+    assertAssignedUmpire(subMatch, refereeId);
 
     if (subMatch.status !== "in_progress") {
       throw new Error(
@@ -114,24 +220,22 @@ export class SubMatchService {
     const sets = await MatchSet.findAll({ where: { subMatchId } });
     if (sets.length === 0) throw new Error("No sets found for this sub-match");
 
-    // Tính winner team từ sets
-    let teamASets = 0;
-    let teamBSets = 0;
-    for (const set of sets) {
-      if (set.entryAScore > set.entryBScore) teamASets++;
-      else if (set.entryBScore > set.entryAScore) teamBSets++;
-    }
+    const winnerTeam = getWinningTeamFromSets(sets, category);
+    if (!winnerTeam) throw new Error("Sub-match is not ready to finalize");
 
-    if (teamASets === teamBSets) {
-      throw new Error("Sub-match cannot end in a draw");
-    }
-
-    const winnerTeam: Team = teamASets > teamBSets ? "A" : "B";
-
-    return await subMatch.update({
+    const updatedSubMatch = await subMatch.update({
       status: "completed" satisfies SubMatchStatus,
       winnerTeam,
     });
+    const matchReadyToFinalize = await isMatchReadyToFinalize(match.id);
+
+    return {
+      message: matchReadyToFinalize
+        ? "Sub-match finalized. Match is ready to finalize."
+        : "Sub-match finalized. Move to next sub-match.",
+      subMatch: updatedSubMatch,
+      matchReadyToFinalize,
+    };
   }
 
   // ── 4. Assign players vào sub-match ──────────────────────────────────────
@@ -168,54 +272,23 @@ export class SubMatchService {
 
   // ── 5. Queries ────────────────────────────────────────────────────────────
 
-  async getSubMatchesByMatch(matchId: number, options?: { offset?: number; limit?: number }): Promise<{ subMatches?: SubMatch[], pagination?: any } | SubMatch[]> {
-    const offset = options?.offset || 0;
-    const limit = options?.limit || 10;
-
-    // If pagination is requested
-    if (options && (options.offset !== undefined || options.limit !== undefined)) {
-      const { count, rows } = await SubMatch.findAndCountAll({
-        where: { matchId },
-        include: [
-          { model: MatchSet, as: "matchSets" },
-          {
-            model: SubMatchPlayer,
-            as: "subMatchPlayers",
-            include: [{
-              model: EntryMember,
-              as: "entryMember",
-              include: [{
-                model: User,
-                as: "user",
-                attributes: ["id", "firstName", "lastName"],
-              }],
-            }],
-          },
-        ],
-        order: [["subMatchNumber", "ASC"]],
-        offset,
-        limit: limit,
-      });
-
-      const totalPages = Math.ceil(count / limit);
-      const page = Math.floor(offset / limit) + 1;
-
-      return {
-        subMatches: rows,
-        pagination: {
-          total: count,
-          page,
-          limit,
-          totalPages,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      };
-    }
+  async getSubMatchesByMatch(matchId: number): Promise<SubMatch[]> {
+    const match = await Match.findByPk(matchId, { attributes: ["id"] });
+    if (!match) throw new Error("Match not found");
 
     return await SubMatch.findAll({
       where: { matchId },
       include: [
+        {
+          model: User,
+          as: "umpire",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+        {
+          model: User,
+          as: "assistantUmpire",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
         { model: MatchSet, as: "matchSets" },
         {
           model: SubMatchPlayer,
@@ -231,7 +304,11 @@ export class SubMatchService {
           }],
         },
       ],
-      order: [["subMatchNumber", "ASC"]],
+      order: [
+        ["subMatchNumber", "ASC"],
+        [{ model: MatchSet, as: "matchSets" }, "setNumber", "ASC"],
+        [{ model: SubMatchPlayer, as: "subMatchPlayers" }, "team", "ASC"],
+      ],
     });
   }
 
