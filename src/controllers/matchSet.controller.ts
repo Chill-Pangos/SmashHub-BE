@@ -31,7 +31,7 @@ export class MatchSetController {
   async updateLiveSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = req.userId!;
-      const { subMatchId, entryAScore, entryBScore } = req.body;
+      const { subMatchId, setNumber, entryAScore, entryBScore } = req.body;
 
       if (!subMatchId || entryAScore === undefined || entryBScore === undefined) {
         throw new BadRequestError("subMatchId, entryAScore, and entryBScore are required");
@@ -39,6 +39,7 @@ export class MatchSetController {
 
       const result = await matchSetService.updateLiveSetScore(refereeId, {
         subMatchId,
+        setNumber,
         entryAScore,
         entryBScore,
       });
