@@ -93,8 +93,168 @@ router.post(
  *     responses:
  *       200:
  *         description: Live score cached, set not completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: success
+ *                 liveScore:
+ *                   type: object
+ *                   properties:
+ *                     subMatchId:
+ *                       type: integer
+ *                       example: 1
+ *                     setNumber:
+ *                       type: integer
+ *                       example: 2
+ *                     entryAScore:
+ *                       type: integer
+ *                       example: 8
+ *                     entryBScore:
+ *                       type: integer
+ *                       example: 5
+ *                     updatedBy:
+ *                       type: integer
+ *                       example: 12
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-06-09T08:10:00.000Z"
+ *                 isCompleted:
+ *                   type: boolean
+ *                   example: false
+ *                 nextSetNumber:
+ *                   type: integer
+ *                   example: 2
+ *             examples:
+ *               liveScoreCached:
+ *                 summary: Live score cached, set not completed
+ *                 value:
+ *                   message: success
+ *                   liveScore:
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 8
+ *                     entryBScore: 5
+ *                     updatedBy: 12
+ *                     updatedAt: "2026-06-09T08:10:00.000Z"
+ *                   isCompleted: false
+ *                   nextSetNumber: 2
+ *               persistedSetReopened:
+ *                 summary: Persisted set reopened as live score
+ *                 value:
+ *                   message: Persisted set reopened as live score.
+ *                   liveScore:
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 10
+ *                     entryBScore: 8
+ *                     updatedBy: 12
+ *                     updatedAt: "2026-06-09T08:19:00.000Z"
+ *                   isCompleted: false
+ *                   nextSetNumber: 2
  *       201:
  *         description: Set completed and persisted to DB; may require referee finalize/submit
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 liveScore:
+ *                   type: object
+ *                 isCompleted:
+ *                   type: boolean
+ *                 persistedSet:
+ *                   $ref: '#/components/schemas/MatchSet'
+ *                 nextSetNumber:
+ *                   type: integer
+ *                 subMatchReadyToFinalize:
+ *                   type: boolean
+ *                 winningTeam:
+ *                   type: string
+ *                   enum: [A, B]
+ *                 finalizationNotice:
+ *                   type: object
+ *             examples:
+ *               subMatchReadyToFinalize:
+ *                 summary: Set completed, sub-match winner decided
+ *                 value:
+ *                   message: Set completed and saved. Referee must finalize sub-match.
+ *                   liveScore:
+ *                     subMatchId: 1
+ *                     setNumber: 3
+ *                     entryAScore: 11
+ *                     entryBScore: 9
+ *                     updatedBy: 12
+ *                     updatedAt: "2026-06-09T08:25:00.000Z"
+ *                   isCompleted: true
+ *                   persistedSet:
+ *                     id: 103
+ *                     subMatchId: 1
+ *                     setNumber: 3
+ *                     entryAScore: 11
+ *                     entryBScore: 9
+ *                     createdAt: "2026-06-09T08:25:00.000Z"
+ *                     updatedAt: "2026-06-09T08:25:00.000Z"
+ *                   subMatchReadyToFinalize: true
+ *                   winningTeam: A
+ *                   finalizationNotice:
+ *                     subMatchId: 1
+ *                     matchId: 20
+ *                     completedSetNumber: 3
+ *                     entryAScore: 11
+ *                     entryBScore: 9
+ *                     entryASets: 2
+ *                     entryBSets: 1
+ *                     winningTeam: A
+ *                     matchWillBeCompleted: false
+ *               setCompletedStartNextSet:
+ *                 summary: Set completed, sub-match continues
+ *                 value:
+ *                   message: Set completed and saved. Start next set.
+ *                   liveScore:
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 11
+ *                     entryBScore: 7
+ *                     updatedBy: 12
+ *                     updatedAt: "2026-06-09T08:15:00.000Z"
+ *                   isCompleted: true
+ *                   persistedSet:
+ *                     id: 102
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 11
+ *                     entryBScore: 7
+ *                     createdAt: "2026-06-09T08:15:00.000Z"
+ *                     updatedAt: "2026-06-09T08:15:00.000Z"
+ *                   nextSetNumber: 3
+ *                   subMatchReadyToFinalize: false
+ *               persistedSetScoreCorrected:
+ *                 summary: Persisted set score corrected
+ *                 value:
+ *                   message: Persisted set score corrected.
+ *                   liveScore:
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 11
+ *                     entryBScore: 8
+ *                     updatedBy: 12
+ *                     updatedAt: "2026-06-09T08:18:00.000Z"
+ *                   isCompleted: true
+ *                   persistedSet:
+ *                     id: 102
+ *                     subMatchId: 1
+ *                     setNumber: 2
+ *                     entryAScore: 11
+ *                     entryBScore: 8
+ *                     createdAt: "2026-06-09T08:15:00.000Z"
+ *                     updatedAt: "2026-06-09T08:18:00.000Z"
  */
 router.put(
   "/live-score",

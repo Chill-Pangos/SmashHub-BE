@@ -502,7 +502,7 @@ export class MatchSetService {
     const winningTeam = notice?.winningTeam;
     const subMatchReadyToFinalize = notice !== null;
     const message = subMatchReadyToFinalize
-      ? "Set completed and saved. Referee must finalize and submit match."
+      ? "Set completed and saved. Referee must finalize sub-match."
       : "Set completed and saved. Start next set.";
 
     return {
