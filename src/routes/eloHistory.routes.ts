@@ -28,27 +28,4 @@ router.get(
   eloHistoryController.findByUserId.bind(eloHistoryController)
 );
 
-/**
- * @swagger
- * /elo-histories/match/{matchId}:
- *   get:
- *     tags: [ELO Histories]
- *     summary: Get ELO history by match ID
- *     parameters:
- *       - in: path
- *         name: matchId
- *         required: true
- *         schema:
- *           type: integer
- *       - $ref: '#/components/parameters/pageParam'
- *       - $ref: '#/components/parameters/limitParam'
- *     responses:
- *       200:
- *         description: ELO history for match
- */
-router.get(
-  "/match/:matchId",
-  eloHistoryController.findByMatchId.bind(eloHistoryController)
-);
-
 export default router;

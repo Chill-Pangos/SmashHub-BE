@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import matchService from "../services/match.service";
-import eloCalculationService from "../services/eloCalculation.service";
 import {
   ApprovePendingMatchResultDto,
   RejectPendingMatchResultDto,
@@ -134,19 +133,6 @@ export class MatchController {
         message: "Match result rejected. Referee needs to resubmit the result.",
         match,
       });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async previewEloChanges(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      const preview = await eloCalculationService.previewMatchEloChanges(id);
-      res.status(200).json(preview);
     } catch (error) {
       next(error);
     }

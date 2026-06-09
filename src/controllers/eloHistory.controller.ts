@@ -17,17 +17,6 @@ export class EloHistoryController {
       next(error);
     }
   }
-
-  async findByMatchId(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const eloHistories = await eloHistoryService.getByMatch(
-        Number(req.params.matchId)
-      );
-      res.status(200).json(eloHistories);
-    } catch (error) {
-      next(error);
-    }
-  }
 }
 
 export default new EloHistoryController();

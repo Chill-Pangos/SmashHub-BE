@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import tournamentService from "../services/tournament.service";
+import eloCalculationService from "../services/eloCalculation.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 
 export class TournamentController {
@@ -178,6 +179,25 @@ export class TournamentController {
           lookAheadHours: hours,
           timestamp: new Date().toISOString(),
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async calculateTournamentElo(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const result = await eloCalculationService.updateEloForTournament(id);
+      res.status(200).json({
+        success: true,
+        message: "Tournament Elo calculated successfully",
+        data: result,
       });
     } catch (error) {
       next(error);
