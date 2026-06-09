@@ -2,7 +2,7 @@
 
 Match set endpoints
 
-Total endpoints: 5
+Total endpoints: 8
 
 ## POST /api/match-sets
 Tag: Match Sets
@@ -59,6 +59,111 @@ Example response:
   "message": "Invalid request data"
 }
 ```
+
+---
+
+## PUT /api/match-sets/live-score
+Tag: Match Sets
+Summary: Update live set score in Redis
+
+Stores point-by-point score in Redis. When score completes a set, persists it to DB.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - subMatchId: integer | required
+  - setNumber: integer | Optional current set number. Defaults to next unfinished set.
+  - entryAScore: integer | required
+  - entryBScore: integer | required
+Example payload:
+```json
+{
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 7,
+  "entryBScore": 5
+}
+```
+
+Responses:
+### 200
+Live score cached, set not completed
+
+### 201
+Set completed and persisted to DB
+
+---
+
+## POST /api/match-sets/final-score
+Tag: Match Sets
+Summary: Submit final set score
+
+Fallback API when Redis live score is missing. Validates final score and persists to DB.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - subMatchId: integer | required
+  - setNumber: integer | Optional current set number. Defaults to next unfinished set.
+  - entryAScore: integer | required
+  - entryBScore: integer | required
+Example payload:
+```json
+{
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 11,
+  "entryBScore": 9
+}
+```
+
+Responses:
+### 201
+Description: Final set score persisted
+Type: object
+Example response:
+```json
+{
+  "id": 1,
+  "subMatchId": 1,
+  "setNumber": 1,
+  "entryAScore": 0,
+  "entryBScore": 0,
+  "subMatch": null,
+  "createdAt": "2026-05-27T00:00:00Z",
+  "updatedAt": "2026-05-27T00:00:00Z",
+  "matchId": 1
+}
+```
+
+---
+
+## GET /api/match-sets/sub-match/{subMatchId}/live-score
+Tag: Match Sets
+Summary: Get live set score from Redis
+
+Request parameters:
+- subMatchId (path) | type: integer | required
+- setNumber (query) | type: integer | Optional set number. Defaults to next unfinished set.
+
+Request body:
+None
+
+Responses:
+### 200
+Current live score or null if cache missing
 
 ---
 

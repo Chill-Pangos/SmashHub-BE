@@ -2,34 +2,14 @@
 
 Group stage standing management endpoints
 
-Total endpoints: 7
+Total endpoints: 6
 
-## POST /api/group-standings/generate-placeholders
+## POST /api/group-standings/generate
 Tag: Group Standings
 Summary: Generate group preview with random assignments
 
-Generate a random group stage preview for a tournament category.
-Returns optimal group configuration with randomly shuffled entries.
-This endpoint does NOT save to database - it's for preview/approval only.
-
-**Authorization**: Only chief referee of the tournament can call this.
-
-**Prerequisites**:
-- Registration period must be closed for the tournament
-- Minimum 12 eligible entries required
-- Category type validation (single/team entries with correct member counts)
-
-**Group Calculation Algorithm**:
-- Finds optimal number of groups (4, 8, 16, 32, or 64 - powers of 2)
-- Each group has 3-5 teams for balanced competition
-- Variance between groups minimized for fairness (all groups differ by at most 1 team)
-- Entries randomly shuffled to ensure fair distribution
-
-**Use Case**:
-Chief referee reviews preview and either:
-1. Approves and calls `/save-assignments` to persist
-2. Requests regeneration for different random arrangement
-3. Manually modifies assignments before saving
+Generate a random group stage preview for organizer review.
+This endpoint does not save data. Review the returned groups, then call /group-standings/save-assignments with approved assignments.
 
 Auth: bearerAuth
 
@@ -40,7 +20,7 @@ Request body:
 Required: yes
 Type: object
 Fields:
-  - categoryId: integer | required | Tournament category ID for which to generate groups
+  - categoryId: integer | required
 Example payload:
 ```json
 {
@@ -50,15 +30,15 @@ Example payload:
 
 Responses:
 ### 200
-Description: Group preview generated successfully (not saved to database)
+Description: Group preview generated successfully
 Type: object
 Body:
   - success: boolean
-  - data: array | Array of group previews with shuffled team assignments
+  - data: array
     - items: object
-      - groupName: string | Group identifier (Group A, B, C, etc.)
-      - slots: integer | Number of teams in this group
-      - entryIds: array | Team/entry IDs assigned to this group
+      - groupName: string
+      - slots: integer
+      - entryIds: array
         - items: integer
   - message: string
 Example response:
@@ -75,36 +55,6 @@ Example response:
         3,
         8
       ]
-    },
-    {
-      "groupName": "Group B",
-      "slots": 4,
-      "entryIds": [
-        1,
-        9,
-        6,
-        15
-      ]
-    },
-    {
-      "groupName": "Group C",
-      "slots": 4,
-      "entryIds": [
-        2,
-        10,
-        7,
-        14
-      ]
-    },
-    {
-      "groupName": "Group D",
-      "slots": 4,
-      "entryIds": [
-        4,
-        11,
-        13,
-        16
-      ]
     }
   ],
   "message": "Group preview generated successfully"
@@ -112,14 +62,12 @@ Example response:
 ```
 
 ### 400
-Description: Invalid request or prerequisites not met
+Description: Invalid request data
 Type: object
-Body:
-  - message: string | choices: categoryId must be a positive integer, Category not found, Not enough eligible entries (X). Minimum required: 12., Registration must be closed before managing groups, Cannot generate valid groups for X entries. Supported range: 12–320.
 Example response:
 ```json
 {
-  "message": "categoryId must be a positive integer"
+  "message": "Invalid request data"
 }
 ```
 
@@ -134,165 +82,12 @@ Example response:
 ```
 
 ### 403
-Description: User is not the chief referee of this tournament
-Type: object
-Body:
-  - message: string
-Example response:
-```json
-{
-  "message": "Only the chief referee can perform this action"
-}
-```
-
-### 500
-Description: Internal server error
+Description: Insufficient permissions
 Type: object
 Example response:
 ```json
 {
-  "message": "Internal server error"
-}
-```
-
----
-
-## POST /api/group-standings/random-draw
-Tag: Group Standings
-Summary: Random draw preview (backward compatible alias)
-
-Alias endpoint for `/group-standings/generate-placeholders`.
-Generates a random group stage preview for chief referee review.
-Identical functionality to generate-placeholders - provided for backward compatibility.
-
-**Response Structure**:
-Returns preview of group assignments without saving to database.
-Each group contains:
-- **groupName**: Unique identifier (Group A, Group B, etc.)
-- **slots**: Number of teams assigned to this group
-- **entryIds**: Array of team IDs in this group
-
-**Next Steps**:
-After reviewing the preview, chief referee should:
-1. Call `/group-standings/save-assignments` to persist (if satisfied)
-2. Call this endpoint again for different random arrangement
-3. Manually modify and send custom assignments to `/save-assignments`
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
-Type: object
-Fields:
-  - categoryId: integer | required | Tournament category ID for random draw
-Example payload:
-```json
-{
-  "categoryId": 1
-}
-```
-
-Responses:
-### 200
-Description: Random draw completed and preview generated
-Type: object
-Body:
-  - success: boolean
-  - data: array | Group preview with random shuffled team assignments
-    - items: object
-      - groupName: string | Group identifier
-      - slots: integer | Number of teams in group
-      - entryIds: array | Randomly shuffled team IDs
-        - items: integer
-  - message: string
-Example response:
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "groupName": "Group A",
-      "slots": 5,
-      "entryIds": [
-        1,
-        7,
-        14,
-        2,
-        9
-      ]
-    },
-    {
-      "groupName": "Group B",
-      "slots": 5,
-      "entryIds": [
-        3,
-        11,
-        18,
-        6,
-        20
-      ]
-    },
-    {
-      "groupName": "Group C",
-      "slots": 5,
-      "entryIds": [
-        5,
-        12,
-        16,
-        4,
-        19
-      ]
-    },
-    {
-      "groupName": "Group D",
-      "slots": 5,
-      "entryIds": [
-        8,
-        15,
-        17,
-        10,
-        13
-      ]
-    }
-  ],
-  "message": "Group preview generated successfully"
-}
-```
-
-### 400
-Description: Invalid request or prerequisites not met
-Type: object
-Body:
-  - message: string | choices: categoryId must be a positive integer, Category not found, Not enough eligible entries (X). Minimum required: 12., Registration must be closed before managing groups
-Example response:
-```json
-{
-  "message": "categoryId must be a positive integer"
-}
-```
-
-### 401
-Description: Authentication required or token invalid
-Type: object
-Example response:
-```json
-{
-  "message": "Unauthorized access"
-}
-```
-
-### 403
-Description: User is not the chief referee of this tournament
-Type: object
-Body:
-  - message: string
-Example response:
-```json
-{
-  "message": "Only the chief referee can perform this action"
+  "message": "Forbidden - insufficient permissions"
 }
 ```
 
@@ -312,11 +107,11 @@ Example response:
 Tag: Group Standings
 Summary: Save group assignments to database
 
-Persist approved group assignments to the database after chief referee confirmation.
+Persist approved group assignments to the database after organizer confirmation.
 Creates initial GroupStanding records with all stats at zero (0 matches, 0 sets).
 
 **Workflow**:
-1. Chief referee calls `/group-standings/generate-placeholders` to get preview
+1. Organizer calls `/group-standings/generate-placeholders` to get preview
 2. Reviews and optionally modifies group assignments
 3. Calls this endpoint to finalize - REPLACES any existing standings for category
 
@@ -332,7 +127,7 @@ Each entry in each group gets a GroupStanding record initialized with:
 - All entries must be eligible (closed registration, proper member count)
 - Replaces previous standings completely (transaction-safe)
 
-**Authorization**: Only chief referee of the tournament
+**Authorization**: Only organizer of the tournament
 
 Auth: bearerAuth
 
@@ -469,14 +264,14 @@ Example response:
 ```
 
 ### 403
-Description: User is not the chief referee of this tournament
+Description: User is not the tournament organizer
 Type: object
 Body:
   - message: string
 Example response:
 ```json
 {
-  "message": "Only the chief referee can perform this action"
+  "message": "Only the tournament organizer can perform this action"
 }
 ```
 
@@ -644,7 +439,7 @@ Called when referee marks a group stage match as completed and sets the winner.
    - setsDiff recalculated (setsWon - setsLost)
 4. Recalculates positions for the group using tiebreaker
 
-**Authorization**: Only chief referee of the tournament can call this
+**Authorization**: Only organizer of the tournament can call this
 
 **Prerequisites**:
 - Match must be in group stage (schedule.stage === "group")
@@ -708,7 +503,7 @@ Body:
 Example response:
 ```json
 {
-  "message": "Only the chief referee can perform this action"
+  "message": "Only the tournament organizer can perform this action"
 }
 ```
 

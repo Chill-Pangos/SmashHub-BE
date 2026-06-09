@@ -388,6 +388,16 @@ Example response:
 }
 ```
 
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
 ### 404
 Description: Resource not found
 Type: object
@@ -449,6 +459,16 @@ Example response:
 ```json
 {
   "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
 }
 ```
 
@@ -554,6 +574,16 @@ Example response:
 ```json
 {
   "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
 }
 ```
 
@@ -694,6 +724,16 @@ Example response:
 }
 ```
 
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
 ### 404
 Description: Resource not found
 Type: object
@@ -826,6 +866,16 @@ Example response:
 ```json
 {
   "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
 }
 ```
 

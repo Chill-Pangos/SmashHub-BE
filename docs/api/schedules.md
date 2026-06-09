@@ -8,6 +8,8 @@ Total endpoints: 8
 Tag: Schedules
 Summary: Generate full tournament schedule (group + knockout)
 
+Authorization: Only the tournament organizer can perform this action.
+
 Tạo lịch toàn bộ tournament theo thứ tự: xong hết category này mới đến category khác.
 Trong mỗi category: group stage trước, knockout sau (kể cả TBD placeholders).
 Slot time được tính liên tục theo scheduleConfig của tournament.
@@ -112,6 +114,8 @@ Example response:
 ## POST /api/schedules/generate-group-stage
 Tag: Schedules
 Summary: Generate group stage schedule for a category
+
+Authorization: Only the tournament organizer can perform this action.
 
 Tạo lịch vòng bảng (round-robin) cho 1 category dựa trên groupStandings.
 Slot time tính từ scheduleConfig của tournament.
@@ -357,6 +361,8 @@ Example response:
 ## POST /api/schedules/generate-knockout
 Tag: Schedules
 Summary: Generate knockout schedule for a category
+
+Authorization: Only the tournament organizer can perform this action.
 
 Tạo lịch knockout cho 1 category dựa trên knockoutBrackets.
 Lấy tất cả brackets kể cả TBD placeholder (trừ bye matches).
@@ -607,6 +613,8 @@ Example response:
 Tag: Schedules
 Summary: Sync match entries from brackets after fillQualifiers
 
+Authorization: Only the tournament organizer can perform this action.
+
 Sau khi fillQualifiers() fill entryId thật vào knockoutBrackets,
 gọi endpoint này để cập nhật lại entryAId / entryBId trong match tương ứng.
 
@@ -852,6 +860,8 @@ Example response:
 Tag: Schedules
 Summary: Update schedule (scheduledAt or tableNumber)
 
+Only the tournament organizer can perform this action.
+
 Auth: bearerAuth
 
 Request parameters:
@@ -952,6 +962,8 @@ Example response:
 ## DELETE /api/schedules/{id}
 Tag: Schedules
 Summary: Delete schedule
+
+Only the tournament organizer can perform this action.
 
 Auth: bearerAuth
 

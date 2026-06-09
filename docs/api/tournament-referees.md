@@ -2,7 +2,7 @@
 
 Tournament referee management endpoints
 
-Total endpoints: 9
+Total endpoints: 10
 
 ## POST /api/tournament-referees/invite
 Tag: Tournament Referees
@@ -775,6 +775,139 @@ Example response:
     "totalPages": 1,
     "hasNextPage": false,
     "hasPrevPage": false
+  }
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/tournament-referees/tournament/{tournamentId}/available
+Tag: Tournament Referees
+Summary: Get referees available for invitation
+
+Retrieve referee users who can be invited to this tournament.
+
+A referee is available only when:
+- Has referee or chief_referee system role
+- Is not organizer of this tournament
+- Is not competing in this tournament
+- Is not already assigned/invited to this tournament
+- Is not assigned to another non-cancelled tournament whose schedule overlaps this tournament
+
+Auth: bearerAuth
+
+Request parameters:
+- tournamentId (path) | type: integer | required | Tournament ID
+- page (query) | type: integer | Page number for pagination | default: 1
+- limit (query) | type: integer | Maximum number of records to return | default: 10
+- role (query) | type: string | Filter by system role. referee includes chief_referee users too. | choices: referee, chief_referee
+- search (query) | type: string | Search by firstName, lastName, or email
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Available referees with pagination
+Type: object
+Body:
+  - referees: array
+    - items: object
+      - id: integer | User ID
+      - firstName: string | required | User first name
+      - lastName: string | required | User last name
+      - email: string | required | User email address
+      - password: string | required | Hashed password
+      - isEmailVerified: boolean | Whether the email is verified | default: false
+      - gender: string | User gender | choices: male, female, other
+      - avatarUrl: string | URL to user avatar image
+      - dob: string | Date of birth
+      - phoneNumber: string | User phone number
+      - createdAt: string
+      - updatedAt: string
+  - pagination: object
+    - total: integer | Total number of records
+    - page: integer | Current page number
+    - limit: integer | Records per page
+    - totalPages: integer | Total number of pages
+    - hasNextPage: boolean | Whether a next page exists
+    - hasPrevPage: boolean | Whether a previous page exists
+Example response:
+```json
+{
+  "referees": [
+    {
+      "id": 1,
+      "firstName": "string",
+      "lastName": "string",
+      "email": "string",
+      "password": "string",
+      "isEmailVerified": false,
+      "gender": "male",
+      "avatarUrl": "string",
+      "dob": "2026-05-27",
+      "phoneNumber": "string",
+      "createdAt": "2026-05-27T00:00:00Z",
+      "updatedAt": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 1,
+    "totalPages": 1,
+    "hasNextPage": true,
+    "hasPrevPage": true
   }
 }
 ```

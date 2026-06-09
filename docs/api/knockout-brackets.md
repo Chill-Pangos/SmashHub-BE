@@ -2,159 +2,13 @@
 
 Knockout bracket management endpoints
 
-Total endpoints: 8
+Total endpoints: 9
 
-## POST /api/knockout-brackets/placeholders
+## POST /api/knockout-brackets/preview-placeholders
 Tag: Knockout Brackets
-Summary: Generate TBD placeholders based on number of groups
+Summary: Preview TBD placeholder bracket tree
 
-Tạo bracket với toàn bộ slots là TBD dựa trên số bảng hiện có.
-Dùng để tạo schedule trước khi vòng bảng kết thúc.
-Số slots = số bảng × 2 (nhất + nhì mỗi bảng).
-Sau khi vòng bảng kết thúc, gọi /fill-qualifiers để fill entryId thật.
-
-Auth: bearerAuth
-
-Request parameters:
-None
-
-Request body:
-Required: yes
-Type: object
-Fields:
-  - categoryId: integer | required
-Example payload:
-```json
-{
-  "categoryId": 1
-}
-```
-
-Responses:
-### 201
-Description: Bracket placeholders generated successfully
-Type: object
-Body:
-  - success: boolean
-  - data: object
-    - categoryId: integer | required
-    - totalRounds: integer | required
-    - totalBrackets: integer | required
-    - rounds: array | required
-      - items: object
-        - roundNumber: integer | required
-        - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
-        - brackets: array | required
-          - items: object
-            - id: integer | required
-            - roundNumber: integer | required
-            - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
-            - bracketPosition: integer | required
-            - entryA: object | required
-              - entryId: integer | required
-              - entryName: string | required
-            - entryB: object | required
-              - entryId: integer | required
-              - entryName: string | required
-            - winnerEntryId: integer | required
-            - status: string | required | choices: pending, ready, in_progress, completed
-            - isByeMatch: boolean | required
-            - previousBracketAId: integer | required
-            - previousBracketBId: integer | required
-            - nextBracketId: integer | required
-  - message: string
-Example response:
-```json
-{
-  "success": true,
-  "data": {
-    "categoryId": 1,
-    "totalRounds": 1,
-    "totalBrackets": 1,
-    "rounds": [
-      {
-        "roundNumber": 1,
-        "roundName": "Round of 64",
-        "brackets": [
-          {
-            "id": 1,
-            "roundNumber": 1,
-            "roundName": "Round of 64",
-            "bracketPosition": 1,
-            "entryA": {
-              "entryId": 1,
-              "entryName": "TBD"
-            },
-            "entryB": {
-              "entryId": 1,
-              "entryName": "TBD"
-            },
-            "winnerEntryId": 1,
-            "status": "pending",
-            "isByeMatch": true,
-            "previousBracketAId": 1,
-            "previousBracketBId": 1,
-            "nextBracketId": 1
-          }
-        ]
-      }
-    ]
-  },
-  "message": "Bracket placeholders generated successfully"
-}
-```
-
-### 400
-Description: Invalid request data
-Type: object
-Example response:
-```json
-{
-  "message": "Invalid request data"
-}
-```
-
-### 401
-Description: Authentication required or token invalid
-Type: object
-Example response:
-```json
-{
-  "message": "Unauthorized access"
-}
-```
-
-### 403
-Description: Insufficient permissions
-Type: object
-Example response:
-```json
-{
-  "message": "Forbidden - insufficient permissions"
-}
-```
-
-### 500
-Description: Internal server error
-Type: object
-Example response:
-```json
-{
-  "message": "Internal server error"
-}
-```
-
----
-
-## POST /api/knockout-brackets/fill-qualifiers
-Tag: Knockout Brackets
-Summary: Fill real qualifiers into TBD placeholder brackets
-
-Fill entryId thật vào bracket round 1 sau khi vòng bảng kết thúc.
-Yêu cầu tất cả bảng đã có đủ kết quả xếp hạng (nhất + nhì).
-Đội nhất các bảng vào top half, đội nhì vào bottom half
-để đảm bảo đội nhất và nhì cùng bảng không gặp nhau trước Final.
-Bracket bye sẽ được tự động fill vào vòng tiếp theo.
+Preview bracket placeholders without saving to database. Use /knockout-brackets/save-assignments with categoryId only to persist after organizer review.
 
 Auth: bearerAuth
 
@@ -175,7 +29,7 @@ Example payload:
 
 Responses:
 ### 200
-Description: Qualifiers filled into bracket successfully
+Description: Bracket placeholder preview generated successfully
 Type: object
 Body:
   - success: boolean
@@ -243,7 +97,7 @@ Example response:
       }
     ]
   },
-  "message": "Qualifiers filled into bracket successfully"
+  "message": "string"
 }
 ```
 
@@ -289,13 +143,11 @@ Example response:
 
 ---
 
-## POST /api/knockout-brackets/from-entries
+## POST /api/knockout-brackets/preview-fill-qualifiers
 Tag: Knockout Brackets
-Summary: Generate knockout bracket from eligible entries (no group stage)
+Summary: Preview filling qualifiers into brackets
 
-Tạo bracket trực tiếp từ danh sách entry đủ điều kiện.
-Chỉ dùng cho giải đấu không có vòng bảng (isGroupStage = false).
-Tự động tính bracket size (lũy thừa 2), phân bổ bye đều 2 nửa.
+Preview shuffled qualifier placement without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
 
 Auth: bearerAuth
 
@@ -315,8 +167,335 @@ Example payload:
 ```
 
 Responses:
+### 200
+Description: Qualifier placement preview generated successfully. data.entryIds contains save order and data.bracketTree contains preview tree.
+Type: object
+Body:
+  - success: boolean
+  - data: object
+    - entryIds: array
+      - items: integer
+    - bracketTree: object
+      - categoryId: integer | required
+      - totalRounds: integer | required
+      - totalBrackets: integer | required
+      - rounds: array | required
+        - items: object
+          - roundNumber: integer | required
+          - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
+          - brackets: array | required
+            - items: object
+              - id: integer | required
+              - roundNumber: integer | required
+              - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
+              - bracketPosition: integer | required
+              - entryA: object | required
+                - entryId: integer | required
+                - entryName: string | required
+              - entryB: object | required
+                - entryId: integer | required
+                - entryName: string | required
+              - winnerEntryId: integer | required
+              - status: string | required | choices: pending, ready, in_progress, completed
+              - isByeMatch: boolean | required
+              - previousBracketAId: integer | required
+              - previousBracketBId: integer | required
+              - nextBracketId: integer | required
+  - message: string
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "entryIds": [
+      5,
+      9,
+      2,
+      12
+    ],
+    "bracketTree": {
+      "categoryId": 1,
+      "totalRounds": 1,
+      "totalBrackets": 1,
+      "rounds": [
+        {
+          "roundNumber": 1,
+          "roundName": "Round of 64",
+          "brackets": [
+            {
+              "id": 1,
+              "roundNumber": 1,
+              "roundName": "Round of 64",
+              "bracketPosition": 1,
+              "entryA": {
+                "entryId": 1,
+                "entryName": "TBD"
+              },
+              "entryB": {
+                "entryId": 1,
+                "entryName": "TBD"
+              },
+              "winnerEntryId": 1,
+              "status": "pending",
+              "isByeMatch": true,
+              "previousBracketAId": 1,
+              "previousBracketBId": 1,
+              "nextBracketId": 1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "message": "string"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## POST /api/knockout-brackets/preview-from-entries
+Tag: Knockout Brackets
+Summary: Preview knockout bracket from eligible entries
+
+Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - categoryId: integer | required
+Example payload:
+```json
+{
+  "categoryId": 1
+}
+```
+
+Responses:
+### 200
+Description: Knockout bracket preview generated successfully. data.entryIds contains save order and data.bracketTree contains preview tree.
+Type: object
+Body:
+  - success: boolean
+  - data: object
+    - entryIds: array
+      - items: integer
+    - bracketTree: object
+      - categoryId: integer | required
+      - totalRounds: integer | required
+      - totalBrackets: integer | required
+      - rounds: array | required
+        - items: object
+          - roundNumber: integer | required
+          - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
+          - brackets: array | required
+            - items: object
+              - id: integer | required
+              - roundNumber: integer | required
+              - roundName: string | required | choices: Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final
+              - bracketPosition: integer | required
+              - entryA: object | required
+                - entryId: integer | required
+                - entryName: string | required
+              - entryB: object | required
+                - entryId: integer | required
+                - entryName: string | required
+              - winnerEntryId: integer | required
+              - status: string | required | choices: pending, ready, in_progress, completed
+              - isByeMatch: boolean | required
+              - previousBracketAId: integer | required
+              - previousBracketBId: integer | required
+              - nextBracketId: integer | required
+  - message: string
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "entryIds": [
+      8,
+      3,
+      12,
+      6
+    ],
+    "bracketTree": {
+      "categoryId": 1,
+      "totalRounds": 1,
+      "totalBrackets": 1,
+      "rounds": [
+        {
+          "roundNumber": 1,
+          "roundName": "Round of 64",
+          "brackets": [
+            {
+              "id": 1,
+              "roundNumber": 1,
+              "roundName": "Round of 64",
+              "bracketPosition": 1,
+              "entryA": {
+                "entryId": 1,
+                "entryName": "TBD"
+              },
+              "entryB": {
+                "entryId": 1,
+                "entryName": "TBD"
+              },
+              "winnerEntryId": 1,
+              "status": "pending",
+              "isByeMatch": true,
+              "previousBracketAId": 1,
+              "previousBracketBId": 1,
+              "nextBracketId": 1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "message": "string"
+}
+```
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## POST /api/knockout-brackets/save-assignments
+Tag: Knockout Brackets
+Summary: Save knockout bracket assignments
+
+Persist approved knockout preview to database after organizer confirmation.
+
+**Workflow**:
+1. Preview TBD placeholders: gọi `/knockout-brackets/preview-placeholders`, rồi save body chỉ cần `categoryId`
+2. Preview qualifiers: gọi `/knockout-brackets/preview-fill-qualifiers`, rồi save body có `categoryId` + `entryIds`
+3. Preview direct knockout: gọi `/knockout-brackets/preview-from-entries`, rồi save body có `categoryId` + `entryIds`
+
+**Validation**:
+- `categoryId` luôn bắt buộc
+- `entryIds` optional khi save placeholders
+- `entryIds` bắt buộc khi save qualifiers hoặc direct knockout
+- Nếu có `entryIds`, danh sách phải là positive integer và khớp các entry có thể preview
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - categoryId: integer | required
+  - entryIds: array | Optional for preview-placeholders save. Required order returned by preview-fill-qualifiers or preview-from-entries.
+    - items: integer
+  - assignments: array | Backward-compatible alias for entryIds.
+    - items: integer
+Example payload:
+```json
+{
+  "categoryId": 1,
+  "entryIds": [
+    8,
+    3,
+    12,
+    6
+  ],
+  "assignments": [
+    8,
+    3,
+    12,
+    6
+  ]
+}
+```
+
+Responses:
 ### 201
-Description: Knockout bracket generated successfully
+Description: Knockout bracket assignments saved successfully
 Type: object
 Body:
   - success: boolean
@@ -384,7 +563,7 @@ Example response:
       }
     ]
   },
-  "message": "Knockout bracket generated successfully"
+  "message": "Knockout bracket assignments saved successfully"
 }
 ```
 
