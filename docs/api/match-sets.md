@@ -66,7 +66,7 @@ Example response:
 Tag: Match Sets
 Summary: Update live set score
 
-Stores point-by-point score in Redis. System calculates current set number. When score completes a set, persists it to DB and returns details if referee must finalize/submit.
+Stores point-by-point score in Redis. System calculates current set number unless setNumber is provided. Sending the same setNumber again overwrites the live score, so referees can correct mistyped points. If the set was already persisted, this corrects the saved set while the sub-match is still in progress.
 
 Auth: bearerAuth
 
@@ -78,23 +78,95 @@ Required: yes
 Type: object
 Fields:
   - subMatchId: integer | required
+  - setNumber: integer | Optional set number to correct. Defaults to current unfinished set.
   - entryAScore: integer | required
   - entryBScore: integer | required
 Example payload:
 ```json
 {
   "subMatchId": 1,
-  "entryAScore": 7,
+  "setNumber": 1,
+  "entryAScore": 8,
   "entryBScore": 5
 }
 ```
 
 Responses:
 ### 200
-Live score cached, set not completed
+Description: Live score cached, set not completed
+Type: object
+Body:
+  - message: string
+  - liveScore: object
+    - subMatchId: integer
+    - setNumber: integer
+    - entryAScore: integer
+    - entryBScore: integer
+    - updatedBy: integer
+    - updatedAt: string
+  - isCompleted: boolean
+  - nextSetNumber: integer
+Example response:
+```json
+{
+  "message": "success",
+  "liveScore": {
+    "subMatchId": 1,
+    "setNumber": 2,
+    "entryAScore": 8,
+    "entryBScore": 5,
+    "updatedBy": 12,
+    "updatedAt": "2026-06-09T08:10:00.000Z"
+  },
+  "isCompleted": false,
+  "nextSetNumber": 2
+}
+```
 
 ### 201
-Set completed and persisted to DB; may require referee finalize/submit
+Description: Set completed and persisted to DB; may require referee finalize/submit
+Type: object
+Body:
+  - message: string
+  - liveScore: object
+  - isCompleted: boolean
+  - persistedSet: object
+    - id: integer
+    - subMatchId: integer | required
+    - setNumber: integer | required
+    - entryAScore: integer | default: 0
+    - entryBScore: integer | default: 0
+    - subMatch: object
+    - createdAt: string
+    - updatedAt: string
+    - matchId: integer
+  - nextSetNumber: integer
+  - subMatchReadyToFinalize: boolean
+  - winningTeam: string | choices: A, B
+  - finalizationNotice: object
+Example response:
+```json
+{
+  "message": "string",
+  "liveScore": null,
+  "isCompleted": true,
+  "persistedSet": {
+    "id": 1,
+    "subMatchId": 1,
+    "setNumber": 1,
+    "entryAScore": 0,
+    "entryBScore": 0,
+    "subMatch": null,
+    "createdAt": "2026-05-27T00:00:00Z",
+    "updatedAt": "2026-05-27T00:00:00Z",
+    "matchId": 1
+  },
+  "nextSetNumber": 1,
+  "subMatchReadyToFinalize": true,
+  "winningTeam": "A",
+  "finalizationNotice": null
+}
+```
 
 ---
 
