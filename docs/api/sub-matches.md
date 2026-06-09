@@ -90,7 +90,9 @@ Example response:
 Tag: Sub Matches
 Summary: Start a sub-match
 
-Start a sub-match and assign the requesting referee as umpire
+Start a scheduled sub-match.
+Only assigned umpire or assistant umpire can start.
+Match must be in_progress and both teams must have approved lineups.
 
 Auth: bearerAuth
 
@@ -104,42 +106,51 @@ Responses:
 ### 200
 Description: Sub-match started successfully
 Type: object
+Body:
+  - message: string | required
+  - lineupReady: boolean | required
+  - subMatch: object | required
 Example response:
 ```json
 {
-  "id": 1,
-  "matchId": 1,
-  "subMatchNumber": 1,
-  "status": "scheduled",
-  "winnerTeam": "A",
-  "umpireId": 1,
-  "assistantUmpireId": 1,
-  "matchSets": [
-    {
-      "id": 1,
-      "subMatchId": 1,
-      "setNumber": 1,
-      "entryAScore": 0,
-      "entryBScore": 0,
-      "subMatch": null,
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z",
-      "matchId": 1
-    }
-  ],
-  "subMatchPlayers": [
-    {
-      "id": 1,
-      "subMatchId": 1,
-      "entryMemberId": 1,
-      "team": "A",
-      "entryMember": null,
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z"
-    }
-  ],
-  "createdAt": "2026-05-27T00:00:00Z",
-  "updatedAt": "2026-05-27T00:00:00Z"
+  "message": "Sub-match started successfully",
+  "lineupReady": true,
+  "subMatch": {
+    "id": 88,
+    "matchId": 42,
+    "subMatchNumber": 1,
+    "status": "in_progress",
+    "winnerTeam": null,
+    "umpireId": 21,
+    "assistantUmpireId": 22,
+    "createdAt": "2026-06-09T08:00:00.000Z",
+    "updatedAt": "2026-06-09T08:30:00.000Z",
+    "matchSets": [],
+    "subMatchPlayers": [
+      {
+        "id": 900,
+        "subMatchId": 88,
+        "entryMemberId": 301,
+        "team": "A",
+        "entryMember": {
+          "id": 301,
+          "entryId": 101,
+          "userId": 11
+        }
+      },
+      {
+        "id": 901,
+        "subMatchId": 88,
+        "entryMemberId": 302,
+        "team": "B",
+        "entryMember": {
+          "id": 302,
+          "entryId": 102,
+          "userId": 12
+        }
+      }
+    ]
+  }
 }
 ```
 
@@ -159,7 +170,10 @@ Example response:
 Tag: Sub Matches
 Summary: Finalize a sub-match
 
-Complete a sub-match and determine winner based on sets won
+Complete a sub-match and determine winner based on sets won.
+Only assigned umpire or assistant umpire can finalize.
+This endpoint only finalizes sub-match. It does not submit/finalize match.
+When enough sub-matches are won, response returns matchReadyToFinalize = true.
 
 Auth: bearerAuth
 
@@ -173,42 +187,26 @@ Responses:
 ### 200
 Description: Sub-match finalized successfully
 Type: object
+Body:
+  - message: string | required
+  - matchReadyToFinalize: boolean | required
+  - subMatch: object | required
 Example response:
 ```json
 {
-  "id": 1,
-  "matchId": 1,
-  "subMatchNumber": 1,
-  "status": "scheduled",
-  "winnerTeam": "A",
-  "umpireId": 1,
-  "assistantUmpireId": 1,
-  "matchSets": [
-    {
-      "id": 1,
-      "subMatchId": 1,
-      "setNumber": 1,
-      "entryAScore": 0,
-      "entryBScore": 0,
-      "subMatch": null,
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z",
-      "matchId": 1
-    }
-  ],
-  "subMatchPlayers": [
-    {
-      "id": 1,
-      "subMatchId": 1,
-      "entryMemberId": 1,
-      "team": "A",
-      "entryMember": null,
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z"
-    }
-  ],
-  "createdAt": "2026-05-27T00:00:00Z",
-  "updatedAt": "2026-05-27T00:00:00Z"
+  "message": "Sub-match finalized. Match is ready to finalize.",
+  "matchReadyToFinalize": true,
+  "subMatch": {
+    "id": 88,
+    "matchId": 42,
+    "subMatchNumber": 1,
+    "status": "completed",
+    "winnerTeam": "A",
+    "umpireId": 21,
+    "assistantUmpireId": 22,
+    "createdAt": "2026-06-09T08:00:00.000Z",
+    "updatedAt": "2026-06-09T08:45:00.000Z"
+  }
 }
 ```
 
@@ -292,6 +290,8 @@ Summary: Get sub-matches by match ID
 
 Retrieve all sub-matches for a specific match with sets and player assignments
 
+Auth: bearerAuth
+
 Request parameters:
 - matchId (path) | type: integer | required | ID of the match
 
@@ -303,92 +303,92 @@ Responses:
 Description: List of sub-matches
 Type: object
 Body:
-  - subMatches: array
+  - message: string | required
+  - matchId: integer | required
+  - count: integer | required
+  - subMatches: array | required
     - items: object
-      - id: integer | Unique identifier
-      - matchId: integer | required | Parent match ID
-      - subMatchNumber: integer | required
-      - status: string | required | Current status of the sub-match | choices: scheduled, in_progress, completed | default: "scheduled"
-      - winnerTeam: string | Winning team (A or B) | choices: A, B
-      - umpireId: integer | Referee ID assigned as umpire
-      - assistantUmpireId: integer | Optional assistant umpire ID
-      - matchSets: array
-        - items: object
-          - id: integer
-          - subMatchId: integer | required
-          - setNumber: integer | required
-          - entryAScore: integer | default: 0
-          - entryBScore: integer | default: 0
-          - subMatch: object
-          - createdAt: string
-          - updatedAt: string
-          - matchId: integer
-      - subMatchPlayers: array
-        - items: object
-          - id: integer | Unique identifier
-          - subMatchId: integer | required | Sub-match ID
-          - entryMemberId: integer | required | Entry member ID (player)
-          - team: string | required | Team assignment | choices: A, B
-          - entryMember: object
-          - createdAt: string
-          - updatedAt: string
-      - createdAt: string
-      - updatedAt: string
-  - pagination: object
-    - total: integer | Total number of records
-    - page: integer | Current page number
-    - limit: integer | Records per page
-    - totalPages: integer | Total number of pages
-    - hasNextPage: boolean | Whether a next page exists
-    - hasPrevPage: boolean | Whether a previous page exists
 Example response:
 ```json
 {
+  "message": "Sub-matches retrieved successfully",
+  "matchId": 42,
+  "count": 2,
   "subMatches": [
     {
-      "id": 1,
-      "matchId": 1,
+      "id": 88,
+      "matchId": 42,
       "subMatchNumber": 1,
-      "status": "scheduled",
+      "status": "completed",
       "winnerTeam": "A",
-      "umpireId": 1,
-      "assistantUmpireId": 1,
+      "umpireId": 21,
+      "assistantUmpireId": 22,
+      "createdAt": "2026-06-09T08:00:00.000Z",
+      "updatedAt": "2026-06-09T08:30:00.000Z",
+      "umpire": {
+        "id": 21,
+        "firstName": "Le",
+        "lastName": "Referee",
+        "email": "referee@example.com"
+      },
+      "assistantUmpire": {
+        "id": 22,
+        "firstName": "Pham",
+        "lastName": "Assistant",
+        "email": "assistant@example.com"
+      },
       "matchSets": [
         {
-          "id": 1,
-          "subMatchId": 1,
+          "id": 501,
+          "subMatchId": 88,
           "setNumber": 1,
-          "entryAScore": 0,
-          "entryBScore": 0,
-          "subMatch": null,
-          "createdAt": "2026-05-27T00:00:00Z",
-          "updatedAt": "2026-05-27T00:00:00Z",
-          "matchId": 1
+          "entryAScore": 21,
+          "entryBScore": 18,
+          "createdAt": "2026-06-09T08:10:00.000Z",
+          "updatedAt": "2026-06-09T08:10:00.000Z"
         }
       ],
       "subMatchPlayers": [
         {
-          "id": 1,
-          "subMatchId": 1,
-          "entryMemberId": 1,
+          "id": 900,
+          "subMatchId": 88,
+          "entryMemberId": 301,
           "team": "A",
-          "entryMember": null,
-          "createdAt": "2026-05-27T00:00:00Z",
-          "updatedAt": "2026-05-27T00:00:00Z"
+          "entryMember": {
+            "id": 301,
+            "entryId": 101,
+            "userId": 11,
+            "user": {
+              "id": 11,
+              "firstName": "Nguyen",
+              "lastName": "An"
+            }
+          }
         }
-      ],
-      "createdAt": "2026-05-27T00:00:00Z",
-      "updatedAt": "2026-05-27T00:00:00Z"
+      ]
+    },
+    {
+      "id": 89,
+      "matchId": 42,
+      "subMatchNumber": 2,
+      "status": "scheduled",
+      "winnerTeam": null,
+      "umpireId": 21,
+      "assistantUmpireId": 22,
+      "matchSets": [],
+      "subMatchPlayers": []
     }
-  ],
-  "pagination": {
-    "total": 1,
-    "page": 1,
-    "limit": 1,
-    "totalPages": 1,
-    "hasNextPage": true,
-    "hasPrevPage": true
-  }
+  ]
+}
+```
+
+### 400
+Description: Bad request
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
 }
 ```
 

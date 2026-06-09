@@ -2,7 +2,337 @@
 
 Sub-match player assignment endpoints
 
-Total endpoints: 3
+Total endpoints: 8
+
+## POST /api/sub-match-players/match/{matchId}/lineup-submit
+Tag: Sub Match Players
+Summary: Captain submits team lineup for all sub-matches
+
+Captain submits lineup for every sub-match in a match.
+Captain does not send team A/B; system detects team from match entryAId/entryBId.
+Submitted lineups are stored as pending requests in Redis.
+Data is written to sub_match_players only after umpire approval.
+
+Auth: bearerAuth
+
+Request parameters:
+- matchId (path) | type: integer | required | Match ID
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - lineups: array | required
+    - items: object
+      - subMatchId: integer | required
+      - entryMemberIds: array | required
+        - items: integer
+Example payload:
+```json
+{
+  "lineups": [
+    {
+      "subMatchId": 88,
+      "entryMemberIds": [
+        301,
+        302
+      ]
+    }
+  ]
+}
+```
+
+Responses:
+### 202
+Description: Lineups submitted and waiting for umpire approval
+Type: object
+Body:
+  - message: string | required
+  - lineups: array | required
+    - items: object
+Example response:
+```json
+{
+  "message": "Lineups submitted. Waiting for umpire approval.",
+  "lineups": [
+    {
+      "subMatchId": 88,
+      "matchId": 42,
+      "team": "A",
+      "captainId": 11,
+      "umpireId": 21,
+      "entryId": 101,
+      "entryMemberIds": [
+        301
+      ],
+      "status": "pending"
+    },
+    {
+      "subMatchId": 89,
+      "matchId": 42,
+      "team": "A",
+      "captainId": 11,
+      "umpireId": 21,
+      "entryId": 101,
+      "entryMemberIds": [
+        302,
+        303
+      ],
+      "status": "pending"
+    }
+  ]
+}
+```
+
+### 400
+Description: Bad request
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+
+---
+
+## GET /api/sub-match-players/lineup-requests/pending
+Tag: Sub Match Players
+Summary: Umpire gets pending lineup requests
+
+Retrieve pending lineup requests assigned to current umpire.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Pending lineup requests
+Type: object
+Body:
+  - lineups: array | required
+    - items: object
+Example response:
+```json
+{
+  "lineups": [
+    {
+      "subMatchId": 88,
+      "matchId": 42,
+      "team": "A",
+      "captainId": 11,
+      "umpireId": 21,
+      "entryId": 101,
+      "entryMemberIds": [
+        301
+      ],
+      "status": "pending"
+    },
+    {
+      "subMatchId": 88,
+      "matchId": 42,
+      "team": "B",
+      "captainId": 12,
+      "umpireId": 21,
+      "entryId": 102,
+      "entryMemberIds": [
+        401
+      ],
+      "status": "pending"
+    }
+  ]
+}
+```
+
+### 401
+
+---
+
+## POST /api/sub-match-players/match/{matchId}/lineup-approve
+Tag: Sub Match Players
+Summary: Umpire approves pending lineups for a match
+
+Umpire approves all pending lineups for this match.
+Approved lineups are persisted into sub_match_players table.
+
+Auth: bearerAuth
+
+Request parameters:
+- matchId (path) | type: integer | required | Match ID
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Lineups approved and saved
+Type: object
+Body:
+  - message: string | required
+  - players: array | required
+    - items: object
+      - id: integer | Unique identifier
+      - subMatchId: integer | required | Sub-match ID
+      - entryMemberId: integer | required | Entry member ID (player)
+      - team: string | required | Team assignment | choices: A, B
+      - entryMember: object
+      - createdAt: string
+      - updatedAt: string
+Example response:
+```json
+{
+  "message": "Lineup approved and saved.",
+  "players": [
+    {
+      "id": 900,
+      "subMatchId": 88,
+      "entryMemberId": 301,
+      "team": "A"
+    },
+    {
+      "id": 901,
+      "subMatchId": 88,
+      "entryMemberId": 401,
+      "team": "B"
+    }
+  ]
+}
+```
+
+### 400
+Description: Bad request
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+
+---
+
+## POST /api/sub-match-players/match/{matchId}/lineup-reject
+Tag: Sub Match Players
+Summary: Umpire rejects pending lineups for a match
+
+Umpire rejects pending lineup requests for this match.
+Pending requests are removed. Captain must submit updated lineup.
+
+Auth: bearerAuth
+
+Request parameters:
+- matchId (path) | type: integer | required | Match ID
+
+Request body:
+Required: no
+Type: object
+Fields:
+  - reviewNotes: string
+Example payload:
+```json
+{
+  "reviewNotes": "Player order invalid. Please resubmit lineup."
+}
+```
+
+Responses:
+### 200
+Description: Lineups rejected
+Type: object
+Body:
+  - message: string | required
+  - rejected: array | required
+    - items: object
+Example response:
+```json
+{
+  "message": "Lineup rejected. Captain must submit updated lineup.",
+  "rejected": [
+    {
+      "subMatchId": 88,
+      "matchId": 42,
+      "team": "A",
+      "captainId": 11,
+      "umpireId": 21,
+      "entryId": 101,
+      "entryMemberIds": [
+        301
+      ],
+      "status": "rejected",
+      "reviewNotes": "Player order invalid. Please resubmit lineup."
+    }
+  ]
+}
+```
+
+### 400
+Description: Bad request
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+
+---
+
+## GET /api/sub-match-players/lineup-requests/rejected
+Tag: Sub Match Players
+Summary: Captain gets rejected lineup requests
+
+Retrieve rejected lineup requests for current captain.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Rejected lineup requests
+Type: object
+Body:
+  - rejected: array | required
+    - items: object
+Example response:
+```json
+{
+  "rejected": [
+    {
+      "subMatchId": 88,
+      "matchId": 42,
+      "team": "A",
+      "captainId": 11,
+      "umpireId": 21,
+      "entryId": 101,
+      "entryMemberIds": [
+        301
+      ],
+      "status": "rejected",
+      "reviewNotes": "Player order invalid. Please resubmit lineup."
+    }
+  ]
+}
+```
+
+### 401
+
+---
 
 ## GET /api/sub-match-players/sub-match/{subMatchId}
 Tag: Sub Match Players

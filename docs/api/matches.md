@@ -2,7 +2,7 @@
 
 Match management endpoints
 
-Total endpoints: 8
+Total endpoints: 11
 
 ## GET /api/matches/pending
 Tag: Matches
@@ -73,6 +73,352 @@ Example response:
 ```json
 {
   "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/matches/category/{categoryId}
+Tag: Matches
+Summary: Get schedules and matches by category for chief referee
+
+Chief referee retrieves all schedules in a category with their matches.
+Only chief referee assigned to the category tournament can access this endpoint.
+
+Auth: bearerAuth
+
+Request parameters:
+- categoryId (path) | type: integer | required
+- stage (query) | type: string | choices: group, knockout
+- status (query) | type: string | choices: scheduled, in_progress, completed, cancelled
+- resultStatus (query) | type: string | choices: pending, approved, rejected
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
+
+Request body:
+None
+
+Responses:
+### 200
+Schedules with nested matches
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 404
+Description: Resource not found
+Type: object
+Example response:
+```json
+{
+  "message": "Resource not found"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## POST /api/matches/bulk-start
+Tag: Matches
+Summary: Start multiple matches
+
+Start many scheduled matches in one request.
+Each match is processed independently; failed matches are returned with reasons.
+
+Auth: bearerAuth
+
+Request parameters:
+None
+
+Request body:
+Required: yes
+Type: object
+Fields:
+  - matchIds: array | required
+    - items: integer
+Example payload:
+```json
+{
+  "matchIds": [
+    1
+  ]
+}
+```
+
+Responses:
+### 200
+Bulk start completed
+
+### 400
+Description: Invalid request data
+Type: object
+Example response:
+```json
+{
+  "message": "Invalid request data"
+}
+```
+
+### 401
+Description: Authentication required or token invalid
+Type: object
+Example response:
+```json
+{
+  "message": "Unauthorized access"
+}
+```
+
+### 403
+Description: Insufficient permissions
+Type: object
+Example response:
+```json
+{
+  "message": "Forbidden - insufficient permissions"
+}
+```
+
+### 500
+Description: Internal server error
+Type: object
+Example response:
+```json
+{
+  "message": "Internal server error"
+}
+```
+
+---
+
+## GET /api/matches/referee/my
+Tag: Matches
+Summary: Get matches assigned to current referee
+
+Referee retrieves matches assigned to them.
+If status is omitted, returns all statuses.
+
+Auth: bearerAuth
+
+Request parameters:
+- categoryId (query) | type: integer | required | Filter matches by tournament category
+- status (query) | type: string | Optional comma-separated statuses
+- page (query) | type: integer | default: 1
+- limit (query) | type: integer | default: 10
+
+Request body:
+None
+
+Responses:
+### 200
+Description: Assigned matches with schedule, entries, referees, sub-matches, and sets
+Type: object
+Body:
+  - message: string | required
+  - categoryId: integer | required
+  - statuses: array | required
+    - items: string
+  - matches: array | required
+    - items: object
+      - id: integer
+      - scheduleId: integer
+      - entryAId: integer
+      - entryBId: integer
+      - winnerEntryId: integer
+      - status: string | choices: scheduled, in_progress, completed, cancelled
+      - resultStatus: string | choices: pending, approved, rejected
+      - reviewNotes: string
+      - createdAt: string
+      - updatedAt: string
+      - schedule: object
+      - entryA: object
+      - entryB: object
+      - winnerEntry: object
+      - matchReferees: array
+        - items: object
+      - subMatches: array
+        - items: object
+  - count: integer | required
+  - offset: integer | required
+  - limit: integer | required
+Example response:
+```json
+{
+  "message": "Assigned matches retrieved successfully",
+  "categoryId": 1,
+  "statuses": null,
+  "count": 1,
+  "offset": 0,
+  "limit": 10,
+  "matches": [
+    {
+      "id": 42,
+      "scheduleId": 15,
+      "entryAId": 101,
+      "entryBId": 102,
+      "winnerEntryId": null,
+      "status": "in_progress",
+      "resultStatus": null,
+      "reviewNotes": null,
+      "createdAt": "2026-06-09T08:00:00.000Z",
+      "updatedAt": "2026-06-09T08:30:00.000Z",
+      "schedule": {
+        "id": 15,
+        "tournamentId": 3,
+        "categoryId": 1,
+        "stage": "group",
+        "scheduledAt": "2026-06-09T09:00:00.000Z",
+        "tournamentCategory": {
+          "id": 1,
+          "tournamentId": 3,
+          "categoryType": "singles",
+          "name": "Men's Singles",
+          "maxSets": 3,
+          "teamFormat": null
+        }
+      },
+      "entryA": {
+        "id": 101,
+        "tournamentId": 3,
+        "categoryId": 1,
+        "seed": 1,
+        "members": [
+          {
+            "id": 301,
+            "entryId": 101,
+            "userId": 11,
+            "user": {
+              "id": 11,
+              "firstName": "Nguyen",
+              "lastName": "An",
+              "email": "an@example.com",
+              "avatarUrl": null
+            }
+          }
+        ]
+      },
+      "entryB": {
+        "id": 102,
+        "tournamentId": 3,
+        "categoryId": 1,
+        "seed": 2,
+        "members": [
+          {
+            "id": 302,
+            "entryId": 102,
+            "userId": 12,
+            "user": {
+              "id": 12,
+              "firstName": "Tran",
+              "lastName": "Binh",
+              "email": "binh@example.com",
+              "avatarUrl": null
+            }
+          }
+        ]
+      },
+      "winnerEntry": null,
+      "matchReferees": [
+        {
+          "id": 7,
+          "matchId": 42,
+          "refereeId": 21,
+          "referee": {
+            "id": 21,
+            "firstName": "Le",
+            "lastName": "Referee",
+            "email": "referee@example.com"
+          }
+        }
+      ],
+      "subMatches": [
+        {
+          "id": 88,
+          "matchId": 42,
+          "subMatchNumber": 1,
+          "status": "in_progress",
+          "winnerTeam": null,
+          "umpireId": 21,
+          "assistantUmpireId": 22,
+          "matchSets": [
+            {
+              "id": 501,
+              "subMatchId": 88,
+              "setNumber": 1,
+              "entryAScore": 21,
+              "entryBScore": 18
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }
 ```
 
