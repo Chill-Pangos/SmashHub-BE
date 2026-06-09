@@ -79,7 +79,11 @@ export interface ScheduleConfigResponseDto {
 }
 
 export interface ValidateScheduleConfigDto {
-  totalMatches: number;
+  category: {
+    maxEntries: number;
+    isGroupStage?: boolean;
+  };
+  scheduleConfig: Omit<CreateScheduleConfigDto, "tournamentId">;
 }
 
 export interface ScheduleValidationResponseDto {

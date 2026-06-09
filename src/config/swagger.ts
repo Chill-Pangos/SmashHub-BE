@@ -417,10 +417,16 @@ const swaggerDefinition = {
       },
       ScheduleConfig: {
         type: "object",
-        required: ["tournamentId"],
+        required: ["tournamentId", "startDate", "endDate", "registrationStartDate", "registrationEndDate", "bracketGenerationDate"],
         properties: {
           id: { type: "integer" },
           tournamentId: { type: "integer", description: "Tournament ID" },
+          startDate: { type: "string", format: "date-time", description: "Tournament start date and time" },
+          endDate: { type: "string", format: "date-time", description: "Tournament end date and time" },
+          registrationStartDate: { type: "string", format: "date-time", description: "Registration start date and time" },
+          registrationEndDate: { type: "string", format: "date-time", description: "Registration end date and time" },
+          bracketGenerationDate: { type: "string", format: "date-time", description: "Bracket generation date and time" },
+          numberOfTables: { type: "integer", minimum: 1, default: 1, description: "Number of tables available for parallel matches" },
           matchDurationMinutes: { type: "integer", minimum: 15, maximum: 120, default: 60, description: "Duration of each match in minutes" },
           breakDurationMinutes: { type: "integer", minimum: 0, maximum: 60, default: 10, description: "Break time between matches in minutes" },
           dailyStartHour: { type: "integer", minimum: 0, maximum: 23, default: 8, description: "Daily start hour (0-23)" },
@@ -439,42 +445,21 @@ const swaggerDefinition = {
       },
       ScheduleValidationResponse: {
         type: "object",
+        required: ["isValid", "message", "details"],
         properties: {
           isValid: { type: "boolean", description: "Whether the config fits within tournament timeframe" },
           message: { type: "string", description: "Validation result message" },
           details: {
             type: "object",
+            required: ["totalMatches", "totalSlots", "estimatedEndTime", "tournamentEndTime"],
             properties: {
               totalMatches: { type: "integer", description: "Number of matches to schedule" },
               totalSlots: { type: "integer", description: "Number of time slots needed" },
-              lastMatchEndTime: { type: "string", format: "date-time", description: "When the last match will end" },
+              estimatedEndTime: { type: "string", format: "date-time", description: "When the schedule is expected to finish" },
               tournamentEndTime: { type: "string", format: "date-time", description: "Tournament end time" },
               overflowMinutes: { type: "integer", description: "How many minutes over the limit (if not valid)" },
             },
           },
-          suggestions: {
-            type: "array",
-            items: { $ref: "#/components/schemas/OptimizationSuggestion" },
-            description: "Array of optimization suggestions if config doesn't fit",
-          },
-        },
-      },
-      OptimizationSuggestion: {
-        type: "object",
-        properties: {
-          type: { type: "string", enum: ["increase_tables", "reduce_match_duration", "reduce_break_duration", "extend_schedule"], description: "Type of suggestion" },
-          description: { type: "string", description: "Detailed description of the suggestion" },
-          impact: {
-            type: "object",
-            properties: {
-              matchDurationMinutes: { type: "integer", description: "Suggested match duration (if applicable)" },
-              breakDurationMinutes: { type: "integer", description: "Suggested break duration (if applicable)" },
-              numberOfTables: { type: "integer", description: "Suggested number of tables (if applicable)" },
-              newEndDate: { type: "string", format: "date-time", description: "Suggested new end date (if applicable)" },
-            },
-            description: "Impact of this suggestion on the schedule",
-          },
-          priority: { type: "string", enum: ["high", "medium", "low"], description: "Priority of this suggestion" },
         },
       },
       Match: {

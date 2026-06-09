@@ -103,30 +103,25 @@ export class ScheduleConfigController {
   }
 
   /**
-   * Validate schedule config against tournament and total matches
-   * POST /tournaments/:tournamentId/schedule-config/validate
+   * Validate unsaved schedule config against category input
+   * POST /schedule-configs/validate
    */
   async validate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const tournamentId = Number(req.params.tournamentId);
-      const organizerId = this.getAuthenticatedUserId(req);
+      this.getAuthenticatedUserId(req);
 
-      if (isNaN(tournamentId) || tournamentId <= 0) {
-        throw new BadRequestError("Invalid tournament ID");
+      const { category, scheduleConfig }: ValidateScheduleConfigDto = req.body;
+
+      if (!category || typeof category !== "object") {
+        throw new BadRequestError("category is required");
+      }
+      if (!scheduleConfig || typeof scheduleConfig !== "object") {
+        throw new BadRequestError("scheduleConfig is required");
       }
 
-      const { totalMatches }: ValidateScheduleConfigDto = req.body;
-
-      if (!Number.isInteger(totalMatches) || totalMatches <= 0) {
-        throw new BadRequestError(
-          "totalMatches must be a positive integer"
-        );
-      }
-
-      const result = await ScheduleConfigService.validateScheduleConfig(
-        tournamentId,
-        totalMatches,
-        organizerId
+      const result = await ScheduleConfigService.validateScheduleConfigInput(
+        category,
+        scheduleConfig
       );
 
       res.status(200).json(result);

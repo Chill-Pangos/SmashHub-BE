@@ -81,7 +81,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 60,
+    defaultValue: 20,
   })
   declare matchDurationMinutes: number; // Thời lượng mỗi trận (phút)
 
