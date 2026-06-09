@@ -33,7 +33,7 @@ Create a schedule configuration for a tournament. The configuration defines:
 
 **Schedule Fit Analysis:**
 After creation, verify the schedule can accommodate all matches using the
-validate endpoint (POST /schedule-configs/{tournamentId}/validate)
+validate endpoint (POST /schedule-configs/validate)
 
 Auth: bearerAuth
 
@@ -242,6 +242,12 @@ Example response:
 {
   "id": 1,
   "tournamentId": 1,
+  "startDate": "2026-05-27T00:00:00Z",
+  "endDate": "2026-05-27T00:00:00Z",
+  "registrationStartDate": "2026-05-27T00:00:00Z",
+  "registrationEndDate": "2026-05-27T00:00:00Z",
+  "bracketGenerationDate": "2026-05-27T00:00:00Z",
+  "numberOfTables": 1,
   "matchDurationMinutes": 60,
   "breakDurationMinutes": 10,
   "dailyStartHour": 8,
@@ -351,6 +357,12 @@ Example response:
 {
   "id": 1,
   "tournamentId": 1,
+  "startDate": "2026-05-27T00:00:00Z",
+  "endDate": "2026-05-27T00:00:00Z",
+  "registrationStartDate": "2026-05-27T00:00:00Z",
+  "registrationEndDate": "2026-05-27T00:00:00Z",
+  "bracketGenerationDate": "2026-05-27T00:00:00Z",
+  "numberOfTables": 1,
   "matchDurationMinutes": 60,
   "breakDurationMinutes": 10,
   "dailyStartHour": 8,
@@ -494,34 +506,79 @@ Example response:
 
 ---
 
-## POST /api/schedule-configs/tournament/{tournamentId}/validate
+## POST /api/schedule-configs/validate
 Tag: Schedule Config
 Summary: Validate schedule configuration
 
-Validate the current schedule configuration against a specific number of matches.
+Validate an unsaved schedule configuration against a category input.
 This endpoint checks if the configured schedule (tables, durations, daily hours) can
-accommodate all matches within the tournament timeframe.
+accommodate all matches calculated from category.maxEntries and category.isGroupStage.
 
 **Validation Checks:**
 - Available time = (end date - start date) × daily operating hours
-- Total slots needed = ceil(totalMatches / numberOfTables)
+- Total matches calculated from category information
+- Total slots needed = ceil(calculatedMatches / numberOfTables)
 - Time needed = totalSlots × (matchDuration + breakDuration)
 - Valid if: timeNeeded <= availableTime
 
 Auth: bearerAuth
 
 Request parameters:
-- tournamentId (path) | type: integer | required | Tournament ID
+None
 
 Request body:
 Required: yes
 Type: object
 Fields:
-  - totalMatches: integer | required | Total number of matches to schedule (calculated from tournament categories)
+  - category: object | required
+    - maxEntries: integer | required | Maximum entries for the category
+    - isGroupStage: boolean | Whether category uses group stage before knockout | default: false
+  - scheduleConfig: object | required
+    - startDate: string | required
+    - endDate: string | required
+    - registrationStartDate: string | required
+    - registrationEndDate: string | required
+    - bracketGenerationDate: string | required
+    - numberOfTables: integer | default: 1
+    - matchDurationMinutes: integer | default: 60
+    - breakDurationMinutes: integer | default: 10
+    - dailyStartHour: integer | default: 8
+    - dailyStartMinute: integer | default: 0
+    - dailyEndHour: integer | default: 22
+    - dailyEndMinute: integer | default: 0
+    - lunchBreakStartHour: integer
+    - lunchBreakStartMinute: integer | default: 0
+    - lunchBreakEndHour: integer
+    - lunchBreakEndMinute: integer | default: 0
+    - lunchBreakDurationMinutes: integer
+    - notes: string
 Example payload:
 ```json
 {
-  "totalMatches": 127
+  "category": {
+    "maxEntries": 32,
+    "isGroupStage": false
+  },
+  "scheduleConfig": {
+    "startDate": "2026-06-15T08:00:00Z",
+    "endDate": "2026-06-20T22:00:00Z",
+    "registrationStartDate": "2026-05-15T00:00:00Z",
+    "registrationEndDate": "2026-06-12T23:59:59Z",
+    "bracketGenerationDate": "2026-06-13T00:00:00Z",
+    "numberOfTables": 1,
+    "matchDurationMinutes": 60,
+    "breakDurationMinutes": 10,
+    "dailyStartHour": 8,
+    "dailyStartMinute": 0,
+    "dailyEndHour": 22,
+    "dailyEndMinute": 0,
+    "lunchBreakStartHour": 12,
+    "lunchBreakStartMinute": 0,
+    "lunchBreakEndHour": 13,
+    "lunchBreakEndMinute": 0,
+    "lunchBreakDurationMinutes": 60,
+    "notes": "Main hall schedule"
+  }
 }
 ```
 
@@ -537,23 +594,10 @@ Example response:
   "details": {
     "totalMatches": 1,
     "totalSlots": 1,
-    "lastMatchEndTime": "2026-05-27T00:00:00Z",
+    "estimatedEndTime": "2026-05-27T00:00:00Z",
     "tournamentEndTime": "2026-05-27T00:00:00Z",
     "overflowMinutes": 1
-  },
-  "suggestions": [
-    {
-      "type": "increase_tables",
-      "description": "string",
-      "impact": {
-        "matchDurationMinutes": 1,
-        "breakDurationMinutes": 1,
-        "numberOfTables": 1,
-        "newEndDate": "2026-05-27T00:00:00Z"
-      },
-      "priority": "high"
-    }
-  ]
+  }
 }
 ```
 
