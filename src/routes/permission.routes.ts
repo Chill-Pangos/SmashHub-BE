@@ -1,7 +1,7 @@
 import { Router } from "express";
 import permissionController from "../controllers/permission.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission, checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -38,12 +38,12 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:manage'),
   permissionController.create.bind(permissionController)
 );
 router.get("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   permissionController.findAll.bind(permissionController)
 );
 
@@ -87,17 +87,17 @@ router.get("/",
  */
 router.get("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   permissionController.findById.bind(permissionController)
 );
 router.put("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:manage'),
   permissionController.update.bind(permissionController)
 );
 router.delete("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:manage'),
   permissionController.delete.bind(permissionController)
 );
 

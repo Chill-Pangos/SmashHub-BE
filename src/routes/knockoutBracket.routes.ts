@@ -1,7 +1,7 @@
 import { Router } from "express";
 import knockoutBracketController from "../controllers/knockoutBracket.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -52,7 +52,7 @@ const router = Router();
 router.post(
   "/preview-placeholders",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:create"),
   knockoutBracketController.previewPlaceholders.bind(knockoutBracketController),
 );
 
@@ -111,7 +111,7 @@ router.post(
 router.post(
   "/preview-fill-qualifiers",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:create"),
   knockoutBracketController.previewFillQualifiers.bind(knockoutBracketController),
 );
 
@@ -170,7 +170,7 @@ router.post(
 router.post(
   "/preview-from-entries",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:create"),
   knockoutBracketController.previewFromEntries.bind(knockoutBracketController),
 );
 
@@ -262,7 +262,7 @@ router.post(
 router.post(
   "/save-assignments",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:create"),
   knockoutBracketController.saveAssignments.bind(knockoutBracketController),
 );
 
@@ -328,7 +328,7 @@ router.post(
 router.post(
   "/:id/advance-winner",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:update"),
   knockoutBracketController.advanceWinner.bind(knockoutBracketController),
 );
 
@@ -385,7 +385,7 @@ router.post(
 router.get(
   "/validate/:categoryId",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("knockouts:view"),
   knockoutBracketController.validateBracketIntegrity.bind(knockoutBracketController),
 );
 

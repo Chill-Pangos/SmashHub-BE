@@ -593,6 +593,47 @@ router.get(
 
 /**
  * @swagger
+ * /tournaments/{id}/elo/calculate:
+ *   post:
+ *     tags: [Tournaments]
+ *     summary: Calculate Elo for all players in a completed tournament
+ *     description: |
+ *       Calculates and persists Elo changes for all players who participated in approved matches of a completed tournament.
+ *       This endpoint is intended to be called once after the tournament ends.
+ *
+ *       Business Logic:
+ *       - Tournament status must be completed
+ *       - Uses only matches with status = completed and resultStatus = approved
+ *       - Creates missing Elo scores with default 1000
+ *       - Aggregates all match deltas per user and writes one Elo history record per user
+ *       - Rejects duplicate calculation if Elo history already exists for the tournament
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Tournament Elo calculated successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:id/elo/calculate",
+  authenticate,
+  checkPermission('tournaments:update'),
+  tournamentController.calculateTournamentElo.bind(tournamentController)
+);
+
+/**
+ * @swagger
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]

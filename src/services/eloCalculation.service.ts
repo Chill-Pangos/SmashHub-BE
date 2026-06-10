@@ -3,7 +3,6 @@ import { Transaction } from "sequelize";
 import sequelize from "../config/database";
 import Match from "../models/match.model";
 import SubMatch from "../models/subMatch.model";
-import MatchSet from "../models/matchSet.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import EloScore from "../models/eloScore.model";
@@ -14,35 +13,32 @@ import Tournament from "../models/tournament.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EloChangePreview {
+interface TournamentEloChange {
   userId: number;
   currentElo: number;
-  expectedElo: number;
-  change: number;
+  finalElo: number;
+  totalDelta: number;
 }
 
-export interface EloPreview {
-  entryA: { averageElo: number; expectedScore: number; actualScore: number };
-  entryB: { averageElo: number; expectedScore: number; actualScore: number };
-  marginMultiplier: number;
-  changes: EloChangePreview[];
-}
-
-export interface TournamentEloPreview {
+export interface TournamentEloUpdateResult {
   tournamentId: number;
   totalMatches: number;
-  changes: {
-    userId: number;
-    currentElo: number;
-    finalElo: number;
-    totalDelta: number;
-  }[];
+  tierMultiplier: number;
+  historyRecordsCreated: number;
+  changes: TournamentEloChange[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const K_FACTOR = 12;
 const DEFAULT_ELO = 1000;
+const TIER_MULTIPLIERS: Record<number, number> = {
+  1: 1.5,
+  2: 1.35,
+  3: 1.2,
+  4: 1.1,
+  5: 1,
+};
 
 // ─── Pure ELO functions ───────────────────────────────────────────────────────
 
@@ -59,13 +55,19 @@ function marginMultiplier(winsA: number, winsB: number): number {
   return total === 0 ? 1 : 1 + Math.abs(winsA - winsB) / total;
 }
 
+function getTierMultiplier(tier?: number): number {
+  if (!tier) return TIER_MULTIPLIERS[1]!;
+  return TIER_MULTIPLIERS[tier] ?? TIER_MULTIPLIERS[1]!;
+}
+
 function calcEloDelta(
   current: number,
   expected: number,
   actual: number,
-  margin: number
+  margin: number,
+  tierMultiplier: number
 ): number {
-  return Math.round(K_FACTOR * margin * (actual - expected));
+  return Math.round(K_FACTOR * margin * tierMultiplier * (actual - expected));
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -87,31 +89,6 @@ async function getOrCreateEloScore(
   
   const [score] = await EloScore.findOrCreate(options);
   return score;
-}
-
-async function getMemberElos(
-  entryId: number,
-  t?: Transaction
-): Promise<{ userId: number; currentElo: number }[]> {
-  const options: any = {
-    where: { entryId },
-    attributes: ["userId"],
-    transaction: t,
-  };
-  
-  // Only add lock if transaction exists
-  if (t && t.LOCK) {
-    options.lock = t.LOCK.UPDATE;
-  }
-  
-  const members = await EntryMember.findAll(options);
-
-  return await Promise.all(
-    members.map(async (m) => {
-      const elo = await getOrCreateEloScore(m.userId, t);
-      return { userId: m.userId, currentElo: elo.score };
-    })
-  );
 }
 
 function averageElo(members: { currentElo: number }[]): number {
@@ -136,7 +113,8 @@ function countSubMatchResults(subMatches: SubMatch[]): {
 function calcMatchDeltas(
   match: Match,
   entryAMemberElos: { userId: number; currentElo: number }[],
-  entryBMemberElos: { userId: number; currentElo: number }[]
+  entryBMemberElos: { userId: number; currentElo: number }[],
+  tierMultiplier: number
 ): Map<number, number> {
   const deltas = new Map<number, number>();
 
@@ -155,12 +133,12 @@ function calcMatchDeltas(
   const actualB = actualScore(entryBWins, total);
 
   for (const { userId, currentElo } of entryAMemberElos) {
-    const delta = calcEloDelta(currentElo, expectedA, actualA, margin);
+    const delta = calcEloDelta(currentElo, expectedA, actualA, margin, tierMultiplier);
     deltas.set(userId, (deltas.get(userId) ?? 0) + delta);
   }
 
   for (const { userId, currentElo } of entryBMemberElos) {
-    const delta = calcEloDelta(currentElo, expectedB, actualB, margin);
+    const delta = calcEloDelta(currentElo, expectedB, actualB, margin, tierMultiplier);
     deltas.set(userId, (deltas.get(userId) ?? 0) + delta);
   }
 
@@ -174,12 +152,28 @@ export class EloCalculationService {
    * Cập nhật ELO sau khi tournament kết thúc.
    * Tính delta từng trận, cộng dồn, ghi 1 lần per user.
    */
-  async updateEloForTournament(tournamentId: number): Promise<void> {
+  async updateEloForTournament(tournamentId: number): Promise<TournamentEloUpdateResult> {
+    const tournament = await Tournament.findByPk(tournamentId);
+    if (!tournament) {
+      throw new Error("Tournament not found");
+    }
+    if (tournament.status !== "completed") {
+      throw new Error("Tournament must be completed before Elo can be calculated");
+    }
+
+    const existingHistoryCount = await EloHistory.count({
+      where: { tournamentId },
+    });
+    if (existingHistoryCount > 0) {
+      throw new Error("ELO has already been calculated for this tournament");
+    }
+
     const matches = await this.getApprovedMatchesInTournament(tournamentId);
 
     if (matches.length === 0) {
       throw new Error("No approved matches found in this tournament");
     }
+    const tierMultiplier = getTierMultiplier(tournament.tier);
 
     // Lấy ELO snapshot trước khi tính (dùng ELO hiện tại — chưa bị giải này ảnh hưởng)
     const userEloSnapshot = await this.buildUserEloSnapshot(matches);
@@ -197,7 +191,7 @@ export class EloCalculationService {
         userEloSnapshot
       );
 
-      const deltas = calcMatchDeltas(match, entryAMembers, entryBMembers);
+      const deltas = calcMatchDeltas(match, entryAMembers, entryBMembers, tierMultiplier);
 
       for (const [userId, delta] of deltas) {
         totalDeltas.set(userId, (totalDeltas.get(userId) ?? 0) + delta);
@@ -205,6 +199,8 @@ export class EloCalculationService {
     }
 
     // Ghi vào DB trong 1 transaction
+    const changes: TournamentEloChange[] = [];
+
     await sequelize.transaction(async (t) => {
       // Sử dụng matchId của trận cuối cùng trong giải làm reference
       const referenceMatchId = matches[matches.length - 1]!.id;
@@ -215,6 +211,13 @@ export class EloCalculationService {
         const newEloValue = Math.max(0, previousElo + totalDelta);
 
         await eloScore.update({ score: newEloValue }, { transaction: t });
+
+        changes.push({
+          userId,
+          currentElo: previousElo,
+          finalElo: newEloValue,
+          totalDelta,
+        });
 
         await EloHistory.create(
           {
@@ -230,96 +233,13 @@ export class EloCalculationService {
         );
       }
     });
-  }
-
-  /**
-   * Preview thay đổi ELO của toàn giải — không ghi DB.
-   */
-  async previewTournamentEloChanges(
-    tournamentId: number
-  ): Promise<TournamentEloPreview> {
-    const matches = await this.getApprovedMatchesInTournament(tournamentId);
-    const userEloSnapshot = await this.buildUserEloSnapshot(matches);
-
-    const totalDeltas = new Map<number, number>();
-
-    for (const match of matches) {
-      const entryAMembers = this.getMembersFromEntry(match.entryA, userEloSnapshot);
-      const entryBMembers = this.getMembersFromEntry(match.entryB, userEloSnapshot);
-      const deltas = calcMatchDeltas(match, entryAMembers, entryBMembers);
-
-      for (const [userId, delta] of deltas) {
-        totalDeltas.set(userId, (totalDeltas.get(userId) ?? 0) + delta);
-      }
-    }
-
-    const changes = Array.from(totalDeltas.entries()).map(([userId, totalDelta]) => {
-      const currentElo = userEloSnapshot.get(userId) ?? DEFAULT_ELO;
-      return {
-        userId,
-        currentElo,
-        finalElo: Math.max(0, currentElo + totalDelta),
-        totalDelta,
-      };
-    });
 
     return {
       tournamentId,
       totalMatches: matches.length,
+      tierMultiplier,
+      historyRecordsCreated: changes.length,
       changes: changes.sort((a, b) => b.finalElo - a.finalElo),
-    };
-  }
-
-  /**
-   * Preview ELO cho 1 trận cụ thể (dùng cho chief referee dashboard).
-   */
-  async previewMatchEloChanges(matchId: number): Promise<EloPreview> {
-    const match = await Match.findByPk(matchId, {
-      include: [
-        { model: SubMatch, as: "subMatches" },
-        { model: Entry, as: "entryA", include: [{ model: EntryMember, as: "members" }] },
-        { model: Entry, as: "entryB", include: [{ model: EntryMember, as: "members" }] },
-      ],
-    });
-    if (!match) throw new Error("Match not found");
-
-    const entryAMemberElos = await getMemberElos(match.entryAId);
-    const entryBMemberElos = await getMemberElos(match.entryBId);
-    const avgA = averageElo(entryAMemberElos);
-    const avgB = averageElo(entryBMemberElos);
-
-    const { entryAWins, entryBWins, total } = countSubMatchResults(
-      match.subMatches ?? []
-    );
-    const margin = marginMultiplier(entryAWins, entryBWins);
-    const expectedA = expectedScore(avgA, avgB);
-    const expectedB = 1 - expectedA;
-    const actualA = actualScore(entryAWins, total);
-    const actualB = actualScore(entryBWins, total);
-
-    const buildChanges = (
-      members: { userId: number; currentElo: number }[],
-      expected: number,
-      actual: number
-    ): EloChangePreview[] =>
-      members.map(({ userId, currentElo }) => {
-        const delta = calcEloDelta(currentElo, expected, actual, margin);
-        return {
-          userId,
-          currentElo,
-          expectedElo: currentElo + delta,
-          change: delta,
-        };
-      });
-
-    return {
-      entryA: { averageElo: avgA, expectedScore: expectedA, actualScore: actualA },
-      entryB: { averageElo: avgB, expectedScore: expectedB, actualScore: actualB },
-      marginMultiplier: margin,
-      changes: [
-        ...buildChanges(entryAMemberElos, expectedA, actualA),
-        ...buildChanges(entryBMemberElos, expectedB, actualB),
-      ],
     };
   }
 

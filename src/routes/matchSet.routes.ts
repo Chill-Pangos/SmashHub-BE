@@ -52,7 +52,7 @@ const router = Router();
 router.post(
   "/",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('matchsets:create'),
   matchSetController.createSet.bind(matchSetController)
 );
 
@@ -259,7 +259,7 @@ router.post(
 router.put(
   "/live-score",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('matchsets:update'),
   matchSetController.updateLiveSetScore.bind(matchSetController)
 );
 
@@ -308,7 +308,7 @@ router.put(
 router.post(
   "/final-score",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('matchsets:create'),
   matchSetController.submitFinalSetScore.bind(matchSetController)
 );
 
@@ -403,7 +403,7 @@ router.get(
 router.get(
   "/sub-match/:subMatchId",
   authenticate,
-  checkPermission('matches:view'),
+  checkPermission('matchsets:view'),
   matchSetController.getBySubMatchId.bind(matchSetController)
 );
 
@@ -475,13 +475,13 @@ router.get("/:id", matchSetController.getById.bind(matchSetController));
 router.put(
   "/:id",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('matchsets:update'),
   matchSetController.updateSetScore.bind(matchSetController)
 );
 router.delete(
   "/:id",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('matchsets:delete'),
   matchSetController.deleteSet.bind(matchSetController)
 );
 

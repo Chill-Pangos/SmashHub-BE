@@ -1,7 +1,7 @@
 import { Router } from "express";
 import roleController from "../controllers/role.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission, checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -154,12 +154,12 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:create'),
   roleController.create.bind(roleController)
 );
 router.get("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:view'),
   roleController.findAll.bind(roleController)
 );
 
@@ -302,17 +302,17 @@ router.get("/",
  */
 router.get("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:view'),
   roleController.findById.bind(roleController)
 );
 router.patch("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:update'),
   roleController.update.bind(roleController)
 );
 router.delete("/:id",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:delete'),
   roleController.delete.bind(roleController)
 );
 
@@ -357,7 +357,7 @@ router.delete("/:id",
  */
 router.get("/name/:name",
   authenticate,
-  checkRole('admin'),
+  checkPermission('roles:view'),
   roleController.findByName.bind(roleController)
 );
 

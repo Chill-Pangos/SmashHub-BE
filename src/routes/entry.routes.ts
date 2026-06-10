@@ -313,7 +313,7 @@ router.post(
 router.post(
   "/join-requests/:joinRequestId/respond",
   authenticate,
-  checkPermission("entries:update"),
+  checkPermission("entries:approve"),
   entryController.respondToJoinRequest.bind(entryController),
 );
 
