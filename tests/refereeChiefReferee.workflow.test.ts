@@ -2,13 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import tournamentRefereeController from "../src/controllers/tournamentReferee.controller";
+import eloHistoryController from "../src/controllers/eloHistory.controller";
+import entryController from "../src/controllers/entry.controller";
+import groupStandingController from "../src/controllers/groupStanding.controller";
+import knockoutBracketController from "../src/controllers/knockoutBracket.controller";
 import matchController from "../src/controllers/match.controller";
+import scheduleController from "../src/controllers/schedule.controller";
 import subMatchController from "../src/controllers/subMatch.controller";
 import subMatchPlayerController from "../src/controllers/subMatchPlayer.controller";
 import matchSetController from "../src/controllers/matchSet.controller";
 
 import tournamentRefereeService from "../src/services/tournamentReferee.service";
+import eloHistoryService from "../src/services/eloHistory.service";
+import entryService from "../src/services/entry.service";
+import groupStandingService from "../src/services/groupStanding.service";
+import knockoutBracketService from "../src/services/knockoutBracket.service";
 import matchService from "../src/services/match.service";
+import scheduleService from "../src/services/schedule.service";
 import subMatchService from "../src/services/subMatch.service";
 import subMatchPlayerService from "../src/services/subMatchPlayer.service";
 import matchSetService from "../src/services/matchSet.service";
@@ -650,4 +660,497 @@ test("team flow requires captain lineup review before sub-match start and loops 
     "matchService.findPendingMatches",
     "matchService.rejectMatchResult",
   ]);
+});
+
+test("public player can review Elo, matches, register, and manage captain entry actions", async (t) => {
+  const calls: ServiceCall[] = [];
+  const userId = 71;
+  const singleCategoryId = 301;
+  const teamCategoryId = 302;
+  const captainEntryId = 8101;
+  const targetEntryId = 8102;
+  const matchId = 9901;
+  const joinRequestId = 8801;
+
+  patchMethods(t, eloHistoryService, {
+    getByUser: record(calls, "eloHistoryService", "getByUser", {
+      rows: [
+        {
+          id: 1,
+          userId,
+          previousElo: 1000,
+          newElo: 1018,
+          eloDelta: 18,
+          createdAt: "2026-06-01T10:00:00.000Z",
+        },
+      ],
+      count: 1,
+    }),
+    getByMatch: record(calls, "eloHistoryService", "getByMatch", [
+      { id: 2, matchId, userId, previousElo: 1018, newElo: 1027, eloDelta: 9 },
+      { id: 3, matchId, userId: 72, previousElo: 990, newElo: 981, eloDelta: -9 },
+    ]),
+  });
+
+  patchMethods(t, matchService, {
+    findMatchHistoryByAthlete: record(calls, "matchService", "findMatchHistoryByAthlete", {
+      matches: [
+        {
+          id: matchId,
+          status: "completed",
+          resultStatus: "approved",
+          winnerEntryId: captainEntryId,
+        },
+      ],
+      count: 1,
+    }),
+    findUpcomingMatchesByAthlete: record(calls, "matchService", "findUpcomingMatchesByAthlete", {
+      matches: [
+        {
+          id: 9902,
+          status: "scheduled",
+          schedule: { scheduledAt: "2026-06-12T09:00:00.000Z" },
+        },
+        {
+          id: 9903,
+          status: "in_progress",
+          schedule: { scheduledAt: "2026-06-09T14:00:00.000Z" },
+        },
+      ],
+      count: 2,
+    }),
+  });
+
+  patchMethods(t, entryService, {
+    register: async (
+      playerId: number,
+      categoryId: number,
+      action: string,
+      targetId?: number,
+      name?: string,
+    ) => {
+      calls.push({
+        service: "entryService",
+        method: "register",
+        args: [playerId, categoryId, action, targetId, name],
+      });
+
+      if (categoryId === singleCategoryId) {
+        return {
+          message: "Single entry created automatically",
+          entry: { id: 8001, categoryId, captainId: playerId, name: name ?? "Player 71" },
+        };
+      }
+
+      if (action === "create_team") {
+        return {
+          message: "Team created successfully",
+          entry: { id: captainEntryId, categoryId, captainId: playerId, name },
+        };
+      }
+
+      return {
+        message: "Join request submitted",
+        joinRequest: { id: joinRequestId, entryId: targetId, userId: playerId, status: "pending" },
+      };
+    },
+    getUserRoleInEntry: record(calls, "entryService", "getUserRoleInEntry", "captain"),
+    getJoinRequests: record(calls, "entryService", "getJoinRequests", {
+      joinRequests: [{ id: joinRequestId, entryId: captainEntryId, userId: 72, status: "pending" }],
+      pagination: { total: 1, page: 1, limit: 10 },
+    }),
+    respondToJoinRequest: async (
+      captainId: number,
+      requestId: number,
+      action: string,
+      rejectionReason?: string,
+    ) => {
+      calls.push({
+        service: "entryService",
+        method: "respondToJoinRequest",
+        args: [captainId, requestId, action, rejectionReason],
+      });
+      return {
+        id: requestId,
+        entryId: captainEntryId,
+        status: action === "approve" ? "approved" : "rejected",
+        rejectionReason,
+      };
+    },
+    transferCaptaincy: record(calls, "entryService", "transferCaptaincy", {
+      id: captainEntryId,
+      captainId: 72,
+    }),
+    setRequiredMemberCount: record(calls, "entryService", "setRequiredMemberCount", {
+      id: captainEntryId,
+      requiredMemberCount: 5,
+      currentMemberCount: 4,
+    }),
+    update: record(calls, "entryService", "update", {
+      id: captainEntryId,
+      name: "Smash Warriors Elite",
+      requiredMemberCount: 5,
+      isAcceptingMembers: false,
+    }),
+    confirmLineup: record(calls, "entryService", "confirmLineup", {
+      id: captainEntryId,
+      isConfirmed: true,
+    }),
+    delete: record(calls, "entryService", "delete", undefined),
+  });
+
+  const eloChart = await invoke(
+    eloHistoryController.findByUserId.bind(eloHistoryController),
+    makeReq({ params: { userId: String(userId) }, query: { page: "1", limit: "20" } }),
+  );
+  assert.equal(eloChart.statusCode, 200);
+  assert.equal((eloChart.body as any).rows[0].eloDelta, 18);
+
+  const matchHistory = await invoke(
+    matchController.getMatchHistoryByAthlete.bind(matchController),
+    makeReq({ params: { userId: String(userId) }, query: { page: "1", limit: "10" } }),
+  );
+  assert.equal(matchHistory.statusCode, 200);
+  assert.equal((matchHistory.body as any).matches[0].id, matchId);
+
+  const matchEloDetails = await invoke(
+    eloHistoryController.findByMatchId.bind(eloHistoryController),
+    makeReq({ params: { matchId: String(matchId) } }),
+  );
+  assert.equal(matchEloDetails.statusCode, 200);
+  assert.equal((matchEloDetails.body as any).length, 2);
+
+  const upcomingMatches = await invoke(
+    matchController.getUpcomingMatchesByAthlete.bind(matchController),
+    makeReq({ params: { userId: String(userId) }, query: { page: "1", limit: "10" } }),
+  );
+  assert.equal(upcomingMatches.statusCode, 200);
+  assert.equal((upcomingMatches.body as any).matches[1].status, "in_progress");
+
+  const singleRegistration = await invoke(
+    entryController.register.bind(entryController),
+    makeReq({
+      userId,
+      body: { categoryId: singleCategoryId, action: "create_team", name: "Solo Smash" },
+    }),
+  );
+  assert.equal(singleRegistration.statusCode, 201);
+  assert.equal((singleRegistration.body as any).entry.id, 8001);
+
+  const createdTeam = await invoke(
+    entryController.register.bind(entryController),
+    makeReq({
+      userId,
+      body: { categoryId: teamCategoryId, action: "create_team", name: "Smash Warriors" },
+    }),
+  );
+  assert.equal(createdTeam.statusCode, 201);
+  assert.equal((createdTeam.body as any).entry.id, captainEntryId);
+
+  const joinTeam = await invoke(
+    entryController.register.bind(entryController),
+    makeReq({
+      userId,
+      body: { categoryId: teamCategoryId, action: "join_team", targetEntryId },
+    }),
+  );
+  assert.equal(joinTeam.statusCode, 201);
+  assert.equal((joinTeam.body as any).joinRequest.status, "pending");
+
+  const myRole = await invoke(
+    entryController.getUserRoleInEntry.bind(entryController),
+    makeReq({ userId, params: { entryId: String(captainEntryId) } }),
+  );
+  assert.equal(myRole.statusCode, 200);
+  assert.equal((myRole.body as any).role, "captain");
+
+  const joinRequests = await invoke(
+    entryController.getJoinRequests.bind(entryController),
+    makeReq({
+      userId,
+      params: { entryId: String(captainEntryId) },
+      query: { status: "pending", page: "1", limit: "10" },
+    }),
+  );
+  assert.equal(joinRequests.statusCode, 200);
+  assert.equal((joinRequests.body as any).joinRequests[0].id, joinRequestId);
+
+  const approvedRequest = await invoke(
+    entryController.respondToJoinRequest.bind(entryController),
+    makeReq({
+      userId,
+      params: { joinRequestId: String(joinRequestId) },
+      body: { action: "approve" },
+    }),
+  );
+  assert.equal(approvedRequest.statusCode, 200);
+  assert.equal((approvedRequest.body as any).status, "approved");
+
+  const rejectedRequest = await invoke(
+    entryController.respondToJoinRequest.bind(entryController),
+    makeReq({
+      userId,
+      params: { joinRequestId: String(joinRequestId + 1) },
+      body: { action: "reject", rejectionReason: "Player is too strong for this category" },
+    }),
+  );
+  assert.equal(rejectedRequest.statusCode, 200);
+  assert.equal((rejectedRequest.body as any).status, "rejected");
+
+  const transferred = await invoke(
+    entryController.transferCaptaincy.bind(entryController),
+    makeReq({ userId, params: { entryId: String(captainEntryId) }, body: { newCaptainId: 72 } }),
+  );
+  assert.equal(transferred.statusCode, 200);
+  assert.equal((transferred.body as any).captainId, 72);
+
+  const requiredMembers = await invoke(
+    entryController.setRequiredMemberCount.bind(entryController),
+    makeReq({ userId, params: { entryId: String(captainEntryId) }, body: { count: 5 } }),
+  );
+  assert.equal(requiredMembers.statusCode, 200);
+  assert.equal((requiredMembers.body as any).requiredMemberCount, 5);
+
+  const updatedEntry = await invoke(
+    entryController.update.bind(entryController),
+    makeReq({
+      userId,
+      params: { entryId: String(captainEntryId) },
+      body: {
+        name: "Smash Warriors Elite",
+        requiredMemberCount: 5,
+        isAcceptingMembers: false,
+      },
+    }),
+  );
+  assert.equal(updatedEntry.statusCode, 200);
+  assert.equal((updatedEntry.body as any).isAcceptingMembers, false);
+
+  const confirmedLineup = await invoke(
+    entryController.confirmLineup.bind(entryController),
+    makeReq({ userId, params: { entryId: String(captainEntryId) } }),
+  );
+  assert.equal(confirmedLineup.statusCode, 200);
+  assert.equal((confirmedLineup.body as any).isConfirmed, true);
+
+  const deletedEntry = await invoke(
+    entryController.delete.bind(entryController),
+    makeReq({ userId, params: { entryId: String(captainEntryId) } }),
+  );
+  assert.equal(deletedEntry.statusCode, 204);
+
+  assert.deepEqual(calls.map((call) => `${call.service}.${call.method}`), [
+    "eloHistoryService.getByUser",
+    "matchService.findMatchHistoryByAthlete",
+    "eloHistoryService.getByMatch",
+    "matchService.findUpcomingMatchesByAthlete",
+    "entryService.register",
+    "entryService.register",
+    "entryService.register",
+    "entryService.getUserRoleInEntry",
+    "entryService.getJoinRequests",
+    "entryService.respondToJoinRequest",
+    "entryService.respondToJoinRequest",
+    "entryService.transferCaptaincy",
+    "entryService.setRequiredMemberCount",
+    "entryService.update",
+    "entryService.confirmLineup",
+    "entryService.delete",
+  ]);
+  assert.deepEqual(calls[0]?.args, [userId, { offset: 0, limit: 20 }]);
+  assert.deepEqual(calls[1]?.args, [userId, 0, 10]);
+  assert.deepEqual(calls[2]?.args, [matchId]);
+  assert.deepEqual(calls[3]?.args, [userId, 0, 10]);
+  assert.deepEqual(calls[4]?.args, [userId, singleCategoryId, "create_team", undefined, "Solo Smash"]);
+  assert.deepEqual(calls[6]?.args, [userId, teamCategoryId, "join_team", targetEntryId, undefined]);
+  assert.deepEqual(calls[8]?.args, [userId, captainEntryId, "pending", { offset: 0, limit: 10 }]);
+  assert.deepEqual(calls[9]?.args, [userId, joinRequestId, "approve", undefined]);
+  assert.deepEqual(calls[10]?.args, [
+    userId,
+    joinRequestId + 1,
+    "reject",
+    "Player is too strong for this category",
+  ]);
+  assert.deepEqual(calls[11]?.args, [userId, captainEntryId, 72]);
+  assert.deepEqual(calls[12]?.args, [userId, captainEntryId, 5]);
+  assert.deepEqual(calls[14]?.args, [userId, captainEntryId]);
+  assert.deepEqual(calls[15]?.args, [userId, captainEntryId]);
+});
+
+test("organizer can build group-stage tournament brackets and full schedule", async (t) => {
+  const calls: ServiceCall[] = [];
+  const organizerId = 31;
+  const tournamentId = 7001;
+  const categoryId = 7101;
+  const groupAssignments = [
+    { groupName: "A", entryIds: [101, 102, 103, 104] },
+    { groupName: "B", entryIds: [105, 106, 107, 108] },
+  ];
+  const qualifierEntryIds = [101, 105, 102, 106];
+
+  patchMethods(t, groupStandingService, {
+    generateGroupPreview: record(calls, "groupStandingService", "generateGroupPreview", [
+      { groupName: "A", entries: [{ id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }] },
+      { groupName: "B", entries: [{ id: 105 }, { id: 106 }, { id: 107 }, { id: 108 }] },
+    ]),
+    saveGroupAssignments: record(calls, "groupStandingService", "saveGroupAssignments", {
+      created: groupAssignments.length,
+      groups: groupAssignments,
+    }),
+  });
+
+  patchMethods(t, knockoutBracketService, {
+    previewPlaceholders: record(calls, "knockoutBracketService", "previewPlaceholders", {
+      bracketSize: 4,
+      bracketTree: [{ round: "semifinal", entryAId: null, entryBId: null }],
+    }),
+    saveAssignments: async (userId: number, id: number, entryIds?: number[]) => {
+      calls.push({
+        service: "knockoutBracketService",
+        method: "saveAssignments",
+        args: [userId, id, entryIds],
+      });
+      return entryIds
+        ? { saved: true, entryIds }
+        : { saved: true, placeholders: 2 };
+    },
+    previewFillQualifiers: record(calls, "knockoutBracketService", "previewFillQualifiers", {
+      entryIds: qualifierEntryIds,
+      bracketTree: [
+        { round: "semifinal", entryAId: 101, entryBId: 106 },
+        { round: "semifinal", entryAId: 105, entryBId: 102 },
+      ],
+    }),
+  });
+
+  patchMethods(t, scheduleService, {
+    generateTournamentSchedule: record(calls, "scheduleService", "generateTournamentSchedule", [
+      {
+        categoryId,
+        result: {
+          schedules: [{ id: 1, stage: "group" }, { id: 2, stage: "knockout" }],
+          matches: [{ id: 11 }, { id: 12 }, { id: 13 }],
+        },
+      },
+    ]),
+  });
+
+  const groupPreview = await invoke(
+    groupStandingController.generatePlaceholders.bind(groupStandingController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(groupPreview.statusCode, 200);
+  assert.equal((groupPreview.body as any).data.length, 2);
+
+  const savedGroups = await invoke(
+    groupStandingController.saveAssignments.bind(groupStandingController),
+    makeReq({ userId: organizerId, body: { categoryId, groupAssignments } }),
+  );
+  assert.equal(savedGroups.statusCode, 201);
+  assert.equal((savedGroups.body as any).data.created, 2);
+
+  const knockoutPlaceholderPreview = await invoke(
+    knockoutBracketController.previewPlaceholders.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(knockoutPlaceholderPreview.statusCode, 200);
+  assert.equal((knockoutPlaceholderPreview.body as any).data.bracketSize, 4);
+
+  const savedPlaceholders = await invoke(
+    knockoutBracketController.saveAssignments.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(savedPlaceholders.statusCode, 201);
+  assert.equal((savedPlaceholders.body as any).data.placeholders, 2);
+
+  const fullSchedule = await invoke(
+    scheduleController.generateTournamentSchedule.bind(scheduleController),
+    makeReq({ userId: organizerId, body: { tournamentId } }),
+  );
+  assert.equal(fullSchedule.statusCode, 201);
+  assert.equal((fullSchedule.body as any).data[0].totalMatches, 3);
+
+  const qualifierPreview = await invoke(
+    knockoutBracketController.previewFillQualifiers.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(qualifierPreview.statusCode, 200);
+  assert.deepEqual((qualifierPreview.body as any).data.entryIds, qualifierEntryIds);
+
+  const filledQualifiers = await invoke(
+    knockoutBracketController.saveAssignments.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId, entryIds: qualifierEntryIds } }),
+  );
+  assert.equal(filledQualifiers.statusCode, 201);
+  assert.deepEqual((filledQualifiers.body as any).data.entryIds, qualifierEntryIds);
+
+  assert.deepEqual(calls.map((call) => `${call.service}.${call.method}`), [
+    "groupStandingService.generateGroupPreview",
+    "groupStandingService.saveGroupAssignments",
+    "knockoutBracketService.previewPlaceholders",
+    "knockoutBracketService.saveAssignments",
+    "scheduleService.generateTournamentSchedule",
+    "knockoutBracketService.previewFillQualifiers",
+    "knockoutBracketService.saveAssignments",
+  ]);
+  assert.deepEqual(calls[0]?.args, [organizerId, categoryId]);
+  assert.deepEqual(calls[1]?.args, [organizerId, categoryId, groupAssignments]);
+  assert.deepEqual(calls[3]?.args, [organizerId, categoryId, undefined]);
+  assert.deepEqual(calls[4]?.args, [organizerId, tournamentId]);
+  assert.deepEqual(calls[6]?.args, [organizerId, categoryId, qualifierEntryIds]);
+});
+
+test("organizer can build direct knockout bracket and schedule", async (t) => {
+  const calls: ServiceCall[] = [];
+  const organizerId = 31;
+  const categoryId = 7201;
+  const entryIds = [201, 202, 203, 204, 205, 206, 207, 208];
+
+  patchMethods(t, knockoutBracketService, {
+    previewFromEntries: record(calls, "knockoutBracketService", "previewFromEntries", {
+      entryIds,
+      bracketTree: [{ round: "quarterfinal", entryAId: 201, entryBId: 208 }],
+    }),
+    saveAssignments: record(calls, "knockoutBracketService", "saveAssignments", {
+      saved: true,
+      entryIds,
+    }),
+  });
+
+  patchMethods(t, scheduleService, {
+    generateKnockoutSchedule: record(calls, "scheduleService", "generateKnockoutSchedule", {
+      schedules: [{ id: 21, stage: "knockout" }, { id: 22, stage: "knockout" }],
+      matches: [{ id: 31 }, { id: 32 }],
+    }),
+  });
+
+  const knockoutPreview = await invoke(
+    knockoutBracketController.previewFromEntries.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(knockoutPreview.statusCode, 200);
+  assert.deepEqual((knockoutPreview.body as any).data.entryIds, entryIds);
+
+  const savedKnockout = await invoke(
+    knockoutBracketController.saveAssignments.bind(knockoutBracketController),
+    makeReq({ userId: organizerId, body: { categoryId, entryIds } }),
+  );
+  assert.equal(savedKnockout.statusCode, 201);
+  assert.equal((savedKnockout.body as any).data.saved, true);
+
+  const knockoutSchedule = await invoke(
+    scheduleController.generateKnockoutSchedule.bind(scheduleController),
+    makeReq({ userId: organizerId, body: { categoryId } }),
+  );
+  assert.equal(knockoutSchedule.statusCode, 201);
+  assert.equal((knockoutSchedule.body as any).data.totalMatches, 2);
+
+  assert.deepEqual(calls.map((call) => `${call.service}.${call.method}`), [
+    "knockoutBracketService.previewFromEntries",
+    "knockoutBracketService.saveAssignments",
+    "scheduleService.generateKnockoutSchedule",
+  ]);
+  assert.deepEqual(calls[0]?.args, [organizerId, categoryId]);
+  assert.deepEqual(calls[1]?.args, [organizerId, categoryId, entryIds]);
+  assert.deepEqual(calls[2]?.args, [organizerId, categoryId, undefined]);
 });
