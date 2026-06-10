@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import http from "node:http";
+import path from "node:path";
 
+import app from "../src/app";
 import tournamentRefereeController from "../src/controllers/tournamentReferee.controller";
 import eloHistoryController from "../src/controllers/eloHistory.controller";
 import entryController from "../src/controllers/entry.controller";
@@ -22,6 +26,15 @@ import scheduleService from "../src/services/schedule.service";
 import subMatchService from "../src/services/subMatch.service";
 import subMatchPlayerService from "../src/services/subMatchPlayer.service";
 import matchSetService from "../src/services/matchSet.service";
+import authService from "../src/services/auth.service";
+import User from "../src/models/user.model";
+
+const repoRoot = path.join(__dirname, "..");
+const seedSqlPath = path.join(repoRoot, "database/migrations/002-seed-default-data.sql");
+const routeDir = path.join(repoRoot, "src/routes");
+const organizerUserId = 2;
+const refereeUserId = 203;
+const chiefRefereeUserId = 353;
 
 type ServiceCall = {
   service: string;
@@ -37,6 +50,11 @@ type MockResponse = {
     json(payload: unknown): MockResponse["res"];
     send(payload?: unknown): MockResponse["res"];
   };
+};
+
+type HttpResponse = {
+  status: number;
+  body: any;
 };
 
 function createResponse(): MockResponse {
@@ -125,6 +143,288 @@ function record(
   };
 }
 
+function countMatches(source: string, pattern: RegExp): number {
+  return [...source.matchAll(pattern)].length;
+}
+
+function readSeedSql(): string {
+  return fs.readFileSync(seedSqlPath, "utf8");
+}
+
+function readRouteSources(): string {
+  return fs
+    .readdirSync(routeDir)
+    .filter((file) => file.endsWith(".routes.ts"))
+    .map((file) => fs.readFileSync(path.join(routeDir, file), "utf8"))
+    .join("\n");
+}
+
+function extractSeededPermissions(seedSql: string): Set<string> {
+  const permissions = new Set<string>();
+
+  for (const match of seedSql.matchAll(/\('([^']+:[^']+)'\)/g)) {
+    permissions.add(match[1] as string);
+  }
+
+  return permissions;
+}
+
+function extractSeededRolePermissions(seedSql: string, roleName: string): Set<string> {
+  if (roleName === "admin") {
+    return extractSeededPermissions(seedSql);
+  }
+
+  const headings: Record<string, string> = {
+    user: "User",
+    referee: "Referee",
+    chief_referee: "Chief referee",
+    organizer: "Organizer",
+  };
+  const heading = headings[roleName];
+  assert.ok(heading, `Unknown role: ${roleName}`);
+
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const block = seedSql.match(new RegExp(`-- ${escapedHeading} permissions[\\s\\S]*?WHERE \`name\` IN \\(([\\s\\S]*?)\\);`));
+  assert.ok(block?.[1], `Missing role permission block: ${roleName}`);
+
+  return new Set([...block[1].matchAll(/'([^']+:[^']+)'/g)].map((match) => match[1] as string));
+}
+
+function extractRoutePermissions(routeSources: string): Set<string> {
+  const permissions = new Set<string>();
+
+  for (const match of routeSources.matchAll(/checkPermission\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    permissions.add(match[1] as string);
+  }
+
+  for (const match of routeSources.matchAll(/checkAnyPermission\(\s*\[([\s\S]*?)\]\s*\)/g)) {
+    const permissionList = match[1] as string;
+    for (const permission of permissionList.matchAll(/['"]([^'"]+)['"]/g)) {
+      permissions.add(permission[1] as string);
+    }
+  }
+
+  return permissions;
+}
+
+function hasRoutePermission(routeSources: string, permission: string): boolean {
+  return routeSources.includes(`checkPermission("${permission}")`)
+    || routeSources.includes(`checkPermission('${permission}')`);
+}
+
+async function requestApp(
+  method: string,
+  routePath: string,
+  token?: string,
+  body?: unknown,
+): Promise<HttpResponse> {
+  const server = http.createServer(app);
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}${routePath}`, {
+      method,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body == null ? {} : { "content-type": "application/json" }),
+      },
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+    const text = await response.text();
+    const parsedBody = text ? JSON.parse(text) : undefined;
+
+    return {
+      status: response.status,
+      body: parsedBody,
+    };
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+}
+
+test("seed users match deterministic role ranges", () => {
+  const seedSql = readSeedSql();
+
+  assert.equal(countMatches(seedSql, /'admin@test\.com'/g), 1);
+  assert.equal(countMatches(seedSql, /'organizer@test\.com'/g), 1);
+  assert.equal(countMatches(seedSql, /'user\d+@test\.com'/g), 200);
+  assert.equal(countMatches(seedSql, /'referee\d+@test\.com'/g), 150);
+  assert.equal(countMatches(seedSql, /'chief_referee\d+@test\.com'/g), 50);
+  assert.equal(countMatches(seedSql, /'user_\d+@test\.com'/g), 0);
+  assert.equal(countMatches(seedSql, /'referee_\d+@test\.com'/g), 0);
+  assert.equal(countMatches(seedSql, /'chief_referee_\d+@test\.com'/g), 0);
+
+  assert.match(seedSql, /\(3, 'User', '1', 'user1@test\.com'/);
+  assert.match(seedSql, /\(202, 'User', '200', 'user200@test\.com'/);
+  assert.match(seedSql, /\(203, 'Referee', '1', 'referee1@test\.com'/);
+  assert.match(seedSql, /\(352, 'Referee', '150', 'referee150@test\.com'/);
+  assert.match(seedSql, /\(353, 'Chief Referee', '1', 'chief_referee1@test\.com'/);
+  assert.match(seedSql, /\(402, 'Chief Referee', '50', 'chief_referee50@test\.com'/);
+
+  assert.equal(countMatches(seedSql, /^\(1, 1,/gm), 1);
+  assert.equal(countMatches(seedSql, /^\(2, 5,/gm), 1);
+  assert.equal(countMatches(seedSql, /^\((?:[3-9]|[1-9]\d|1\d\d|20[0-2]), 2,/gm), 200);
+  assert.equal(countMatches(seedSql, /^\((?:20[3-9]|2[1-9]\d|3[0-4]\d|35[0-2]), 4,/gm), 150);
+  assert.equal(countMatches(seedSql, /^\((?:35[3-9]|3[6-9]\d|40[0-2]), 3,/gm), 50);
+});
+
+test("route permissions are seeded and domain-specific permissions stay wired", () => {
+  const seedPermissions = extractSeededPermissions(readSeedSql());
+  const routeSources = readRouteSources();
+  const routePermissions = extractRoutePermissions(routeSources);
+  const missingPermissions = [...routePermissions].filter((permission) => !seedPermissions.has(permission));
+
+  assert.deepEqual(missingPermissions, []);
+  assert.equal(routeSources.includes("checkRole("), false);
+
+  for (const permission of [
+    "groups:create",
+    "groups:update",
+    "knockouts:create",
+    "knockouts:update",
+    "knockouts:view",
+    "submatches:create",
+    "submatches:start",
+    "submatches:update",
+    "submatches:view",
+    "matchsets:create",
+    "matchsets:update",
+    "matchsets:view",
+    "matchsets:delete",
+    "entries:approve",
+    "notifications:manage",
+  ]) {
+    assert.equal(hasRoutePermission(routeSources, permission), true, permission);
+  }
+});
+
+test("protected routes enforce seeded role permissions through Express middleware", async (t) => {
+  const seedSql = readSeedSql();
+  const rolesByUserId = new Map<number, string>([
+    [1, "admin"],
+    [3, "user"],
+    [organizerUserId, "organizer"],
+    [refereeUserId, "referee"],
+    [chiefRefereeUserId, "chief_referee"],
+  ]);
+  const userIdsByToken = new Map<string, number>([
+    ["admin-token", 1],
+    ["user-token", 3],
+    ["organizer-token", organizerUserId],
+    ["referee-token", refereeUserId],
+    ["chief-referee-token", chiefRefereeUserId],
+  ]);
+  const permissionSetsByRole = new Map(
+    [...new Set(rolesByUserId.values())].map((roleName) => [
+      roleName,
+      extractSeededRolePermissions(seedSql, roleName),
+    ]),
+  );
+
+  patchMethods(t, authService, {
+    isTokenBlacklisted: async () => false,
+    verifyToken: async (token: string) => {
+      const userId = userIdsByToken.get(token);
+      if (userId == null) {
+        throw new Error("Invalid token");
+      }
+      return { userId };
+    },
+    getUserByToken: async (token: string) => {
+      const userId = userIdsByToken.get(token);
+      return userId == null ? null : ({ id: userId } as any);
+    },
+  });
+
+  patchMethods(t, User, {
+    findByPk: async (userId: number) => {
+      const roleName = rolesByUserId.get(userId);
+      if (!roleName) return null;
+
+      return {
+        get: () => ({
+          id: userId,
+          roles: [
+            {
+              name: roleName,
+              permissions: [...(permissionSetsByRole.get(roleName) ?? [])].map((name) => ({ name })),
+            },
+          ],
+        }),
+      } as any;
+    },
+  } as any);
+
+  patchMethods(t, groupStandingService, {
+    generateGroupPreview: record(
+      [],
+      "groupStandingService",
+      "generateGroupPreview",
+      [{ groupName: "A", entries: [] }],
+    ),
+  });
+  patchMethods(t, subMatchService, {
+    startSubMatch: record([], "subMatchService", "startSubMatch", {
+      message: "Sub-match started successfully",
+      lineupReady: true,
+      subMatch: { id: 1, status: "in_progress" },
+    }),
+  });
+
+  const organizerGroup = await requestApp(
+    "POST",
+    "/api/group-standings/generate",
+    "organizer-token",
+    { categoryId: 1 },
+  );
+  assert.equal(organizerGroup.status, 200);
+  assert.equal(organizerGroup.body.success, true);
+
+  const refereeGroup = await requestApp(
+    "POST",
+    "/api/group-standings/generate",
+    "referee-token",
+    { categoryId: 1 },
+  );
+  assert.equal(refereeGroup.status, 403);
+  assert.match(refereeGroup.body.message, /groups:create/);
+
+  const refereeStart = await requestApp("POST", "/api/sub-matches/1/start", "referee-token");
+  assert.equal(refereeStart.status, 200);
+  assert.equal(refereeStart.body.lineupReady, true);
+
+  const userStart = await requestApp("POST", "/api/sub-matches/1/start", "user-token");
+  assert.equal(userStart.status, 403);
+  assert.match(userStart.body.message, /submatches:start/);
+
+  const adminNotifications = await requestApp(
+    "GET",
+    "/api/notifications/connected-users",
+    "admin-token",
+  );
+  assert.equal(adminNotifications.status, 200);
+  assert.equal(adminNotifications.body.totalConnectedUsers, 0);
+
+  const organizerNotifications = await requestApp(
+    "GET",
+    "/api/notifications/connected-users",
+    "organizer-token",
+  );
+  assert.equal(organizerNotifications.status, 403);
+  assert.match(organizerNotifications.body.message, /notifications:manage/);
+
+  const missingToken = await requestApp("POST", "/api/sub-matches/1/start");
+  assert.equal(missingToken.status, 401);
+});
+
 test("referee and chief_referee can list, accept, and reject invitations", async (t) => {
   const calls: ServiceCall[] = [];
 
@@ -138,7 +438,7 @@ test("referee and chief_referee can list, accept, and reject invitations", async
 
       return {
         invitations: [
-          { id: refereeId === 21 ? 701 : 702, refereeId, role: "referee", status: "pending" },
+          { id: refereeId === refereeUserId ? 701 : 702, refereeId, role: "referee", status: "pending" },
         ],
         count: 1,
       };
@@ -147,39 +447,39 @@ test("referee and chief_referee can list, accept, and reject invitations", async
       calls,
       "tournamentRefereeService",
       "acceptInvitation",
-      { id: 701, refereeId: 21, role: "referee", status: "accepted" },
+      { id: 701, refereeId: refereeUserId, role: "referee", status: "accepted" },
     ),
     rejectInvitation: record(
       calls,
       "tournamentRefereeService",
       "rejectInvitation",
-      { id: 702, refereeId: 22, role: "chief_referee", status: "rejected" },
+      { id: 702, refereeId: chiefRefereeUserId, role: "chief_referee", status: "rejected" },
     ),
   });
 
   const refereeInvitations = await invoke(
     tournamentRefereeController.getMyInvitations.bind(tournamentRefereeController),
-    makeReq({ userId: 21, query: { status: "pending", page: "1", limit: "10" } }),
+    makeReq({ userId: refereeUserId, query: { status: "pending", page: "1", limit: "10" } }),
   );
   assert.equal(refereeInvitations.statusCode, 200);
 
   const accepted = await invoke(
     tournamentRefereeController.acceptInvitation.bind(tournamentRefereeController),
-    makeReq({ userId: 21, body: { invitationId: 701 } }),
+    makeReq({ userId: refereeUserId, body: { invitationId: 701 } }),
   );
   assert.equal(accepted.statusCode, 200);
   assert.deepEqual((accepted.body as any).status, "accepted");
 
   const chiefInvitations = await invoke(
     tournamentRefereeController.getMyInvitations.bind(tournamentRefereeController),
-    makeReq({ userId: 22, query: { status: "pending", page: "1", limit: "10" } }),
+    makeReq({ userId: chiefRefereeUserId, query: { status: "pending", page: "1", limit: "10" } }),
   );
   assert.equal(chiefInvitations.statusCode, 200);
 
   const rejected = await invoke(
     tournamentRefereeController.rejectInvitation.bind(tournamentRefereeController),
     makeReq({
-      userId: 22,
+      userId: chiefRefereeUserId,
       body: { invitationId: 702, rejectionReason: "Busy on match day" },
     }),
   );
@@ -196,11 +496,11 @@ test("referee and chief_referee can list, accept, and reject invitations", async
     ],
   );
   assert.deepEqual(calls[0]?.args, [
-    21,
+    refereeUserId,
     { status: "pending", offset: 0, limit: 10, sortBy: "createdAt", sortOrder: "DESC" },
   ]);
-  assert.deepEqual(calls[1]?.args, [21, 701]);
-  assert.deepEqual(calls[3]?.args, [22, 702, "Busy on match day"]);
+  assert.deepEqual(calls[1]?.args, [refereeUserId, 701]);
+  assert.deepEqual(calls[3]?.args, [chiefRefereeUserId, 702, "Busy on match day"]);
 });
 
 test("singles or doubles flow starts match, scores one sub-match, submits result, and chief approves", async (t) => {
@@ -289,14 +589,14 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
 
   const chiefSeesSubMatches = await invoke(
     subMatchController.getByMatchId.bind(subMatchController),
-    makeReq({ userId: 31, params: { matchId: String(matchId) } }),
+    makeReq({ userId: chiefRefereeUserId, params: { matchId: String(matchId) } }),
   );
   assert.equal(chiefSeesSubMatches.statusCode, 200);
   assert.equal((chiefSeesSubMatches.body as any).count, 1);
 
   const bulkStarted = await invoke(
     matchController.bulkStartMatches.bind(matchController),
-    makeReq({ userId: 31, body: { matchIds: [matchId, matchId] } }),
+    makeReq({ userId: chiefRefereeUserId, body: { matchIds: [matchId, matchId] } }),
   );
   assert.equal(bulkStarted.statusCode, 200);
   assert.equal((bulkStarted.body as any).totalRequested, 1);
@@ -304,26 +604,26 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
 
   const refereeMatches = await invoke(
     matchController.findAssignedMatchesForReferee.bind(matchController),
-    makeReq({ userId: 41, query: { categoryId: "101", status: "in_progress" } }),
+    makeReq({ userId: refereeUserId, query: { categoryId: "101", status: "in_progress" } }),
   );
   assert.equal(refereeMatches.statusCode, 200);
   assert.equal((refereeMatches.body as any).matches[0].id, matchId);
 
   await invoke(
     subMatchController.getByMatchId.bind(subMatchController),
-    makeReq({ userId: 41, params: { matchId: String(matchId) } }),
+    makeReq({ userId: refereeUserId, params: { matchId: String(matchId) } }),
   );
 
   const startedSubMatch = await invoke(
     subMatchController.start.bind(subMatchController),
-    makeReq({ userId: 41, params: { id: String(subMatchId) } }),
+    makeReq({ userId: refereeUserId, params: { id: String(subMatchId) } }),
   );
   assert.equal(startedSubMatch.statusCode, 200);
   assert.equal((startedSubMatch.body as any).lineupReady, true);
 
   const firstSets = await invoke(
     matchSetController.getBySubMatchId.bind(matchSetController),
-    makeReq({ userId: 41, params: { subMatchId: String(subMatchId) } }),
+    makeReq({ userId: refereeUserId, params: { subMatchId: String(subMatchId) } }),
   );
   assert.equal(firstSets.statusCode, 200);
   assert.equal((firstSets.body as any).count, 0);
@@ -331,7 +631,7 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
   const firstSetScore = await invoke(
     matchSetController.updateLiveSetScore.bind(matchSetController),
     makeReq({
-      userId: 41,
+      userId: refereeUserId,
       body: { subMatchId, setNumber: 1, entryAScore: 21, entryBScore: 11 },
     }),
   );
@@ -340,7 +640,7 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
 
   const nextSets = await invoke(
     matchSetController.getBySubMatchId.bind(matchSetController),
-    makeReq({ userId: 41, params: { subMatchId: String(subMatchId) } }),
+    makeReq({ userId: refereeUserId, params: { subMatchId: String(subMatchId) } }),
   );
   assert.equal(nextSets.statusCode, 200);
   assert.equal((nextSets.body as any).sets[0].setNumber, 1);
@@ -348,7 +648,7 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
   const secondSetScore = await invoke(
     matchSetController.updateLiveSetScore.bind(matchSetController),
     makeReq({
-      userId: 41,
+      userId: refereeUserId,
       body: { subMatchId, setNumber: 2, entryAScore: 21, entryBScore: 14 },
     }),
   );
@@ -357,28 +657,28 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
 
   const finalizedSubMatch = await invoke(
     subMatchController.finalize.bind(subMatchController),
-    makeReq({ userId: 41, params: { id: String(subMatchId) } }),
+    makeReq({ userId: refereeUserId, params: { id: String(subMatchId) } }),
   );
   assert.equal(finalizedSubMatch.statusCode, 200);
   assert.equal((finalizedSubMatch.body as any).matchReadyToFinalize, true);
 
   const finalizedMatch = await invoke(
     matchController.finalizeMatch.bind(matchController),
-    makeReq({ userId: 41, params: { id: String(matchId) } }),
+    makeReq({ userId: refereeUserId, params: { id: String(matchId) } }),
   );
   assert.equal(finalizedMatch.statusCode, 200);
   assert.equal((finalizedMatch.body as any).match.resultStatus, "pending");
 
   const pendingMatches = await invoke(
     matchController.findPendingMatches.bind(matchController),
-    makeReq({ userId: 31, query: { tournamentId: "501" } }),
+    makeReq({ userId: chiefRefereeUserId, query: { tournamentId: "501" } }),
   );
   assert.equal(pendingMatches.statusCode, 200);
   assert.equal((pendingMatches.body as any).matches[0].resultStatus, "pending");
 
   const approvedMatch = await invoke(
     matchController.approveMatchResult.bind(matchController),
-    makeReq({ userId: 31, params: { id: String(matchId) }, body: { reviewNotes: "OK" } }),
+    makeReq({ userId: chiefRefereeUserId, params: { id: String(matchId) }, body: { reviewNotes: "OK" } }),
   );
   assert.equal(approvedMatch.statusCode, 200);
   assert.equal((approvedMatch.body as any).match.resultStatus, "approved");
@@ -398,7 +698,7 @@ test("singles or doubles flow starts match, scores one sub-match, submits result
     "matchService.findPendingMatches",
     "matchService.approveMatchResult",
   ]);
-  assert.deepEqual(calls[1]?.args, [31, [matchId]]);
+  assert.deepEqual(calls[1]?.args, [chiefRefereeUserId, [matchId]]);
 });
 
 test("team flow requires captain lineup review before sub-match start and loops until match is ready", async (t) => {
@@ -408,7 +708,7 @@ test("team flow requires captain lineup review before sub-match start and loops 
   const subMatchTwoId = 9402;
   const captainAId = 51;
   const captainBId = 52;
-  const umpireId = 61;
+  const umpireId = refereeUserId;
 
   patchMethods(t, subMatchPlayerService, {
     submitTeamLineups: async (captainId: number, id: number, lineups: unknown) => {
@@ -623,7 +923,7 @@ test("team flow requires captain lineup review before sub-match start and loops 
 
   const pendingMatch = await invoke(
     matchController.findPendingMatches.bind(matchController),
-    makeReq({ userId: 31, query: { tournamentId: "501" } }),
+    makeReq({ userId: chiefRefereeUserId, query: { tournamentId: "501" } }),
   );
   assert.equal(pendingMatch.statusCode, 200);
   assert.equal((pendingMatch.body as any).matches[0].id, matchId);
@@ -631,7 +931,7 @@ test("team flow requires captain lineup review before sub-match start and loops 
   const rejectedMatch = await invoke(
     matchController.rejectMatchResult.bind(matchController),
     makeReq({
-      userId: 31,
+      userId: chiefRefereeUserId,
       params: { id: String(matchId) },
       body: { reviewNotes: "Score evidence mismatch" },
     }),
@@ -686,10 +986,6 @@ test("public player can review Elo, matches, register, and manage captain entry 
       ],
       count: 1,
     }),
-    getByMatch: record(calls, "eloHistoryService", "getByMatch", [
-      { id: 2, matchId, userId, previousElo: 1018, newElo: 1027, eloDelta: 9 },
-      { id: 3, matchId, userId: 72, previousElo: 990, newElo: 981, eloDelta: -9 },
-    ]),
   });
 
   patchMethods(t, matchService, {
@@ -813,13 +1109,6 @@ test("public player can review Elo, matches, register, and manage captain entry 
   assert.equal(matchHistory.statusCode, 200);
   assert.equal((matchHistory.body as any).matches[0].id, matchId);
 
-  const matchEloDetails = await invoke(
-    eloHistoryController.findByMatchId.bind(eloHistoryController),
-    makeReq({ params: { matchId: String(matchId) } }),
-  );
-  assert.equal(matchEloDetails.statusCode, 200);
-  assert.equal((matchEloDetails.body as any).length, 2);
-
   const upcomingMatches = await invoke(
     matchController.getUpcomingMatchesByAthlete.bind(matchController),
     makeReq({ params: { userId: String(userId) }, query: { page: "1", limit: "10" } }),
@@ -942,7 +1231,6 @@ test("public player can review Elo, matches, register, and manage captain entry 
   assert.deepEqual(calls.map((call) => `${call.service}.${call.method}`), [
     "eloHistoryService.getByUser",
     "matchService.findMatchHistoryByAthlete",
-    "eloHistoryService.getByMatch",
     "matchService.findUpcomingMatchesByAthlete",
     "entryService.register",
     "entryService.register",
@@ -959,27 +1247,26 @@ test("public player can review Elo, matches, register, and manage captain entry 
   ]);
   assert.deepEqual(calls[0]?.args, [userId, { offset: 0, limit: 20 }]);
   assert.deepEqual(calls[1]?.args, [userId, 0, 10]);
-  assert.deepEqual(calls[2]?.args, [matchId]);
-  assert.deepEqual(calls[3]?.args, [userId, 0, 10]);
-  assert.deepEqual(calls[4]?.args, [userId, singleCategoryId, "create_team", undefined, "Solo Smash"]);
-  assert.deepEqual(calls[6]?.args, [userId, teamCategoryId, "join_team", targetEntryId, undefined]);
-  assert.deepEqual(calls[8]?.args, [userId, captainEntryId, "pending", { offset: 0, limit: 10 }]);
-  assert.deepEqual(calls[9]?.args, [userId, joinRequestId, "approve", undefined]);
-  assert.deepEqual(calls[10]?.args, [
+  assert.deepEqual(calls[2]?.args, [userId, 0, 10]);
+  assert.deepEqual(calls[3]?.args, [userId, singleCategoryId, "create_team", undefined, "Solo Smash"]);
+  assert.deepEqual(calls[5]?.args, [userId, teamCategoryId, "join_team", targetEntryId, undefined]);
+  assert.deepEqual(calls[7]?.args, [userId, captainEntryId, "pending", { offset: 0, limit: 10 }]);
+  assert.deepEqual(calls[8]?.args, [userId, joinRequestId, "approve", undefined]);
+  assert.deepEqual(calls[9]?.args, [
     userId,
     joinRequestId + 1,
     "reject",
     "Player is too strong for this category",
   ]);
-  assert.deepEqual(calls[11]?.args, [userId, captainEntryId, 72]);
-  assert.deepEqual(calls[12]?.args, [userId, captainEntryId, 5]);
+  assert.deepEqual(calls[10]?.args, [userId, captainEntryId, 72]);
+  assert.deepEqual(calls[11]?.args, [userId, captainEntryId, 5]);
+  assert.deepEqual(calls[13]?.args, [userId, captainEntryId]);
   assert.deepEqual(calls[14]?.args, [userId, captainEntryId]);
-  assert.deepEqual(calls[15]?.args, [userId, captainEntryId]);
 });
 
 test("organizer can build group-stage tournament brackets and full schedule", async (t) => {
   const calls: ServiceCall[] = [];
-  const organizerId = 31;
+  const organizerId = organizerUserId;
   const tournamentId = 7001;
   const categoryId = 7101;
   const groupAssignments = [
@@ -1102,7 +1389,7 @@ test("organizer can build group-stage tournament brackets and full schedule", as
 
 test("organizer can build direct knockout bracket and schedule", async (t) => {
   const calls: ServiceCall[] = [];
-  const organizerId = 31;
+  const organizerId = organizerUserId;
   const categoryId = 7201;
   const entryIds = [201, 202, 203, 204, 205, 206, 207, 208];
 
