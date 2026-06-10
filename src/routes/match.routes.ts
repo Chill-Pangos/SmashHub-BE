@@ -1,7 +1,7 @@
 import { Router } from "express";
 import matchController from "../controllers/match.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission, checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -160,7 +160,7 @@ router.get("/pending", authenticate, checkPermission('matches:approve_result'), 
 router.get(
   "/category/:categoryId",
   authenticate,
-  checkRole('chief_referee'),
+  checkPermission('matches:approve_result'),
   matchController.findCategorySchedulesAndMatchesForChiefReferee.bind(matchController),
 );
 

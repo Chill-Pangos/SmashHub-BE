@@ -1,7 +1,7 @@
 import { Router } from "express";
 import rolePermissionController from "../controllers/rolePermission.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -142,12 +142,12 @@ const router = Router();
  */
 router.post("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:manage'),
   rolePermissionController.create.bind(rolePermissionController)
 );
 router.get("/",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   rolePermissionController.findAll.bind(rolePermissionController)
 );
 
@@ -222,7 +222,7 @@ router.get("/",
  */
 router.get("/role/:roleId",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   rolePermissionController.findByRoleId.bind(rolePermissionController)
 );
 
@@ -297,7 +297,7 @@ router.get("/role/:roleId",
  */
 router.get("/permission/:permissionId",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   rolePermissionController.findByPermissionId.bind(rolePermissionController)
 );
 
@@ -358,7 +358,7 @@ router.get("/permission/:permissionId",
  */
 router.get("/check",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:view'),
   rolePermissionController.hasPermission.bind(rolePermissionController)
 );
 
@@ -411,7 +411,7 @@ router.get("/check",
  */
 router.delete("/:roleId/:permissionId",
   authenticate,
-  checkRole('admin'),
+  checkPermission('permissions:manage'),
   rolePermissionController.deleteByRoleIdAndPermissionId.bind(rolePermissionController)
 );
 

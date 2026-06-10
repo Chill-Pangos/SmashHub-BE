@@ -1,7 +1,5 @@
 import { Router } from "express";
 import eloHistoryController from "../controllers/eloHistory.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 

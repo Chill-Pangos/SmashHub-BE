@@ -236,7 +236,7 @@ const router = Router();
 router.post(
   "/",
   authenticate,
-  checkPermission('content:create'),
+  checkPermission('category:create'),
   TournamentCategoryController.create.bind(TournamentCategoryController)
 );
 router.get(
@@ -460,13 +460,13 @@ router.get(
 router.patch(
   "/:id",
   authenticate,
-  checkPermission('content:update'),
+  checkPermission('category:update'),
   TournamentCategoryController.update.bind(TournamentCategoryController)
 );
 router.delete(
   "/:id",
   authenticate,
-  checkPermission('content:delete'),
+  checkPermission('category:delete'),
   TournamentCategoryController.delete.bind(TournamentCategoryController)
 );
 
