@@ -25,18 +25,7 @@ export class EloHistoryService {
       distinct: true,
     });
   }
-
-  /**
-   * Lịch sử ELO của tất cả players trong 1 match.
-   */
-  async getByMatch(matchId: number): Promise<EloHistory[]> {
-    return await EloHistory.findAll({
-      where: { matchId },
-      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
-      order: [["createdAt", "DESC"]],
-    });
-  }
-
+  
   /**
    * Tổng thay đổi ELO của user trong 1 khoảng thời gian.
    */

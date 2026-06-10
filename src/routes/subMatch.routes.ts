@@ -47,7 +47,7 @@ const router = Router();
 router.post(
   "/create-from-format",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('submatches:create'),
   subMatchController.createFromFormat.bind(subMatchController)
 );
 
@@ -119,7 +119,7 @@ router.post(
 router.post(
   "/:id/start",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('submatches:start'),
   subMatchController.start.bind(subMatchController)
 );
 
@@ -174,7 +174,7 @@ router.post(
 router.post(
   "/:id/finalize",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('submatches:update'),
   subMatchController.finalize.bind(subMatchController)
 );
 
@@ -228,7 +228,7 @@ router.post(
 router.post(
   "/:id/assign-players",
   authenticate,
-  checkPermission('matches:update'),
+  checkPermission('submatches:update'),
   subMatchController.assignPlayers.bind(subMatchController)
 );
 
@@ -332,7 +332,7 @@ router.post(
 router.get(
   "/match/:matchId",
   authenticate,
-  checkPermission('matches:view'),
+  checkPermission('submatches:view'),
   subMatchController.getByMatchId.bind(subMatchController)
 );
 

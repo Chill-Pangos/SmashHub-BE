@@ -1,7 +1,7 @@
 import { Router } from "express";
 import groupStandingController from "../controllers/groupStanding.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -69,7 +69,7 @@ const router = Router();
 router.post(
   "/generate",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("groups:create"),
   groupStandingController.generatePlaceholders.bind(groupStandingController)
 );
 
@@ -272,7 +272,7 @@ router.post(
 router.post(
   "/save-assignments",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("groups:create"),
   groupStandingController.saveAssignments.bind(groupStandingController)
 );
 
@@ -369,7 +369,7 @@ router.post(
 router.post(
   "/calculate",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("groups:update"),
   groupStandingController.calculateStandings.bind(groupStandingController)
 );
 
@@ -460,7 +460,7 @@ router.post(
 router.post(
   "/matches/:matchId/sync",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("groups:update"),
   groupStandingController.updateAfterMatch.bind(groupStandingController)
 );
 

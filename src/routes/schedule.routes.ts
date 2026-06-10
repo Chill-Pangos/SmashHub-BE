@@ -1,7 +1,7 @@
 import { Router } from "express";
 import scheduleController from "../controllers/schedule.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
@@ -78,7 +78,7 @@ const router = Router();
 router.post(
   "/generate-tournament",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:create"),
   scheduleController.generateTournamentSchedule.bind(scheduleController),
 );
 
@@ -155,7 +155,7 @@ router.post(
 router.post(
   "/generate-group-stage",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:create"),
   scheduleController.generateGroupStageSchedule.bind(scheduleController),
 );
 
@@ -238,7 +238,7 @@ router.post(
 router.post(
   "/generate-knockout",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:create"),
   scheduleController.generateKnockoutSchedule.bind(scheduleController),
 );
 
@@ -292,7 +292,7 @@ router.post(
 router.post(
   "/sync-match-entries",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:update"),
   scheduleController.syncMatchEntries.bind(scheduleController),
 );
 
@@ -465,13 +465,13 @@ router.get("/:id", scheduleController.findById.bind(scheduleController));
 router.put(
   "/:id",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:update"),
   scheduleController.update.bind(scheduleController),
 );
 router.delete(
   "/:id",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:delete"),
   scheduleController.delete.bind(scheduleController),
 );
 
