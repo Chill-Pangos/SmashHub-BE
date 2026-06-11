@@ -256,6 +256,13 @@ WHERE `name` IN (
 --   3-202: user accounts (200)
 --   203-352: referee accounts (150)
 --   353-402: chief_referee accounts (50)
+--   403-702: additional user accounts (300)
+--   703-1052: additional referee accounts (350)
+--   1053-1502: additional chief_referee accounts (450)
+-- Totals:
+--   user: 500 accounts
+--   referee: 500 accounts
+--   chief_referee: 500 accounts
 -- ============================================================================
 INSERT INTO `users` (`id`, `firstName`, `lastName`, `email`, `password`, `isEmailVerified`, `gender`, `avatarUrl`, `dob`, `phoneNumber`, `createdAt`, `updatedAt`) VALUES
 (1, 'Admin', 'User', 'admin@test.com', '$2b$10$WSTW/8cDMbNokSu89L4jlOhkIxrHnUitCT.beHYzdeRIgLeUDsueK', 1, NULL, NULL, NULL, NULL, '2026-05-20 00:00:00', '2026-05-20 00:00:00'),
@@ -1068,4 +1075,102 @@ INSERT INTO `user_roles` (`userId`, `roleId`, `createdAt`, `updatedAt`) VALUES
 (400, 3, '2026-05-20 00:00:00', '2026-05-20 00:00:00'),
 (401, 3, '2026-05-20 00:00:00', '2026-05-20 00:00:00'),
 (402, 3, '2026-05-20 00:00:00', '2026-05-20 00:00:00');
+
+-- ============================================================================
+-- Seed Data: additional users to reach 500 accounts per role
+-- Ranges:
+--   403-702: user accounts 201-500
+--   703-1052: referee accounts 151-500
+--   1053-1502: chief_referee accounts 51-500
+-- ============================================================================
+
+INSERT INTO `users` (`id`, `firstName`, `lastName`, `email`, `password`, `isEmailVerified`, `gender`, `avatarUrl`, `dob`, `phoneNumber`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 201 AS n
+  UNION ALL
+  SELECT n + 1 FROM seq WHERE n < 500
+)
+SELECT
+  202 + n AS `id`,
+  'User' AS `firstName`,
+  CAST(n AS CHAR) AS `lastName`,
+  CONCAT('user', n, '@test.com') AS `email`,
+  '$2b$10$WSTW/8cDMbNokSu89L4jlOhkIxrHnUitCT.beHYzdeRIgLeUDsueK' AS `password`,
+  1 AS `isEmailVerified`,
+  IF(MOD(n, 2) = 1, 'male', 'female') AS `gender`,
+  NULL AS `avatarUrl`,
+  STR_TO_DATE(CONCAT(1990 + MOD(n - 1, 20), '-', LPAD(1 + MOD(n - 1, 12), 2, '0'), '-', LPAD(1 + MOD(n - 1, 28), 2, '0')), '%Y-%m-%d') AS `dob`,
+  NULL AS `phoneNumber`,
+  '2026-05-20 00:00:00' AS `createdAt`,
+  '2026-05-20 00:00:00' AS `updatedAt`
+FROM seq;
+
+INSERT INTO `users` (`id`, `firstName`, `lastName`, `email`, `password`, `isEmailVerified`, `gender`, `avatarUrl`, `dob`, `phoneNumber`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 151 AS n
+  UNION ALL
+  SELECT n + 1 FROM seq WHERE n < 500
+)
+SELECT
+  552 + n AS `id`,
+  'Referee' AS `firstName`,
+  CAST(n AS CHAR) AS `lastName`,
+  CONCAT('referee', n, '@test.com') AS `email`,
+  '$2b$10$WSTW/8cDMbNokSu89L4jlOhkIxrHnUitCT.beHYzdeRIgLeUDsueK' AS `password`,
+  1 AS `isEmailVerified`,
+  IF(MOD(n, 2) = 1, 'male', 'female') AS `gender`,
+  NULL AS `avatarUrl`,
+  STR_TO_DATE(CONCAT(1990 + MOD(n - 1, 20), '-', LPAD(1 + MOD(n - 1, 12), 2, '0'), '-', LPAD(1 + MOD(n - 1, 28), 2, '0')), '%Y-%m-%d') AS `dob`,
+  NULL AS `phoneNumber`,
+  '2026-05-20 00:00:00' AS `createdAt`,
+  '2026-05-20 00:00:00' AS `updatedAt`
+FROM seq;
+
+INSERT INTO `users` (`id`, `firstName`, `lastName`, `email`, `password`, `isEmailVerified`, `gender`, `avatarUrl`, `dob`, `phoneNumber`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 51 AS n
+  UNION ALL
+  SELECT n + 1 FROM seq WHERE n < 500
+)
+SELECT
+  1002 + n AS `id`,
+  'Chief Referee' AS `firstName`,
+  CAST(n AS CHAR) AS `lastName`,
+  CONCAT('chief_referee', n, '@test.com') AS `email`,
+  '$2b$10$WSTW/8cDMbNokSu89L4jlOhkIxrHnUitCT.beHYzdeRIgLeUDsueK' AS `password`,
+  1 AS `isEmailVerified`,
+  IF(MOD(n, 2) = 1, 'male', 'female') AS `gender`,
+  NULL AS `avatarUrl`,
+  STR_TO_DATE(CONCAT(1990 + MOD(n - 1, 20), '-', LPAD(1 + MOD(n - 1, 12), 2, '0'), '-', LPAD(1 + MOD(n - 1, 28), 2, '0')), '%Y-%m-%d') AS `dob`,
+  NULL AS `phoneNumber`,
+  '2026-05-20 00:00:00' AS `createdAt`,
+  '2026-05-20 00:00:00' AS `updatedAt`
+FROM seq;
+
+INSERT INTO `user_roles` (`userId`, `roleId`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 403 AS id
+  UNION ALL
+  SELECT id + 1 FROM seq WHERE id < 702
+)
+SELECT id, 2, '2026-05-20 00:00:00', '2026-05-20 00:00:00'
+FROM seq;
+
+INSERT INTO `user_roles` (`userId`, `roleId`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 703 AS id
+  UNION ALL
+  SELECT id + 1 FROM seq WHERE id < 1052
+)
+SELECT id, 4, '2026-05-20 00:00:00', '2026-05-20 00:00:00'
+FROM seq;
+
+INSERT INTO `user_roles` (`userId`, `roleId`, `createdAt`, `updatedAt`)
+WITH RECURSIVE seq AS (
+  SELECT 1053 AS id
+  UNION ALL
+  SELECT id + 1 FROM seq WHERE id < 1502
+)
+SELECT id, 3, '2026-05-20 00:00:00', '2026-05-20 00:00:00'
+FROM seq;
 
