@@ -4,6 +4,7 @@ import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import Payment from "../models/payment.model";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -13,6 +14,7 @@ import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
+const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
 
 export class TournamentService {
   async create(data: CreateTournamentDto): Promise<Tournament> {
@@ -411,10 +413,16 @@ export class TournamentService {
     openedCount: number;
     closedCount: number;
     bracketsGeneratedCount: number;
+    cancelledCount: number;
     totalUpdated: number;
   }> {
     const now = new Date();
-    const statuses = { openedCount: 0, closedCount: 0, bracketsGeneratedCount: 0 };
+    const statuses = {
+      openedCount: 0,
+      closedCount: 0,
+      bracketsGeneratedCount: 0,
+      cancelledCount: 0,
+    };
 
     // Helper: lấy tournamentIds từ ScheduleConfig theo điều kiện ngày
     const getIds = async (where: WhereOptions<any>): Promise<number[]> => {
@@ -423,6 +431,93 @@ export class TournamentService {
         attributes: ["tournamentId"],
       });
       return configs.map((c) => c.tournamentId);
+    };
+
+    const splitByMinimumEligibleEntries = async (
+      tournamentIds: number[],
+    ): Promise<{ runnableIds: number[]; cancellableIds: number[] }> => {
+      if (tournamentIds.length === 0) {
+        return { runnableIds: [], cancellableIds: [] };
+      }
+
+      const categories = await TournamentCategory.findAll({
+        where: { tournamentId: { [Op.in]: tournamentIds } },
+        attributes: ["id", "tournamentId", "entryFee"],
+      });
+
+      const categoryIds = categories.map((category) => category.id);
+      const entries = categoryIds.length > 0
+        ? await Entry.findAll({
+            where: { categoryId: { [Op.in]: categoryIds } },
+            attributes: ["id", "categoryId", "requiredMemberCount", "currentMemberCount", "isConfirmed"],
+            raw: true,
+          })
+        : [];
+
+      const paidEntryIds = new Set<number>();
+      const entryIdsRequiringPayment = entries
+        .filter((entry) => {
+          const category = categories.find((c) => c.id === entry.categoryId);
+          return category?.entryFee != null && Number(category.entryFee) > 0;
+        })
+        .map((entry) => entry.id);
+
+      if (entryIdsRequiringPayment.length > 0) {
+        const payments = await Payment.findAll({
+          where: {
+            entryId: { [Op.in]: entryIdsRequiringPayment },
+            status: "completed",
+          },
+          attributes: ["entryId"],
+          raw: true,
+        });
+
+        for (const payment of payments) {
+          paidEntryIds.add(payment.entryId);
+        }
+      }
+
+      const categoryById = new Map(categories.map((category) => [category.id, category]));
+      const eligibleEntryCountByCategoryId = new Map<number, number>();
+
+      for (const entry of entries) {
+        const category = categoryById.get(entry.categoryId);
+        const requiresPayment = category?.entryFee != null && Number(category.entryFee) > 0;
+        const hasEnoughMembers =
+          entry.requiredMemberCount == null ||
+          entry.currentMemberCount >= entry.requiredMemberCount;
+
+        if (!hasEnoughMembers || !entry.isConfirmed) continue;
+        if (requiresPayment && !paidEntryIds.has(entry.id)) continue;
+
+        eligibleEntryCountByCategoryId.set(
+          entry.categoryId,
+          (eligibleEntryCountByCategoryId.get(entry.categoryId) ?? 0) + 1,
+        );
+      }
+
+      const eligibleEntryCountByTournamentId = new Map<number, number>();
+      for (const category of categories) {
+        eligibleEntryCountByTournamentId.set(
+          category.tournamentId,
+          (eligibleEntryCountByTournamentId.get(category.tournamentId) ?? 0) +
+            (eligibleEntryCountByCategoryId.get(category.id) ?? 0),
+        );
+      }
+
+      const runnableIds: number[] = [];
+      const cancellableIds: number[] = [];
+
+      for (const tournamentId of tournamentIds) {
+        const eligibleEntryCount = eligibleEntryCountByTournamentId.get(tournamentId) ?? 0;
+        if (eligibleEntryCount >= MIN_ELIGIBLE_ENTRIES_TO_RUN) {
+          runnableIds.push(tournamentId);
+        } else {
+          cancellableIds.push(tournamentId);
+        }
+      }
+
+      return { runnableIds, cancellableIds };
     };
 
     // 1. upcoming → registration_open
@@ -455,10 +550,26 @@ export class TournamentService {
     const bracketIds = await getIds({
       bracketGenerationDate: { [Op.lte]: now, [Op.not]: null },
     });
-    if (bracketIds.length > 0) {
+    const { runnableIds: runnableBracketIds, cancellableIds } =
+      await splitByMinimumEligibleEntries(bracketIds);
+
+    if (cancellableIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "cancelled" },
+        {
+          where: {
+            status: { [Op.in]: ["upcoming", "registration_open", "registration_closed"] },
+            id: { [Op.in]: cancellableIds },
+          },
+        }
+      );
+      statuses.cancelledCount += r[0];
+    }
+
+    if (runnableBracketIds.length > 0) {
       const r = await Tournament.update(
         { status: "brackets_generated" },
-        { where: { status: "registration_closed", id: { [Op.in]: bracketIds } } }
+        { where: { status: "registration_closed", id: { [Op.in]: runnableBracketIds } } }
       );
       statuses.bracketsGeneratedCount += r[0];
     }
@@ -478,13 +589,13 @@ export class TournamentService {
     }
 
     // 5. Edge case: any early phase → brackets_generated
-    if (bracketIds.length > 0) {
+    if (runnableBracketIds.length > 0) {
       const r = await Tournament.update(
         { status: "brackets_generated" },
         {
           where: {
             status: { [Op.in]: ["upcoming", "registration_open", "registration_closed"] },
-            id: { [Op.in]: bracketIds },
+            id: { [Op.in]: runnableBracketIds },
           },
         }
       );
@@ -495,7 +606,12 @@ export class TournamentService {
       openedCount: statuses.openedCount,
       closedCount: statuses.closedCount,
       bracketsGeneratedCount: statuses.bracketsGeneratedCount,
-      totalUpdated: statuses.openedCount + statuses.closedCount + statuses.bracketsGeneratedCount,
+      cancelledCount: statuses.cancelledCount,
+      totalUpdated:
+        statuses.openedCount +
+        statuses.closedCount +
+        statuses.bracketsGeneratedCount +
+        statuses.cancelledCount,
     };
   }
 
