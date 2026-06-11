@@ -1,7 +1,5 @@
 import { Router } from "express";
 import eloScoreController from "../controllers/eloScore.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 

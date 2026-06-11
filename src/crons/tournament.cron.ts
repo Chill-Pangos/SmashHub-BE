@@ -21,6 +21,7 @@ export const autoUpdateTournamentStatus = cron.schedule(
         openedCount,
         closedCount,
         bracketsGeneratedCount,
+        cancelledCount,
         totalUpdated,
       } = await tournamentService.updateTournamentStatuses();
 
@@ -29,6 +30,7 @@ export const autoUpdateTournamentStatus = cron.schedule(
         console.log(`  - Opened registration: ${openedCount} tournament(s)`);
         console.log(`  - Closed registration: ${closedCount} tournament(s)`);
         console.log(`  - Generated brackets: ${bracketsGeneratedCount} tournament(s)`);
+        console.log(`  - Cancelled: ${cancelledCount} tournament(s)`);
       }
     } catch (error) {
       console.error("[CRON] Error updating tournament status:", error);

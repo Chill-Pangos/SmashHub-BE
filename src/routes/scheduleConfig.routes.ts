@@ -1,7 +1,7 @@
 import { Router } from "express";
 import scheduleConfigController from "../controllers/scheduleConfig.controller";
 import { authenticate } from "../middlewares/auth.middleware";
-import { checkRole } from "../middlewares/permission.middleware";
+import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router({ mergeParams: true });
 
@@ -253,7 +253,7 @@ const router = Router({ mergeParams: true });
 router.post(
   "/",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:create"),
   scheduleConfigController.create.bind(scheduleConfigController)
 );
 
@@ -537,7 +537,7 @@ router.get(
 router.patch(
   "/:tournamentId/schedule-config",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:update"),
   scheduleConfigController.update.bind(scheduleConfigController)
 );
 
@@ -724,7 +724,7 @@ router.patch(
 router.post(
   "/validate",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:update"),
   scheduleConfigController.validate.bind(scheduleConfigController)
 );
 
@@ -883,7 +883,7 @@ router.post(
 router.post(
   "/:tournamentId/schedule-config/preview-create",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:create"),
   scheduleConfigController.previewCreate.bind(scheduleConfigController)
 );
 
@@ -1034,7 +1034,7 @@ router.post(
 router.post(
   "/:tournamentId/schedule-config/preview-update",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:update"),
   scheduleConfigController.previewUpdate.bind(scheduleConfigController)
 );
 
@@ -1081,7 +1081,7 @@ router.post(
 router.delete(
   "/:tournamentId/schedule-config",
   authenticate,
-  checkRole("organizer"),
+  checkPermission("schedules:delete"),
   scheduleConfigController.delete.bind(scheduleConfigController)
 );
 

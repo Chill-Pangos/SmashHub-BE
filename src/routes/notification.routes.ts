@@ -146,7 +146,12 @@ router.post("/event",
  *       500:
  *         description: Server error
  */
-router.get("/connected-users", authenticate, notificationController.getConnectedUsers);
+router.get(
+  "/connected-users",
+  authenticate,
+  checkPermission('notifications:manage'),
+  notificationController.getConnectedUsers
+);
 
 /**
  * @swagger
@@ -182,7 +187,12 @@ router.get("/connected-users", authenticate, notificationController.getConnected
  *       500:
  *         description: Server error
  */
-router.get("/status/:userId", authenticate, notificationController.checkUserConnection);
+router.get(
+  "/status/:userId",
+  authenticate,
+  checkPermission('notifications:manage'),
+  notificationController.checkUserConnection
+);
 
 /**
  * @swagger
@@ -209,7 +219,12 @@ router.get("/status/:userId", authenticate, notificationController.checkUserConn
  *       500:
  *         description: Server error
  */
-router.post("/disconnect/:userId", authenticate, notificationController.disconnectUser);
+router.post(
+  "/disconnect/:userId",
+  authenticate,
+  checkPermission('notifications:manage'),
+  notificationController.disconnectUser
+);
 
 /**
  * @swagger
@@ -241,6 +256,11 @@ router.post("/disconnect/:userId", authenticate, notificationController.disconne
  *       500:
  *         description: Server error
  */
-router.get("/status", authenticate, notificationController.getStatus);
+router.get(
+  "/status",
+  authenticate,
+  checkPermission('notifications:manage'),
+  notificationController.getStatus
+);
 
 export default router;
