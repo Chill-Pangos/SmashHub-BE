@@ -59,6 +59,14 @@ function withTime(date: Date, hour: number, minute: number): Date {
   return result;
 }
 
+function nextDayStart(date: Date, config: ScheduleConfig): Date {
+  return withTime(
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
+    config.dailyStartHour,
+    config.dailyStartMinute,
+  );
+}
+
 // ─── Slot Allocators ──────────────────────────────────────────────────────────
 
 /**
@@ -121,8 +129,8 @@ class MultiDayAllocator {
   private readonly slotDuration: number;
 
   constructor(config: ScheduleConfig) {
-    this.startDate = config.startDate;
-    this.endDate = config.endDate;
+    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
+    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
     this.dailyStartHour = config.dailyStartHour;
     this.dailyStartMinute = config.dailyStartMinute;
     this.dailyEndHour = config.dailyEndHour;
@@ -182,6 +190,57 @@ function createAllocator(
   return isSingleDayTournament(config)
     ? new SingleDayAllocator(config)
     : new MultiDayAllocator(config);
+}
+
+function getPhaseSlot(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  matchIndex: number,
+): TimeSlot {
+  const slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
+  const slotIndex = Math.floor(matchIndex / config.numberOfTables);
+
+  if (isSingleDayTournament(config)) {
+    return {
+      scheduledAt: new Date(phaseStart.getTime() + slotIndex * slotDuration * 60_000),
+    };
+  }
+
+  let current = new Date(phaseStart);
+  for (let i = 0; i < slotIndex; i++) {
+    current = new Date(current.getTime() + slotDuration * 60_000);
+
+    const nextSlotStart = new Date(current.getTime() + slotDuration * 60_000);
+    const lastStartOfDay = withTime(
+      current,
+      config.dailyEndHour,
+      config.dailyEndMinute,
+    );
+
+    if (nextSlotStart > lastStartOfDay) {
+      current = nextDayStart(current, config);
+    }
+  }
+
+  return { scheduledAt: current };
+}
+
+function getPhaseEndTime(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  matchCount: number,
+): Date {
+  if (matchCount <= 0) return phaseStart;
+
+  const lastSlot = getPhaseSlot(config, phaseStart, matchCount - 1).scheduledAt;
+  return new Date(
+    lastSlot.getTime() +
+      (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000,
+  );
+}
+
+function getTournamentEndTime(config: ScheduleConfig): Date {
+  return withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
 }
 
 // ─── Table Assignment ─────────────────────────────────────────────────────────
@@ -619,10 +678,9 @@ export class ScheduleService {
 
   /**
    * Tạo lịch cho toàn bộ tournament.
-   * Thứ tự: xong hết category này mới đến category khác.
-   * Trong mỗi category: group stage trước, knockout sau.
+   * Thứ tự phase toàn giải: tất cả group stage trước, knockout sau.
    *
-   * Slot time được tính liên tục — category sau tiếp nối ngay sau category trước.
+   * Nếu giải nhiều ngày, knockout bắt đầu từ ngày kế tiếp sau group phase.
    */
   async generateTournamentSchedule(
     organizerId: number,
@@ -639,44 +697,131 @@ export class ScheduleService {
       throw new Error("Tournament has no categories.");
     }
 
-    const results: { categoryId: number; result: ScheduleResult }[] = [];
-
-    // Xử lý tuần tự: category này xong mới đến category khác
-    for (const category of categories) {
-      const categoryResults: ScheduleResult = {
-        schedules: [],
-        matches: [],
+    const config = await getRequiredScheduleConfig(tournament.id);
+    const groupJobs: {
+      category: TournamentCategory;
+      pair: { entryAId: number; entryBId: number; groupName: string };
+    }[] = [];
+    const knockoutJobs: {
+      category: TournamentCategory;
+      pair: {
+        bracketId: number;
+        entryAId: number | null;
+        entryBId: number | null;
+        roundName: KnockoutRound;
       };
-      const warnings: string[] = [];
+    }[] = [];
 
-      // Group stage
+    for (const category of categories) {
       if (category.isGroupStage) {
-        const groupResult = await this.generateGroupStageSchedule(
-          organizerId,
-          category.id,
-        );
-        categoryResults.schedules.push(...groupResult.schedules);
-        categoryResults.matches.push(...groupResult.matches);
-        if (groupResult.warning) warnings.push(`[Group] ${groupResult.warning}`);
+        const pairs = await buildGroupMatchPairs(category.id);
+        groupJobs.push(...pairs.map((pair) => ({ category, pair })));
       }
 
-      // Knockout (tất cả vòng, kể cả TBD)
-      const knockoutResult = await this.generateKnockoutSchedule(
-        organizerId,
-        category.id,
-      );
-      categoryResults.schedules.push(...knockoutResult.schedules);
-      categoryResults.matches.push(...knockoutResult.matches);
-      if (knockoutResult.warning) warnings.push(`[Knockout] ${knockoutResult.warning}`);
-
-      if (warnings.length > 0) {
-        categoryResults.warning = warnings.join(" | ");
-      }
-
-      results.push({ categoryId: category.id, result: categoryResults });
+      const pairs = await buildKnockoutPairs(category.id);
+      knockoutJobs.push(...pairs.map((pair) => ({ category, pair })));
     }
 
-    return results;
+    const tournamentStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
+    const groupEnd = getPhaseEndTime(config, tournamentStart, groupJobs.length);
+    const knockoutStart = groupJobs.length === 0
+      ? tournamentStart
+      : isSingleDayTournament(config)
+        ? groupEnd
+        : nextDayStart(groupEnd, config);
+    const finalEnd = getPhaseEndTime(config, knockoutStart, knockoutJobs.length);
+    const tournamentEnd = getTournamentEndTime(config);
+    const warning = finalEnd > tournamentEnd
+      ? `Schedule overflows tournament end time. Last match ends at ${finalEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
+      : undefined;
+
+    const resultsByCategory = new Map<number, ScheduleResult>();
+    for (const category of categories) {
+      resultsByCategory.set(category.id, { schedules: [], matches: [] });
+    }
+
+    await sequelize.transaction(async (t) => {
+      for (const category of categories) {
+        await clearExistingSchedules(category.id, "group", t);
+        await clearExistingSchedules(category.id, "knockout", t);
+      }
+
+      for (let i = 0; i < groupJobs.length; i++) {
+        const job = groupJobs[i]!;
+        const slot = getPhaseSlot(config, tournamentStart, i);
+        const schedule = await Schedule.create(
+          {
+            categoryId: job.category.id,
+            stage: "group" satisfies Stage,
+            groupName: job.pair.groupName,
+            scheduledAt: slot.scheduledAt,
+            tableNumber: null,
+          },
+          { transaction: t },
+        );
+
+        const match = await Match.create(
+          {
+            scheduleId: schedule.id,
+            entryAId: job.pair.entryAId,
+            entryBId: job.pair.entryBId,
+            status: "scheduled",
+          },
+          { transaction: t },
+        );
+
+        await createSubMatchesForMatch(match, job.category, t);
+
+        const result = resultsByCategory.get(job.category.id)!;
+        result.schedules.push(schedule);
+        result.matches.push(match);
+      }
+
+      for (let i = 0; i < knockoutJobs.length; i++) {
+        const job = knockoutJobs[i]!;
+        const slot = getPhaseSlot(config, knockoutStart, i);
+        const schedule = await Schedule.create(
+          {
+            categoryId: job.category.id,
+            stage: "knockout" satisfies Stage,
+            knockoutRound: job.pair.roundName,
+            scheduledAt: slot.scheduledAt,
+            tableNumber: null,
+          },
+          { transaction: t },
+        );
+
+        const match = await Match.create(
+          {
+            scheduleId: schedule.id,
+            entryAId: job.pair.entryAId ?? null,
+            entryBId: job.pair.entryBId ?? null,
+            status: "scheduled",
+          },
+          { transaction: t },
+        );
+
+        await createSubMatchesForMatch(match, job.category, t);
+        await KnockoutBracket.update(
+          { scheduleId: schedule.id, matchId: match.id },
+          { where: { id: job.pair.bracketId }, transaction: t },
+        );
+
+        const result = resultsByCategory.get(job.category.id)!;
+        result.schedules.push(schedule);
+        result.matches.push(match);
+      }
+    });
+
+    return categories.map((category) => {
+      const result = resultsByCategory.get(category.id)!;
+      if (warning) result.warning = warning;
+      return { categoryId: category.id, result };
+    });
   }
 
   // ── 4. Fill entryId vào match sau khi fillQualifiers ─────────────────────
