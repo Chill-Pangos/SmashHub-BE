@@ -20,6 +20,19 @@ const HOUR_MAX = 23;
 const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
+function dateOnlyTime(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function isSameCalendarDate(a: Date, b: Date): boolean {
+  return dateOnlyTime(a) === dateOnlyTime(b);
+}
+
+function timeToMinutes(hour?: number, minute?: number): number | null {
+  if (hour == null || minute == null) return null;
+  return hour * 60 + minute;
+}
+
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
@@ -373,6 +386,10 @@ export default class ScheduleConfig extends Model {
       registrationStartDate,
       registrationEndDate,
       bracketGenerationDate,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute,
       isNewRecord,
     } = instance;
 
@@ -388,9 +405,24 @@ export default class ScheduleConfig extends Model {
       throw new Error("Registration start date cannot be in the past");
     }
 
-    // endDate phải sau startDate
-    if (startDate && endDate && endDate <= startDate) {
-      throw new Error("End date must be after start date");
+    if (startDate && endDate) {
+      const startDay = dateOnlyTime(startDate);
+      const endDay = dateOnlyTime(endDate);
+
+      if (endDay < startDay) {
+        throw new Error("End date must be after start date");
+      }
+
+      if (isSameCalendarDate(startDate, endDate)) {
+        const dailyStart = timeToMinutes(dailyStartHour, dailyStartMinute);
+        const dailyEnd = timeToMinutes(dailyEndHour, dailyEndMinute);
+
+        if (dailyStart != null && dailyEnd != null && dailyEnd <= dailyStart) {
+          throw new Error(
+            "Daily end time must be after daily start time when start date and end date are the same day"
+          );
+        }
+      }
     }
 
     // registrationEndDate phải sau registrationStartDate
@@ -437,4 +469,3 @@ export default class ScheduleConfig extends Model {
     }
   }
 }
-

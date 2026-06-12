@@ -5,6 +5,11 @@ import EntryMember from "../models/entryMember.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import Payment from "../models/payment.model";
+import GroupStanding from "../models/groupStanding.model";
+import KnockoutBracket from "../models/knockoutBracket.model";
+import User from "../models/user.model";
+import eloCalculationService, { TournamentEloUpdateResult } from "./eloCalculation.service";
+import knockoutBracketService from "./knockoutBracket.service";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -15,6 +20,39 @@ import { Op, WhereOptions } from "sequelize";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
 const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
+
+type AwardEntry = {
+  id: number;
+  name: string;
+  captainId?: number;
+  members: {
+    userId: number;
+    eloAtEntry: number;
+    user?: {
+      id: number;
+      firstName: string;
+      lastName: string;
+      email: string;
+      avatarUrl?: string;
+    };
+  }[];
+};
+
+type TournamentAward = {
+  categoryId: number;
+  categoryName: string;
+  source: "knockout" | "group";
+  placement: number;
+  title: "champion" | "runner_up" | "third_place" | "group_winner" | "group_runner_up" | "group_third_place";
+  groupName?: string;
+  entry: AwardEntry;
+};
+
+export type CompleteTournamentResult = {
+  tournament: Tournament;
+  awards: TournamentAward[];
+  elo: TournamentEloUpdateResult;
+};
 
 export class TournamentService {
   async create(data: CreateTournamentDto): Promise<Tournament> {
@@ -402,6 +440,180 @@ export class TournamentService {
 
   async delete(id: number): Promise<number> {
     return await Tournament.destroy({ where: { id } });
+  }
+
+  async completeTournament(id: number): Promise<CompleteTournamentResult | null> {
+    const tournament = await Tournament.findByPk(id, {
+      include: [{ model: TournamentCategory, as: "categories" }],
+    });
+
+    if (!tournament) {
+      return null;
+    }
+
+    const categories = tournament.categories ?? [];
+    if (categories.length === 0) {
+      throw new Error("Tournament has no categories");
+    }
+
+    const awards = await this.getTournamentAwards(categories);
+
+    if (tournament.status !== "completed") {
+      await tournament.update({ status: "completed" });
+      tournament.status = "completed";
+    }
+
+    const elo = await eloCalculationService.updateEloForTournament(id);
+
+    return {
+      tournament,
+      awards,
+      elo,
+    };
+  }
+
+  private async getTournamentAwards(categories: TournamentCategory[]): Promise<TournamentAward[]> {
+    const awards: TournamentAward[] = [];
+
+    for (const category of categories) {
+      const hasKnockoutBrackets = await KnockoutBracket.count({
+        where: { categoryId: category.id },
+      });
+
+      if (hasKnockoutBrackets > 0) {
+        awards.push(...await this.getKnockoutAwards(category));
+        continue;
+      }
+
+      awards.push(...await this.getGroupAwards(category));
+    }
+
+    return awards;
+  }
+
+  private async getKnockoutAwards(category: TournamentCategory): Promise<TournamentAward[]> {
+    const standings = await knockoutBracketService.getStandings(category.id);
+    const awardItems: {
+      entryId: number | undefined;
+      placement: number;
+      title: TournamentAward["title"];
+    }[] = [
+      { entryId: standings.champion, placement: 1, title: "champion" },
+      { entryId: standings.runnerUp, placement: 2, title: "runner_up" },
+      ...(standings.thirdPlace ?? []).map((entryId) => ({
+        entryId,
+        placement: 3,
+        title: "third_place" as const,
+      })),
+    ];
+
+    const awards: TournamentAward[] = [];
+    for (const item of awardItems) {
+      if (item.entryId == null) continue;
+
+      const entry = await this.findAwardEntry(item.entryId);
+      if (!entry) continue;
+
+      awards.push({
+        categoryId: category.id,
+        categoryName: category.name,
+        source: "knockout",
+        placement: item.placement,
+        title: item.title,
+        entry,
+      });
+    }
+
+    return awards;
+  }
+
+  private async getGroupAwards(category: TournamentCategory): Promise<TournamentAward[]> {
+    const standings = await GroupStanding.findAll({
+      where: {
+        categoryId: category.id,
+        position: { [Op.in]: [1, 2, 3] },
+      },
+      include: [
+        {
+          model: Entry,
+          as: "entry",
+          include: [
+            {
+              model: EntryMember,
+              as: "members",
+              include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "avatarUrl"] }],
+            },
+          ],
+        },
+      ],
+      order: [
+        ["groupName", "ASC"],
+        ["position", "ASC"],
+      ],
+    });
+
+    const titleByPosition: Record<number, TournamentAward["title"]> = {
+      1: "group_winner",
+      2: "group_runner_up",
+      3: "group_third_place",
+    };
+
+    return standings
+      .filter((standing) => standing.position != null && standing.entry)
+      .map((standing) => ({
+        categoryId: category.id,
+        categoryName: category.name,
+        source: "group" as const,
+        placement: standing.position!,
+        title: titleByPosition[standing.position!]!,
+        groupName: standing.groupName,
+        entry: this.toAwardEntry(standing.entry!),
+      }));
+  }
+
+  private async findAwardEntry(entryId: number): Promise<AwardEntry | null> {
+    const entry = await Entry.findByPk(entryId, {
+      include: [
+        {
+          model: EntryMember,
+          as: "members",
+          include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "avatarUrl"] }],
+        },
+      ],
+    });
+
+    return entry ? this.toAwardEntry(entry) : null;
+  }
+
+  private toAwardEntry(entry: Entry): AwardEntry {
+    const result: AwardEntry = {
+      id: entry.id,
+      name: entry.name,
+      members: (entry.members ?? []).map((member) => {
+        const item: AwardEntry["members"][number] = {
+          userId: member.userId,
+          eloAtEntry: member.eloAtEntry,
+        };
+
+        if (member.user) {
+          item.user = {
+            id: member.user.id,
+            firstName: member.user.firstName,
+            lastName: member.user.lastName,
+            email: member.user.email,
+            ...(member.user.avatarUrl ? { avatarUrl: member.user.avatarUrl } : {}),
+          };
+        }
+
+        return item;
+      }),
+    };
+
+    if (entry.captainId != null) {
+      result.captainId = entry.captainId;
+    }
+
+    return result;
   }
 
   /**
