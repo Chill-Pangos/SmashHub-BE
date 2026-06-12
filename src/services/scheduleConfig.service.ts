@@ -45,6 +45,12 @@ export interface ScheduleValidationCategoryInput {
   isGroupStage?: boolean;
 }
 
+interface MatchBreakdown {
+  groupMatches: number;
+  knockoutMatches: number;
+  totalMatches: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /**
@@ -83,10 +89,20 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
 export function calculateMatchesForCategory(
   category: Pick<TournamentCategory, "maxEntries" | "isGroupStage">
 ): number {
+  return calculateMatchBreakdownForCategory(category).totalMatches;
+}
+
+function calculateMatchBreakdownForCategory(
+  category: Pick<TournamentCategory, "maxEntries" | "isGroupStage">
+): MatchBreakdown {
   const { maxEntries, isGroupStage } = category;
 
   if (!isGroupStage) {
-    return maxEntries - 1;
+    return {
+      groupMatches: 0,
+      knockoutMatches: maxEntries - 1,
+      totalMatches: maxEntries - 1,
+    };
   }
 
   const numberOfGroups = Math.floor(maxEntries / DEFAULT_ENTRIES_PER_GROUP);
@@ -99,7 +115,11 @@ export function calculateMatchesForCategory(
   const qualifiers = numberOfGroups * DEFAULT_QUALIFIERS_PER_GROUP;
   const knockoutMatches = qualifiers - 1;
 
-  return groupMatches + knockoutMatches;
+  return {
+    groupMatches,
+    knockoutMatches,
+    totalMatches: groupMatches + knockoutMatches,
+  };
 }
 
 /**
@@ -108,9 +128,22 @@ export function calculateMatchesForCategory(
 export function calculateTotalMatchesFromCategories(
   categories: Array<Pick<TournamentCategory, "maxEntries" | "isGroupStage">>
 ): number {
+  return calculateMatchBreakdownFromCategories(categories).totalMatches;
+}
+
+function calculateMatchBreakdownFromCategories(
+  categories: Array<Pick<TournamentCategory, "maxEntries" | "isGroupStage">>
+): MatchBreakdown {
   return categories.reduce(
-    (sum, cat) => sum + calculateMatchesForCategory(cat),
-    0
+    (sum, category) => {
+      const breakdown = calculateMatchBreakdownForCategory(category);
+      return {
+        groupMatches: sum.groupMatches + breakdown.groupMatches,
+        knockoutMatches: sum.knockoutMatches + breakdown.knockoutMatches,
+        totalMatches: sum.totalMatches + breakdown.totalMatches,
+      };
+    },
+    { groupMatches: 0, knockoutMatches: 0, totalMatches: 0 }
   );
 }
 
@@ -118,6 +151,11 @@ export function calculateTotalMatchesFromCategories(
 
 function dateOnlyTime(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function calendarDayCount(startDate: Date, endDate: Date): number {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((dateOnlyTime(endDate) - dateOnlyTime(startDate)) / dayMs) + 1;
 }
 
 function isSingleDay(startDate: Date, endDate: Date): boolean {
@@ -141,14 +179,7 @@ function calculateAvailableMinutes(
   const dailyMinutes =
     dailyEndHour * 60 + dailyEndMinute - (dailyStartHour * 60 + dailyStartMinute);
 
-  if (isSingleDay(startDate, endDate)) {
-    return dailyMinutes;
-  }
-
-  const diffDays = Math.ceil(
-    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  return dailyMinutes * diffDays;
+  return dailyMinutes * Math.max(0, calendarDayCount(startDate, endDate));
 }
 
 function calculateNeededMinutes(
@@ -163,6 +194,14 @@ function calculateNeededMinutes(
   );
 }
 
+function nextDayStart(date: Date, dailyStartHour: number, dailyStartMinute: number): Date {
+  return withTime(
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
+    dailyStartHour,
+    dailyStartMinute
+  );
+}
+
 function calculateEstimatedEndTime(
   startDate: Date,
   totalMatches: number,
@@ -171,22 +210,110 @@ function calculateEstimatedEndTime(
   numberOfTables: number,
   dailyStartHour: number,
   dailyStartMinute: number,
-  endDate: Date
+  endDate: Date,
+  dailyEndHour: number,
+  dailyEndMinute: number
 ): Date {
-  const effectiveStartDate = isSingleDay(startDate, endDate)
-    ? withTime(startDate, dailyStartHour, dailyStartMinute)
-    : startDate;
+  const slotDuration = matchDurationMinutes + breakDurationMinutes;
+  let remainingSlots = Math.ceil(totalMatches / numberOfTables);
+  let current = withTime(startDate, dailyStartHour, dailyStartMinute);
+  const finalDay = dateOnlyTime(endDate);
 
-  return new Date(
-    effectiveStartDate.getTime() +
-      calculateNeededMinutes(
-        totalMatches,
-        matchDurationMinutes,
-        breakDurationMinutes,
-        numberOfTables
-      ) *
-        60000
+  while (remainingSlots > 0) {
+    const dayEnd = withTime(current, dailyEndHour, dailyEndMinute);
+    const availableMinutes = Math.max(
+      0,
+      Math.floor((dayEnd.getTime() - current.getTime()) / 60000)
+    );
+    const slotsToday = Math.floor(availableMinutes / slotDuration);
+
+    if (remainingSlots <= slotsToday) {
+      return new Date(current.getTime() + remainingSlots * slotDuration * 60000);
+    }
+
+    remainingSlots -= slotsToday;
+    current = withTime(
+      new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1),
+      dailyStartHour,
+      dailyStartMinute
+    );
+
+    if (slotsToday === 0 && dateOnlyTime(current) > finalDay) {
+      return current;
+    }
+  }
+
+  return current;
+}
+
+function calculatePhasedEstimatedEndTime(
+  startDate: Date,
+  endDate: Date,
+  breakdown: MatchBreakdown,
+  matchDurationMinutes: number,
+  breakDurationMinutes: number,
+  numberOfTables: number,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  dailyEndHour: number,
+  dailyEndMinute: number
+): Date {
+  if (breakdown.groupMatches === 0) {
+    return calculateEstimatedEndTime(
+      startDate,
+      breakdown.knockoutMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
+    );
+  }
+
+  const groupEndTime = calculateEstimatedEndTime(
+    startDate,
+    breakdown.groupMatches,
+    matchDurationMinutes,
+    breakDurationMinutes,
+    numberOfTables,
+    dailyStartHour,
+    dailyStartMinute,
+    endDate,
+    dailyEndHour,
+    dailyEndMinute
   );
+
+  const knockoutStartDate = isSingleDay(startDate, endDate)
+    ? groupEndTime
+    : nextDayStart(groupEndTime, dailyStartHour, dailyStartMinute);
+
+  return calculateEstimatedEndTime(
+    knockoutStartDate,
+    breakdown.knockoutMatches,
+    matchDurationMinutes,
+    breakDurationMinutes,
+    numberOfTables,
+    dailyStartHour,
+    dailyStartMinute,
+    endDate,
+    dailyEndHour,
+    dailyEndMinute
+  );
+}
+
+function calculatePhaseNeededMinutes(
+  breakdown: MatchBreakdown,
+  matchDurationMinutes: number,
+  breakDurationMinutes: number,
+  numberOfTables: number
+): number {
+  const slotDuration = matchDurationMinutes + breakDurationMinutes;
+  const groupSlots = Math.ceil(breakdown.groupMatches / numberOfTables);
+  const knockoutSlots = Math.ceil(breakdown.knockoutMatches / numberOfTables);
+  return (groupSlots + knockoutSlots) * slotDuration;
 }
 
 function getEffectiveTournamentEndTime(
@@ -195,9 +322,7 @@ function getEffectiveTournamentEndTime(
   dailyEndHour: number,
   dailyEndMinute: number
 ): Date {
-  return isSingleDay(startDate, endDate)
-    ? withTime(endDate, dailyEndHour, dailyEndMinute)
-    : endDate;
+  return withTime(endDate, dailyEndHour, dailyEndMinute);
 }
 
 // ─── Model Validator ─────────────────────────────────────────────────────────
@@ -306,8 +431,10 @@ export class ScheduleConfigService {
       );
     }
 
-    const resolvedMatches = totalMatches ?? this._resolveMatchCount(tournament);
-    return this._buildPreview(data, resolvedMatches);
+    const breakdown = totalMatches != null
+      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      : this._resolveMatchBreakdown(tournament);
+    return this._buildPreview(data, breakdown);
   }
 
   /**
@@ -350,8 +477,10 @@ export class ScheduleConfigService {
       ...data,
     } as Partial<ScheduleConfig>;
 
-    const resolvedMatches = totalMatches ?? this._resolveMatchCount(tournament);
-    return this._buildPreview(merged, resolvedMatches);
+    const breakdown = totalMatches != null
+      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      : this._resolveMatchBreakdown(tournament);
+    return this._buildPreview(merged, breakdown);
   }
 
   // ─── CRUD thật (gọi sau khi user xác nhận preview) ─────────────────────────
@@ -453,7 +582,9 @@ export class ScheduleConfigService {
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
 
-    const resolvedMatches = totalMatches ?? this._resolveMatchCount(tournament);
+    const breakdown = totalMatches != null
+      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      : this._resolveMatchBreakdown(tournament);
 
     const {
       matchDurationMinutes,
@@ -472,19 +603,21 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(resolvedMatches / numberOfTables);
-    const neededMinutes = calculateNeededMinutes(
-      resolvedMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
+    const neededMinutes = calculatePhaseNeededMinutes(
+      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
-    const estimatedEndTime = calculateEstimatedEndTime(
+    const estimatedEndTime = calculatePhasedEstimatedEndTime(
       startDate,
-      resolvedMatches,
+      endDate,
+      breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
       numberOfTables,
       dailyStartHour,
       dailyStartMinute,
-      endDate
+      dailyEndHour,
+      dailyEndMinute
     );
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
@@ -493,13 +626,17 @@ export class ScheduleConfigService {
       dailyEndMinute
     );
 
-    const isValid = neededMinutes <= availableMinutes;
+    const overflowMinutes = Math.max(
+      0,
+      Math.ceil((estimatedEndTime.getTime() - tournamentEndTime.getTime()) / 60000)
+    );
+    const isValid = overflowMinutes === 0;
     const details = {
-      totalMatches: resolvedMatches,
+      totalMatches: breakdown.totalMatches,
       totalSlots,
       estimatedEndTime,
       tournamentEndTime,
-      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+      ...(!isValid && { overflowMinutes }),
     };
 
     if (isValid) {
@@ -512,7 +649,7 @@ export class ScheduleConfigService {
 
     return {
       isValid: false,
-      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
+      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${overflowMinutes} minutes).`,
       details,
     };
   }
@@ -529,12 +666,12 @@ export class ScheduleConfigService {
     const normalizedConfig = normalizeScheduleConfigDates(scheduleConfig);
     await runModelValidation(1, normalizedConfig);
 
-    const totalMatches = calculateMatchesForCategory({
+    const breakdown = calculateMatchBreakdownForCategory({
       maxEntries: category.maxEntries,
       isGroupStage: category.isGroupStage ?? false,
     });
 
-    return this._buildValidation(normalizedConfig, totalMatches);
+    return this._buildValidation(normalizedConfig, breakdown);
   }
 
   /**
@@ -571,7 +708,7 @@ export class ScheduleConfigService {
    * Tính totalMatches từ categories của tournament.
    * Ném BadRequestError nếu tournament chưa có category.
    */
-  private _resolveMatchCount(tournament: Tournament): number {
+  private _resolveMatchBreakdown(tournament: Tournament): MatchBreakdown {
     const categories = tournament.categories ?? [];
 
     if (categories.length === 0) {
@@ -581,12 +718,12 @@ export class ScheduleConfigService {
       );
     }
 
-    return calculateTotalMatchesFromCategories(categories);
+    return calculateMatchBreakdownFromCategories(categories);
   }
 
   private _buildValidation(
     data: Partial<ScheduleConfig>,
-    totalMatches: number
+    breakdown: MatchBreakdown
   ): ScheduleValidationResponse {
     const {
       matchDurationMinutes = 60,
@@ -609,19 +746,21 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(totalMatches / numberOfTables);
-    const neededMinutes = calculateNeededMinutes(
-      totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
+    const neededMinutes = calculatePhaseNeededMinutes(
+      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
-    const estimatedEndTime = calculateEstimatedEndTime(
+    const estimatedEndTime = calculatePhasedEstimatedEndTime(
       startDate,
-      totalMatches,
+      endDate,
+      breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
       numberOfTables,
       dailyStartHour,
       dailyStartMinute,
-      endDate
+      dailyEndHour,
+      dailyEndMinute
     );
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
@@ -630,13 +769,17 @@ export class ScheduleConfigService {
       dailyEndMinute
     );
 
-    const isValid = neededMinutes <= availableMinutes;
+    const overflowMinutes = Math.max(
+      0,
+      Math.ceil((estimatedEndTime.getTime() - tournamentEndTime.getTime()) / 60000)
+    );
+    const isValid = overflowMinutes === 0;
     const details = {
-      totalMatches,
+      totalMatches: breakdown.totalMatches,
       totalSlots,
       estimatedEndTime,
       tournamentEndTime,
-      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+      ...(!isValid && { overflowMinutes }),
     };
 
     if (isValid) {
@@ -649,7 +792,7 @@ export class ScheduleConfigService {
 
     return {
       isValid: false,
-      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
+      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${overflowMinutes} minutes).`,
       details,
     };
   }
@@ -660,7 +803,7 @@ export class ScheduleConfigService {
    */
   private _buildPreview(
     data: Partial<ScheduleConfig>,
-    totalMatches: number
+    breakdown: MatchBreakdown
   ): SchedulePreviewResponse {
     const {
       startDate,
@@ -699,19 +842,21 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(totalMatches / numberOfTables);
-    const neededMinutes = calculateNeededMinutes(
-      totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
+    const neededMinutes = calculatePhaseNeededMinutes(
+      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
-    const estimatedEndTime = calculateEstimatedEndTime(
+    const estimatedEndTime = calculatePhasedEstimatedEndTime(
       startDate,
-      totalMatches,
+      endDate,
+      breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
       numberOfTables,
       dailyStartHour,
       dailyStartMinute,
-      endDate
+      dailyEndHour,
+      dailyEndMinute
     );
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
@@ -720,10 +865,14 @@ export class ScheduleConfigService {
       dailyEndMinute
     );
 
-    const isValid = neededMinutes <= availableMinutes;
+    const overflowMinutes = Math.max(
+      0,
+      Math.ceil((estimatedEndTime.getTime() - tournamentEndTime.getTime()) / 60000)
+    );
+    const isValid = overflowMinutes === 0;
 
     const preview = {
-      totalMatches,
+      totalMatches: breakdown.totalMatches,
       totalSlots,
       estimatedEndTime,
       tournamentEndTime,
@@ -737,16 +886,16 @@ export class ScheduleConfigService {
       numberOfTables,
       matchDurationMinutes,
       breakDurationMinutes,
-      ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
+      ...(!isValid && { overflowMinutes }),
     };
 
     if (isValid) {
       return {
         isValid: true,
         message:
-          `Config is valid. With ${totalMatches} matches, it is expected to finish at ` +
+          `Config is valid. With ${breakdown.totalMatches} matches, it is expected to finish at ` +
           `${estimatedEndTime.toISOString()}, leaving ` +
-          `${Math.floor(availableMinutes - neededMinutes)} minutes of buffer within the allowed time.`,
+          `${Math.floor((tournamentEndTime.getTime() - estimatedEndTime.getTime()) / 60000)} minutes of buffer within the allowed time.`,
         preview,
       };
     }
@@ -755,7 +904,7 @@ export class ScheduleConfigService {
       isValid: false,
       message:
         `Config is invalid. It needs ${neededMinutes} minutes but only ${availableMinutes} minutes are available ` +
-        `(missing ${neededMinutes - availableMinutes} minutes). ` +
+        `(missing ${overflowMinutes} minutes). ` +
         `Please adjust the number of tables, match duration, or tournament dates.`,
       preview,
     };
