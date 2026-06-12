@@ -154,6 +154,24 @@ const swaggerDefinition = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
+      PublicUser: {
+        type: "object",
+        description: "Public user profile. Sensitive fields are omitted.",
+        properties: {
+          id: { type: "integer" },
+          firstName: { type: "string", maxLength: 50 },
+          lastName: { type: "string", maxLength: 50 },
+          gender: { type: "string", enum: ["male", "female"], nullable: true },
+          avatarUrl: { type: "string", maxLength: 255, nullable: true },
+          dob: { type: "string", format: "date", nullable: true },
+          eloScore: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/EloScore" }],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
       AccessToken: {
         type: "object",
         required: ["userId", "token", "expiresAt"],
@@ -256,6 +274,24 @@ const swaggerDefinition = {
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
+      },
+      TournamentDetail: {
+        allOf: [
+          { $ref: "#/components/schemas/Tournament" },
+          {
+            type: "object",
+            properties: {
+              scheduleConfig: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/ScheduleConfig" }],
+              },
+              creator: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/PublicUser" }],
+              },
+            },
+          },
+        ],
       },
       CreateTournamentRequest: {
         type: "object",
@@ -398,6 +434,28 @@ const swaggerDefinition = {
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
+      },
+      EntryDetail: {
+        allOf: [
+          { $ref: "#/components/schemas/Entry" },
+          {
+            type: "object",
+            properties: {
+              category: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/TournamentCategory" }],
+              },
+              captain: {
+                nullable: true,
+                allOf: [{ $ref: "#/components/schemas/PublicUser" }],
+              },
+              members: {
+                type: "array",
+                items: { $ref: "#/components/schemas/PublicEntryMember" },
+              },
+            },
+          },
+        ],
       },
       Schedule: {
         type: "object",
@@ -588,6 +646,21 @@ const swaggerDefinition = {
           user: {
             nullable: true,
             allOf: [{ $ref: "#/components/schemas/UserDetail" }],
+          },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      PublicEntryMember: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          entryId: { type: "integer" },
+          userId: { type: "integer" },
+          eloAtEntry: { type: "integer", minimum: 0, maximum: 10000 },
+          user: {
+            nullable: true,
+            allOf: [{ $ref: "#/components/schemas/PublicUser" }],
           },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },

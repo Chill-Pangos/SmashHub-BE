@@ -29,6 +29,7 @@ export class TournamentController {
       const page = Number(req.query.page) || 1;
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
       const offset = Math.max(page - 1, 0) * limit;
+      const name = typeof req.query.name === "string" ? req.query.name : undefined;
       const userId = req.query.userId ? Number(req.query.userId) : undefined;
       const createdBy = req.query.createdBy ? Number(req.query.createdBy) : undefined;
       const minAge = req.query.minAge ? Number(req.query.minAge) : undefined;
@@ -41,6 +42,7 @@ export class TournamentController {
       const result = await tournamentService.findAllWithCategoriesFiltered({
         offset,
         limit,
+        name,
         userId,
         createdBy,
         minAge,

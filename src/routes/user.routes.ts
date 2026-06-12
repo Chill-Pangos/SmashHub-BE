@@ -88,6 +88,26 @@ router.get("/me", authenticate, userController.me.bind(userController));
 
 /**
  * @swagger
+ * /users/search:
+ *   get:
+ *     tags: [Users]
+ *     summary: Search users by name
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: First name, last name, or full name to search for
+ *       - $ref: '#/components/parameters/pageParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of matching users with pagination
+ */
+router.get("/search", userController.searchByName.bind(userController));
+
+/**
+ * @swagger
  * /users/{id}:
  *   get:
  *     tags: [Users]
