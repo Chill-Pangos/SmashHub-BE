@@ -343,7 +343,7 @@ router.get(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}:
+ * /schedule-configs/{tournamentId}/schedule-config:
  *   get:
  *     tags: [Schedule Config]
  *     summary: Get schedule configuration for a tournament
@@ -379,7 +379,7 @@ router.get(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}:
+ * /schedule-configs/{tournamentId}/schedule-config:
  *   patch:
  *     tags: [Schedule Config]
  *     summary: Update schedule configuration
@@ -730,7 +730,7 @@ router.post(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}/preview-create:
+ * /schedule-configs/{tournamentId}/schedule-config/preview-create:
  *   post:
  *     tags: [Schedule Config]
  *     summary: Preview schedule configuration before creation
@@ -889,7 +889,7 @@ router.post(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}/preview-update:
+ * /schedule-configs/{tournamentId}/schedule-config/preview-update:
  *   post:
  *     tags: [Schedule Config]
  *     summary: Preview schedule configuration update
@@ -1040,7 +1040,7 @@ router.post(
 
 /**
  * @swagger
- * /schedule-configs/tournament/{tournamentId}:
+ * /schedule-configs/{tournamentId}/schedule-config:
  *   delete:
  *     tags: [Schedule Config]
  *     summary: Delete schedule configuration
