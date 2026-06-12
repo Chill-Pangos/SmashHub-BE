@@ -204,6 +204,29 @@ export class TournamentController {
     }
   }
 
+  async completeTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const result = await tournamentService.completeTournament(id);
+      if (!result) {
+        throw new NotFoundError("Tournament not found");
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Tournament completed successfully. Awards and Elo updated.",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getMyOrganizedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as any).user?.id;

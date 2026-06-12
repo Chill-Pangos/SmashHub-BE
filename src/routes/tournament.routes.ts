@@ -634,6 +634,47 @@ router.post(
 
 /**
  * @swagger
+ * /tournaments/{id}/complete:
+ *   post:
+ *     tags: [Tournaments]
+ *     summary: Complete tournament, return awards, and update Elo
+ *     description: |
+ *       Marks a tournament as completed, returns prize winners, then calculates and persists Elo changes.
+ *
+ *       Award logic:
+ *       - Knockout: champion, runner-up, and third-place entries from final standings
+ *       - Group-only: top 3 entries per group from group standings
+ *
+ *       Elo logic:
+ *       - Uses approved completed matches
+ *       - Rejects duplicate Elo calculation if histories already exist for the tournament
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Tournament completed successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:id/complete",
+  authenticate,
+  checkPermission('tournaments:update'),
+  tournamentController.completeTournament.bind(tournamentController)
+);
+
+/**
+ * @swagger
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]

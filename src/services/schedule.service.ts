@@ -34,8 +34,6 @@ interface RefereeWorkload {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SINGLE_DAY_THRESHOLD_HOURS = 20;
-
 const MATCH_INCLUDE = {
   model: Match,
   as: "scheduledMatches",
@@ -47,11 +45,18 @@ const MATCH_INCLUDE = {
 
 // ─── Tournament Type Detection ────────────────────────────────────────────────
 
+function dateOnlyTime(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 function isSingleDayTournament(config: ScheduleConfig): boolean {
-  return (
-    (config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60) <=
-    SINGLE_DAY_THRESHOLD_HOURS
-  );
+  return dateOnlyTime(config.startDate) === dateOnlyTime(config.endDate);
+}
+
+function withTime(date: Date, hour: number, minute: number): Date {
+  const result = new Date(date);
+  result.setHours(hour, minute, 0, 0);
+  return result;
 }
 
 // ─── Slot Allocators ──────────────────────────────────────────────────────────
@@ -67,8 +72,8 @@ class SingleDayAllocator {
   private readonly endDate: Date;
 
   constructor(config: ScheduleConfig) {
-    this.startDate = config.startDate;
-    this.endDate = config.endDate;
+    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
+    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
     this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
   }
 
