@@ -7,6 +7,53 @@ const router = Router();
 
 /**
  * @swagger
+ * /matches/search/by-entries:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Search matches by two entry names
+ *     parameters:
+ *       - in: query
+ *         name: entryAName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: First entry name
+ *       - in: query
+ *         name: entryBName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Second entry name
+ *       - in: query
+ *         name: tournamentId
+ *         schema:
+ *           type: integer
+ *         description: Filter matches within a tournament
+ *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: integer
+ *         description: Filter matches within a tournament category
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Matching matches. Entry order can be A-B or B-A.
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ */
+router.get("/search/by-entries", matchController.findByEntryNames.bind(matchController));
+
+/**
+ * @swagger
  * /matches/pending:
  *   get:
  *     tags: [Matches]
@@ -419,6 +466,29 @@ router.get(
   checkPermission('matches:view'),
   matchController.findAssignedMatchesForReferee.bind(matchController),
 );
+
+/**
+ * @swagger
+ * /matches/{id}:
+ *   get:
+ *     tags: [Matches]
+ *     summary: Get match by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID
+ *     responses:
+ *       200:
+ *         description: Match details with schedule, entries, referees, winner, and sub-matches
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ */
+router.get("/:id", matchController.findById.bind(matchController));
 
 router.get(
   "/:id/finalize-summary",

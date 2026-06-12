@@ -135,7 +135,7 @@ export class TournamentService {
       hasPrevPage: boolean;
     };
   }> {
-    const { offset = 0, limit, userId, createdBy, ...categoryFilters } = filters;
+    const { offset = 0, limit, name, userId, createdBy, ...categoryFilters } = filters;
 
     // Build where clause for TournamentCategory
     const categoryWhere: WhereOptions<any> = {};
@@ -166,6 +166,10 @@ export class TournamentService {
 
     // Build tournament where clause
     const tournamentWhere: WhereOptions<any> = {};
+
+    if (name?.trim()) {
+      tournamentWhere.name = { [Op.like]: `%${name.trim()}%` };
+    }
 
     // Add createdBy filter if provided
     if (createdBy !== undefined) {
@@ -348,6 +352,17 @@ export class TournamentService {
         {
           model: TournamentCategory,
           as: "categories",
+        },
+        {
+          model: ScheduleConfig,
+          as: "scheduleConfig",
+          required: false,
+        },
+        {
+          model: User,
+          as: "creator",
+          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
+          required: false,
         },
       ],
     });

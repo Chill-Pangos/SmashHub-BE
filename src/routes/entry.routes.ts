@@ -369,6 +369,26 @@ router.get(
 
 /**
  * @swagger
+ * /entries/search:
+ *   get:
+ *     tags: [Entries]
+ *     summary: Search entries by name
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Entry name to search for
+ *       - $ref: '#/components/parameters/pageParam'
+ *       - $ref: '#/components/parameters/limitParam'
+ *     responses:
+ *       200:
+ *         description: List of matching entries with pagination
+ */
+router.get("/search", entryController.searchByName.bind(entryController));
+
+/**
+ * @swagger
  * /entries/{entryId}:
  *   get:
  *     tags: [Entries]

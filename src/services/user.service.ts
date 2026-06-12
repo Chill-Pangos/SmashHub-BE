@@ -3,7 +3,7 @@ import Role from "../models/role.model";
 import EloScore from "../models/eloScore.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
-import { Op } from "sequelize";
+import { col, fn, Op, where } from "sequelize";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
@@ -40,8 +40,74 @@ export class UserService {
     };
   }
 
+  async searchByName(
+    name: string,
+    offset: number = 0,
+    limit: number = 10,
+  ): Promise<{ users: User[]; pagination: any }> {
+    const query = name.trim();
+    const pattern = `%${query}%`;
+
+    const { count, rows } = await User.findAndCountAll({
+      where: {
+        [Op.or]: [
+          { firstName: { [Op.like]: pattern } },
+          { lastName: { [Op.like]: pattern } },
+          where(fn("CONCAT", col("firstName"), " ", col("lastName")), {
+            [Op.like]: pattern,
+          }),
+        ],
+      },
+      attributes: {
+        exclude: ["password", "email", "phoneNumber", "isEmailVerified"],
+      },
+      include: [
+        {
+          model: EloScore,
+          as: "eloScore",
+          attributes: ["id", "userId", "score", "createdAt", "updatedAt"],
+          required: false,
+        },
+      ],
+      offset,
+      limit,
+      order: [
+        ["firstName", "ASC"],
+        ["lastName", "ASC"],
+      ],
+      distinct: true,
+    });
+
+    const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
+
+    return {
+      users: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
   async findById(id: number): Promise<User | null> {
-    return await User.findByPk(id);
+    return await User.findByPk(id, {
+      attributes: {
+        exclude: ["password", "email", "phoneNumber", "isEmailVerified"],
+      },
+      include: [
+        {
+          model: EloScore,
+          as: "eloScore",
+          attributes: ["id", "userId", "score", "createdAt", "updatedAt"],
+          required: false,
+        },
+      ],
+    });
   }
 
   async findMe(userId: number): Promise<User | null> {

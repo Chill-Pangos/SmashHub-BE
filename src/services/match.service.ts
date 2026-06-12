@@ -257,6 +257,89 @@ async function assignUmpiresToSubMatches(
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class MatchService {
+  async findById(matchId: number): Promise<Match | null> {
+    return Match.findByPk(matchId, {
+      include: [
+        ...MATCH_DETAIL_INCLUDE,
+        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
+      ],
+      order: [
+        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
+        [
+          { model: SubMatch, as: "subMatches" },
+          { model: MatchSet, as: "matchSets" },
+          "setNumber",
+          "ASC",
+        ],
+      ],
+    });
+  }
+
+  async findByEntryNames(
+    entryAName: string,
+    entryBName: string,
+    filters: { tournamentId?: number; categoryId?: number } = {},
+    offset = 0,
+    limit = 10,
+  ): Promise<{ matches: Match[]; count: number; offset: number; limit: number }> {
+    const firstNamePattern = `%${entryAName.trim()}%`;
+    const secondNamePattern = `%${entryBName.trim()}%`;
+    const scheduleWhere = filters.categoryId ? { categoryId: filters.categoryId } : undefined;
+    const categoryWhere = filters.tournamentId ? { tournamentId: filters.tournamentId } : undefined;
+
+    const { rows: matches, count } = await Match.findAndCountAll({
+      where: {
+        [Op.or]: [
+          {
+            "$entryA.name$": { [Op.like]: firstNamePattern },
+            "$entryB.name$": { [Op.like]: secondNamePattern },
+          },
+          {
+            "$entryA.name$": { [Op.like]: secondNamePattern },
+            "$entryB.name$": { [Op.like]: firstNamePattern },
+          },
+        ],
+      } as any,
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          ...(scheduleWhere && { where: scheduleWhere, required: true }),
+          include: [
+            {
+              model: TournamentCategory,
+              as: "tournamentCategory",
+              ...(categoryWhere && { where: categoryWhere, required: true }),
+            },
+          ],
+        },
+        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE], required: true },
+        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE], required: true },
+        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        {
+          model: MatchReferee,
+          as: "matchReferees",
+          include: [
+            {
+              model: User,
+              as: "referee",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
+      ],
+      offset,
+      limit,
+      order: [["updatedAt", "DESC"]],
+      distinct: true,
+      subQuery: false,
+    });
+
+    return { matches, count, offset, limit };
+  }
+
   // ── 1. Bắt đầu trận ───────────────────────────────────────────────────────
 
   /**

@@ -60,6 +60,7 @@ export interface TournamentResponseDto {
 }
 
 export interface TournamentFilterDto {
+  name?: string | undefined;
   userId?: number | undefined;
   createdBy?: number | undefined;
   minAge?: number | undefined;
