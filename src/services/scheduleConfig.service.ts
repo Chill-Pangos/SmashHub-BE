@@ -47,8 +47,6 @@ export interface ScheduleValidationCategoryInput {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SINGLE_DAY_THRESHOLD_HOURS = 20;
-
 /**
  * Số đội đi tiếp từ group stage sang knockout.
  * Mặc định 2 đội đầu bảng.
@@ -118,11 +116,18 @@ export function calculateTotalMatchesFromCategories(
 
 // ─── Schedule Math Helpers ────────────────────────────────────────────────────
 
+function dateOnlyTime(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 function isSingleDay(startDate: Date, endDate: Date): boolean {
-  return (
-    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60) <
-    SINGLE_DAY_THRESHOLD_HOURS
-  );
+  return dateOnlyTime(startDate) === dateOnlyTime(endDate);
+}
+
+function withTime(date: Date, hour: number, minute: number): Date {
+  const result = new Date(date);
+  result.setHours(hour, minute, 0, 0);
+  return result;
 }
 
 function calculateAvailableMinutes(
@@ -133,15 +138,16 @@ function calculateAvailableMinutes(
   dailyEndHour: number,
   dailyEndMinute: number
 ): number {
+  const dailyMinutes =
+    dailyEndHour * 60 + dailyEndMinute - (dailyStartHour * 60 + dailyStartMinute);
+
   if (isSingleDay(startDate, endDate)) {
-    return (endDate.getTime() - startDate.getTime()) / 60000;
+    return dailyMinutes;
   }
 
   const diffDays = Math.ceil(
     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
-  const dailyMinutes =
-    dailyEndHour * 60 + dailyEndMinute - (dailyStartHour * 60 + dailyStartMinute);
   return dailyMinutes * diffDays;
 }
 
@@ -162,10 +168,17 @@ function calculateEstimatedEndTime(
   totalMatches: number,
   matchDurationMinutes: number,
   breakDurationMinutes: number,
-  numberOfTables: number
+  numberOfTables: number,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  endDate: Date
 ): Date {
+  const effectiveStartDate = isSingleDay(startDate, endDate)
+    ? withTime(startDate, dailyStartHour, dailyStartMinute)
+    : startDate;
+
   return new Date(
-    startDate.getTime() +
+    effectiveStartDate.getTime() +
       calculateNeededMinutes(
         totalMatches,
         matchDurationMinutes,
@@ -174,6 +187,17 @@ function calculateEstimatedEndTime(
       ) *
         60000
   );
+}
+
+function getEffectiveTournamentEndTime(
+  startDate: Date,
+  endDate: Date,
+  dailyEndHour: number,
+  dailyEndMinute: number
+): Date {
+  return isSingleDay(startDate, endDate)
+    ? withTime(endDate, dailyEndHour, dailyEndMinute)
+    : endDate;
 }
 
 // ─── Model Validator ─────────────────────────────────────────────────────────
@@ -453,7 +477,20 @@ export class ScheduleConfigService {
       resolvedMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
     const estimatedEndTime = calculateEstimatedEndTime(
-      startDate, resolvedMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+      startDate,
+      resolvedMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      endDate
+    );
+    const tournamentEndTime = getEffectiveTournamentEndTime(
+      startDate,
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const isValid = neededMinutes <= availableMinutes;
@@ -461,21 +498,21 @@ export class ScheduleConfigService {
       totalMatches: resolvedMatches,
       totalSlots,
       estimatedEndTime,
-      tournamentEndTime: endDate,
+      tournamentEndTime,
       ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
     };
 
     if (isValid) {
       return {
         isValid: true,
-        message: `Schedule is valid. It is expected to finish at ${estimatedEndTime.toISOString()}, ${Math.floor((endDate.getTime() - estimatedEndTime.getTime()) / 60000)} minutes before the deadline.`,
+        message: `Schedule is valid. It is expected to finish at ${estimatedEndTime.toISOString()}, ${Math.floor((tournamentEndTime.getTime() - estimatedEndTime.getTime()) / 60000)} minutes before the deadline.`,
         details,
       };
     }
 
     return {
       isValid: false,
-      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${endDate.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
+      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
       details,
     };
   }
@@ -577,7 +614,20 @@ export class ScheduleConfigService {
       totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
     const estimatedEndTime = calculateEstimatedEndTime(
-      startDate, totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+      startDate,
+      totalMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      endDate
+    );
+    const tournamentEndTime = getEffectiveTournamentEndTime(
+      startDate,
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const isValid = neededMinutes <= availableMinutes;
@@ -585,21 +635,21 @@ export class ScheduleConfigService {
       totalMatches,
       totalSlots,
       estimatedEndTime,
-      tournamentEndTime: endDate,
+      tournamentEndTime,
       ...(!isValid && { overflowMinutes: neededMinutes - availableMinutes }),
     };
 
     if (isValid) {
       return {
         isValid: true,
-        message: `Schedule is valid. It is expected to finish at ${estimatedEndTime.toISOString()}, ${Math.floor((endDate.getTime() - estimatedEndTime.getTime()) / 60000)} minutes before the deadline.`,
+        message: `Schedule is valid. It is expected to finish at ${estimatedEndTime.toISOString()}, ${Math.floor((tournamentEndTime.getTime() - estimatedEndTime.getTime()) / 60000)} minutes before the deadline.`,
         details,
       };
     }
 
     return {
       isValid: false,
-      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${endDate.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
+      message: `Schedule exceeds the allowed time. It is expected to finish at ${estimatedEndTime.toISOString()}, but the tournament ends at ${tournamentEndTime.toISOString()} (exceeds by ${neededMinutes - availableMinutes} minutes).`,
       details,
     };
   }
@@ -654,7 +704,20 @@ export class ScheduleConfigService {
       totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
     );
     const estimatedEndTime = calculateEstimatedEndTime(
-      startDate, totalMatches, matchDurationMinutes, breakDurationMinutes, numberOfTables
+      startDate,
+      totalMatches,
+      matchDurationMinutes,
+      breakDurationMinutes,
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      endDate
+    );
+    const tournamentEndTime = getEffectiveTournamentEndTime(
+      startDate,
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const isValid = neededMinutes <= availableMinutes;
@@ -663,7 +726,7 @@ export class ScheduleConfigService {
       totalMatches,
       totalSlots,
       estimatedEndTime,
-      tournamentEndTime: endDate,
+      tournamentEndTime,
       availableMinutes,
       neededMinutes,
       startDate,
