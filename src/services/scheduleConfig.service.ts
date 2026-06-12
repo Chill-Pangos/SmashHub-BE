@@ -398,6 +398,20 @@ function normalizeScheduleConfigDates(
   return normalized;
 }
 
+function removeUndefinedFields(
+  data: Partial<ScheduleConfig>
+): Partial<ScheduleConfig> {
+  const cleaned: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (value !== undefined) {
+      cleaned[key] = value;
+    }
+  }
+
+  return cleaned as Partial<ScheduleConfig>;
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class ScheduleConfigService {
@@ -456,6 +470,7 @@ export class ScheduleConfigService {
 
     const existing = await this.getConfig(tournamentId);
     if (!existing) throw new NotFoundError("Schedule config not found");
+    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(data));
 
     const merged = {
       startDate:              existing.startDate,
@@ -474,7 +489,7 @@ export class ScheduleConfigService {
       lunchBreakStartMinute:  existing.lunchBreakStartMinute,
       lunchBreakEndHour:      existing.lunchBreakEndHour,
       lunchBreakEndMinute:    existing.lunchBreakEndMinute,
-      ...data,
+      ...updateData,
     } as Partial<ScheduleConfig>;
 
     const breakdown = totalMatches != null
@@ -537,6 +552,11 @@ export class ScheduleConfigService {
 
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
+    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(data));
+
+    if (Object.keys(updateData).length === 0) {
+      return config;
+    }
 
     // Merge existing → incoming để validate toàn trạng thái cuối
     const mergedForValidation = {
@@ -556,12 +576,12 @@ export class ScheduleConfigService {
       lunchBreakStartMinute:  config.lunchBreakStartMinute,
       lunchBreakEndHour:      config.lunchBreakEndHour,
       lunchBreakEndMinute:    config.lunchBreakEndMinute,
-      ...data,
+      ...updateData,
     } as Partial<ScheduleConfig>;
 
     await runModelValidation(tournamentId, mergedForValidation);
 
-    return await config.update(data);
+    return await config.update(updateData);
   }
 
   /**
