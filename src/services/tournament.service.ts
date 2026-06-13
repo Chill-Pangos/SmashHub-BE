@@ -95,6 +95,7 @@ export class TournamentService {
             maxMembersPerEntry: categoryData.maxMembersPerEntry ?? null,
             gender: categoryData.gender ?? null,
             isGroupStage: categoryData.isGroupStage,
+            entryFee: categoryData.entryFee ?? 0,
           })),
           { transaction },
         );
@@ -427,6 +428,7 @@ export class TournamentService {
               maxMembersPerEntry: c.maxMembersPerEntry ?? null,
               gender: c.gender ?? null,
               isGroupStage: c.isGroupStage,
+              entryFee: c.entryFee ?? 0,
             })),
             { transaction },
           );
