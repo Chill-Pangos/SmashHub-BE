@@ -2,7 +2,7 @@
 
 User management endpoints
 
-Total endpoints: 8
+Total endpoints: 9
 
 ## POST /api/users
 Tag: Users
@@ -174,6 +174,24 @@ Example response:
   "message": "Unauthorized access"
 }
 ```
+
+---
+
+## GET /api/users/search
+Tag: Users
+Summary: Search users by name
+
+Request parameters:
+- name (query) | type: string | First name, last name, or full name to search for
+- page (query) | type: integer | Page number for pagination | default: 1
+- limit (query) | type: integer | Maximum number of records to return | default: 10
+
+Request body:
+None
+
+Responses:
+### 200
+List of matching users with pagination
 
 ---
 

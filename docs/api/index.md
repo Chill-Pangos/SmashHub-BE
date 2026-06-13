@@ -17,7 +17,7 @@ Base path: /api
 - [Match Sets](match-sets.md) - Match set endpoints (8 endpoints)
 - [Matches](matches.md) - Match management endpoints (11 endpoints)
 - [Notifications](notifications.md) - Real-time notifications endpoints (6 endpoints)
-- [Payments](payments.md) - Payment and entry fee management endpoints (12 endpoints)
+- [Payments](payments.md) - Payment and entry fee management endpoints (10 endpoints)
 - [Permissions](permissions.md) - Permission management endpoints (5 endpoints)
 - [Role Permissions](role-permissions.md) - Role permission assignment endpoints (6 endpoints)
 - [Roles](roles.md) - Role management endpoints (6 endpoints)
@@ -29,7 +29,7 @@ Base path: /api
 - [Tournament Referees](tournament-referees.md) - Tournament referee management endpoints (10 endpoints)
 - [Tournaments](tournaments.md) - Tournament management endpoints (10 endpoints)
 - [User Roles](user-roles.md) - User role assignment endpoints (6 endpoints)
-- [Users](users.md) - User management endpoints (8 endpoints)
+- [Users](users.md) - User management endpoints (9 endpoints)
 
 ## Notes
 
