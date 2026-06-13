@@ -22,6 +22,7 @@ export interface CreateTournamentCategoryDto {
   maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
+  entryFee?: number;
 }
 
 export interface UpdateTournamentDto {
@@ -46,6 +47,7 @@ export interface UpdateTournamentCategoryDto {
   maxMembersPerEntry?: number;
   gender?: 'male' | 'female' | 'mixed';
   isGroupStage?: boolean;
+  entryFee?: number;
 }
 
 export interface TournamentResponseDto {
