@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import matchSetService from "../services/matchSet.service";
 import { BadRequestError } from "../utils/errors.helper";
+import { parsePositiveInt } from "../utils/request.helper";
 
 export class MatchSetController {
   /**
@@ -18,7 +19,7 @@ export class MatchSetController {
       }
 
       const matchSet = await matchSetService.submitFinalSetScore(refereeId, {
-        subMatchId,
+        subMatchId: parsePositiveInt(subMatchId, "subMatchId"),
         entryAScore,
         entryBScore,
       });
@@ -38,8 +39,8 @@ export class MatchSetController {
       }
 
       const result = await matchSetService.updateLiveSetScore(refereeId, {
-        subMatchId,
-        setNumber,
+        subMatchId: parsePositiveInt(subMatchId, "subMatchId"),
+        ...(setNumber !== undefined && { setNumber: parsePositiveInt(setNumber, "setNumber") }),
         entryAScore,
         entryBScore,
       });
@@ -59,8 +60,8 @@ export class MatchSetController {
       }
 
       const matchSet = await matchSetService.submitFinalSetScore(refereeId, {
-        subMatchId,
-        setNumber,
+        subMatchId: parsePositiveInt(subMatchId, "subMatchId"),
+        ...(setNumber !== undefined && { setNumber: parsePositiveInt(setNumber, "setNumber") }),
         entryAScore,
         entryBScore,
       });
@@ -72,9 +73,9 @@ export class MatchSetController {
 
   async getLiveSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const subMatchId = Number(req.params.subMatchId);
+      const subMatchId = parsePositiveInt(req.params.subMatchId, "subMatchId");
       const setNumber =
-        req.query.setNumber !== undefined ? Number(req.query.setNumber) : undefined;
+        req.query.setNumber !== undefined ? parsePositiveInt(req.query.setNumber, "setNumber") : undefined;
 
       const liveScore = await matchSetService.getLiveSetScore(subMatchId, setNumber);
       res.status(200).json({ liveScore });
@@ -90,7 +91,7 @@ export class MatchSetController {
   async updateSetScore(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = req.userId!;
-      const setId = Number(req.params.id);
+      const setId = parsePositiveInt(req.params.id, "id");
       const { entryAScore, entryBScore } = req.body;
 
       if (entryAScore === undefined || entryBScore === undefined) {
@@ -115,10 +116,7 @@ export class MatchSetController {
    */
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const subMatchId = Number(req.params.subMatchId);
-      if (!Number.isInteger(subMatchId) || subMatchId <= 0) {
-        throw new BadRequestError("Invalid sub-match ID");
-      }
+      const subMatchId = parsePositiveInt(req.params.subMatchId, "subMatchId");
 
       const sets = await matchSetService.getSetsBySubMatch(subMatchId);
       res.status(200).json({
@@ -138,7 +136,7 @@ export class MatchSetController {
    */
   async getById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const setId = Number(req.params.id);
+      const setId = parsePositiveInt(req.params.id, "id");
       const matchSet = await matchSetService.getSetById(setId);
       res.status(200).json(matchSet);
     } catch (error) {
@@ -153,7 +151,7 @@ export class MatchSetController {
   async deleteSet(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = req.userId!;
-      const setId = Number(req.params.id);
+      const setId = parsePositiveInt(req.params.id, "id");
 
       await matchSetService.deleteSet(refereeId, setId);
       res.status(204).send();

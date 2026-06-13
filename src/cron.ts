@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import sequelize from "./config/database";
+import { disconnectRedis } from "./config/redis";
 import { startCleanupCrons, stopCleanupCrons } from "./crons/cleanup.cron";
 import { startTournamentCrons, stopTournamentCrons } from "./crons/tournament.cron";
 
@@ -10,7 +11,7 @@ const start = async () => {
 
     // Start cron jobs
     startCleanupCrons();
-    startTournamentCrons();
+    await startTournamentCrons();
 
     console.log("Cron jobs started");
   } catch (error) {
@@ -24,6 +25,7 @@ const shutdown = async () => {
   try {
     stopCleanupCrons();
     stopTournamentCrons();
+    await disconnectRedis();
   } catch (e) {
     console.error("Error stopping cron jobs:", e);
   }

@@ -20,6 +20,8 @@ import {
 } from "../dto/auth.dto";
 import UserRole from "../models/userRole.model";
 import Role from "../models/role.model";
+import EloScore from "../models/eloScore.model";
+import { sequelize } from "../config/database";
 
 export class AuthService {
   private readonly JWT_SECRET = config.jwt.secret;
@@ -165,15 +167,6 @@ export class AuthService {
     // Hash password
     const hashedPassword = await this.hashPassword(password);
 
-    // Create user
-    const user = await User.create({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      isEmailVerified: false,
-    } as any);
-
     const assignedRoleName = role || "spectator"; // Default to 'spectator' role if none provided
 
     const foundRole = await Role.findOne({ where: { name: assignedRoleName } });
@@ -181,10 +174,37 @@ export class AuthService {
       throw AuthErrors.RoleNotFound();
     }
 
-    await UserRole.create({
-      userId: user.id,
-      roleId: foundRole.id,
-    } as any);
+    const user = await sequelize.transaction(async (transaction) => {
+      const createdUser = await User.create(
+        {
+          firstName,
+          lastName,
+          email,
+          password: hashedPassword,
+          isEmailVerified: false,
+        } as any,
+        { transaction },
+      );
+
+      await Promise.all([
+        UserRole.create(
+          {
+            userId: createdUser.id,
+            roleId: foundRole.id,
+          } as any,
+          { transaction },
+        ),
+        EloScore.create(
+          {
+            userId: createdUser.id,
+            score: 1000,
+          } as any,
+          { transaction },
+        ),
+      ]);
+
+      return createdUser;
+    });
 
     // Generate tokens
     const accessToken = this.generateAccessToken(user.id);

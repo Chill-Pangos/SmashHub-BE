@@ -10,6 +10,7 @@ import User from "../models/user.model";
 import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
 import notificationService, { NotificationTemplates } from "./notification.service";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -663,7 +664,7 @@ export class EntryService {
       }
     }
 
-    return await entry.update(data);
+    return await entry.update(removeUndefinedFields(data as Record<string, unknown>));
   }
 
   /**

@@ -14,6 +14,8 @@ import Tournament from "../models/tournament.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
+import { toUtcDate } from "../utils/date.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -581,7 +583,7 @@ export class ScheduleService {
             categoryId,
             stage: "group" satisfies Stage,
             groupName: pair.groupName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -655,7 +657,7 @@ export class ScheduleService {
             categoryId,
             stage: "knockout" satisfies Stage,
             knockoutRound: pair.roundName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -776,7 +778,7 @@ export class ScheduleService {
             categoryId: job.category.id,
             stage: "group" satisfies Stage,
             groupName: job.pair.groupName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -807,7 +809,7 @@ export class ScheduleService {
             categoryId: job.category.id,
             stage: "knockout" satisfies Stage,
             knockoutRound: job.pair.roundName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -1004,12 +1006,18 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<Pick<Schedule, "scheduledAt" | "tableNumber">>,
+    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number }>,
   ): Promise<Schedule> {
     const schedule = await this.getScheduleById(scheduleId);
     const category = await getCategoryWithTournament(schedule.categoryId);
     assertOrganizer(organizerId, category.tournament!);
-    return await schedule.update(data);
+    const updateData = removeUndefinedFields({
+      ...data,
+      ...(data.scheduledAt != null && {
+        scheduledAt: toUtcDate(data.scheduledAt, "scheduledAt"),
+      }),
+    });
+    return await schedule.update(updateData);
   }
 
   async deleteSchedule(

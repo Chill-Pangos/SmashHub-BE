@@ -3,6 +3,7 @@ import userService from "../services/user.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { NotFoundError } from "../utils/errors.helper";
 import { avatarUpload } from "../config/multer";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class UserController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -16,9 +17,7 @@ export class UserController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await userService.findAll(offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -29,9 +28,7 @@ export class UserController {
   async searchByName(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await userService.searchByName(name, offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -55,7 +52,7 @@ export class UserController {
 
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await userService.findById(Number(req.params.id));
+      const user = await userService.findById(parsePositiveInt(req.params.id, "id"));
       if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
@@ -65,7 +62,7 @@ export class UserController {
 
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await userService.update(Number(req.params.id), req.body);
+      const user = await userService.update(parsePositiveInt(req.params.id, "id"), req.body);
       if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
@@ -75,7 +72,7 @@ export class UserController {
 
   async updateProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await userService.updateProfile(Number(req.params.id), req.body);
+      const user = await userService.updateProfile(parsePositiveInt(req.params.id, "id"), req.body);
       if (!user) throw new NotFoundError("User not found");
       res.status(200).json(user);
     } catch (error) {
@@ -85,7 +82,7 @@ export class UserController {
 
   async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const deleted = await userService.delete(Number(req.params.id));
+      const deleted = await userService.delete(parsePositiveInt(req.params.id, "id"));
       if (!deleted) throw new NotFoundError("User not found");
       res.status(204).send();
     } catch (error) {
@@ -95,9 +92,7 @@ export class UserController {
 
   async getAvailableChiefReferees(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await userService.findAvailableChiefReferees(offset, limit);
       res.status(200).json(result);
     } catch (error) {

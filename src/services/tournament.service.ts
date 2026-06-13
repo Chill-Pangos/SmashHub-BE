@@ -17,6 +17,7 @@ import {
 } from "../dto/tournament.dto";
 import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
 const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
@@ -218,7 +219,18 @@ export class TournamentService {
         model: ScheduleConfig,
         as: "scheduleConfig",
         required: false,
-        attributes: [],
+        attributes: [
+          "startDate",
+          "endDate",
+          "registrationStartDate",
+          "registrationEndDate",
+          "bracketGenerationDate",
+          "dailyStartHour",
+          "dailyStartMinute",
+          "dailyEndHour",
+          "dailyEndMinute",
+          "numberOfTables",
+        ],
       },
     ];
 
@@ -384,15 +396,16 @@ export class TournamentService {
       }
 
       // Update tournament basic info
-      await tournament.update(
-        {
-          name: data.name,
-          introduction: data.introduction,
-          location: data.location,
-          status: data.status,
-        },
-        { transaction },
-      );
+      const tournamentUpdateData = removeUndefinedFields({
+        name: data.name,
+        introduction: data.introduction,
+        tier: data.tier,
+        location: data.location,
+        status: data.status,
+      });
+      if (Object.keys(tournamentUpdateData).length > 0) {
+        await tournament.update(tournamentUpdateData, { transaction });
+      }
 
       if (
         data.categories !== undefined &&
@@ -405,33 +418,46 @@ export class TournamentService {
 
       // Update or create tournament categories if provided
       if (data.categories !== undefined) {
-        // Delete existing categories
-        await TournamentCategory.destroy({
+        const existingCategory = await TournamentCategory.findOne({
           where: { tournamentId: id },
           transaction,
         });
 
-        // Create new categories if provided
-        if (data.categories.length > 0) {
-          await TournamentCategory.bulkCreate(
-            data.categories.map((c) => ({
+        if (data.categories.length === 0) {
+          await TournamentCategory.destroy({
+            where: { tournamentId: id },
+            transaction,
+          });
+        } else {
+          const c = data.categories[0] as any;
+          const categoryData = removeUndefinedFields({
+            tournamentId: id,
+            name: c.name,
+            type: c.type,
+            maxEntries: c.maxEntries,
+            maxSets: c.maxSets,
+            teamFormat: c.teamFormat,
+            minAge: c.minAge,
+            maxAge: c.maxAge,
+            minElo: c.minElo,
+            maxElo: c.maxElo,
+            maxMembersPerEntry: c.maxMembersPerEntry,
+            gender: c.gender,
+            isGroupStage: c.isGroupStage,
+            entryFee: c.entryFee,
+          } as Record<string, unknown>);
+
+          if (existingCategory) {
+            await existingCategory.update(categoryData, { transaction });
+          } else {
+            await TournamentCategory.create(
+              {
               tournamentId: id,
-              name: c.name,
-              type: c.type,
-              maxEntries: c.maxEntries,
-              maxSets: c.maxSets,
-              teamFormat: c.teamFormat ?? null,
-              minAge: c.minAge ?? null,
-              maxAge: c.maxAge ?? null,
-              minElo: c.minElo ?? null,
-              maxElo: c.maxElo ?? null,
-              maxMembersPerEntry: c.maxMembersPerEntry ?? null,
-              gender: c.gender ?? null,
-              isGroupStage: c.isGroupStage,
-              entryFee: c.entryFee ?? 0,
-            })),
-            { transaction },
-          );
+                ...categoryData,
+              } as any,
+              { transaction },
+            );
+          }
         }
       }
 

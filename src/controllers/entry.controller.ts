@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import entryService from "../services/entry.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError } from "../utils/errors.helper";
+import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class EntryController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -17,7 +18,13 @@ export class EntryController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
       const { categoryId, action, targetEntryId, name } = req.body;
-      const result = await entryService.register(userId, categoryId, action, targetEntryId, name);
+      const result = await entryService.register(
+        userId,
+        parsePositiveInt(categoryId, "categoryId"),
+        action,
+        targetEntryId === undefined ? undefined : parsePositiveInt(targetEntryId, "targetEntryId"),
+        name,
+      );
       res.status(201).json(result);
     } catch (error) {
       next(error);
@@ -26,10 +33,8 @@ export class EntryController {
 
   async findByCategoryId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
       const isFull = req.query.isFull ? req.query.isFull === "true" : undefined;
       const isAcceptingMembers = req.query.isAcceptingMembers
         ? req.query.isAcceptingMembers === "true"
@@ -59,9 +64,7 @@ export class EntryController {
   async searchByName(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryService.searchByName(name, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -73,7 +76,7 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const joinRequestId = Number(req.params.joinRequestId);
+      const joinRequestId = parsePositiveInt(req.params.joinRequestId, "joinRequestId");
       const { action, rejectionReason } = req.body;
       const result = await entryService.respondToJoinRequest(
         captainId,
@@ -91,14 +94,15 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const { offset, limit } = parsePagination(req.query);
       const status =
         typeof req.query.status === "string"
           ? (req.query.status as "pending" | "approved" | "rejected")
           : undefined;
+      if (status && !["pending", "approved", "rejected"].includes(status)) {
+        throw new BadRequestError("status must be pending, approved, or rejected");
+      }
       const result = await entryService.getJoinRequests(captainId, entryId, status, {
         offset,
         limit,
@@ -111,7 +115,7 @@ export class EntryController {
 
   async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const entry = await entryService.getById(entryId);
       res.status(200).json(entry);
     } catch (error) {
@@ -123,7 +127,7 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const entry = await entryService.update(captainId, entryId, req.body);
       res.status(200).json(entry);
     } catch (error) {
@@ -135,7 +139,7 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       await entryService.delete(captainId, entryId);
       res.status(204).send();
     } catch (error) {
@@ -147,9 +151,13 @@ export class EntryController {
     try {
       const currentCaptainId = this.getAuthenticatedUserId(req, next);
       if (currentCaptainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const { newCaptainId } = req.body;
-      const entry = await entryService.transferCaptaincy(currentCaptainId, entryId, newCaptainId);
+      const entry = await entryService.transferCaptaincy(
+        currentCaptainId,
+        entryId,
+        parsePositiveInt(newCaptainId, "newCaptainId"),
+      );
       res.status(200).json(entry);
     } catch (error) {
       next(error);
@@ -160,9 +168,13 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const { count } = req.body;
-      const entry = await entryService.setRequiredMemberCount(captainId, entryId, count);
+      const entry = await entryService.setRequiredMemberCount(
+        captainId,
+        entryId,
+        parsePositiveInt(count, "count"),
+      );
       res.status(200).json(entry);
     } catch (error) {
       next(error);
@@ -173,7 +185,7 @@ export class EntryController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const entry = await entryService.confirmLineup(captainId, entryId);
       res.status(200).json(entry);
     } catch (error) {
@@ -183,10 +195,8 @@ export class EntryController {
 
   async getEligibleEntries(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryService.getEligibleEntries(categoryId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -202,7 +212,7 @@ export class EntryController {
     try {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
-      const categoryId = Number(req.params.categoryId);
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
       const result = await entryService.disqualifyIneligibleEntries(organizerId, categoryId);
       res.status(200).json(result);
     } catch (error) {
@@ -214,9 +224,7 @@ export class EntryController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryService.getUserEntries(userId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -228,7 +236,7 @@ export class EntryController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const role = await entryService.getUserRoleInEntry(entryId, userId);
       res.status(200).json({ entryId, userId, role });
     } catch (error) {
