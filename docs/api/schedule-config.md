@@ -220,7 +220,7 @@ Example response:
 
 ---
 
-## GET /api/schedule-configs/tournament/{tournamentId}
+## GET /api/schedule-configs/{tournamentId}/schedule-config
 Tag: Schedule Config
 Summary: Get schedule configuration for a tournament
 
@@ -287,7 +287,7 @@ Example response:
 
 ---
 
-## PATCH /api/schedule-configs/tournament/{tournamentId}
+## PATCH /api/schedule-configs/{tournamentId}/schedule-config
 Tag: Schedule Config
 Summary: Update schedule configuration
 
@@ -432,7 +432,7 @@ Example response:
 
 ---
 
-## DELETE /api/schedule-configs/tournament/{tournamentId}
+## DELETE /api/schedule-configs/{tournamentId}/schedule-config
 Tag: Schedule Config
 Summary: Delete schedule configuration
 
@@ -653,7 +653,7 @@ Example response:
 
 ---
 
-## POST /api/schedule-configs/tournament/{tournamentId}/preview-create
+## POST /api/schedule-configs/{tournamentId}/schedule-config/preview-create
 Tag: Schedule Config
 Summary: Preview schedule configuration before creation
 
@@ -800,7 +800,7 @@ Example response:
 
 ---
 
-## POST /api/schedule-configs/tournament/{tournamentId}/preview-update
+## POST /api/schedule-configs/{tournamentId}/schedule-config/preview-update
 Tag: Schedule Config
 Summary: Preview schedule configuration update
 
