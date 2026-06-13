@@ -18,6 +18,7 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(config.upload.avatarUrlPath, express.static(config.upload.avatarDir));
+app.use(config.upload.paymentUrlPath, express.static(config.upload.paymentDir));
 
 // Swagger Documentation
 app.use(

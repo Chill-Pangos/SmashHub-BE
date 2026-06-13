@@ -19,9 +19,19 @@ export class UserService {
     limit: number = 10,
   ): Promise<{ users: User[]; pagination: any }> {
     const { count, rows } = await User.findAndCountAll({
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          attributes: ["id", "name"],
+          through: { attributes: [] },
+          required: false,
+        },
+      ],
       offset,
       limit,
       order: [["createdAt", "DESC"]],
+      distinct: true,
     });
 
     const totalPages = Math.ceil(count / limit);

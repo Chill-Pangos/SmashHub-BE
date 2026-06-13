@@ -105,8 +105,7 @@ INSERT INTO `permissions` (`name`) VALUES
   -- Payment permissions
   ('payments:view'),
   ('payments:create'),
-  ('payments:update'),
-  ('payments:delete');
+  ('payments:update');
 
 -- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- ROLE PERMISSIONS
