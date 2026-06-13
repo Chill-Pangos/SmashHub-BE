@@ -29,6 +29,8 @@ const envSchema = Joi.object({
   SMTP_FROM_NAME: Joi.string().default("SmashHub"),
   AVATAR_UPLOAD_DIR: Joi.string().required(),
   AVATAR_URL_PATH: Joi.string().default("/uploads/avatars"),
+  PAYMENT_UPLOAD_DIR: Joi.string().required(),
+  PAYMENT_URL_PATH: Joi.string().required(),
   REDIS_URL: Joi.string().uri().required(),
   REDIS_MATCH_SET_SCORE_TTL_SECONDS: Joi.number().integer().min(0).required(),
 }).unknown(true);
@@ -48,6 +50,8 @@ const config = {
   upload: {
     avatarDir: path.resolve(envVars.AVATAR_UPLOAD_DIR),
     avatarUrlPath: envVars.AVATAR_URL_PATH,
+    paymentDir: path.resolve(envVars.PAYMENT_UPLOAD_DIR),
+    paymentUrlPath: envVars.PAYMENT_URL_PATH,
   },
   jwt: {
     secret: envVars.JWT_SECRET,

@@ -1,11 +1,15 @@
 // payment.service.ts
 import { Op, WhereOptions } from "sequelize";
 import { sequelize } from "../config/database";
-import Payment, { PaymentMethod, PaymentStatus } from "../models/payment.model";
+import Payment, { PaymentStatus } from "../models/payment.model";
 import Entry from "../models/entry.model";
 import User from "../models/user.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
+import config from "../config/config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +30,6 @@ interface PaginationOptions {
 
 interface PaymentListOptions extends PaginationOptions {
   status?: PaymentStatus;
-  method?: PaymentMethod;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -87,19 +90,35 @@ const CONFIRMER_INCLUDE = {
   attributes: ["id", "firstName", "lastName", "email"],
 };
 
+async function savePaymentImage(file: Express.Multer.File): Promise<string> {
+  const outputFilename = `${path.basename(file.filename, path.extname(file.filename))}.webp`;
+  const outputPath = path.join(config.upload.paymentDir, outputFilename);
+
+  await fs.mkdir(config.upload.paymentDir, { recursive: true });
+
+  try {
+    await sharp(file.path)
+      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 85 })
+      .toFile(outputPath);
+  } finally {
+    await fs.unlink(file.path).catch(() => {});
+  }
+
+  return `${config.upload.paymentUrlPath}/${outputFilename}`;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class PaymentService {
-  // ── 1. Tạo payment (bank_transfer hoặc online) ────────────────────────────
+  // ── 1. Tạo payment chuyển khoản ──────────────────────────────────────────
 
   /**
-   * Tạo payment record cho entry.
-   * Cash không đi qua đây — dùng recordCashPayment thay thế.
+   * Tạo payment chuyển khoản cho entry.
    */
   async createPayment(
     entryId: number,
-    amount: number,
-    method: Exclude<PaymentMethod, "cash">
+    amount: number
   ): Promise<Payment> {
     const entry = await getEntryWithCategory(entryId);
     assertHasEntryFee(entry.category!);
@@ -110,15 +129,14 @@ export class PaymentService {
     });
     if (existing) throw new Error("A pending or completed payment already exists for this entry");
 
-    return await Payment.create({ entryId, amount, method, status: "pending" });
+    return await Payment.create({ entryId, amount, status: "pending" });
   }
 
   // ── 2. Xác nhận thanh toán ────────────────────────────────────────────────
 
   async confirmPayment(
     paymentId: number,
-    organizerId: number,
-    options: { proofImageUrl?: string; transactionRef?: string } = {}
+    organizerId: number
   ): Promise<Payment> {
     const payment = await getPaymentWithTournament(paymentId);
     assertOrganizer(organizerId, payment.entry!.category!.tournament!);
@@ -126,22 +144,14 @@ export class PaymentService {
     if (payment.status !== "pending") {
       throw new Error("Only pending payments can be confirmed");
     }
-    if (payment.method === "bank_transfer" && !options.proofImageUrl) {
+    if (!payment.proofImageUrl) {
       throw new Error("Proof image is required for bank transfer confirmation");
-    }
-    if (payment.method === "online" && !options.transactionRef) {
-      throw new Error("Transaction reference is required for online payment confirmation");
-    }
-    if (payment.method === "cash") {
-      throw new Error("Cash payments are confirmed via recordCashPayment");
     }
 
     return await payment.update({
       status: "completed",
       confirmedBy: organizerId,
       confirmedAt: new Date(),
-      ...(options.proofImageUrl && { proofImageUrl: options.proofImageUrl }),
-      ...(options.transactionRef && { transactionRef: options.transactionRef }),
     });
   }
 
@@ -160,81 +170,38 @@ export class PaymentService {
 
   // ── 4. Hoàn tiền ──────────────────────────────────────────────────────────
 
-  async refundPayment(paymentId: number, organizerId: number): Promise<Payment> {
-    const payment = await getPaymentWithTournament(paymentId);
-    assertOrganizer(organizerId, payment.entry!.category!.tournament!);
-
-    if (payment.status !== "completed") {
-      throw new Error("Only completed payments can be refunded");
-    }
-
-    return await payment.update({ status: "refunded", refundedAt: new Date() });
-  }
-
-  // ── 5. Ghi nhận thanh toán tiền mặt ──────────────────────────────────────
-
-  /**
-   * Organizer ghi nhận tiền mặt — tạo và confirm ngay trong 1 bước.
-   */
-  async recordCashPayment(
-    entryId: number,
+  async refundPayment(
+    paymentId: number,
     organizerId: number,
-    amount: number
+    file: Express.Multer.File
   ): Promise<Payment> {
-    const entry = await getEntryWithCategory(entryId);
-    assertHasEntryFee(entry.category!);
-    assertAmountMatchesFee(amount, entry.category!.entryFee!);
-    assertOrganizer(organizerId, entry.category!.tournament!);
+    try {
+      const payment = await getPaymentWithTournament(paymentId);
+      assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
-    const existing = await Payment.findOne({
-      where: { entryId, method: "cash" },
-    });
-    if (existing) throw new Error("Cash payment already recorded for this entry");
+      if (payment.status !== "completed") {
+        throw new Error("Only completed payments can be refunded");
+      }
 
-    return await Payment.create({
-      entryId,
-      amount,
-      method: "cash",
-      status: "completed",
-      confirmedBy: organizerId,
-      confirmedAt: new Date(),
-    });
+      const refundProofImageUrl = await savePaymentImage(file);
+
+      return await payment.update({
+        status: "refunded",
+        refundedAt: new Date(),
+        refundProofImageUrl,
+      });
+    } catch (error) {
+      await fs.unlink(file.path).catch(() => {});
+      throw error;
+    }
   }
 
-  // ── 6. Ghi nhận thanh toán online (webhook) ───────────────────────────────
-
-  /**
-   * Gọi từ webhook của Stripe/VNPay khi thanh toán thành công.
-   */
-  async recordOnlinePayment(
-    entryId: number,
-    amount: number,
-    transactionRef: string
-  ): Promise<Payment> {
-    const entry = await getEntryWithCategory(entryId);
-    assertHasEntryFee(entry.category!);
-
-    const existing = await Payment.findOne({
-      where: { transactionRef, status: "completed" },
-    });
-    if (existing) throw new Error("This transaction has already been processed");
-
-    return await Payment.create({
-      entryId,
-      amount,
-      method: "online",
-      status: "completed",
-      transactionRef,
-      confirmedAt: new Date(),
-    });
-  }
-
-  // ── 7. Upload minh chứng chuyển khoản ────────────────────────────────────
+  // ── 5. Upload minh chứng chuyển khoản ────────────────────────────────────
 
   async uploadPaymentProof(
     paymentId: number,
     userId: number,
-    proofImageUrl: string
+    file: Express.Multer.File
   ): Promise<Payment> {
     const payment = await getPaymentWithTournament(paymentId);
 
@@ -244,19 +211,30 @@ export class PaymentService {
       payment.entry?.category?.tournament?.createdBy === userId;
 
     if (!isCaptain && !isOrganizer) {
+      await fs.unlink(file.path).catch(() => {});
       throw new Error("Only the team captain or organizer can upload payment proof");
     }
-    if (payment.method !== "bank_transfer") {
-      throw new Error("Proof image is only applicable for bank transfer payments");
-    }
     if (payment.status !== "pending") {
+      await fs.unlink(file.path).catch(() => {});
       throw new Error("Can only update proof for pending payments");
     }
 
-    return await payment.update({ proofImageUrl });
+    const oldProofImageUrl = payment.proofImageUrl;
+    const proofImageUrl = await savePaymentImage(file);
+    const updated = await payment.update({ proofImageUrl });
+
+    if (oldProofImageUrl) {
+      const oldPath = path.join(
+        config.upload.paymentDir,
+        path.basename(oldProofImageUrl)
+      );
+      await fs.unlink(oldPath).catch(() => {});
+    }
+
+    return updated;
   }
 
-  // ── 8. Get payment theo ID ────────────────────────────────────────────────
+  // ── 6. Get payment theo ID ────────────────────────────────────────────────
 
   async getPaymentById(paymentId: number): Promise<Payment> {
     const payment = await Payment.findByPk(paymentId, {
@@ -269,7 +247,7 @@ export class PaymentService {
     return payment;
   }
 
-  // ── 9. Get payments theo entry ────────────────────────────────────────────
+  // ── 7. Get payments theo entry ────────────────────────────────────────────
 
   async getPaymentsByEntry(
     entryId: number,
@@ -290,21 +268,20 @@ export class PaymentService {
     });
   }
 
-  // ── 10. Get payments theo category ───────────────────────────────────────
+  // ── 8. Get payments theo category ───────────────────────────────────────
 
   async getPaymentsByCategory(
     categoryId: number,
     organizerId: number,
     options: PaymentListOptions = {}
   ): Promise<{ rows: Payment[]; count: number }> {
-    const { offset = 0, limit = 10, status, method } = options;
+    const { offset = 0, limit = 10, status } = options;
 
     const category = await getCategoryWithTournament(categoryId);
     assertOrganizer(organizerId, category.tournament!);
 
     const where: WhereOptions = {};
     if (status) where.status = status;
-    if (method) where.method = method;
 
     return await Payment.findAndCountAll({
       where,
@@ -324,20 +301,19 @@ export class PaymentService {
     });
   }
 
-  // ── 11. Get pending payments ──────────────────────────────────────────────
+  // ── 9. Get pending payments ──────────────────────────────────────────────
 
   async getPendingPayments(
     organizerId: number,
     categoryId: number,
-    options: PaginationOptions & { method?: PaymentMethod } = {}
+    options: PaginationOptions = {}
   ): Promise<{ rows: Payment[]; count: number }> {
-    const { offset = 0, limit = 10, method } = options;
+    const { offset = 0, limit = 10 } = options;
 
     const category = await getCategoryWithTournament(categoryId);
     assertOrganizer(organizerId, category.tournament!);
 
     const where: WhereOptions = { status: "pending" };
-    if (method) where.method = method;
 
     return await Payment.findAndCountAll({
       where,
@@ -356,7 +332,7 @@ export class PaymentService {
     });
   }
 
-  // ── 12. Get payment stats theo category ──────────────────────────────────
+  // ── 10. Get payment stats theo category ──────────────────────────────────
 
   async getPaymentStats(
     categoryId: number,
