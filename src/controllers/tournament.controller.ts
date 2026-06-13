@@ -229,6 +229,34 @@ export class TournamentController {
     }
   }
 
+  async cancelTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const organizerId = (req as any).user?.id;
+      if (!organizerId) {
+        throw new BadRequestError("Unauthorized - User not authenticated");
+      }
+
+      const tournament = await tournamentService.cancelTournament(id, organizerId);
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Tournament cancelled successfully",
+        data: tournament,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getMyOrganizedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizerId = (req as any).user?.id;

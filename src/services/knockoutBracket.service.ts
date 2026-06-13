@@ -11,6 +11,7 @@ import GroupStanding from "../models/groupStanding.model";
 import groupStandingService from "./groupStanding.service";
 import entryService from "./entry.service";
 import { KnockoutRound } from "../models/schedule.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -366,6 +367,21 @@ async function assertOrganizer(
   }
 }
 
+async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+  if (tournament.status !== "brackets_generated") {
+    throw new Error("Tournament must be in brackets_generated status before managing brackets");
+  }
+
+  const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+  if (!config?.bracketGenerationDate) {
+    throw new Error("Bracket generation date is not configured for this tournament");
+  }
+
+  if (new Date() < config.bracketGenerationDate) {
+    throw new Error("Bracket generation date must be reached before managing brackets");
+  }
+}
+
 function formatBracketTree(
   categoryId: number,
   brackets: KnockoutBracket[],
@@ -656,6 +672,7 @@ export class KnockoutBracketService {
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(organizerId, category.tournamentId);
+    await assertBracketsGenerated(category.tournament!);
 
     const groupNames = await GroupStanding.findAll({
       where: { categoryId },
@@ -680,6 +697,7 @@ export class KnockoutBracketService {
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
+    await assertBracketsGenerated(category.tournament!);
 
     // Đếm số bảng hiện có để tính số slots = numGroups * QUALIFIERS_PER_GROUP
     const groupNames = await GroupStanding.findAll({
@@ -879,6 +897,7 @@ export class KnockoutBracketService {
   ): Promise<BracketPreviewResponse> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(organizerId, category.tournamentId);
+    await assertBracketsGenerated(category.tournament!);
 
     if (category.isGroupStage) {
       throw new Error(
@@ -911,6 +930,7 @@ export class KnockoutBracketService {
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
+    await assertBracketsGenerated(category.tournament!);
 
     if (category.isGroupStage) {
       throw new Error(

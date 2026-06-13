@@ -95,23 +95,18 @@ async function assertOrganizer(
   }
 }
 
-async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
-  // registrationEndDate moved to ScheduleConfig. Prefer scheduleConfig if loaded,
-  // otherwise fetch it by tournament id.
-  let regEnd: Date | undefined;
-  if (tournament.scheduleConfig && tournament.scheduleConfig.registrationEndDate) {
-    regEnd = tournament.scheduleConfig.registrationEndDate;
-  } else {
-    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
-    regEnd = cfg?.registrationEndDate;
+async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+  if (tournament.status !== "brackets_generated") {
+    throw new Error("Tournament must be in brackets_generated status before managing groups");
   }
 
-  if (!regEnd) {
-    throw new Error("Registration end date is not configured for this tournament");
+  const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+  if (!config?.bracketGenerationDate) {
+    throw new Error("Bracket generation date is not configured for this tournament");
   }
 
-  if (new Date() <= regEnd) {
-    throw new Error("Registration must be closed before managing groups");
+  if (new Date() < config.bracketGenerationDate) {
+    throw new Error("Bracket generation date must be reached before managing groups");
   }
 }
 
@@ -189,7 +184,7 @@ export class GroupStandingService {
   ): Promise<GroupPreview[]> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertRegistrationClosed(category.tournament!);
+    await assertBracketsGenerated(category.tournament!);
 
     const entries = await this.getEligibleEntries(category);
 
@@ -231,7 +226,7 @@ export class GroupStandingService {
   ): Promise<GroupStanding[]> {
     const category = await getCategoryWithTournament(categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertRegistrationClosed(category.tournament!);
+    await assertBracketsGenerated(category.tournament!);
     await this.validateAssignments(categoryId, assignments);
 
     return await sequelize.transaction(async (t: Transaction) => {

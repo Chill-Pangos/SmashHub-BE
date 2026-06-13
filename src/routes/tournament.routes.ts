@@ -681,6 +681,43 @@ router.post(
 
 /**
  * @swagger
+ * /tournaments/{id}/cancel:
+ *   post:
+ *     tags: [Tournaments]
+ *     summary: Cancel tournament
+ *     description: |
+ *       Marks a tournament as cancelled. Only the tournament organizer can cancel it.
+ *       Completed or already cancelled tournaments cannot be cancelled.
+ *
+ *       Paid entries are not refunded automatically. Use payment refund APIs to
+ *       upload refund proof and mark completed payments as refunded.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     responses:
+ *       200:
+ *         description: Tournament cancelled successfully
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:id/cancel",
+  authenticate,
+  checkPermission('tournaments:update'),
+  tournamentController.cancelTournament.bind(tournamentController)
+);
+
+/**
+ * @swagger
  * /tournaments/{id}:
  *   get:
  *     tags: [Tournaments]
