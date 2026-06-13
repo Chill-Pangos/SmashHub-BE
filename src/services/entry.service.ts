@@ -145,6 +145,50 @@ export async function assertNotAlreadyRegistered(
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class EntryService {
+  async searchByName(
+    name: string,
+    options: { offset?: number; limit?: number } = {},
+  ): Promise<{ entries: Entry[]; pagination: any }> {
+    const { offset = 0, limit = 10 } = options;
+    const query = name.trim();
+
+    const { count, rows } = await Entry.findAndCountAll({
+      where: {
+        name: { [Op.like]: `%${query}%` },
+      },
+      include: [
+        {
+          model: TournamentCategory,
+          include: [{ model: Tournament }],
+        },
+        {
+          model: User,
+          as: "captain",
+          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
+        },
+      ],
+      offset,
+      limit,
+      order: [["name", "ASC"]],
+      distinct: true,
+    });
+
+    const totalPages = Math.ceil(count / limit);
+    const page = Math.floor(offset / limit) + 1;
+
+    return {
+      entries: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
   /**
    * 1. Đăng ký tham gia giải đấu
    * - single: tạo entry + tự động thêm user vào làm member
@@ -553,7 +597,7 @@ export class EntryService {
         {
           model: User,
           as: "captain",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
         },
         {
           model: EntryMember,
@@ -561,7 +605,7 @@ export class EntryService {
           include: [
             {
               model: User,
-              attributes: ["id", "firstName", "lastName", "email", "gender"],
+              attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
             },
           ],
         },

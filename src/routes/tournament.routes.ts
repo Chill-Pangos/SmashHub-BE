@@ -166,6 +166,12 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *         description: Filter tournaments where this user has entries
  *         example: 1
  *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter tournaments by similar name
+ *         example: "Spring"
+ *       - in: query
  *         name: createdBy
  *         schema:
  *           type: integer
