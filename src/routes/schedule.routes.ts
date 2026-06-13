@@ -20,6 +20,8 @@ const router = Router();
  *       tableNumber KHÔNG được gán ở đây — sẽ gán động khi trận bắt đầu.
  *
  *       Yêu cầu:
+ *       - Tournament status must be brackets_generated
+ *       - scheduleConfig.bracketGenerationDate must be reached
  *       - scheduleConfig đã được tạo cho tournament
  *       - groupStandings đã có (nếu category có vòng bảng)
  *       - knockoutBrackets đã được generate (generatePlaceholders hoặc generateFromEntries)
@@ -96,6 +98,8 @@ router.post(
  *       tableNumber KHÔNG được gán — sẽ gán động khi trận bắt đầu.
  *
  *       Yêu cầu:
+ *       - Tournament status must be brackets_generated
+ *       - scheduleConfig.bracketGenerationDate must be reached
  *       - scheduleConfig đã được tạo
  *       - groupStandings đã có (saveGroupAssignments đã chạy)
  *     security:

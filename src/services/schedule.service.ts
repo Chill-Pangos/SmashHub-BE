@@ -388,6 +388,21 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
   }
 }
 
+async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+  if (tournament.status !== "brackets_generated") {
+    throw new Error("Tournament must be in brackets_generated status before generating schedules");
+  }
+
+  const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
+  if (!config?.bracketGenerationDate) {
+    throw new Error("Bracket generation date is not configured for this tournament");
+  }
+
+  if (new Date() < config.bracketGenerationDate) {
+    throw new Error("Bracket generation date must be reached before generating schedules");
+  }
+}
+
 async function getTournamentReferees(
   tournamentId: number,
 ): Promise<TournamentReferee[]> {
@@ -544,6 +559,7 @@ export class ScheduleService {
     const category = await getCategoryWithTournament(categoryId);
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
+    await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildGroupMatchPairs(categoryId);
@@ -611,6 +627,7 @@ export class ScheduleService {
     const category = await getCategoryWithTournament(categoryId);
     const tournament = category.tournament!;
     assertOrganizer(organizerId, tournament);
+    await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildKnockoutPairs(categoryId, roundName);
@@ -691,6 +708,7 @@ export class ScheduleService {
     });
     if (!tournament) throw new Error("Tournament not found");
     assertOrganizer(organizerId, tournament);
+    await assertBracketsGenerated(tournament);
 
     const categories = tournament.categories ?? [];
     if (categories.length === 0) {
