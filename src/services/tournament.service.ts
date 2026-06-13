@@ -487,6 +487,30 @@ export class TournamentService {
     };
   }
 
+  async cancelTournament(id: number, organizerId: number): Promise<Tournament | null> {
+    const tournament = await Tournament.findByPk(id, {
+      include: [{ model: TournamentCategory, as: "categories" }],
+    });
+
+    if (!tournament) {
+      return null;
+    }
+    if (tournament.createdBy !== organizerId) {
+      throw new Error("Only the tournament organizer can cancel this tournament");
+    }
+    if (tournament.status === "completed") {
+      throw new Error("Completed tournaments cannot be cancelled");
+    }
+    if (tournament.status === "cancelled") {
+      throw new Error("Tournament is already cancelled");
+    }
+
+    await tournament.update({ status: "cancelled" });
+    tournament.status = "cancelled";
+
+    return tournament;
+  }
+
   private async getTournamentAwards(categories: TournamentCategory[]): Promise<TournamentAward[]> {
     const awards: TournamentAward[] = [];
 

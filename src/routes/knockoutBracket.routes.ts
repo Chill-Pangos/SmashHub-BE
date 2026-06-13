@@ -11,7 +11,12 @@ const router = Router();
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Preview TBD placeholder bracket tree
- *     description: Preview bracket placeholders without saving to database. Use /knockout-brackets/save-assignments with categoryId only to persist after organizer review.
+ *     description: |
+ *       Preview bracket placeholders without saving to database. Use /knockout-brackets/save-assignments with categoryId only to persist after organizer review.
+ *
+ *       Requirements:
+ *       - Tournament status must be brackets_generated
+ *       - scheduleConfig.bracketGenerationDate must be reached
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -121,7 +126,12 @@ router.post(
  *   post:
  *     tags: [Knockout Brackets]
  *     summary: Preview knockout bracket from eligible entries
- *     description: Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
+ *     description: |
+ *       Preview shuffled knockout bracket without saving. Response includes entryIds; send same entryIds to /knockout-brackets/save-assignments to persist exactly what organizer reviewed.
+ *
+ *       Requirements:
+ *       - Tournament status must be brackets_generated
+ *       - scheduleConfig.bracketGenerationDate must be reached
  *     security:
  *       - bearerAuth: []
  *     requestBody:
