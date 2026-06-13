@@ -20,9 +20,9 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const { entryId, amount, method } = req.body;
+      const { entryId, amount } = req.body;
 
-      const payment = await paymentService.createPayment(entryId, amount, method);
+      const payment = await paymentService.createPayment(entryId, amount);
       res.status(201).json({
         success: true,
         data: payment,
@@ -42,12 +42,10 @@ export class PaymentController {
       if (organizerId == null) return;
 
       const paymentId = Number(req.params.paymentId);
-      const { proofImageUrl, transactionRef } = req.body;
 
       const payment = await paymentService.confirmPayment(
         paymentId,
-        organizerId,
-        { proofImageUrl, transactionRef }
+        organizerId
       );
       res.status(200).json({
         success: true,
@@ -89,8 +87,12 @@ export class PaymentController {
       if (organizerId == null) return;
 
       const paymentId = Number(req.params.paymentId);
+      if (!req.file) {
+        res.status(400).json({ success: false, message: "No file uploaded" });
+        return;
+      }
 
-      const payment = await paymentService.refundPayment(paymentId, organizerId);
+      const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
       res.status(200).json({
         success: true,
         data: payment,
@@ -175,17 +177,11 @@ export class PaymentController {
         | "failed"
         | "refunded"
         | undefined;
-      const method = req.query.method as
-        | "cash"
-        | "bank_transfer"
-        | "online"
-        | undefined;
 
       const options: {
         offset: number;
         limit: number;
         status?: "pending" | "completed" | "failed" | "refunded";
-        method?: "cash" | "bank_transfer" | "online";
       } = {
         offset,
         limit,
@@ -193,10 +189,6 @@ export class PaymentController {
 
       if (status) {
         options.status = status;
-      }
-
-      if (method) {
-        options.method = method;
       }
 
       const result = await paymentService.getPaymentsByCategory(
@@ -234,54 +226,7 @@ export class PaymentController {
   }
 
   /**
-   * 9. Record cash payment
-   */
-  async recordCashPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const organizerId = this.getAuthenticatedUserId(req, next);
-      if (organizerId == null) return;
-
-      const { entryId, amount } = req.body;
-
-      const payment = await paymentService.recordCashPayment(
-        entryId,
-        organizerId,
-        amount
-      );
-      res.status(201).json({
-        success: true,
-        data: payment,
-        message: "Cash payment recorded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * 10. Record online payment (simulate webhook)
-   */
-  async recordOnlinePayment(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { entryId, amount, transactionRef } = req.body;
-
-      const payment = await paymentService.recordOnlinePayment(
-        entryId,
-        amount,
-        transactionRef
-      );
-      res.status(201).json({
-        success: true,
-        data: payment,
-        message: "Online payment recorded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
-   * 11. Get pending payments by category
+   * 9. Get pending payments by category
    */
   async getPendingPayments(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -292,24 +237,14 @@ export class PaymentController {
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 10;
       const offset = Math.max(page - 1, 0) * limit;
-      const method = req.query.method as
-        | "cash"
-        | "bank_transfer"
-        | "online"
-        | undefined;
 
       const options: {
         offset: number;
         limit: number;
-        method?: "cash" | "bank_transfer" | "online";
       } = {
         offset,
         limit,
       };
-
-      if (method) {
-        options.method = method;
-      }
 
       const result = await paymentService.getPendingPayments(
         organizerId,
@@ -326,7 +261,7 @@ export class PaymentController {
   }
 
   /**
-   * 12. Upload payment proof image
+   * 10. Upload payment proof image
    */
   async uploadPaymentProof(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -334,12 +269,15 @@ export class PaymentController {
       if (userId == null) return;
 
       const paymentId = Number(req.params.paymentId);
-      const { proofImageUrl } = req.body;
+      if (!req.file) {
+        res.status(400).json({ success: false, message: "No file uploaded" });
+        return;
+      }
 
       const payment = await paymentService.uploadPaymentProof(
         paymentId,
         userId,
-        proofImageUrl
+        req.file
       );
       res.status(200).json({
         success: true,

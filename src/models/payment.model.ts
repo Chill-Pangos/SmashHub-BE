@@ -11,17 +11,7 @@ import {
 import Entry from "./entry.model";
 import User from "./user.model";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const PROOF_IMAGE_URL_MAX_LENGTH = 500;
-const TRANSACTION_REF_MAX_LENGTH = 100;
-
-export const PAYMENT_METHODS = [
-  "cash",
-  "bank_transfer",
-  "online",
-] as const;
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_STATUSES = [
   "pending",
@@ -31,15 +21,12 @@ export const PAYMENT_STATUSES = [
 ] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
-// ─── Model ────────────────────────────────────────────────────────────────────
-
 @Table({
   tableName: "payments",
   timestamps: true,
   indexes: [
     { fields: ["entryId"] },
     { fields: ["status"] },
-    { fields: ["method"] },
     { fields: ["confirmedBy"] },
     { fields: ["entryId", "status"] },
   ],
@@ -66,12 +53,6 @@ export default class Payment extends Model {
   declare amount: number;
 
   @Column({
-    type: DataType.ENUM(...PAYMENT_METHODS),
-    allowNull: false,
-  })
-  declare method: PaymentMethod;
-
-  @Column({
     type: DataType.ENUM(...PAYMENT_STATUSES),
     allowNull: false,
     defaultValue: "pending" satisfies PaymentStatus,
@@ -81,7 +62,7 @@ export default class Payment extends Model {
   @Column({
     type: DataType.STRING(PROOF_IMAGE_URL_MAX_LENGTH),
     allowNull: true,
-    comment: "Required for bank_transfer method",
+    comment: "Required before payment confirmation",
   })
   declare proofImageUrl?: string;
 
@@ -100,27 +81,23 @@ export default class Payment extends Model {
   declare confirmedAt?: Date;
 
   @Column({
-    type: DataType.STRING(TRANSACTION_REF_MAX_LENGTH),
-    allowNull: true,
-    comment: "Transaction reference for online payments (Stripe/VNPay)",
-  })
-  declare transactionRef?: string;
-
-  @Column({
     type: DataType.DATE,
     allowNull: true,
   })
   declare refundedAt?: Date;
 
-  // ─── Associations ──────────────────────────────────────────────────────────
+  @Column({
+    type: DataType.STRING(PROOF_IMAGE_URL_MAX_LENGTH),
+    allowNull: true,
+    comment: "Required before payment refund",
+  })
+  declare refundProofImageUrl?: string;
 
   @BelongsTo(() => Entry, { foreignKey: "entryId" })
   declare entry?: Entry;
 
   @BelongsTo(() => User, { foreignKey: "confirmedBy" })
   declare confirmer?: User;
-
-  // ─── Validators ────────────────────────────────────────────────────────────
 
   @BeforeValidate
   static validateAmount(instance: Payment): void {
@@ -133,32 +110,15 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateProofImage(instance: Payment): void {
-    if (instance.method === undefined && instance.proofImageUrl === undefined && instance.status === undefined) return;
+    if (instance.proofImageUrl === undefined && instance.status === undefined) return;
 
-    const { method, proofImageUrl, status } = instance;
+    const { proofImageUrl, status } = instance;
 
-    if (method === "bank_transfer" && status === "completed" && !proofImageUrl) {
-      throw new Error("Proof image is required for completed bank transfer payments");
-    }
-    if (method !== "bank_transfer" && proofImageUrl) {
-      throw new Error("Proof image is only applicable for bank transfer payments");
+    if (status === "completed" && !proofImageUrl) {
+      throw new Error("Proof image is required for completed payments");
     }
     if (proofImageUrl && proofImageUrl.length > PROOF_IMAGE_URL_MAX_LENGTH) {
       throw new Error(`Proof image URL must not exceed ${PROOF_IMAGE_URL_MAX_LENGTH} characters`);
-    }
-  }
-
-  @BeforeValidate
-  static validateTransactionRef(instance: Payment): void {
-    if (instance.method === undefined && instance.transactionRef === undefined && instance.status === undefined) return;
-
-    const { method, transactionRef } = instance;
-
-    if (transactionRef && method !== "online") {
-      throw new Error("Transaction reference is only applicable for online payments");
-    }
-    if (method === "online" && instance.status === "completed" && !transactionRef) {
-      throw new Error("Transaction reference is required for completed online payments");
     }
   }
 
@@ -168,8 +128,8 @@ export default class Payment extends Model {
 
     const { confirmedAt, confirmedBy, status } = instance;
 
-    if (confirmedAt && status !== "completed") {
-      throw new Error("confirmedAt can only be set when status is completed");
+    if (confirmedAt && !["completed", "refunded"].includes(status)) {
+      throw new Error("confirmedAt can only be set when status is completed or refunded");
     }
     if (confirmedAt && !confirmedBy) {
       throw new Error("confirmedBy must be set when confirmedAt is set");
@@ -181,9 +141,9 @@ export default class Payment extends Model {
 
   @BeforeValidate
   static validateRefundedAt(instance: Payment): void {
-    if (instance.refundedAt === undefined && instance.status === undefined) return;
+    if (instance.refundedAt === undefined && instance.refundProofImageUrl === undefined && instance.status === undefined) return;
 
-    const { refundedAt, status } = instance;
+    const { refundedAt, refundProofImageUrl, status } = instance;
 
     if (refundedAt && status !== "refunded") {
       throw new Error("refundedAt can only be set when status is refunded");
@@ -191,17 +151,11 @@ export default class Payment extends Model {
     if (status === "refunded" && !refundedAt) {
       throw new Error("refundedAt must be set when status is refunded");
     }
-  }
-
-  @BeforeValidate
-  static validateManualConfirmation(instance: Payment): void {
-    if (instance.method === undefined && instance.confirmedBy === undefined) return;
-
-    const { method, confirmedBy } = instance;
-
-    // Online payments được xác nhận qua webhook, không cần confirmedBy
-    if (method === "online" && confirmedBy) {
-      throw new Error("Online payments are confirmed automatically, not manually");
+    if (status === "refunded" && !refundProofImageUrl) {
+      throw new Error("Refund proof image is required when status is refunded");
+    }
+    if (refundProofImageUrl && refundProofImageUrl.length > PROOF_IMAGE_URL_MAX_LENGTH) {
+      throw new Error(`Refund proof image URL must not exceed ${PROOF_IMAGE_URL_MAX_LENGTH} characters`);
     }
   }
 }

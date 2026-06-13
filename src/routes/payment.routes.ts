@@ -2,6 +2,7 @@ import { Router } from "express";
 import paymentController from "../controllers/payment.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
+import { paymentProofUpload } from "../config/multer";
 
 const router = Router();
 
@@ -12,14 +13,12 @@ const router = Router();
  *     tags: [Payments]
  *     summary: Create pending payment for entry
  *     description: |
- *       Create a pending payment record for an entry using bank transfer or online method.
+ *       Create a pending bank transfer payment record for an entry.
  *       The payment amount MUST match the category's entry fee exactly (within 0.01 tolerance).
  *
  *       Business Logic:
  *       - Only one active payment (pending or completed) is allowed per entry
- *       - Cash payments should use POST /payments/record-cash endpoint instead
- *       - For bank transfers: proof image must be uploaded before confirmation
- *       - For online payments: transaction reference is required from payment gateway
+ *       - Proof image must be uploaded before organizer confirmation
  *       - Authenticated user is recording the payment attempt
  *     security:
  *       - bearerAuth: []
@@ -29,7 +28,7 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [entryId, amount, method]
+ *             required: [entryId, amount]
  *             properties:
  *               entryId:
  *                 type: integer
@@ -42,22 +41,11 @@ const router = Router();
  *                 minimum: 0.01
  *                 description: Payment amount in VND. Must match the category's entry fee exactly
  *                 example: 250000
- *               method:
- *                 type: string
- *                 enum: [bank_transfer, online]
- *                 description: Payment method (bank_transfer for manual bank transfers, online for payment gateway webhooks)
- *                 example: bank_transfer
  *           examples:
  *             BankTransfer:
  *               value:
  *                 entryId: 42
  *                 amount: 250000
- *                 method: bank_transfer
- *             OnlinePayment:
- *               value:
- *                 entryId: 42
- *                 amount: 250000
- *                 method: online
  *     responses:
  *       201:
  *         description: Payment created successfully with pending status
@@ -82,10 +70,6 @@ const router = Router();
  *                       type: number
  *                       format: double
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -94,11 +78,6 @@ const router = Router();
  *                       type: string
  *                       nullable: true
  *                       description: URL of bank transfer proof (null until confirmed)
- *                       example: null
- *                     transactionRef:
- *                       type: string
- *                       nullable: true
- *                       description: Payment gateway transaction reference (null until confirmed)
  *                       example: null
  *                     confirmedBy:
  *                       type: integer
@@ -144,272 +123,8 @@ const router = Router();
 router.post(
   "/",
   authenticate,
+  checkPermission('payments:create'),
   paymentController.createPayment.bind(paymentController)
-);
-
-/**
- * @swagger
- * /payments/record-cash:
- *   post:
- *     tags: [Payments]
- *     summary: Record and confirm cash payment (organizer only)
- *     description: |
- *       Record and immediately confirm a cash payment for an entry in a single operation.
- *       Only tournament organizers can use this endpoint.
- *
- *       Business Logic:
- *       - Cash payments are confirmed immediately (status = completed)
- *       - Authenticated organizer user ID is recorded as confirmedBy
- *       - Amount MUST match the category's entry fee exactly
- *       - Only one cash payment per entry is allowed
- *       - No proof image or transaction reference is required for cash
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [entryId, amount]
- *             properties:
- *               entryId:
- *                 type: integer
- *                 minimum: 1
- *                 description: ID of the entry receiving cash payment
- *                 example: 42
- *               amount:
- *                 type: number
- *                 format: double
- *                 minimum: 0.01
- *                 description: Cash payment amount in VND. Must match entry fee
- *                 example: 250000
- *           examples:
- *             CashPayment:
- *               value:
- *                 entryId: 42
- *                 amount: 250000
- *     responses:
- *       201:
- *         description: Cash payment recorded and immediately confirmed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 2
- *                     entryId:
- *                       type: integer
- *                       example: 42
- *                     amount:
- *                       type: number
- *                       format: double
- *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: cash
- *                     status:
- *                       type: string
- *                       enum: [pending, completed, failed, refunded]
- *                       description: Always 'completed' for cash payments
- *                       example: completed
- *                     confirmedBy:
- *                       type: integer
- *                       description: Organizer user ID who recorded the cash payment
- *                       example: 5
- *                     confirmedAt:
- *                       type: string
- *                       format: date-time
- *                       description: Timestamp when cash payment was recorded
- *                       example: "2026-05-27T10:35:00Z"
- *                     proofImageUrl:
- *                       type: string
- *                       nullable: true
- *                       example: null
- *                     transactionRef:
- *                       type: string
- *                       nullable: true
- *                       example: null
- *                     refundedAt:
- *                       type: string
- *                       format: date-time
- *                       nullable: true
- *                       example: null
- *                     createdAt:
- *                       type: string
- *                       format: date-time
- *                       example: "2026-05-27T10:35:00Z"
- *                     updatedAt:
- *                       type: string
- *                       format: date-time
- *                       example: "2026-05-27T10:35:00Z"
- *                 message:
- *                   type: string
- *                   example: "Cash payment recorded successfully"
- *       400:
- *         description: Invalid request (entry not found, amount mismatch, entry has no fee, entry already has cash payment)
- *         $ref: '#/components/responses/BadRequest400'
- *       401:
- *         description: Authentication required or invalid token
- *         $ref: '#/components/responses/Unauthorized401'
- *       403:
- *         description: Permission denied - user is not tournament organizer
- *         $ref: '#/components/responses/Forbidden403'
- *       409:
- *         description: Conflict - cash payment already exists for this entry
- *         $ref: '#/components/responses/Conflict409'
- *       500:
- *         description: Server error
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post(
-  "/record-cash",
-  authenticate,
-  checkPermission('payments:update'),
-  paymentController.recordCashPayment.bind(paymentController)
-);
-
-/**
- * @swagger
- * /payments/record-online:
- *   post:
- *     tags: [Payments]
- *     summary: Record online payment from payment gateway webhook
- *     description: |
- *       Record and immediately confirm an online payment from payment gateway webhook (Stripe, VNPay, etc.).
- *       This endpoint processes successful online transactions and creates a confirmed payment record.
- *
- *       Business Logic:
- *       - Online payments are confirmed immediately (status = completed)
- *       - Transaction reference is required and must be unique to prevent double-processing
- *       - Amount MUST match the category's entry fee exactly
- *       - This endpoint is typically called by payment gateway webhooks (no manual confirmation needed)
- *       - Duplicate transaction references are rejected to ensure idempotency
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [entryId, amount, transactionRef]
- *             properties:
- *               entryId:
- *                 type: integer
- *                 minimum: 1
- *                 description: ID of the entry being paid for
- *                 example: 42
- *               amount:
- *                 type: number
- *                 format: double
- *                 minimum: 0.01
- *                 description: Payment amount in VND. Must match entry fee
- *                 example: 250000
- *               transactionRef:
- *                 type: string
- *                 maxLength: 100
- *                 description: Unique transaction reference from payment gateway (Stripe PI, VNPay txnRef, etc.). Must be globally unique
- *                 example: "stripe_pi_1234567890abc"
- *           examples:
- *             StripeWebhook:
- *               value:
- *                 entryId: 42
- *                 amount: 250000
- *                 transactionRef: "stripe_pi_1234567890abc"
- *             VNPayWebhook:
- *               value:
- *                 entryId: 42
- *                 amount: 250000
- *                 transactionRef: "vnpay_20260527103000_12345"
- *     responses:
- *       201:
- *         description: Online payment recorded and confirmed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 3
- *                     entryId:
- *                       type: integer
- *                       example: 42
- *                     amount:
- *                       type: number
- *                       format: double
- *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: online
- *                     status:
- *                       type: string
- *                       enum: [pending, completed, failed, refunded]
- *                       description: Always 'completed' for online payments
- *                       example: completed
- *                     transactionRef:
- *                       type: string
- *                       description: Payment gateway transaction reference
- *                       example: "stripe_pi_1234567890abc"
- *                     confirmedBy:
- *                       type: integer
- *                       nullable: true
- *                       description: Null for online payments (auto-confirmed by webhook)
- *                       example: null
- *                     confirmedAt:
- *                       type: string
- *                       format: date-time
- *                       description: Timestamp when payment was confirmed by webhook
- *                       example: "2026-05-27T10:40:00Z"
- *                     proofImageUrl:
- *                       type: string
- *                       nullable: true
- *                       example: null
- *                     refundedAt:
- *                       type: string
- *                       format: date-time
- *                       nullable: true
- *                       example: null
- *                     createdAt:
- *                       type: string
- *                       format: date-time
- *                       example: "2026-05-27T10:40:00Z"
- *                     updatedAt:
- *                       type: string
- *                       format: date-time
- *                       example: "2026-05-27T10:40:00Z"
- *                 message:
- *                   type: string
- *                   example: "Online payment recorded successfully"
- *       400:
- *         description: Invalid request (entry not found, amount mismatch, entry has no fee)
- *         $ref: '#/components/responses/BadRequest400'
- *       409:
- *         description: Conflict - transaction reference already processed
- *         $ref: '#/components/responses/Conflict409'
- *       500:
- *         description: Server error
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post(
-  "/record-online",
-  authenticate,
-  paymentController.recordOnlinePayment.bind(paymentController)
 );
 
 /**
@@ -488,19 +203,11 @@ router.post(
  *                             type: number
  *                             format: double
  *                             example: 250000
- *                           method:
- *                             type: string
- *                             enum: [cash, bank_transfer, online]
- *                             example: bank_transfer
  *                           status:
  *                             type: string
  *                             enum: [pending, completed, failed, refunded]
  *                             example: completed
  *                           proofImageUrl:
- *                             type: string
- *                             nullable: true
- *                             example: null
- *                           transactionRef:
  *                             type: string
  *                             nullable: true
  *                             example: null
@@ -549,7 +256,7 @@ router.get(
  *   get:
  *     tags: [Payments]
  *     summary: Get payments by category (organizer only)
- *     description: Retrieve all payments for a tournament category with optional filtering by status and payment method. Only tournament organizers can access this endpoint.
+ *     description: Retrieve all payments for a tournament category with optional filtering by status. Only tournament organizers can access this endpoint.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -577,12 +284,6 @@ router.get(
  *           type: string
  *           enum: [pending, completed, failed, refunded]
  *         description: Filter by payment status
- *       - in: query
- *         name: method
- *         schema:
- *           type: string
- *           enum: [cash, bank_transfer, online]
- *         description: Filter by payment method
  *     responses:
  *       200:
  *         description: List of payments for category with pagination
@@ -611,10 +312,6 @@ router.get(
  *                           amount:
  *                             type: number
  *                             example: 250000
- *                           method:
- *                             type: string
- *                             enum: [cash, bank_transfer, online]
- *                             example: bank_transfer
  *                           status:
  *                             type: string
  *                             enum: [pending, completed, failed, refunded]
@@ -733,7 +430,7 @@ router.get(
  *                       example: 12500000
  *                     collectedAmount:
  *                       type: number
- *                       description: Total amount collected (completed + cash payments)
+ *                       description: Total amount collected from completed payments
  *                       example: 8750000
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
@@ -757,7 +454,7 @@ router.get(
  *   get:
  *     tags: [Payments]
  *     summary: Get pending payments by category (organizer only)
- *     description: Retrieve all pending payments for a tournament category with optional filtering by payment method. Ordered by oldest first for priority processing. Only tournament organizers can access this endpoint.
+ *     description: Retrieve all pending payments for a tournament category. Ordered by oldest first for priority processing. Only tournament organizers can access this endpoint.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -779,12 +476,6 @@ router.get(
  *           type: integer
  *           default: 10
  *         description: Maximum number of records per page
- *       - in: query
- *         name: method
- *         schema:
- *           type: string
- *           enum: [cash, bank_transfer, online]
- *         description: Filter by payment method (optional)
  *     responses:
  *       200:
  *         description: List of pending payments ordered by oldest first
@@ -813,10 +504,6 @@ router.get(
  *                           amount:
  *                             type: number
  *                             example: 250000
- *                           method:
- *                             type: string
- *                             enum: [cash, bank_transfer, online]
- *                             example: bank_transfer
  *                           status:
  *                             type: string
  *                             enum: [pending, completed, failed, refunded]
@@ -825,10 +512,6 @@ router.get(
  *                             type: string
  *                             nullable: true
  *                             example: "https://s3.example.com/proof-123.jpg"
- *                           transactionRef:
- *                             type: string
- *                             nullable: true
- *                             example: null
  *                           createdAt:
  *                             type: string
  *                             format: date-time
@@ -910,10 +593,6 @@ router.get(
  *                     amount:
  *                       type: number
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -923,11 +602,6 @@ router.get(
  *                       nullable: true
  *                       maxLength: 500
  *                       example: "https://s3.example.com/proof-123.jpg"
- *                     transactionRef:
- *                       type: string
- *                       nullable: true
- *                       maxLength: 100
- *                       example: null
  *                     confirmedBy:
  *                       type: integer
  *                       nullable: true
@@ -991,7 +665,7 @@ router.get(
  *   post:
  *     tags: [Payments]
  *     summary: Confirm payment (organizer only)
- *     description: Confirm a pending payment. For bank transfers, proof image URL is required. For online payments, transaction reference is required. Only tournament organizers can confirm payments.
+ *     description: Confirm a pending payment. A proof image must already be uploaded. Only tournament organizers can confirm payments.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1001,23 +675,6 @@ router.get(
  *         schema:
  *           type: integer
  *         description: Payment ID to confirm
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               proofImageUrl:
- *                 type: string
- *                 maxLength: 500
- *                 description: URL of proof image (required for bank_transfer, optional for others)
- *                 example: "https://s3.example.com/proof-123.jpg"
- *               transactionRef:
- *                 type: string
- *                 maxLength: 100
- *                 description: Transaction reference (required for online payments)
- *                 example: "vnpay_123456"
  *     responses:
  *       200:
  *         description: Payment confirmed successfully
@@ -1041,10 +698,6 @@ router.get(
  *                     amount:
  *                       type: number
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -1052,10 +705,6 @@ router.get(
  *                     proofImageUrl:
  *                       type: string
  *                       example: "https://s3.example.com/proof-123.jpg"
- *                     transactionRef:
- *                       type: string
- *                       nullable: true
- *                       example: null
  *                     confirmedBy:
  *                       type: integer
  *                       example: 5
@@ -1127,10 +776,6 @@ router.post(
  *                     amount:
  *                       type: number
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -1166,7 +811,7 @@ router.post(
  *   post:
  *     tags: [Payments]
  *     summary: Refund completed payment (organizer only)
- *     description: Initiate a refund for a completed payment. Only tournament organizers can process refunds. Can only refund payments in completed status.
+ *     description: Initiate a refund for a completed payment. Only tournament organizers can process refunds. Refund proof image is required.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1176,6 +821,18 @@ router.post(
  *         schema:
  *           type: integer
  *         description: Payment ID to refund
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [refundProof]
+ *             properties:
+ *               refundProof:
+ *                 type: string
+ *                 format: binary
+ *                 description: Refund proof image file (jpeg, jpg, png, webp). Max 5MB.
  *     responses:
  *       200:
  *         description: Payment refunded successfully
@@ -1199,10 +856,6 @@ router.post(
  *                     amount:
  *                       type: number
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -1211,6 +864,10 @@ router.post(
  *                       type: string
  *                       format: date-time
  *                       example: "2026-05-27T10:45:00Z"
+ *                     refundProofImageUrl:
+ *                       type: string
+ *                       maxLength: 500
+ *                       example: "/uploads/payments/refund-proof.webp"
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
@@ -1233,6 +890,7 @@ router.post(
   "/:paymentId/refund",
   authenticate,
   checkPermission('payments:update'),
+  paymentProofUpload.single("refundProof"),
   paymentController.refundPayment.bind(paymentController)
 );
 
@@ -1242,7 +900,7 @@ router.post(
  *   put:
  *     tags: [Payments]
  *     summary: Upload payment proof image
- *     description: Upload or update proof image for bank transfer payments. Only the team captain or tournament organizer can upload proof. Proof is only applicable for bank transfer method and pending payments.
+ *     description: Upload or update proof image for payments. Only the team captain or tournament organizer can upload proof. Proof can only be updated for pending payments.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1255,16 +913,15 @@ router.post(
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [proofImageUrl]
+ *             required: [proof]
  *             properties:
- *               proofImageUrl:
+ *               proof:
  *                 type: string
- *                 maxLength: 500
- *                 description: URL of the proof image (screenshot of bank transfer, etc.)
- *                 example: "https://s3.example.com/proof-transfer-123.jpg"
+ *                 format: binary
+ *                 description: Proof image file (jpeg, jpg, png, webp). Max 5MB.
  *     responses:
  *       200:
  *         description: Proof image uploaded successfully
@@ -1288,10 +945,6 @@ router.post(
  *                     amount:
  *                       type: number
  *                       example: 250000
- *                     method:
- *                       type: string
- *                       enum: [cash, bank_transfer, online]
- *                       example: bank_transfer
  *                     status:
  *                       type: string
  *                       enum: [pending, completed, failed, refunded]
@@ -1321,6 +974,7 @@ router.post(
 router.put(
   "/:paymentId/proof",
   authenticate,
+  paymentProofUpload.single("proof"),
   paymentController.uploadPaymentProof.bind(paymentController)
 );
 
