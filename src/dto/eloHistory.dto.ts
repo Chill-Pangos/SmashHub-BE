@@ -4,6 +4,8 @@ export interface CreateEloHistoryDto {
   userId: number;
   previousElo: number;
   newElo: number;
+  eloDelta: number;
+  tournamentId?: number | null;
   changeReason: string;
 }
 
@@ -13,6 +15,8 @@ export interface EloHistoryResponseDto {
   userId: number;
   previousElo: number;
   newElo: number;
+  eloDelta: number;
+  tournamentId?: number | null;
   changeReason: string;
   createdAt: Date;
   updatedAt: Date;

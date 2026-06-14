@@ -720,7 +720,7 @@ export class ScheduleConfigService {
    */
   async getDefaultConfig() {
     return {
-      matchDurationMinutes: 60,
+      matchDurationMinutes: 30,
       breakDurationMinutes: 10,
       dailyStartHour: 8,
       dailyStartMinute: 0,
@@ -754,7 +754,7 @@ export class ScheduleConfigService {
     breakdown: MatchBreakdown
   ): ScheduleValidationResponse {
     const {
-      matchDurationMinutes = 60,
+      matchDurationMinutes = 30,
       breakDurationMinutes = 10,
       dailyStartHour = 8,
       dailyStartMinute = 0,
@@ -840,7 +840,7 @@ export class ScheduleConfigService {
       registrationStartDate,
       registrationEndDate,
       bracketGenerationDate,
-      matchDurationMinutes = 60,
+      matchDurationMinutes = 30,
       breakDurationMinutes = 10,
       dailyStartHour = 8,
       dailyStartMinute = 0,

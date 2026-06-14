@@ -16,12 +16,12 @@ export interface CreateScheduleConfigDto {
   dailyEndHour?: number;
   dailyEndMinute?: number;
   // Lunch break
-  lunchBreakStartHour?: number;
-  lunchBreakStartMinute?: number;
-  lunchBreakEndHour?: number;
-  lunchBreakEndMinute?: number;
-  lunchBreakDurationMinutes?: number;
-  notes?: string;
+  lunchBreakStartHour?: number | null;
+  lunchBreakStartMinute?: number | null;
+  lunchBreakEndHour?: number | null;
+  lunchBreakEndMinute?: number | null;
+  lunchBreakDurationMinutes?: number | null;
+  notes?: string | null;
 }
 
 export interface UpdateScheduleConfigDto {
@@ -41,12 +41,12 @@ export interface UpdateScheduleConfigDto {
   dailyEndHour?: number;
   dailyEndMinute?: number;
   // Lunch break
-  lunchBreakStartHour?: number;
-  lunchBreakStartMinute?: number;
-  lunchBreakEndHour?: number;
-  lunchBreakEndMinute?: number;
-  lunchBreakDurationMinutes?: number;
-  notes?: string;
+  lunchBreakStartHour?: number | null;
+  lunchBreakStartMinute?: number | null;
+  lunchBreakEndHour?: number | null;
+  lunchBreakEndMinute?: number | null;
+  lunchBreakDurationMinutes?: number | null;
+  notes?: string | null;
 }
 
 export interface ScheduleConfigResponseDto {
@@ -68,12 +68,12 @@ export interface ScheduleConfigResponseDto {
   dailyEndHour: number;
   dailyEndMinute: number;
   // Lunch break
-  lunchBreakStartHour?: number;
-  lunchBreakStartMinute?: number;
-  lunchBreakEndHour?: number;
-  lunchBreakEndMinute?: number;
-  lunchBreakDurationMinutes?: number;
-  notes?: string;
+  lunchBreakStartHour?: number | null;
+  lunchBreakStartMinute?: number | null;
+  lunchBreakEndHour?: number | null;
+  lunchBreakEndMinute?: number | null;
+  lunchBreakDurationMinutes?: number | null;
+  notes?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

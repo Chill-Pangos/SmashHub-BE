@@ -83,9 +83,9 @@ const router = Router({ mergeParams: true });
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 default: 60
- *                 example: 60
- *                 description: Duration of each match in minutes (30-90, typically 45-60 for competitive play)
+ *                 default: 30
+ *                 example: 30
+ *                 description: Duration of each match in minutes (30-90, default 30)
  *               breakDurationMinutes:
  *                 type: integer
  *                 minimum: 5
@@ -153,7 +153,6 @@ const router = Router({ mergeParams: true });
  *                 description: Lunch break end minute (optional, 0-59)
  *               notes:
  *                 type: string
- *                 maxLength: 500
  *                 nullable: true
  *                 example: "Main tournament at Convention Center. Use gymnasium for additional tables if needed."
  *                 description: Additional notes or special instructions for schedule management
@@ -167,7 +166,7 @@ const router = Router({ mergeParams: true });
  *                 registrationEndDate: "2026-06-14T23:59:59Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                 numberOfTables: 4
- *                 matchDurationMinutes: 60
+ *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
  *                 dailyStartHour: 8
  *                 dailyStartMinute: 0
@@ -210,7 +209,7 @@ const router = Router({ mergeParams: true });
  *               registrationEndDate: "2026-06-14T23:59:59Z"
  *               bracketGenerationDate: "2026-06-13T00:00:00Z"
  *               numberOfTables: 4
- *               matchDurationMinutes: 60
+ *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
  *               dailyStartHour: 8
  *               dailyStartMinute: 0
@@ -290,7 +289,7 @@ router.post(
  *               properties:
  *                 matchDurationMinutes:
  *                   type: integer
- *                   example: 60
+ *                   example: 30
  *                   description: Default match duration in minutes (30-90 allowed)
  *                 breakDurationMinutes:
  *                   type: integer
@@ -326,7 +325,7 @@ router.post(
  *                   example: 1
  *                   description: Default number of tournament tables
  *             example:
- *               matchDurationMinutes: 60
+ *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
  *               dailyStartHour: 8
  *               dailyStartMinute: 0
@@ -440,7 +439,7 @@ router.get(
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 example: 60
+ *                 example: 30
  *                 description: Match duration in minutes
  *               breakDurationMinutes:
  *                 type: integer
@@ -614,7 +613,7 @@ router.patch(
  *                     type: integer
  *                     minimum: 30
  *                     maximum: 90
- *                     default: 60
+ *                     default: 30
  *                   breakDurationMinutes:
  *                     type: integer
  *                     minimum: 5
@@ -689,7 +688,7 @@ router.patch(
  *                   registrationEndDate: "2026-06-12T23:59:59Z"
  *                   bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                   numberOfTables: 4
- *                   matchDurationMinutes: 60
+ *                   matchDurationMinutes: 30
  *                   breakDurationMinutes: 10
  *                   dailyStartHour: 8
  *                   dailyStartMinute: 0
@@ -797,7 +796,7 @@ router.post(
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 default: 60
+ *                 default: 30
  *               breakDurationMinutes:
  *                 type: integer
  *                 minimum: 5
@@ -854,7 +853,7 @@ router.post(
  *                 registrationEndDate: "2026-06-14T23:59:59Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                 numberOfTables: 4
- *                 matchDurationMinutes: 60
+ *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
  *                 dailyStartHour: 8
  *                 dailyEndHour: 22
