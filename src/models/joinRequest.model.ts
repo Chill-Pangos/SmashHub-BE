@@ -35,6 +35,7 @@ export type JoinRequestType = (typeof JOIN_REQUEST_TYPES)[number];
     { fields: ["userId"] },
     { fields: ["status"] },
     { fields: ["entryId", "status"] },
+    { unique: true, fields: ["entryId", "userId"] },
   ],
 })
 export default class JoinRequest extends Model {
@@ -53,13 +54,6 @@ export default class JoinRequest extends Model {
   })
   declare type: JoinRequestType;
 
-  @Column({
-    type: DataType.INTEGER.UNSIGNED,
-    allowNull: true,
-    // Không khai báo thêm gì — để Sequelize không map column này
-  })
-  // Không declare field này trong model luôn, Sequelize sẽ bỏ qua
-  
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,

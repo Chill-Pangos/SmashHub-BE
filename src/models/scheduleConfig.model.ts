@@ -40,6 +40,7 @@ function timeToMinutes(hour?: number, minute?: number): number | null {
   timestamps: true,
   indexes: [
     { fields: ["tournamentId"] },
+    { fields: ["startDate"] },
     { fields: ["registrationStartDate"] },
     { fields: ["registrationEndDate"] },
     { fields: ["bracketGenerationDate"] },
@@ -94,7 +95,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 20,
+    defaultValue: 30,
   })
   declare matchDurationMinutes: number; // Thời lượng mỗi trận (phút)
 
@@ -143,41 +144,41 @@ export default class ScheduleConfig extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakStartHour?: number; // Giờ bắt đầu break (giữa trưa)
+  declare lunchBreakStartHour?: number | null; // Giờ bắt đầu break (giữa trưa)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
     defaultValue: 0,
   })
-  declare lunchBreakStartMinute?: number;
+  declare lunchBreakStartMinute?: number | null;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakEndHour?: number; // Giờ kết thúc break (giữa trưa)
+  declare lunchBreakEndHour?: number | null; // Giờ kết thúc break (giữa trưa)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
     defaultValue: 0,
   })
-  declare lunchBreakEndMinute?: number;
+  declare lunchBreakEndMinute?: number | null;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakDurationMinutes?: number; // Duration của break
+  declare lunchBreakDurationMinutes?: number | null; // Duration của break
 
   // ─── Description ─────────────────────────────────────────────────────────
 
   @Column({
-    type: DataType.TEXT,
+    type: DataType.TEXT("long"),
     allowNull: true,
   })
-  declare notes?: string; // Ghi chú/mô tả config
+  declare notes?: string | null; // Ghi chú/mô tả config
 
   // ─── Associations ────────────────────────────────────────────────────────
 

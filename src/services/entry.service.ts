@@ -309,7 +309,11 @@ export class EntryService {
         );
       }
 
-      const joinRequest = await JoinRequest.create({ entryId: targetEntryId, userId });
+      const joinRequest = await JoinRequest.create({
+        entryId: targetEntryId,
+        userId,
+        type: "requested",
+      });
 
       const requesterName = `${user.firstName} ${user.lastName}`.trim();
 

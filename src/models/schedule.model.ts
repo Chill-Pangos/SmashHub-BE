@@ -102,7 +102,7 @@ export default class Schedule extends Model {
   @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
   declare tournamentCategory?: TournamentCategory;
 
-  @HasMany(() => Match, { foreignKey: "scheduledId" })
+  @HasMany(() => Match, { foreignKey: "scheduleId" })
   declare scheduledMatches?: Match[];
 
   // ─── Validators ───────────────────────────────────────────────────────────

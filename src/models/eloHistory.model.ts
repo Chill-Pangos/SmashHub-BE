@@ -23,7 +23,11 @@ const MAX_ELO = 10000;
 @Table({
   tableName: "elo_histories",
   timestamps: true,
-  indexes: [{ fields: ["matchId"] }, { fields: ["userId", "createdAt"] }],
+  indexes: [
+    { fields: ["matchId"] },
+    { fields: ["userId", "createdAt"] },
+    { fields: ["tournamentId"] },
+  ],
 })
 export default class EloHistory extends Model {
   @Column({
@@ -78,7 +82,7 @@ export default class EloHistory extends Model {
     allowNull: true, // null = legacy records từ trước khi đổi logic
     comment: "Tournament this ELO change belongs to",
   })
-  declare tournamentId?: number;
+  declare tournamentId?: number | null;
 
   // ─── Associations ──────────────────────────────────────────────────────────
   
