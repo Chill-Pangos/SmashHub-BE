@@ -692,6 +692,7 @@ export class TournamentService {
     openedCount: number;
     closedCount: number;
     bracketsGeneratedCount: number;
+    ongoingCount: number;
     cancelledCount: number;
     totalUpdated: number;
   }> {
@@ -700,6 +701,7 @@ export class TournamentService {
       openedCount: 0,
       closedCount: 0,
       bracketsGeneratedCount: 0,
+      ongoingCount: 0,
       cancelledCount: 0,
     };
 
@@ -881,15 +883,29 @@ export class TournamentService {
       statuses.bracketsGeneratedCount += r[0];
     }
 
+    // 6. brackets_generated -> ongoing
+    const startIds = await getIds({
+      startDate: { [Op.lte]: now, [Op.not]: null },
+    });
+    if (startIds.length > 0) {
+      const r = await Tournament.update(
+        { status: "ongoing" },
+        { where: { status: "brackets_generated", id: { [Op.in]: startIds } } }
+      );
+      statuses.ongoingCount += r[0];
+    }
+
     return {
       openedCount: statuses.openedCount,
       closedCount: statuses.closedCount,
       bracketsGeneratedCount: statuses.bracketsGeneratedCount,
+      ongoingCount: statuses.ongoingCount,
       cancelledCount: statuses.cancelledCount,
       totalUpdated:
         statuses.openedCount +
         statuses.closedCount +
         statuses.bracketsGeneratedCount +
+        statuses.ongoingCount +
         statuses.cancelledCount,
     };
   }
