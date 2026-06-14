@@ -3,6 +3,7 @@ import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
 import { parsePagination, parsePositiveInt } from "../utils/request.helper";
+import { paymentProofUpload } from "../config/multer";
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -85,27 +86,31 @@ export class PaymentController {
   /**
    * 4. Refund payment (organizer)
    */
-  async refundPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const organizerId = this.getAuthenticatedUserId(req, next);
-      if (organizerId == null) return;
+  refundPayment = [
+    paymentProofUpload.single("refundProof"),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const organizerId = this.getAuthenticatedUserId(req, next);
+        if (organizerId == null) return;
 
-      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
-      if (!req.file) {
-        res.status(400).json({ success: false, message: "No file uploaded" });
-        return;
+        const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
+        if (!req.file) {
+          res.status(400).json({ success: false, message: "No file uploaded" });
+          return;
+        }
+
+        const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
+        res.status(200).json({
+          success: true,
+          refundProofImageUrl: payment.refundProofImageUrl,
+          data: payment,
+          message: "Payment refunded successfully",
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
-      res.status(200).json({
-        success: true,
-        data: payment,
-        message: "Payment refunded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    },
+  ];
 
   /**
    * 5. Get payment by ID
@@ -261,31 +266,35 @@ export class PaymentController {
   /**
    * 10. Upload payment proof image
    */
-  async uploadPaymentProof(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const userId = this.getAuthenticatedUserId(req, next);
-      if (userId == null) return;
+  uploadPaymentProof = [
+    paymentProofUpload.single("proof"),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const userId = this.getAuthenticatedUserId(req, next);
+        if (userId == null) return;
 
-      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
-      if (!req.file) {
-        res.status(400).json({ success: false, message: "No file uploaded" });
-        return;
+        const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
+        if (!req.file) {
+          res.status(400).json({ success: false, message: "No file uploaded" });
+          return;
+        }
+
+        const payment = await paymentService.uploadPaymentProof(
+          paymentId,
+          userId,
+          req.file
+        );
+        res.status(200).json({
+          success: true,
+          proofImageUrl: payment.proofImageUrl,
+          data: payment,
+          message: "Payment proof uploaded successfully",
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const payment = await paymentService.uploadPaymentProof(
-        paymentId,
-        userId,
-        req.file
-      );
-      res.status(200).json({
-        success: true,
-        data: payment,
-        message: "Payment proof uploaded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    },
+  ];
 }
 
 export default new PaymentController();

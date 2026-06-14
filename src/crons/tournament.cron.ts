@@ -20,6 +20,7 @@ let redisSubscriber: ReturnType<typeof redisClient.duplicate> | null = null;
  * 1. When registrationStartDate is reached -> status changes to "registration_open"
  * 2. When registrationEndDate is reached -> status changes to "registration_closed"
  * 3. When bracketGenerationDate is reached -> status changes to "brackets_generated"
+ * 4. When startDate is reached -> status changes to "ongoing"
  */
 async function runTournamentStatusUpdate(): Promise<void> {
   try {
@@ -28,6 +29,7 @@ async function runTournamentStatusUpdate(): Promise<void> {
       openedCount,
       closedCount,
       bracketsGeneratedCount,
+      ongoingCount,
       cancelledCount,
       totalUpdated,
     } = await tournamentService.updateTournamentStatuses();
@@ -37,6 +39,7 @@ async function runTournamentStatusUpdate(): Promise<void> {
       console.log(`  - Opened registration: ${openedCount} tournament(s)`);
       console.log(`  - Closed registration: ${closedCount} tournament(s)`);
       console.log(`  - Generated brackets: ${bracketsGeneratedCount} tournament(s)`);
+      console.log(`  - Started tournament: ${ongoingCount} tournament(s)`);
       console.log(`  - Cancelled: ${cancelledCount} tournament(s)`);
     }
   } catch (error) {
@@ -57,6 +60,7 @@ async function loadScheduledUpdateTimes(): Promise<Date[]> {
       "registrationStartDate",
       "registrationEndDate",
       "bracketGenerationDate",
+      "startDate",
     ],
   });
 
@@ -66,6 +70,7 @@ async function loadScheduledUpdateTimes(): Promise<Date[]> {
       config.registrationStartDate,
       config.registrationEndDate,
       config.bracketGenerationDate,
+      config.startDate,
     ]) {
       if (!dateValue) continue;
       const time = new Date(dateValue).getTime();

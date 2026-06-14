@@ -2,7 +2,6 @@ import { Router } from "express";
 import paymentController from "../controllers/payment.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { paymentProofUpload } from "../config/multer";
 
 const router = Router();
 
@@ -890,14 +889,13 @@ router.post(
   "/:paymentId/refund",
   authenticate,
   checkPermission('payments:update'),
-  paymentProofUpload.single("refundProof"),
-  paymentController.refundPayment.bind(paymentController)
+  ...paymentController.refundPayment
 );
 
 /**
  * @swagger
  * /payments/{paymentId}/proof:
- *   put:
+ *   post:
  *     tags: [Payments]
  *     summary: Upload payment proof image
  *     description: Upload or update proof image for payments. Only the team captain or tournament organizer can upload proof. Proof can only be updated for pending payments.
@@ -971,11 +969,10 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
-router.put(
+router.post(
   "/:paymentId/proof",
   authenticate,
-  paymentProofUpload.single("proof"),
-  paymentController.uploadPaymentProof.bind(paymentController)
+  ...paymentController.uploadPaymentProof
 );
 
 export default router;
