@@ -136,7 +136,10 @@ WHERE `name` IN (
   'matches:view',
   'schedules:view',
   'elo:view',
-  'notifications:view'
+  'notifications:view',
+  'payments:view',
+  'payments:create',
+  'payments:update';
 );
 
 -- Referee permissions

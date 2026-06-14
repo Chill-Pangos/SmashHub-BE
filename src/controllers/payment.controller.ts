@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -22,7 +23,10 @@ export class PaymentController {
 
       const { entryId, amount } = req.body;
 
-      const payment = await paymentService.createPayment(entryId, amount);
+      const payment = await paymentService.createPayment(
+        parsePositiveInt(entryId, "entryId"),
+        amount,
+      );
       res.status(201).json({
         success: true,
         data: payment,
@@ -41,7 +45,7 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
       const payment = await paymentService.confirmPayment(
         paymentId,
@@ -65,7 +69,7 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
       const payment = await paymentService.rejectPayment(paymentId, organizerId);
       res.status(200).json({
@@ -86,7 +90,7 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
       if (!req.file) {
         res.status(400).json({ success: false, message: "No file uploaded" });
         return;
@@ -108,7 +112,7 @@ export class PaymentController {
    */
   async getPaymentById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
       const payment = await paymentService.getPaymentById(paymentId);
       res.status(200).json({
@@ -125,10 +129,8 @@ export class PaymentController {
    */
   async getPaymentsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryId = Number(req.params.entryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const { offset, limit } = parsePagination(req.query);
       const status = req.query.status as
         | "pending"
         | "completed"
@@ -167,10 +169,8 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
       const status = req.query.status as
         | "pending"
         | "completed"
@@ -213,7 +213,7 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
 
       const stats = await paymentService.getPaymentStats(categoryId, userId);
       res.status(200).json({
@@ -233,10 +233,8 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
 
       const options: {
         offset: number;
@@ -268,7 +266,7 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
       if (!req.file) {
         res.status(400).json({ success: false, message: "No file uploaded" });
         return;

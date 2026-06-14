@@ -3,6 +3,7 @@
 import Role from "../models/role.model";
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
 import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 export class RoleService {
   // ─── Private Helpers ────────────────────────────────────────────────────────
@@ -66,12 +67,13 @@ export class RoleService {
 
   async update(id: number, data: UpdateRoleDto): Promise<Role> {
     const role = await this.findOrFail(id);
+    const updateData = removeUndefinedFields(data as Record<string, unknown>) as UpdateRoleDto;
 
-    if (data.name && data.name !== role.name) {
-      await this.assertNameNotTaken(data.name, id);
+    if (updateData.name && updateData.name !== role.name) {
+      await this.assertNameNotTaken(updateData.name, id);
     }
 
-    await role.update(data);
+    await role.update(updateData);
     return role;
   }
 

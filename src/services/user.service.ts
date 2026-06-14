@@ -8,10 +8,22 @@ import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import config from "../config/config";
+import { removeUndefinedFields } from "../utils/object.helper";
+import { sequelize } from "../config/database";
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
-    return await User.create(userData as any);
+    return await sequelize.transaction(async (transaction) => {
+      const user = await User.create(userData as any, { transaction });
+      await EloScore.create(
+        {
+          userId: user.id,
+          score: 1000,
+        } as any,
+        { transaction },
+      );
+      return user;
+    });
   }
 
   async findAll(
@@ -147,7 +159,7 @@ export class UserService {
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
-    return await user.update(userData);
+    return await user.update(removeUndefinedFields(userData as Record<string, unknown>));
   }
 
   async updateProfile(
@@ -161,7 +173,7 @@ export class UserService {
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
-    return await user.update(profileData);
+    return await user.update(removeUndefinedFields(profileData as Record<string, unknown>));
   }
 
   async delete(id: number): Promise<boolean> {

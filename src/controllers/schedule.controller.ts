@@ -262,7 +262,7 @@ export class ScheduleController {
       const { scheduledAt, tableNumber } = req.body;
 
       const updated = await scheduleService.updateSchedule(organizerId, id, {
-        ...(scheduledAt && { scheduledAt: new Date(scheduledAt) }),
+        ...(scheduledAt && { scheduledAt }),
         ...(tableNumber !== undefined && { tableNumber: Number(tableNumber) }),
       });
 

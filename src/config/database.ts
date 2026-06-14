@@ -9,6 +9,7 @@ const sequelize = new Sequelize({
   host: config.mysql.host,
   dialect: "mysql",
   port: config.mysql.port,
+  timezone: "+00:00",
   logging: false,
   define: {
     timestamps: true,

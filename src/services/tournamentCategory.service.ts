@@ -4,6 +4,7 @@ import {
   UpdateTournamentCategoryDto,
 } from "../dto/tournamentCategory.dto";
 import { NotFoundError } from "../utils/errors.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 export class TournamentCategoryService {
   /**
@@ -50,6 +51,8 @@ export class TournamentCategoryService {
     id: number,
     data: UpdateTournamentCategoryDto
   ): Promise<[number, TournamentCategory[]]> {
+    const updateData = removeUndefinedFields(data as Record<string, unknown>) as UpdateTournamentCategoryDto;
+
     // Always check if category exists
     const currentCategory = await TournamentCategory.findByPk(id);
     if (!currentCategory) {
@@ -57,16 +60,16 @@ export class TournamentCategoryService {
     }
 
     // If updating gender or type, validate the combination
-    if (data.gender !== undefined || data.type !== undefined) {
-      const finalType = data.type || currentCategory.type;
-      const finalGender = data.gender !== undefined ? data.gender : currentCategory.gender;
+    if (updateData.gender !== undefined || updateData.type !== undefined) {
+      const finalType = updateData.type || currentCategory.type;
+      const finalGender = updateData.gender !== undefined ? updateData.gender : currentCategory.gender;
 
       if (finalGender) {
         this.validateGender(finalType, finalGender);
       }
     }
 
-    return await TournamentCategory.update(data, {
+    return await TournamentCategory.update(updateData, {
       where: { id },
       returning: true,
     });

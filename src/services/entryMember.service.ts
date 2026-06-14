@@ -20,6 +20,7 @@ import {
 import notificationService, {
   NotificationTemplates,
 } from "./notification.service";
+import { removeUndefinedFields } from "../utils/object.helper";
 
 export class EntryMemberService {
   // ─── CRUD gốc ─────────────────────────────────────────────────────────────
@@ -63,7 +64,8 @@ export class EntryMemberService {
     id: number,
     data: UpdateEntryMemberDto,
   ): Promise<[number, EntryMember[]]> {
-    return await EntryMember.update(data, { where: { id }, returning: true });
+    const updateData = removeUndefinedFields(data as Record<string, unknown>);
+    return await EntryMember.update(updateData, { where: { id }, returning: true });
   }
 
   async delete(id: number): Promise<number> {

@@ -3,6 +3,8 @@ import ScheduleConfig from "../models/scheduleConfig.model";
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
+import { toUtcDate } from "../utils/date.helper";
+import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,13 +388,9 @@ function normalizeScheduleConfigDates(
 
   for (const field of dateFields) {
     const value = normalized[field];
-    if (value == null || value instanceof Date) continue;
+    if (value == null) continue;
 
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      throw new BadRequestError(`${field} must be a valid date`);
-    }
-    normalized[field] = date;
+    normalized[field] = toUtcDate(value, field);
   }
 
   return normalized;
@@ -448,7 +446,7 @@ export class ScheduleConfigService {
     const breakdown = totalMatches != null
       ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
       : this._resolveMatchBreakdown(tournament);
-    return this._buildPreview(data, breakdown);
+    return this._buildPreview(normalizeScheduleConfigDates(data), breakdown);
   }
 
   /**
@@ -523,9 +521,13 @@ export class ScheduleConfigService {
     }
 
     // Re-validate toàn bộ model trước khi persist
-    await runModelValidation(tournamentId, data);
+    const createData = normalizeScheduleConfigDates(data);
 
-    return await ScheduleConfig.create({ tournamentId, ...data });
+    await runModelValidation(tournamentId, createData);
+
+    const config = await ScheduleConfig.create({ tournamentId, ...createData });
+    await publishTournamentStatusScheduleRefresh();
+    return config;
   }
 
   /**
@@ -581,7 +583,9 @@ export class ScheduleConfigService {
 
     await runModelValidation(tournamentId, mergedForValidation);
 
-    return await config.update(updateData);
+    const updatedConfig = await config.update(updateData);
+    await publishTournamentStatusScheduleRefresh();
+    return updatedConfig;
   }
 
   /**
@@ -704,7 +708,11 @@ export class ScheduleConfigService {
       assertOrganizer(organizerId, tournament);
     }
 
-    return await ScheduleConfig.destroy({ where: { tournamentId } });
+    const deleted = await ScheduleConfig.destroy({ where: { tournamentId } });
+    if (deleted > 0) {
+      await publishTournamentStatusScheduleRefresh();
+    }
+    return deleted;
   }
 
   /**
