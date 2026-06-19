@@ -262,33 +262,35 @@ async function findAvailableTable(
   const now = new Date();
   const windowStart = new Date(now.getTime() - slotDurationMs);
 
-  const busySchedules = await Schedule.findAll({
+  const busySchedules = await Match.findAll({
     include: [
       {
-        model: TournamentCategory,
-        as: "category",
-        where: { tournamentId },
+        model: Schedule,
+        as: "schedule",
+        where: {
+          scheduledAt: { [Op.between]: [windowStart, now] },
+          tableNumber: { [Op.not]: null },
+        },
         required: true,
-        attributes: [],
-      },
-      {
-        model: Match,
-        as: "scheduledMatches",
-        where: { status: { [Op.in]: ["scheduled", "in_progress"] } },
-        required: true,
-        attributes: [],
+        attributes: ["tableNumber"],
+        include: [
+          {
+            model: TournamentCategory,
+            as: "tournamentCategory",
+            where: { tournamentId },
+            required: true,
+            attributes: [],
+          },
+        ],
       },
     ],
-    attributes: ["tableNumber"],
-    where: {
-      scheduledAt: { [Op.between]: [windowStart, now] },
-      tableNumber: { [Op.not]: null },
-    } as any,
+    where: { status: { [Op.in]: ["scheduled", "in_progress"] } },
+    attributes: [],
     transaction: t,
   });
 
   const busyTables = new Set(
-    busySchedules.map((s) => s.tableNumber).filter(Boolean),
+    busySchedules.map((m) => m.schedule?.tableNumber).filter(Boolean),
   );
 
   for (let table = 1; table <= config.numberOfTables; table++) {
@@ -432,13 +434,12 @@ async function clearExistingSchedules(
 ): Promise<void> {
   const existing = await Schedule.findAll({
     where: { categoryId, stage },
-    include: [{ model: Match, as: "scheduledMatches", attributes: ["id"] }],
+    attributes: ["id"],
     transaction: t,
   });
 
-  const matchIds = existing
-    .flatMap((s) => s.scheduledMatches ?? [])
-    .map((m) => m.id);
+  const scheduleIds = existing.map((s) => s.id);
+  const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
 
   if (matchIds.length > 0) {
     await MatchReferee.destroy({
@@ -452,6 +453,21 @@ async function clearExistingSchedules(
   }
 
   await Schedule.destroy({ where: { categoryId, stage }, transaction: t });
+}
+
+async function getMatchIdsByScheduleIds(
+  scheduleIds: number[],
+  t: Transaction,
+): Promise<number[]> {
+  if (scheduleIds.length === 0) return [];
+
+  const matches = await Match.findAll({
+    where: { scheduleId: { [Op.in]: scheduleIds } },
+    attributes: ["id"],
+    transaction: t,
+  });
+
+  return matches.map((m) => m.id);
 }
 
 // ─── Match Pair Builders ──────────────────────────────────────────────────────
@@ -1042,13 +1058,12 @@ export class ScheduleService {
   ): Promise<void> {
     const existing = await Schedule.findAll({
       where: { categoryId, stage: "knockout", knockoutRound: roundName },
-      include: [{ model: Match, as: "scheduledMatches", attributes: ["id"] }],
+      attributes: ["id"],
       transaction: t,
     });
 
-    const matchIds = existing
-      .flatMap((s) => s.scheduledMatches ?? [])
-      .map((m) => m.id);
+    const scheduleIds = existing.map((s) => s.id);
+    const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
 
     if (matchIds.length > 0) {
       await MatchReferee.destroy({
