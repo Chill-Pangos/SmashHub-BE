@@ -34,6 +34,13 @@ interface RefereeWorkload {
   assignedCount: number;
 }
 
+interface GroupMatchPair {
+  entryAId: number;
+  entryBId: number;
+  groupName: string;
+  roundNumber: number;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MATCH_INCLUDE = {
@@ -239,6 +246,101 @@ function getPhaseEndTime(
     lastSlot.getTime() +
       (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000,
   );
+}
+
+function getSequentialRoundSlots<T extends { roundNumber: number }>(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  items: T[],
+): Map<T, Date> {
+  const slots = new Map<T, Date>();
+  const rounds = new Map<number, T[]>();
+
+  for (const item of items) {
+    const roundItems = rounds.get(item.roundNumber) ?? [];
+    roundItems.push(item);
+    rounds.set(item.roundNumber, roundItems);
+  }
+
+  let roundStart = phaseStart;
+  for (const [, roundItems] of Array.from(rounds.entries()).sort((a, b) => a[0] - b[0])) {
+    for (let i = 0; i < roundItems.length; i++) {
+      slots.set(roundItems[i]!, getPhaseSlot(config, roundStart, i).scheduledAt);
+    }
+    roundStart = getPhaseEndTime(config, roundStart, roundItems.length);
+  }
+
+  return slots;
+}
+
+function getSequentialRoundEndTime<T extends { roundNumber: number }>(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  items: T[],
+): Date {
+  if (items.length === 0) return phaseStart;
+
+  const rounds = new Map<number, number>();
+  for (const item of items) {
+    rounds.set(item.roundNumber, (rounds.get(item.roundNumber) ?? 0) + 1);
+  }
+
+  let roundStart = phaseStart;
+  for (const [, matchCount] of Array.from(rounds.entries()).sort((a, b) => a[0] - b[0])) {
+    roundStart = getPhaseEndTime(config, roundStart, matchCount);
+  }
+
+  return roundStart;
+}
+
+function getSequentialGroupRoundSlots<T extends { groupName: string; roundNumber: number; groupSequenceKey?: string }>(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  items: T[],
+): Map<T, Date> {
+  const slots = new Map<T, Date>();
+  const groups = new Map<string, T[]>();
+
+  for (const item of items) {
+    const groupKey = item.groupSequenceKey ?? item.groupName;
+    const groupItems = groups.get(groupKey) ?? [];
+    groupItems.push(item);
+    groups.set(groupKey, groupItems);
+  }
+
+  let groupStart = phaseStart;
+  for (const [, groupItems] of Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    const groupSlots = getSequentialRoundSlots(config, groupStart, groupItems);
+    for (const [item, scheduledAt] of groupSlots) {
+      slots.set(item, scheduledAt);
+    }
+    groupStart = getSequentialRoundEndTime(config, groupStart, groupItems);
+  }
+
+  return slots;
+}
+
+function getSequentialGroupRoundEndTime<T extends { groupName: string; roundNumber: number; groupSequenceKey?: string }>(
+  config: ScheduleConfig,
+  phaseStart: Date,
+  items: T[],
+): Date {
+  if (items.length === 0) return phaseStart;
+
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const groupKey = item.groupSequenceKey ?? item.groupName;
+    const groupItems = groups.get(groupKey) ?? [];
+    groupItems.push(item);
+    groups.set(groupKey, groupItems);
+  }
+
+  let groupStart = phaseStart;
+  for (const [, groupItems] of Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+    groupStart = getSequentialRoundEndTime(config, groupStart, groupItems);
+  }
+
+  return groupStart;
 }
 
 function getTournamentEndTime(config: ScheduleConfig): Date {
@@ -477,10 +579,14 @@ async function getMatchIdsByScheduleIds(
  */
 async function buildGroupMatchPairs(
   categoryId: number,
-): Promise<{ entryAId: number; entryBId: number; groupName: string }[]> {
+): Promise<GroupMatchPair[]> {
   const standings = await GroupStanding.findAll({
     where: { categoryId },
-    order: [["groupName", "ASC"]],
+    order: [
+      ["groupName", "ASC"],
+      ["position", "ASC"],
+      ["id", "ASC"],
+    ],
   });
 
   if (standings.length === 0) {
@@ -496,16 +602,28 @@ async function buildGroupMatchPairs(
     groupMap.set(s.groupName, group);
   }
 
-  const pairs: { entryAId: number; entryBId: number; groupName: string }[] = [];
+  const pairs: GroupMatchPair[] = [];
   for (const [groupName, entryIds] of groupMap) {
-    for (let i = 0; i < entryIds.length; i++) {
-      for (let j = i + 1; j < entryIds.length; j++) {
+    const players: (number | null)[] = [...entryIds];
+    if (players.length % 2 === 1) players.push(null);
+
+    for (let round = 1; round < players.length; round++) {
+      for (let i = 0; i < players.length / 2; i++) {
+        const entryAId = players[i];
+        const entryBId = players[players.length - 1 - i];
+        if (entryAId == null || entryBId == null) continue;
+
         pairs.push({
-          entryAId: entryIds[i]!,
-          entryBId: entryIds[j]!,
+          entryAId,
+          entryBId,
           groupName,
+          roundNumber: round,
         });
       }
+
+      const fixed = players[0]!;
+      const rotating = players.slice(1);
+      players.splice(0, players.length, fixed, rotating[rotating.length - 1]!, ...rotating.slice(0, -1));
     }
   }
 
@@ -581,8 +699,17 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildGroupMatchPairs(categoryId);
-    const allocator = createAllocator(config);
-    const { warning } = allocator.validate(pairs.length, config.numberOfTables);
+    const groupStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
+    const groupEnd = getSequentialGroupRoundEndTime(config, groupStart, pairs);
+    const tournamentEnd = getTournamentEndTime(config);
+    const warning = groupEnd > tournamentEnd
+      ? `Schedule overflows tournament end time. Last match ends at ${groupEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
+      : undefined;
+    const groupSlots = getSequentialGroupRoundSlots(config, groupStart, pairs);
 
     const result = await sequelize.transaction(async (t) => {
       await clearExistingSchedules(categoryId, "group", t);
@@ -592,14 +719,14 @@ export class ScheduleService {
 
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
-        const slot = allocator.getSlot(i, config.numberOfTables);
+        const scheduledAt = groupSlots.get(pair)!;
 
         const schedule = await Schedule.create(
           {
             categoryId,
             stage: "group" satisfies Stage,
             groupName: pair.groupName,
-            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -649,8 +776,17 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildKnockoutPairs(categoryId, roundName);
-    const allocator = createAllocator(config);
-    const { warning } = allocator.validate(pairs.length, config.numberOfTables);
+    const knockoutStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
+    const knockoutEnd = getSequentialRoundEndTime(config, knockoutStart, pairs);
+    const tournamentEnd = getTournamentEndTime(config);
+    const warning = knockoutEnd > tournamentEnd
+      ? `Schedule overflows tournament end time. Last match ends at ${knockoutEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
+      : undefined;
+    const knockoutSlots = getSequentialRoundSlots(config, knockoutStart, pairs);
 
     const result = await sequelize.transaction(async (t) => {
       // Nếu generate toàn bộ → xóa knockout schedule cũ
@@ -666,14 +802,14 @@ export class ScheduleService {
 
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
-        const slot = allocator.getSlot(i, config.numberOfTables);
+        const scheduledAt = knockoutSlots.get(pair)!;
 
         const schedule = await Schedule.create(
           {
             categoryId,
             stage: "knockout" satisfies Stage,
             knockoutRound: pair.roundName,
-            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -736,10 +872,14 @@ export class ScheduleService {
     const config = await getRequiredScheduleConfig(tournament.id);
     const groupJobs: {
       category: TournamentCategory;
-      pair: { entryAId: number; entryBId: number; groupName: string };
+      groupName: string;
+      groupSequenceKey: string;
+      roundNumber: number;
+      pair: GroupMatchPair;
     }[] = [];
     const knockoutJobs: {
       category: TournamentCategory;
+      roundNumber: number;
       pair: {
         bracketId: number;
         entryAId: number | null;
@@ -751,11 +891,21 @@ export class ScheduleService {
     for (const category of categories) {
       if (category.isGroupStage) {
         const pairs = await buildGroupMatchPairs(category.id);
-        groupJobs.push(...pairs.map((pair) => ({ category, pair })));
+        groupJobs.push(...pairs.map((pair) => ({
+          category,
+          groupName: pair.groupName,
+          groupSequenceKey: `${category.id}:${pair.groupName}`,
+          roundNumber: pair.roundNumber,
+          pair,
+        })));
       }
 
       const pairs = await buildKnockoutPairs(category.id);
-      knockoutJobs.push(...pairs.map((pair) => ({ category, pair })));
+      knockoutJobs.push(...pairs.map((pair) => ({
+        category,
+        roundNumber: pair.roundNumber,
+        pair,
+      })));
     }
 
     const tournamentStart = withTime(
@@ -763,17 +913,19 @@ export class ScheduleService {
       config.dailyStartHour,
       config.dailyStartMinute,
     );
-    const groupEnd = getPhaseEndTime(config, tournamentStart, groupJobs.length);
+    const groupEnd = getSequentialGroupRoundEndTime(config, tournamentStart, groupJobs);
     const knockoutStart = groupJobs.length === 0
       ? tournamentStart
       : isSingleDayTournament(config)
         ? groupEnd
         : nextDayStart(groupEnd, config);
-    const finalEnd = getPhaseEndTime(config, knockoutStart, knockoutJobs.length);
+    const finalEnd = getSequentialRoundEndTime(config, knockoutStart, knockoutJobs);
     const tournamentEnd = getTournamentEndTime(config);
     const warning = finalEnd > tournamentEnd
       ? `Schedule overflows tournament end time. Last match ends at ${finalEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
       : undefined;
+    const groupSlots = getSequentialGroupRoundSlots(config, tournamentStart, groupJobs);
+    const knockoutSlots = getSequentialRoundSlots(config, knockoutStart, knockoutJobs);
 
     const resultsByCategory = new Map<number, ScheduleResult>();
     for (const category of categories) {
@@ -788,13 +940,13 @@ export class ScheduleService {
 
       for (let i = 0; i < groupJobs.length; i++) {
         const job = groupJobs[i]!;
-        const slot = getPhaseSlot(config, tournamentStart, i);
+        const scheduledAt = groupSlots.get(job)!;
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
             stage: "group" satisfies Stage,
             groupName: job.pair.groupName,
-            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -819,13 +971,13 @@ export class ScheduleService {
 
       for (let i = 0; i < knockoutJobs.length; i++) {
         const job = knockoutJobs[i]!;
-        const slot = getPhaseSlot(config, knockoutStart, i);
+        const scheduledAt = knockoutSlots.get(job)!;
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
             stage: "knockout" satisfies Stage,
             knockoutRound: job.pair.roundName,
-            scheduledAt: toUtcDate(slot.scheduledAt, "scheduledAt"),
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
