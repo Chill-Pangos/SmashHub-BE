@@ -1,119 +1,294 @@
 import cron from "node-cron";
-import tournamentService from "../services/tournament.service";
+import tournamentService, {
+  TournamentStatusTransition,
+  TournamentStatusUpdateResult,
+} from "../services/tournament.service";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import redisClient, { connectRedis } from "../config/redis";
 import { formatDateGMT7 } from "../utils/date.helper";
 import { TOURNAMENT_STATUS_REFRESH_CHANNEL } from "../utils/tournamentStatusScheduler.helper";
+import { withDbLock } from "../utils/dbLock.helper";
+import cronLogService from "../services/cronLog.service";
+import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
+import { Op } from "sequelize";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
+const PERIODIC_REFRESH_CRON = "*/5 * * * *";
+const RECONCILE_CRON = "* * * * *";
 
-let tournamentStatusTimer: NodeJS.Timeout | null = null;
-let scheduledUpdateTimes: Date[] = [];
+type StatusJobName = "open" | "close" | "bracket" | "start";
+
+type StatusJobConfig = {
+  jobName: StatusJobName;
+  label: string;
+  dateField: "registrationStartDate" | "registrationEndDate" | "bracketGenerationDate" | "startDate";
+  lockName: string;
+  handler: () => Promise<TournamentStatusTransition[]>;
+};
+
+const statusJobs: StatusJobConfig[] = [
+  {
+    jobName: "open",
+    label: "tournament-status-open",
+    dateField: "registrationStartDate",
+    lockName: "cron:tournament-status:open",
+    handler: () => tournamentService.openRegistrations(),
+  },
+  {
+    jobName: "close",
+    label: "tournament-status-close",
+    dateField: "registrationEndDate",
+    lockName: "cron:tournament-status:close",
+    handler: () => tournamentService.closeRegistrations(),
+  },
+  {
+    jobName: "bracket",
+    label: "tournament-status-bracket",
+    dateField: "bracketGenerationDate",
+    lockName: "cron:tournament-status:bracket",
+    handler: () => tournamentService.generateBracketsOrCancel(),
+  },
+  {
+    jobName: "start",
+    label: "tournament-status-start",
+    dateField: "startDate",
+    lockName: "cron:tournament-status:start",
+    handler: () => tournamentService.startTournaments(),
+  },
+];
+
+const timerByJob = new Map<StatusJobName, NodeJS.Timeout>();
 let tournamentStatusSchedulerStarted = false;
 let refreshPromise: Promise<void> | null = null;
 let redisSubscriber: ReturnType<typeof redisClient.duplicate> | null = null;
 
-/**
- * Dynamic scheduler: Auto update tournament status based on schedule_configs dates
- *
- * Logic:
- * 1. When registrationStartDate is reached -> status changes to "registration_open"
- * 2. When registrationEndDate is reached -> status changes to "registration_closed"
- * 3. When bracketGenerationDate is reached -> status changes to "brackets_generated"
- * 4. When startDate is reached -> status changes to "ongoing"
- */
-async function runTournamentStatusUpdate(): Promise<void> {
-  try {
-    const now = new Date();
-    const {
-      openedCount,
-      closedCount,
-      bracketsGeneratedCount,
-      ongoingCount,
-      cancelledCount,
-      totalUpdated,
-    } = await tournamentService.updateTournamentStatuses();
+function summarizeEvents(events: TournamentStatusTransition[]): TournamentStatusUpdateResult {
+  const openedTournamentIds = events
+    .filter((event) => event.toStatus === "registration_open")
+    .map((event) => event.tournamentId);
+  const closedTournamentIds = events
+    .filter((event) => event.toStatus === "registration_closed")
+    .map((event) => event.tournamentId);
+  const bracketsGeneratedTournamentIds = events
+    .filter((event) => event.toStatus === "brackets_generated")
+    .map((event) => event.tournamentId);
+  const ongoingTournamentIds = events
+    .filter((event) => event.toStatus === "ongoing")
+    .map((event) => event.tournamentId);
+  const cancelledTournamentIds = events
+    .filter((event) => event.toStatus === "cancelled")
+    .map((event) => event.tournamentId);
 
-    if (totalUpdated > 0) {
-      console.log(`[CRON] Updated ${totalUpdated} tournament(s) status at ${formatDateGMT7(now)}`);
-      console.log(`  - Opened registration: ${openedCount} tournament(s)`);
-      console.log(`  - Closed registration: ${closedCount} tournament(s)`);
-      console.log(`  - Generated brackets: ${bracketsGeneratedCount} tournament(s)`);
-      console.log(`  - Started tournament: ${ongoingCount} tournament(s)`);
-      console.log(`  - Cancelled: ${cancelledCount} tournament(s)`);
-    }
-  } catch (error) {
-    console.error("[CRON] Error updating tournament status:", error);
+  return {
+    openedCount: openedTournamentIds.length,
+    closedCount: closedTournamentIds.length,
+    bracketsGeneratedCount: bracketsGeneratedTournamentIds.length,
+    ongoingCount: ongoingTournamentIds.length,
+    cancelledCount: cancelledTournamentIds.length,
+    openedTournamentIds,
+    closedTournamentIds,
+    bracketsGeneratedTournamentIds,
+    ongoingTournamentIds,
+    cancelledTournamentIds,
+    events,
+    totalUpdated: events.length,
+  };
+}
+
+async function writeEventLogs(jobName: string, events: TournamentStatusTransition[]): Promise<void> {
+  for (const event of events) {
+    await cronLogService.create({
+      jobName,
+      tournamentId: event.tournamentId,
+      level: "info",
+      status: "success",
+      message: "Tournament status changed",
+      meta: event,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      durationMs: 0,
+    });
   }
 }
 
-function clearTournamentStatusTimer(): void {
-  if (!tournamentStatusTimer) return;
-  clearTimeout(tournamentStatusTimer);
-  tournamentStatusTimer = null;
+async function notifyStatusTransitions(
+  jobName: string,
+  events: TournamentStatusTransition[],
+): Promise<void> {
+  if (events.length === 0) return;
+
+  try {
+    await tournamentStatusNotificationService.notifyTransitions(events);
+  } catch (error) {
+    await cronLogService.create({
+      jobName,
+      level: "error",
+      status: "failed",
+      message: "Failed to notify tournament status changes",
+      meta: { error: error instanceof Error ? error.message : String(error) },
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      durationMs: 0,
+    });
+  }
 }
 
-async function loadScheduledUpdateTimes(): Promise<Date[]> {
-  const now = new Date();
-  const configs = await ScheduleConfig.findAll({
-    attributes: [
-      "registrationStartDate",
-      "registrationEndDate",
-      "bracketGenerationDate",
-      "startDate",
-    ],
+async function runStatusJob(
+  jobName: string,
+  lockName: string,
+  handler: () => Promise<TournamentStatusTransition[]>,
+): Promise<TournamentStatusUpdateResult> {
+  const startedAt = new Date();
+  const locked = await withDbLock(lockName, handler);
+
+  if (!locked.acquired) {
+    await cronLogService.create({
+      jobName,
+      level: "warn",
+      status: "skipped",
+      message: "Cron job skipped because another worker holds the lock",
+      meta: { lockName },
+      startedAt,
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+    return summarizeEvents([]);
+  }
+
+  const events = locked.result;
+  const summary = summarizeEvents(events);
+  const finishedAt = new Date();
+
+  await cronLogService.create({
+    jobName,
+    level: "info",
+    status: "success",
+    message: "Tournament status job completed",
+    meta: summary,
+    startedAt,
+    finishedAt,
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+  });
+  await writeEventLogs(jobName, events);
+  await notifyStatusTransitions(jobName, events);
+
+  if (summary.totalUpdated > 0) {
+    console.log(`[CRON] ${jobName}: updated ${summary.totalUpdated} tournament(s) at ${formatDateGMT7(finishedAt)}`);
+  }
+
+  return summary;
+}
+
+async function runConfiguredStatusJob(job: StatusJobConfig): Promise<TournamentStatusUpdateResult> {
+  try {
+    return await runStatusJob(job.label, job.lockName, job.handler);
+  } catch (error) {
+    await cronLogService.create({
+      jobName: job.label,
+      level: "error",
+      status: "failed",
+      message: "Tournament status job failed",
+      meta: { error: error instanceof Error ? error.message : String(error) },
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      durationMs: 0,
+    });
+    console.error(`[CRON] ${job.label} failed:`, error);
+    return summarizeEvents([]);
+  }
+}
+
+async function runReconcileTournamentStatuses(): Promise<void> {
+  const startedAt = new Date();
+  const locked = await withDbLock("cron:tournament-status:reconcile", async () => {
+    const result = await tournamentService.reconcileTournamentStatuses();
+    return result.events;
   });
 
-  const uniqueTimes = new Set<number>();
-  for (const config of configs) {
-    for (const dateValue of [
-      config.registrationStartDate,
-      config.registrationEndDate,
-      config.bracketGenerationDate,
-      config.startDate,
-    ]) {
-      if (!dateValue) continue;
-      const time = new Date(dateValue).getTime();
-      if (time > now.getTime()) uniqueTimes.add(time);
-    }
+  if (!locked.acquired) {
+    await cronLogService.create({
+      jobName: "tournament-status-reconcile",
+      level: "warn",
+      status: "skipped",
+      message: "Reconcile skipped because another worker holds the lock",
+      startedAt,
+      finishedAt: new Date(),
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+    return;
   }
 
-  return [...uniqueTimes].sort((a, b) => a - b).map((time) => new Date(time));
+  const events = locked.result;
+  const summary = summarizeEvents(events);
+  const finishedAt = new Date();
+  await cronLogService.create({
+    jobName: "tournament-status-reconcile",
+    level: "info",
+    status: "success",
+    message: "Tournament status reconcile completed",
+    meta: summary,
+    startedAt,
+    finishedAt,
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+  });
+  await writeEventLogs("tournament-status-reconcile", events);
+  await notifyStatusTransitions("tournament-status-reconcile", events);
 }
 
-function scheduleNextTournamentStatusUpdate(): void {
-  clearTournamentStatusTimer();
+function clearStatusTimer(jobName: StatusJobName): void {
+  const timer = timerByJob.get(jobName);
+  if (!timer) return;
+  clearTimeout(timer);
+  timerByJob.delete(jobName);
+}
 
-  const nextTime = scheduledUpdateTimes[0];
+function clearAllStatusTimers(): void {
+  for (const jobName of timerByJob.keys()) {
+    clearStatusTimer(jobName);
+  }
+}
+
+async function loadNextUpdateTime(job: StatusJobConfig): Promise<Date | null> {
+  const now = new Date();
+  const configs = await ScheduleConfig.findAll({
+    attributes: [job.dateField],
+    where: {
+      [job.dateField]: { [Op.gt]: now },
+    },
+    order: [[job.dateField, "ASC"]],
+    limit: 1,
+  });
+
+  const next = configs[0]?.[job.dateField];
+  return next ? new Date(next) : null;
+}
+
+async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
+  clearStatusTimer(job.jobName);
+
+  const nextTime = await loadNextUpdateTime(job);
   if (!nextTime) {
-    console.log("[CRON] Tournament status scheduler: no future update time");
+    console.log(`[CRON] ${job.label}: no future update time`);
     return;
   }
 
   const delay = nextTime.getTime() - Date.now();
-  if (delay <= 0) {
-    tournamentStatusTimer = setTimeout(async () => {
-      await runTournamentStatusUpdate();
-      await refreshTournamentStatusUpdateSchedule();
-    }, 0);
-    return;
-  }
-
   if (delay > MAX_TIMEOUT_MS) {
-    tournamentStatusTimer = setTimeout(
-      () => refreshTournamentStatusUpdateSchedule(),
-      MAX_TIMEOUT_MS,
-    );
-    console.log(`[CRON] Tournament status scheduler: next refresh before ${formatDateGMT7(nextTime)}`);
+    const timer = setTimeout(() => {
+      void scheduleNextStatusJob(job);
+    }, MAX_TIMEOUT_MS);
+    timerByJob.set(job.jobName, timer);
+    console.log(`[CRON] ${job.label}: next refresh before ${formatDateGMT7(nextTime)}`);
     return;
   }
 
-  tournamentStatusTimer = setTimeout(async () => {
-    await runTournamentStatusUpdate();
+  const timer = setTimeout(async () => {
+    await runConfiguredStatusJob(job);
     await refreshTournamentStatusUpdateSchedule();
-  }, delay);
+  }, Math.max(delay, 0));
+  timerByJob.set(job.jobName, timer);
 
-  console.log(`[CRON] Tournament status scheduler: next update at ${formatDateGMT7(nextTime)}`);
+  console.log(`[CRON] ${job.label}: next update at ${formatDateGMT7(nextTime)}`);
 }
 
 export async function refreshTournamentStatusUpdateSchedule(): Promise<void> {
@@ -121,8 +296,7 @@ export async function refreshTournamentStatusUpdateSchedule(): Promise<void> {
 
   refreshPromise = (async () => {
     try {
-      scheduledUpdateTimes = await loadScheduledUpdateTimes();
-      scheduleNextTournamentStatusUpdate();
+      await Promise.all(statusJobs.map((job) => scheduleNextStatusJob(job)));
     } catch (error) {
       console.error("[CRON] Error refreshing tournament status schedule:", error);
     } finally {
@@ -136,10 +310,12 @@ export async function refreshTournamentStatusUpdateSchedule(): Promise<void> {
 async function startTournamentStatusRefreshSubscriber(): Promise<void> {
   try {
     await connectRedis();
+    if (!redisClient.isReady) return;
+
     redisSubscriber = redisClient.duplicate();
     await redisSubscriber.connect();
     await redisSubscriber.subscribe(TOURNAMENT_STATUS_REFRESH_CHANNEL, async () => {
-      await runTournamentStatusUpdate();
+      await runReconcileTournamentStatuses();
       await refreshTournamentStatusUpdateSchedule();
     });
   } catch (error) {
@@ -147,13 +323,20 @@ async function startTournamentStatusRefreshSubscriber(): Promise<void> {
   }
 }
 
-/**
- * Cron job: Notify upcoming tournament status changes
- * Pattern: Every hour at minute 0
- *
- * This job checks for tournaments that will change status in the next 24 hours
- * and logs warnings for admin awareness
- */
+export const reconcileTournamentStatuses = cron.schedule(
+  RECONCILE_CRON,
+  async () => {
+    await runReconcileTournamentStatuses();
+  },
+);
+
+export const refreshTournamentStatusSchedule = cron.schedule(
+  PERIODIC_REFRESH_CRON,
+  async () => {
+    await refreshTournamentStatusUpdateSchedule();
+  },
+);
+
 export const notifyUpcomingStatusChanges = cron.schedule(
   "0 * * * *",
   async () => {
@@ -218,32 +401,31 @@ export const notifyUpcomingStatusChanges = cron.schedule(
   }
 );
 
-/**
- * Start all tournament cron jobs
- */
 export const startTournamentCrons = async () => {
   if (!tournamentStatusSchedulerStarted) {
     tournamentStatusSchedulerStarted = true;
-    await runTournamentStatusUpdate();
+    await runReconcileTournamentStatuses();
     await refreshTournamentStatusUpdateSchedule();
     void startTournamentStatusRefreshSubscriber();
   }
+
+  reconcileTournamentStatuses.start();
+  refreshTournamentStatusSchedule.start();
   notifyUpcomingStatusChanges.start();
   console.log("[CRON] All tournament cron jobs started");
 };
 
-/**
- * Stop all tournament cron jobs
- */
 export const stopTournamentCrons = () => {
   tournamentStatusSchedulerStarted = false;
-  clearTournamentStatusTimer();
+  clearAllStatusTimers();
   if (redisSubscriber?.isOpen) {
     redisSubscriber.quit().catch((error) => {
       console.error("[CRON] Error closing tournament status refresh subscriber:", error);
     });
   }
   redisSubscriber = null;
+  reconcileTournamentStatuses.stop();
+  refreshTournamentStatusSchedule.stop();
   notifyUpcomingStatusChanges.stop();
   console.log("[CRON] All tournament cron jobs stopped");
 };

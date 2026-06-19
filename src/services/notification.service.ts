@@ -1,8 +1,14 @@
 // notification.service.ts
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
+import { createAdapter } from "@socket.io/redis-adapter";
 import Notification, { NotificationType } from "../models/notification.model";
 import { Op } from "sequelize";
+import redisClient, { connectRedis } from "../config/redis";
+import type CronLog from "../models/cronLog.model";
+import User from "../models/user.model";
+import Role from "../models/role.model";
+import authService from "./auth.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,6 +25,8 @@ export interface NotificationPayload {
 const CORS_ORIGIN = process.env.FRONTEND_URL ?? "*";
 const PING_TIMEOUT = 60_000;
 const PING_INTERVAL = 25_000;
+const REALTIME_NOTIFICATION_CHANNEL = "realtime:notifications";
+const REALTIME_CRON_LOG_CHANNEL = "realtime:cron-logs";
 
 function userRoom(userId: string): string {
   return `user:${userId}`;
@@ -30,6 +38,20 @@ function withTimestamp(payload: NotificationPayload): NotificationPayload {
 
 function assertInitialized(io: SocketIOServer | null): asserts io is SocketIOServer {
   if (!io) throw new Error("NotificationService is not initialized. Call initialize() first.");
+}
+
+function getSocketToken(socket: Socket): string | null {
+  const authToken = socket.handshake.auth?.token;
+  if (typeof authToken === "string" && authToken.trim()) {
+    return authToken.startsWith("Bearer ") ? authToken.slice(7) : authToken;
+  }
+
+  const authorization = socket.handshake.headers.authorization;
+  if (typeof authorization === "string" && authorization.startsWith("Bearer ")) {
+    return authorization.slice(7);
+  }
+
+  return null;
 }
 
 // ─── Notification builders ────────────────────────────────────────────────────
@@ -101,6 +123,12 @@ export const NotificationTemplates = {
     title: "Referee Invitation",
     message: `You have been invited to referee at "${tournamentName}"`,
   }),
+
+  tournamentStatusChanged: (tournamentName: string, statusLabel: string) => ({
+    type: "tournament_status_changed" as NotificationType,
+    title: `Tournament status updated: ${tournamentName}`,
+    message: `"${tournamentName}" is now ${statusLabel}`,
+  }),
 };
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -113,6 +141,7 @@ class NotificationService {
 
   // userId → socketId
   private userToSocket = new Map<string, string>();
+  private realtimeSubscriber: ReturnType<typeof redisClient.duplicate> | null = null;
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
@@ -128,38 +157,74 @@ class NotificationService {
         methods: ["GET", "POST"],
         credentials: true,
       },
+      transports: ["websocket"],
       pingTimeout: PING_TIMEOUT,
       pingInterval: PING_INTERVAL,
     });
 
+    this.setupRedisAdapter().catch((error) => {
+      console.error("Socket.IO Redis adapter failed:", error);
+    });
     this.setupConnectionHandlers();
+    this.startRealtimeSubscriber().catch((error) => {
+      console.error("Realtime subscriber failed:", error);
+    });
+  }
+
+  private async setupRedisAdapter(): Promise<void> {
+    assertInitialized(this.io);
+    await connectRedis();
+    if (!redisClient.isReady) return;
+
+    const pubClient = redisClient.duplicate();
+    const subClient = redisClient.duplicate();
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    this.io.adapter(createAdapter(pubClient, subClient));
   }
 
   private setupConnectionHandlers(): void {
     assertInitialized(this.io);
 
-    this.io.on("connection", (socket: Socket) => {
+    this.io.on("connection", async (socket: Socket) => {
+      const token = getSocketToken(socket);
+      if (!token) {
+        socket.disconnect(true);
+        return;
+      }
+
+      let authenticatedUserId: string;
+      try {
+        const decoded = await authService.verifyToken(token);
+        authenticatedUserId = String(decoded.userId);
+      } catch {
+        socket.disconnect(true);
+        return;
+      }
+
       socket.on("register", (userId: string) => {
-        if (!userId) return;
+        if (userId && userId !== authenticatedUserId) {
+          socket.emit("registration_error", { message: "Cannot register another user" });
+          return;
+        }
 
         // Kick previous session nếu user đăng nhập từ thiết bị khác
-        const prevSocketId = this.userToSocket.get(userId);
+        const prevSocketId = this.userToSocket.get(authenticatedUserId);
         if (prevSocketId && prevSocketId !== socket.id) {
-          this.userToSocket.delete(userId);
+          this.userToSocket.delete(authenticatedUserId);
           this.socketToUser.delete(prevSocketId);
         }
 
-        this.userToSocket.set(userId, socket.id);
-        this.socketToUser.set(socket.id, userId);
-        socket.join(userRoom(userId));
+        this.userToSocket.set(authenticatedUserId, socket.id);
+        this.socketToUser.set(socket.id, authenticatedUserId);
+        socket.join(userRoom(authenticatedUserId));
 
-        socket.emit("registered", { userId });
+        socket.emit("registered", { userId: authenticatedUserId });
       });
 
       socket.on("unregister", (userId: string) => {
-        if (!userId) return;
-        this.removeUser(userId);
-        socket.leave(userRoom(userId));
+        if (userId && userId !== authenticatedUserId) return;
+        this.removeUser(authenticatedUserId);
+        socket.leave(userRoom(authenticatedUserId));
       });
 
       socket.on("join-room", (roomId: string) => {
@@ -220,6 +285,98 @@ class NotificationService {
     this.io.to(roomId).emit(event, data);
   }
 
+  private sendLocalToUsers(userIds: string[], payload: NotificationPayload): void {
+    if (!this.io) return;
+    const stamped = withTimestamp(payload);
+    for (const userId of userIds) {
+      this.io.local.to(userRoom(userId)).emit("notification", stamped);
+    }
+  }
+
+  private sendLocalCronLog(userIds: string[], log: unknown): void {
+    if (!this.io) return;
+    for (const userId of userIds) {
+      this.io.local.to(userRoom(userId)).emit("cron_logs_created", { logs: [log] });
+    }
+  }
+
+  private async startRealtimeSubscriber(): Promise<void> {
+    if (!this.io || this.realtimeSubscriber?.isOpen) return;
+
+    await connectRedis();
+    this.realtimeSubscriber = redisClient.duplicate();
+    await this.realtimeSubscriber.connect();
+
+    await this.realtimeSubscriber.subscribe(REALTIME_NOTIFICATION_CHANNEL, (message) => {
+      try {
+        const payload = JSON.parse(message) as {
+          userIds: string[];
+          notification: NotificationPayload;
+        };
+        this.sendLocalToUsers(payload.userIds, payload.notification);
+      } catch (error) {
+        console.error("Invalid realtime notification payload:", error);
+      }
+    });
+
+    await this.realtimeSubscriber.subscribe(REALTIME_CRON_LOG_CHANNEL, (message) => {
+      try {
+        const payload = JSON.parse(message) as { userIds: string[]; log: unknown };
+        this.sendLocalCronLog(payload.userIds, payload.log);
+      } catch (error) {
+        console.error("Invalid realtime cron log payload:", error);
+      }
+    });
+  }
+
+  private async publishRealtimeNotification(
+    userIds: string[],
+    payload: NotificationPayload,
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+
+    await connectRedis();
+    if (!redisClient.isReady) return;
+
+    await redisClient.publish(
+      REALTIME_NOTIFICATION_CHANNEL,
+      JSON.stringify({ userIds, notification: withTimestamp(payload) }),
+    );
+  }
+
+  async publishCronLog(log: CronLog): Promise<void> {
+    await connectRedis();
+    if (!redisClient.isReady) return;
+
+    const userIds = await this.getAdminUserIds();
+    if (userIds.length === 0) return;
+
+    await redisClient.publish(
+      REALTIME_CRON_LOG_CHANNEL,
+      JSON.stringify({
+        userIds: userIds.map(String),
+        log: log.get ? log.get({ plain: true }) : log,
+      }),
+    );
+  }
+
+  private async getAdminUserIds(): Promise<number[]> {
+    const admins = await User.findAll({
+      attributes: ["id"],
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          where: { name: "admin" },
+          through: { attributes: [] },
+          required: true,
+        },
+      ],
+    });
+
+    return admins.map((admin) => admin.id);
+  }
+
   // ── User state ─────────────────────────────────────────────────────────────
 
   isUserConnected(userId: string): boolean {
@@ -255,6 +412,7 @@ class NotificationService {
       message: string;
       referenceId?: number;
       referenceType?: string;
+      data?: unknown;
     }
   ): Promise<Notification> {
     const notification = await Notification.create({
@@ -263,8 +421,7 @@ class NotificationService {
       isRead: false,
     });
 
-    // Gửi realtime nếu user đang online
-    this.sendToUser(String(userId), {
+    const realtimePayload = {
       type: payload.type,
       title: payload.title,
       message: payload.message,
@@ -272,8 +429,15 @@ class NotificationService {
         notificationId: notification.id,
         referenceId: payload.referenceId,
         referenceType: payload.referenceType,
+        ...(payload.data !== undefined ? { payload: payload.data } : {}),
       },
-    });
+    };
+
+    if (this.io) {
+      this.sendToUser(String(userId), realtimePayload);
+    } else {
+      await this.publishRealtimeNotification([String(userId)], realtimePayload);
+    }
 
     return notification;
   }
@@ -289,24 +453,31 @@ class NotificationService {
       message: string;
       referenceId?: number;
       referenceType?: string;
+      data?: unknown;
     }
   ): Promise<void> {
-    await Notification.bulkCreate(
+    const notifications = await Notification.bulkCreate(
       userIds.map((userId) => ({ userId, ...payload, isRead: false }))
     );
 
-    this.sendToUsers(
-      userIds.map(String),
-      {
-        type: payload.type,
-        title: payload.title,
-        message: payload.message,
-        data: {
-          referenceId: payload.referenceId,
-          referenceType: payload.referenceType,
-        },
-      }
-    );
+    const notificationPayload = {
+      type: payload.type,
+      title: payload.title,
+      message: payload.message,
+      data: {
+        referenceId: payload.referenceId,
+        referenceType: payload.referenceType,
+        notificationIds: notifications.map((notification) => notification.id),
+        ...(payload.data !== undefined ? { payload: payload.data } : {}),
+      },
+    };
+
+    const stringUserIds = userIds.map(String);
+    if (this.io) {
+      this.sendToUsers(stringUserIds, notificationPayload);
+    } else {
+      await this.publishRealtimeNotification(stringUserIds, notificationPayload);
+    }
   }
 
   /**

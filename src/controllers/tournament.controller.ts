@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import tournamentService from "../services/tournament.service";
 import eloCalculationService from "../services/eloCalculation.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
+import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
 
 export class TournamentController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -156,6 +157,11 @@ export class TournamentController {
   async updateStatuses(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await tournamentService.updateTournamentStatuses();
+      try {
+        await tournamentStatusNotificationService.notifyTransitions(result.events);
+      } catch (notifyError) {
+        console.error("Failed to notify tournament status changes:", notifyError);
+      }
       res.status(200).json({
         success: true,
         message: "Tournament statuses updated successfully",
