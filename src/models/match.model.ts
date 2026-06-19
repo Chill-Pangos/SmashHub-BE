@@ -62,16 +62,16 @@ export default class Match extends Model {
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
   })
-  declare entryAId: number;
+  declare entryAId?: number | null;
 
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
   })
-  declare entryBId: number;
+  declare entryBId?: number | null;
 
   @Column({
     type: DataType.ENUM(...MATCH_STATUSES),
@@ -130,7 +130,11 @@ export default class Match extends Model {
   static validateEntries(instance: Match): void {
     if (instance.entryAId === undefined && instance.entryBId === undefined) return;
 
-    if (instance.entryAId === instance.entryBId) {
+    if (
+      instance.entryAId != null &&
+      instance.entryBId != null &&
+      instance.entryAId === instance.entryBId
+    ) {
       throw new Error("Entry A and Entry B must be different");
     }
   }

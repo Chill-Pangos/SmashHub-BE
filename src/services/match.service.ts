@@ -356,6 +356,9 @@ export class MatchService {
         `Cannot start match. Status is "${instance.status}", must be "scheduled"`,
       );
     }
+    if (!instance.entryAId || !instance.entryBId) {
+      throw new Error("Cannot start match before both entries are assigned");
+    }
 
     return await sequelize.transaction(async (t) => {
       await instance.update({ status: "in_progress" }, { transaction: t });
@@ -387,6 +390,9 @@ export class MatchService {
       throw new Error(
         `Cannot finalize match. Status is "${instance.status}", must be "in_progress"`,
       );
+    }
+    if (!instance.entryAId || !instance.entryBId) {
+      throw new Error("Cannot finalize match before both entries are assigned");
     }
 
     const sets = await MatchSet.findAll({ where: { matchId } });

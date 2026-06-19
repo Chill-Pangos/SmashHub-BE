@@ -281,6 +281,9 @@ export class GroupStandingService {
   if (!match) throw new Error("Match not found or not a group stage match");
   if (match.status !== "completed") throw new Error("Match is not completed yet");
   if (!match.winnerEntryId) throw new Error("Match has no winner");
+  if (!match.entryAId || !match.entryBId) {
+    throw new Error("Match entries are not fully assigned");
+  }
 
   const schedule = match.schedule;
   if (!schedule) throw new Error("Match has no schedule");
