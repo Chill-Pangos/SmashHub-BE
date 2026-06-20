@@ -47,6 +47,8 @@ export interface UpdateScheduleConfigDto {
   lunchBreakEndMinute?: number | null;
   lunchBreakDurationMinutes?: number | null;
   notes?: string | null;
+  regenerateSchedule?: boolean;
+  regenerationKey?: string;
 }
 
 export interface ScheduleConfigResponseDto {
@@ -89,6 +91,9 @@ export interface ValidateScheduleConfigDto {
 export interface ScheduleValidationResponseDto {
   isValid: boolean;
   message: string;
+  requiresRegeneration?: boolean;
+  regenerationKey?: string;
+  affectedScheduleCount?: number;
   details: {
     totalMatches: number;
     totalSlots: number;

@@ -1,7 +1,14 @@
 // schedule-config.service.ts
+import crypto from "crypto";
+import { Op } from "sequelize";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
+import Schedule from "../models/schedule.model";
+import Match from "../models/match.model";
+import Entry from "../models/entry.model";
+import KnockoutBracket from "../models/knockoutBracket.model";
+import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { toUtcDate } from "../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
@@ -11,6 +18,9 @@ import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatu
 export interface SchedulePreviewResponse {
   isValid: boolean;
   message: string;
+  requiresRegeneration?: boolean;
+  regenerationKey?: string;
+  affectedScheduleCount?: number;
   preview: {
     totalMatches: number;
     totalSlots: number;
@@ -51,6 +61,28 @@ interface MatchBreakdown {
   groupMatches: number;
   knockoutMatches: number;
   totalMatches: number;
+  groupEntryCounts: number[];
+  knockoutEntryCounts: number[];
+  plainMatchCount?: number;
+}
+
+interface ScheduleEstimate {
+  totalSlots: number;
+  estimatedEndTime: Date;
+  neededMinutes: number;
+}
+
+interface UpdateControlFields {
+  regenerateSchedule?: boolean;
+  regenerationKey?: string;
+}
+
+interface ScheduleConfigUpdateContext {
+  categoryIds: number[];
+  entryCount: number;
+  scheduleCount: number;
+  bracketCount: number;
+  activeMatchCount: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,6 +98,50 @@ const DEFAULT_QUALIFIERS_PER_GROUP = 2;
  * Phải chia đều từ maxEntries → dùng làm kích thước bảng mặc định.
  */
 const DEFAULT_ENTRIES_PER_GROUP = 4;
+const POSSIBLE_BRACKET_SIZES = [4, 8, 16, 32, 64, 128, 256];
+const CONFIG_UPDATE_FIELDS = [
+  "startDate",
+  "endDate",
+  "numberOfTables",
+  "registrationStartDate",
+  "registrationEndDate",
+  "bracketGenerationDate",
+  "matchDurationMinutes",
+  "breakDurationMinutes",
+  "dailyStartHour",
+  "dailyStartMinute",
+  "dailyEndHour",
+  "dailyEndMinute",
+  "lunchBreakStartHour",
+  "lunchBreakStartMinute",
+  "lunchBreakEndHour",
+  "lunchBreakEndMinute",
+  "lunchBreakDurationMinutes",
+  "notes",
+] as const;
+type ConfigUpdateField = (typeof CONFIG_UPDATE_FIELDS)[number];
+
+const UPDATE_CONTROL_FIELDS = ["regenerateSchedule", "regenerationKey"] as const;
+const SCHEDULE_AFFECTING_FIELDS = new Set<ConfigUpdateField>([
+  "startDate",
+  "endDate",
+  "numberOfTables",
+  "matchDurationMinutes",
+  "breakDurationMinutes",
+  "dailyStartHour",
+  "dailyStartMinute",
+  "dailyEndHour",
+  "dailyEndMinute",
+  "lunchBreakStartHour",
+  "lunchBreakStartMinute",
+  "lunchBreakEndHour",
+  "lunchBreakEndMinute",
+  "lunchBreakDurationMinutes",
+]);
+const REGISTRATION_FIELDS = new Set<ConfigUpdateField>([
+  "registrationStartDate",
+  "registrationEndDate",
+]);
 
 function assertOrganizer(userId: number, tournament: Tournament): void {
   if (tournament.createdBy !== userId) {
@@ -79,13 +155,13 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
  * Tính số trận của 1 category.
  *
  * Knockout:
- *   totalMatches = maxEntries - 1
+ *   totalMatches = bracketSize(maxEntries) - 1
  *
  * Group stage + knockout:
  *   numberOfGroups  = maxEntries / DEFAULT_ENTRIES_PER_GROUP
  *   groupMatches    = numberOfGroups × C(entriesPerGroup, 2)   ← round-robin
  *   qualifiers      = numberOfGroups × DEFAULT_QUALIFIERS_PER_GROUP
- *   knockoutMatches = qualifiers - 1
+ *   knockoutMatches = bracketSize(qualifiers) - 1
  *   totalMatches    = groupMatches + knockoutMatches
  */
 export function calculateMatchesForCategory(
@@ -100,10 +176,13 @@ function calculateMatchBreakdownForCategory(
   const { maxEntries, isGroupStage } = category;
 
   if (!isGroupStage) {
+    const knockoutMatches = calculateBracketSize(maxEntries) - 1;
     return {
       groupMatches: 0,
-      knockoutMatches: maxEntries - 1,
-      totalMatches: maxEntries - 1,
+      knockoutMatches,
+      totalMatches: knockoutMatches,
+      groupEntryCounts: [],
+      knockoutEntryCounts: [maxEntries],
     };
   }
 
@@ -115,12 +194,14 @@ function calculateMatchBreakdownForCategory(
   const groupMatches = numberOfGroups * matchesPerGroup;
 
   const qualifiers = numberOfGroups * DEFAULT_QUALIFIERS_PER_GROUP;
-  const knockoutMatches = qualifiers - 1;
+  const knockoutMatches = calculateBracketSize(qualifiers) - 1;
 
   return {
     groupMatches,
     knockoutMatches,
     totalMatches: groupMatches + knockoutMatches,
+    groupEntryCounts: Array(numberOfGroups).fill(entriesPerGroup),
+    knockoutEntryCounts: [qualifiers],
   };
 }
 
@@ -136,6 +217,14 @@ export function calculateTotalMatchesFromCategories(
 function calculateMatchBreakdownFromCategories(
   categories: Array<Pick<TournamentCategory, "maxEntries" | "isGroupStage">>
 ): MatchBreakdown {
+  const initial: MatchBreakdown = {
+    groupMatches: 0,
+    knockoutMatches: 0,
+    totalMatches: 0,
+    groupEntryCounts: [],
+    knockoutEntryCounts: [],
+  };
+
   return categories.reduce(
     (sum, category) => {
       const breakdown = calculateMatchBreakdownForCategory(category);
@@ -143,10 +232,23 @@ function calculateMatchBreakdownFromCategories(
         groupMatches: sum.groupMatches + breakdown.groupMatches,
         knockoutMatches: sum.knockoutMatches + breakdown.knockoutMatches,
         totalMatches: sum.totalMatches + breakdown.totalMatches,
+        groupEntryCounts: [...sum.groupEntryCounts, ...breakdown.groupEntryCounts],
+        knockoutEntryCounts: [...sum.knockoutEntryCounts, ...breakdown.knockoutEntryCounts],
       };
     },
-    { groupMatches: 0, knockoutMatches: 0, totalMatches: 0 }
+    initial
   );
+}
+
+function createManualMatchBreakdown(totalMatches: number): MatchBreakdown {
+  return {
+    groupMatches: 0,
+    knockoutMatches: totalMatches,
+    totalMatches,
+    groupEntryCounts: [],
+    knockoutEntryCounts: [totalMatches + 1],
+    plainMatchCount: totalMatches,
+  };
 }
 
 // ─── Schedule Math Helpers ────────────────────────────────────────────────────
@@ -184,16 +286,38 @@ function calculateAvailableMinutes(
   return dailyMinutes * Math.max(0, calendarDayCount(startDate, endDate));
 }
 
-function calculateNeededMinutes(
-  totalMatches: number,
-  matchDurationMinutes: number,
-  breakDurationMinutes: number,
+function calculateBracketSize(entryCount: number): number {
+  for (const size of POSSIBLE_BRACKET_SIZES) {
+    if (size >= entryCount) return size;
+  }
+  throw new BadRequestError(`Too many entries: ${entryCount}. Maximum supported: 256`);
+}
+
+function calculateRoundRobinSlotCount(
+  entryCount: number,
   numberOfTables: number
 ): number {
-  return (
-    Math.ceil(totalMatches / numberOfTables) *
-    (matchDurationMinutes + breakDurationMinutes)
-  );
+  if (entryCount < 2) return 0;
+
+  const playerCount = entryCount % 2 === 0 ? entryCount : entryCount + 1;
+  const rounds = playerCount - 1;
+  const matchesPerRound = Math.floor(entryCount / 2);
+
+  return rounds * Math.ceil(matchesPerRound / numberOfTables);
+}
+
+function calculateKnockoutSlotCount(
+  entryCount: number,
+  numberOfTables: number
+): number {
+  const bracketSize = calculateBracketSize(entryCount);
+  let slots = 0;
+
+  for (let matchesInRound = bracketSize / 2; matchesInRound >= 1; matchesInRound /= 2) {
+    slots += Math.ceil(matchesInRound / numberOfTables);
+  }
+
+  return slots;
 }
 
 function nextDayStart(date: Date, dailyStartHour: number, dailyStartMinute: number): Date {
@@ -204,21 +328,18 @@ function nextDayStart(date: Date, dailyStartHour: number, dailyStartMinute: numb
   );
 }
 
-function calculateEstimatedEndTime(
+function calculateEndTimeFromSlots(
   startDate: Date,
-  totalMatches: number,
-  matchDurationMinutes: number,
-  breakDurationMinutes: number,
-  numberOfTables: number,
+  totalSlots: number,
+  slotDuration: number,
   dailyStartHour: number,
   dailyStartMinute: number,
   endDate: Date,
   dailyEndHour: number,
   dailyEndMinute: number
 ): Date {
-  const slotDuration = matchDurationMinutes + breakDurationMinutes;
-  let remainingSlots = Math.ceil(totalMatches / numberOfTables);
-  let current = withTime(startDate, dailyStartHour, dailyStartMinute);
+  let remainingSlots = totalSlots;
+  let current = new Date(startDate);
   const finalDay = dateOnlyTime(endDate);
 
   while (remainingSlots > 0) {
@@ -234,11 +355,7 @@ function calculateEstimatedEndTime(
     }
 
     remainingSlots -= slotsToday;
-    current = withTime(
-      new Date(current.getFullYear(), current.getMonth(), current.getDate() + 1),
-      dailyStartHour,
-      dailyStartMinute
-    );
+    current = nextDayStart(current, dailyStartHour, dailyStartMinute);
 
     if (slotsToday === 0 && dateOnlyTime(current) > finalDay) {
       return current;
@@ -248,7 +365,7 @@ function calculateEstimatedEndTime(
   return current;
 }
 
-function calculatePhasedEstimatedEndTime(
+function calculateScheduleEstimate(
   startDate: Date,
   endDate: Date,
   breakdown: MatchBreakdown,
@@ -259,63 +376,69 @@ function calculatePhasedEstimatedEndTime(
   dailyStartMinute: number,
   dailyEndHour: number,
   dailyEndMinute: number
-): Date {
-  if (breakdown.groupMatches === 0) {
-    return calculateEstimatedEndTime(
-      startDate,
-      breakdown.knockoutMatches,
-      matchDurationMinutes,
-      breakDurationMinutes,
-      numberOfTables,
-      dailyStartHour,
-      dailyStartMinute,
-      endDate,
-      dailyEndHour,
-      dailyEndMinute
-    );
+): ScheduleEstimate {
+  const slotDuration = matchDurationMinutes + breakDurationMinutes;
+  const tournamentStart = withTime(startDate, dailyStartHour, dailyStartMinute);
+
+  if (breakdown.plainMatchCount != null) {
+    const totalSlots = Math.ceil(breakdown.plainMatchCount / numberOfTables);
+    return {
+      totalSlots,
+      estimatedEndTime: calculateEndTimeFromSlots(
+        tournamentStart,
+        totalSlots,
+        slotDuration,
+        dailyStartHour,
+        dailyStartMinute,
+        endDate,
+        dailyEndHour,
+        dailyEndMinute
+      ),
+      neededMinutes: totalSlots * slotDuration,
+    };
   }
 
-  const groupEndTime = calculateEstimatedEndTime(
-    startDate,
-    breakdown.groupMatches,
-    matchDurationMinutes,
-    breakDurationMinutes,
-    numberOfTables,
+  const groupSlots = breakdown.groupEntryCounts.reduce(
+    (sum, entryCount) => sum + calculateRoundRobinSlotCount(entryCount, numberOfTables),
+    0
+  );
+  const knockoutSlots = breakdown.knockoutEntryCounts.reduce(
+    (sum, entryCount) => sum + calculateKnockoutSlotCount(entryCount, numberOfTables),
+    0
+  );
+
+  const groupEndTime = calculateEndTimeFromSlots(
+    tournamentStart,
+    groupSlots,
+    slotDuration,
     dailyStartHour,
     dailyStartMinute,
     endDate,
     dailyEndHour,
     dailyEndMinute
   );
-
-  const knockoutStartDate = isSingleDay(startDate, endDate)
-    ? groupEndTime
-    : nextDayStart(groupEndTime, dailyStartHour, dailyStartMinute);
-
-  return calculateEstimatedEndTime(
+  const knockoutStartDate = groupSlots === 0
+    ? tournamentStart
+    : isSingleDay(startDate, endDate)
+      ? groupEndTime
+      : nextDayStart(groupEndTime, dailyStartHour, dailyStartMinute);
+  const estimatedEndTime = calculateEndTimeFromSlots(
     knockoutStartDate,
-    breakdown.knockoutMatches,
-    matchDurationMinutes,
-    breakDurationMinutes,
-    numberOfTables,
+    knockoutSlots,
+    slotDuration,
     dailyStartHour,
     dailyStartMinute,
     endDate,
     dailyEndHour,
     dailyEndMinute
   );
-}
+  const totalSlots = groupSlots + knockoutSlots;
 
-function calculatePhaseNeededMinutes(
-  breakdown: MatchBreakdown,
-  matchDurationMinutes: number,
-  breakDurationMinutes: number,
-  numberOfTables: number
-): number {
-  const slotDuration = matchDurationMinutes + breakDurationMinutes;
-  const groupSlots = Math.ceil(breakdown.groupMatches / numberOfTables);
-  const knockoutSlots = Math.ceil(breakdown.knockoutMatches / numberOfTables);
-  return (groupSlots + knockoutSlots) * slotDuration;
+  return {
+    totalSlots,
+    estimatedEndTime,
+    neededMinutes: totalSlots * slotDuration,
+  };
 }
 
 function getEffectiveTournamentEndTime(
@@ -335,9 +458,13 @@ function getEffectiveTournamentEndTime(
  */
 async function runModelValidation(
   tournamentId: number,
-  data: Partial<ScheduleConfig>
+  data: Partial<ScheduleConfig>,
+  options: { isUpdate?: boolean } = {}
 ): Promise<void> {
-  const instance = ScheduleConfig.build({ tournamentId, ...data });
+  const instance = ScheduleConfig.build(
+    { tournamentId, ...data },
+    { isNewRecord: !options.isUpdate },
+  );
   try {
     await instance.validate();
   } catch (error) {
@@ -410,6 +537,328 @@ function removeUndefinedFields(
   return cleaned as Partial<ScheduleConfig>;
 }
 
+function assertKnownUpdateFields(data: Record<string, unknown>): void {
+  const allowed = new Set<string>([...CONFIG_UPDATE_FIELDS, ...UPDATE_CONTROL_FIELDS]);
+  const unknown = Object.keys(data).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) {
+    throw new BadRequestError(`Unknown schedule config update fields: ${unknown.join(", ")}`);
+  }
+}
+
+function splitUpdatePayload(
+  data: Record<string, unknown>,
+): { configData: Partial<ScheduleConfig>; controls: UpdateControlFields } {
+  assertKnownUpdateFields(data);
+
+  const configData: Record<string, unknown> = {};
+  const controls: UpdateControlFields = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+
+    if (key === "regenerateSchedule") {
+      if (typeof value !== "boolean") {
+        throw new BadRequestError("regenerateSchedule must be a boolean");
+      }
+      controls.regenerateSchedule = value;
+      continue;
+    }
+    if (key === "regenerationKey") {
+      if (value != null && typeof value !== "string") {
+        throw new BadRequestError("regenerationKey must be a string");
+      }
+      if (value != null) controls.regenerationKey = value;
+      continue;
+    }
+
+    configData[key] = value;
+  }
+
+  return {
+    configData: configData as Partial<ScheduleConfig>,
+    controls,
+  };
+}
+
+function pickConfigFields(source: Partial<ScheduleConfig>): Partial<ScheduleConfig> {
+  const picked: Record<string, unknown> = {};
+  const raw = source as Record<string, unknown>;
+
+  for (const field of CONFIG_UPDATE_FIELDS) {
+    if (raw[field] !== undefined) {
+      picked[field] = raw[field];
+    }
+  }
+
+  return picked as Partial<ScheduleConfig>;
+}
+
+function buildMergedConfig(
+  config: ScheduleConfig,
+  updateData: Partial<ScheduleConfig>,
+): Partial<ScheduleConfig> {
+  return {
+    startDate:              config.startDate,
+    endDate:                config.endDate,
+    numberOfTables:         config.numberOfTables,
+    registrationStartDate:  config.registrationStartDate,
+    registrationEndDate:    config.registrationEndDate,
+    bracketGenerationDate:  config.bracketGenerationDate,
+    matchDurationMinutes:   config.matchDurationMinutes,
+    breakDurationMinutes:   config.breakDurationMinutes,
+    dailyStartHour:         config.dailyStartHour,
+    dailyStartMinute:       config.dailyStartMinute,
+    dailyEndHour:           config.dailyEndHour,
+    dailyEndMinute:         config.dailyEndMinute,
+    lunchBreakStartHour:    config.lunchBreakStartHour,
+    lunchBreakStartMinute:  config.lunchBreakStartMinute,
+    lunchBreakEndHour:      config.lunchBreakEndHour,
+    lunchBreakEndMinute:    config.lunchBreakEndMinute,
+    lunchBreakDurationMinutes: config.lunchBreakDurationMinutes,
+    notes:                  config.notes,
+    ...updateData,
+  } as Partial<ScheduleConfig>;
+}
+
+function normalizeComparableValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  return value ?? null;
+}
+
+function getChangedFields(
+  config: ScheduleConfig,
+  updateData: Partial<ScheduleConfig>,
+): ConfigUpdateField[] {
+  const changed: ConfigUpdateField[] = [];
+  const current = config as unknown as Record<string, unknown>;
+  const incoming = updateData as Record<string, unknown>;
+
+  for (const field of CONFIG_UPDATE_FIELDS) {
+    if (!(field in incoming)) continue;
+    if (normalizeComparableValue(current[field]) !== normalizeComparableValue(incoming[field])) {
+      changed.push(field);
+    }
+  }
+
+  return changed;
+}
+
+function hasScheduleAffectingChange(changedFields: ConfigUpdateField[]): boolean {
+  return changedFields.some((field) => SCHEDULE_AFFECTING_FIELDS.has(field));
+}
+
+function isNotesOnlyChange(changedFields: ConfigUpdateField[]): boolean {
+  return changedFields.length > 0 && changedFields.every((field) => field === "notes");
+}
+
+function isOngoingTableIncrease(
+  tournament: Tournament,
+  config: ScheduleConfig,
+  changedFields: ConfigUpdateField[],
+  updateData: Partial<ScheduleConfig>,
+): boolean {
+  return (
+    tournament.status === "ongoing" &&
+    changedFields.length === 1 &&
+    changedFields[0] === "numberOfTables" &&
+    updateData.numberOfTables != null &&
+    updateData.numberOfTables > config.numberOfTables
+  );
+}
+
+function getDateValue(value: unknown): Date | null {
+  return value instanceof Date ? value : null;
+}
+
+function assertUpdateDateNotMovedToPast(
+  changedFields: ConfigUpdateField[],
+  mergedConfig: Partial<ScheduleConfig>,
+): void {
+  const now = new Date();
+
+  if (changedFields.includes("startDate")) {
+    const startDate = getDateValue(mergedConfig.startDate);
+    if (startDate && startDate < now) {
+      throw new BadRequestError("Start date cannot be moved to the past");
+    }
+  }
+
+  if (changedFields.includes("registrationStartDate")) {
+    const registrationStartDate = getDateValue(mergedConfig.registrationStartDate);
+    if (registrationStartDate && registrationStartDate < now) {
+      throw new BadRequestError("Registration start date cannot be moved to the past");
+    }
+  }
+}
+
+function assertLifecycleUpdateAllowed(
+  tournament: Tournament,
+  config: ScheduleConfig,
+  changedFields: ConfigUpdateField[],
+  updateData: Partial<ScheduleConfig>,
+  mergedConfig: Partial<ScheduleConfig>,
+  context: ScheduleConfigUpdateContext,
+): void {
+  if (changedFields.length === 0 || isNotesOnlyChange(changedFields)) return;
+
+  const now = new Date();
+  const hasRegistrationChange = changedFields.some((field) => REGISTRATION_FIELDS.has(field));
+  const hasScheduleChange = hasScheduleAffectingChange(changedFields);
+
+  assertUpdateDateNotMovedToPast(changedFields, mergedConfig);
+
+  if (tournament.status === "completed" || tournament.status === "cancelled") {
+    throw new BadRequestError("Only notes can be updated after tournament is completed or cancelled");
+  }
+
+  if (tournament.status === "ongoing") {
+    if (isOngoingTableIncrease(tournament, config, changedFields, updateData)) return;
+    throw new BadRequestError("Only notes or increasing numberOfTables can be updated while tournament is ongoing");
+  }
+
+  if (context.entryCount > 0 && changedFields.includes("registrationStartDate")) {
+    throw new BadRequestError("registrationStartDate cannot be updated after entries exist");
+  }
+
+  if (context.entryCount > 0 && changedFields.includes("registrationEndDate")) {
+    const registrationEndDate = getDateValue(mergedConfig.registrationEndDate);
+    if (registrationEndDate && registrationEndDate < now) {
+      throw new BadRequestError("registrationEndDate cannot be moved to the past after entries exist");
+    }
+  }
+
+  if (tournament.status === "registration_open") {
+    if (changedFields.includes("registrationStartDate")) {
+      throw new BadRequestError("registrationStartDate cannot be updated after registration opens");
+    }
+    if (changedFields.includes("registrationEndDate")) {
+      const registrationEndDate = getDateValue(mergedConfig.registrationEndDate);
+      if (registrationEndDate && registrationEndDate <= now) {
+        throw new BadRequestError("registrationEndDate must be in the future while registration is open");
+      }
+    }
+  }
+
+  if (tournament.status === "registration_closed") {
+    if (hasRegistrationChange) {
+      throw new BadRequestError("Registration dates cannot be updated after registration closes");
+    }
+    if (changedFields.includes("bracketGenerationDate")) {
+      if (context.bracketCount > 0 || context.scheduleCount > 0) {
+        throw new BadRequestError("bracketGenerationDate cannot be updated after brackets or schedules exist");
+      }
+      const bracketGenerationDate = getDateValue(mergedConfig.bracketGenerationDate);
+      if (bracketGenerationDate && bracketGenerationDate < now) {
+        throw new BadRequestError("bracketGenerationDate cannot be moved to the past");
+      }
+    }
+  }
+
+  if (tournament.status === "brackets_generated") {
+    if (hasRegistrationChange || changedFields.includes("bracketGenerationDate")) {
+      throw new BadRequestError("Registration dates and bracketGenerationDate are locked after brackets are generated");
+    }
+  }
+
+  if (context.scheduleCount > 0 && hasScheduleChange) {
+    if (context.activeMatchCount > 0) {
+      throw new BadRequestError("Cannot regenerate schedules after matches are in progress or completed");
+    }
+    if (tournament.status !== "brackets_generated") {
+      throw new BadRequestError("Schedule regeneration is only allowed when tournament status is brackets_generated");
+    }
+  }
+}
+
+function requiresScheduleRegeneration(
+  tournament: Tournament,
+  config: ScheduleConfig,
+  changedFields: ConfigUpdateField[],
+  updateData: Partial<ScheduleConfig>,
+  context: ScheduleConfigUpdateContext,
+): boolean {
+  if (context.scheduleCount === 0) return false;
+  if (!hasScheduleAffectingChange(changedFields)) return false;
+  if (isOngoingTableIncrease(tournament, config, changedFields, updateData)) return false;
+  return true;
+}
+
+function serializeConfigForRegenerationKey(config: Partial<ScheduleConfig>): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  const raw = config as Record<string, unknown>;
+
+  for (const field of CONFIG_UPDATE_FIELDS) {
+    const value = raw[field];
+    if (value instanceof Date) {
+      output[field] = value.toISOString();
+    } else {
+      output[field] = value ?? null;
+    }
+  }
+
+  return output;
+}
+
+function buildRegenerationKey(
+  tournamentId: number,
+  configUpdatedAt: Date,
+  mergedConfig: Partial<ScheduleConfig>,
+  affectedScheduleCount: number,
+): string {
+  const payload = {
+    tournamentId,
+    configUpdatedAt: configUpdatedAt.toISOString(),
+    mergedConfig: serializeConfigForRegenerationKey(mergedConfig),
+    affectedScheduleCount,
+  };
+
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+}
+
+async function getScheduleConfigUpdateContext(
+  tournament: Tournament,
+): Promise<ScheduleConfigUpdateContext> {
+  const categoryIds = (tournament.categories ?? []).map((category) => category.id);
+
+  if (categoryIds.length === 0) {
+    return {
+      categoryIds,
+      entryCount: 0,
+      scheduleCount: 0,
+      bracketCount: 0,
+      activeMatchCount: 0,
+    };
+  }
+
+  const [entryCount, scheduleCount, bracketCount, activeMatchCount] = await Promise.all([
+    Entry.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
+    Schedule.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
+    KnockoutBracket.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
+    Match.count({
+      where: { status: { [Op.in]: ["in_progress", "completed"] } },
+      include: [
+        {
+          model: Schedule,
+          as: "schedule",
+          where: { categoryId: { [Op.in]: categoryIds } },
+          required: true,
+        },
+      ],
+    }),
+  ]);
+
+  return {
+    categoryIds,
+    entryCount,
+    scheduleCount,
+    bracketCount,
+    activeMatchCount,
+  };
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class ScheduleConfigService {
@@ -444,7 +893,7 @@ export class ScheduleConfigService {
     }
 
     const breakdown = totalMatches != null
-      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      ? createManualMatchBreakdown(totalMatches)
       : this._resolveMatchBreakdown(tournament);
     return this._buildPreview(normalizeScheduleConfigDates(data), breakdown);
   }
@@ -468,32 +917,54 @@ export class ScheduleConfigService {
 
     const existing = await this.getConfig(tournamentId);
     if (!existing) throw new NotFoundError("Schedule config not found");
-    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(data));
+    const { configData } = splitUpdatePayload(data as Record<string, unknown>);
+    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(configData));
+    const merged = buildMergedConfig(existing, updateData);
+    const changedFields = getChangedFields(existing, updateData);
+    const context = await getScheduleConfigUpdateContext(tournament);
 
-    const merged = {
-      startDate:              existing.startDate,
-      endDate:                existing.endDate,
-      numberOfTables:         existing.numberOfTables,
-      registrationStartDate:  existing.registrationStartDate,
-      registrationEndDate:    existing.registrationEndDate,
-      bracketGenerationDate:  existing.bracketGenerationDate,
-      matchDurationMinutes:   existing.matchDurationMinutes,
-      breakDurationMinutes:   existing.breakDurationMinutes,
-      dailyStartHour:         existing.dailyStartHour,
-      dailyStartMinute:       existing.dailyStartMinute,
-      dailyEndHour:           existing.dailyEndHour,
-      dailyEndMinute:         existing.dailyEndMinute,
-      lunchBreakStartHour:    existing.lunchBreakStartHour,
-      lunchBreakStartMinute:  existing.lunchBreakStartMinute,
-      lunchBreakEndHour:      existing.lunchBreakEndHour,
-      lunchBreakEndMinute:    existing.lunchBreakEndMinute,
-      ...updateData,
-    } as Partial<ScheduleConfig>;
+    assertLifecycleUpdateAllowed(
+      tournament,
+      existing,
+      changedFields,
+      updateData,
+      merged,
+      context,
+    );
 
     const breakdown = totalMatches != null
-      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      ? createManualMatchBreakdown(totalMatches)
       : this._resolveMatchBreakdown(tournament);
-    return this._buildPreview(merged, breakdown);
+    const preview = this._buildPreview(merged, breakdown);
+    const needsRegeneration = requiresScheduleRegeneration(
+      tournament,
+      existing,
+      changedFields,
+      updateData,
+      context,
+    );
+
+    if (!needsRegeneration) return preview;
+
+    const metadata = {
+      requiresRegeneration: true,
+      affectedScheduleCount: context.scheduleCount,
+    };
+
+    if (!preview.isValid || context.activeMatchCount > 0) {
+      return { ...preview, ...metadata };
+    }
+
+    return {
+      ...preview,
+      ...metadata,
+      regenerationKey: buildRegenerationKey(
+        tournamentId,
+        new Date((existing as any).updatedAt),
+        merged,
+        context.scheduleCount,
+      ),
+    };
   }
 
   // ─── CRUD thật (gọi sau khi user xác nhận preview) ─────────────────────────
@@ -543,47 +1014,94 @@ export class ScheduleConfigService {
    */
   async updateConfig(
     tournamentId: number,
-    data: Partial<ScheduleConfig>,
+    data: Partial<ScheduleConfig> & UpdateControlFields,
     organizerId?: number
   ): Promise<ScheduleConfig> {
+    const tournament = await Tournament.findByPk(tournamentId, {
+      include: [{ model: TournamentCategory, as: "categories" }],
+    });
+
     if (organizerId != null) {
-      const tournament = await Tournament.findByPk(tournamentId);
       if (!tournament) throw new NotFoundError("Tournament not found");
       assertOrganizer(organizerId, tournament);
+    } else if (!tournament) {
+      throw new NotFoundError("Tournament not found");
     }
 
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
-    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(data));
+    const { configData, controls } = splitUpdatePayload(data as Record<string, unknown>);
+    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(configData));
 
     if (Object.keys(updateData).length === 0) {
       return config;
     }
 
-    // Merge existing → incoming để validate toàn trạng thái cuối
-    const mergedForValidation = {
-      startDate:              config.startDate,
-      endDate:                config.endDate,
-      numberOfTables:         config.numberOfTables,
-      registrationStartDate:  config.registrationStartDate,
-      registrationEndDate:    config.registrationEndDate,
-      bracketGenerationDate:  config.bracketGenerationDate,
-      matchDurationMinutes:   config.matchDurationMinutes,
-      breakDurationMinutes:   config.breakDurationMinutes,
-      dailyStartHour:         config.dailyStartHour,
-      dailyStartMinute:       config.dailyStartMinute,
-      dailyEndHour:           config.dailyEndHour,
-      dailyEndMinute:         config.dailyEndMinute,
-      lunchBreakStartHour:    config.lunchBreakStartHour,
-      lunchBreakStartMinute:  config.lunchBreakStartMinute,
-      lunchBreakEndHour:      config.lunchBreakEndHour,
-      lunchBreakEndMinute:    config.lunchBreakEndMinute,
-      ...updateData,
-    } as Partial<ScheduleConfig>;
+    const changedFields = getChangedFields(config, updateData);
+    if (changedFields.length === 0) {
+      return config;
+    }
 
-    await runModelValidation(tournamentId, mergedForValidation);
+    const mergedForValidation = buildMergedConfig(config, updateData);
+    const context = await getScheduleConfigUpdateContext(tournament);
 
+    assertLifecycleUpdateAllowed(
+      tournament,
+      config,
+      changedFields,
+      updateData,
+      mergedForValidation,
+      context,
+    );
+
+    await runModelValidation(tournamentId, mergedForValidation, { isUpdate: true });
+
+    const needsRegeneration = requiresScheduleRegeneration(
+      tournament,
+      config,
+      changedFields,
+      updateData,
+      context,
+    );
+
+    if (needsRegeneration) {
+      if (controls.regenerateSchedule !== true) {
+        throw new BadRequestError("regenerateSchedule=true is required when updating schedule-affecting fields after schedules exist");
+      }
+
+      const breakdown = this._resolveMatchBreakdown(tournament);
+      const preview = this._buildPreview(mergedForValidation, breakdown);
+      if (!preview.isValid) {
+        throw new BadRequestError("Updated schedule config does not fit in the tournament time window. Run preview-update and adjust the config first.");
+      }
+
+      const expectedKey = buildRegenerationKey(
+        tournamentId,
+        new Date((config as any).updatedAt),
+        mergedForValidation,
+        context.scheduleCount,
+      );
+      if (!controls.regenerationKey || controls.regenerationKey !== expectedKey) {
+        throw new BadRequestError("Invalid or stale regenerationKey. Run preview-update again before updating schedule config.");
+      }
+    }
+
+    const previousData = pickConfigFields(config);
     const updatedConfig = await config.update(updateData);
+
+    if (!needsRegeneration) {
+      await publishTournamentStatusScheduleRefresh();
+      return updatedConfig;
+    }
+
+    try {
+      await scheduleService.generateTournamentSchedule(organizerId ?? tournament.createdBy, tournamentId);
+    } catch (error) {
+      await updatedConfig.update(previousData);
+      const message = error instanceof Error ? error.message : "Unknown schedule regeneration error";
+      throw new BadRequestError(`Schedule config update rolled back because regeneration failed: ${message}`);
+    }
+
     await publishTournamentStatusScheduleRefresh();
     return updatedConfig;
   }
@@ -607,7 +1125,7 @@ export class ScheduleConfigService {
     if (!config) throw new NotFoundError("Schedule config not found");
 
     const breakdown = totalMatches != null
-      ? { groupMatches: 0, knockoutMatches: totalMatches, totalMatches }
+      ? createManualMatchBreakdown(totalMatches)
       : this._resolveMatchBreakdown(tournament);
 
     const {
@@ -627,11 +1145,7 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
-    const neededMinutes = calculatePhaseNeededMinutes(
-      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
-    );
-    const estimatedEndTime = calculatePhasedEstimatedEndTime(
+    const estimate = calculateScheduleEstimate(
       startDate,
       endDate,
       breakdown,
@@ -643,6 +1157,7 @@ export class ScheduleConfigService {
       dailyEndHour,
       dailyEndMinute
     );
+    const { totalSlots, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
       endDate,
@@ -774,11 +1289,7 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
-    const neededMinutes = calculatePhaseNeededMinutes(
-      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
-    );
-    const estimatedEndTime = calculatePhasedEstimatedEndTime(
+    const estimate = calculateScheduleEstimate(
       startDate,
       endDate,
       breakdown,
@@ -790,6 +1301,7 @@ export class ScheduleConfigService {
       dailyEndHour,
       dailyEndMinute
     );
+    const { totalSlots, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
       endDate,
@@ -870,11 +1382,7 @@ export class ScheduleConfigService {
       dailyStartHour, dailyStartMinute,
       dailyEndHour, dailyEndMinute
     );
-    const totalSlots = Math.ceil(breakdown.totalMatches / numberOfTables);
-    const neededMinutes = calculatePhaseNeededMinutes(
-      breakdown, matchDurationMinutes, breakDurationMinutes, numberOfTables
-    );
-    const estimatedEndTime = calculatePhasedEstimatedEndTime(
+    const estimate = calculateScheduleEstimate(
       startDate,
       endDate,
       breakdown,
@@ -886,6 +1394,7 @@ export class ScheduleConfigService {
       dailyEndHour,
       dailyEndMinute
     );
+    const { totalSlots, neededMinutes, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
       endDate,

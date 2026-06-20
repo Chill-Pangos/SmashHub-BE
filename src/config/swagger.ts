@@ -1084,6 +1084,9 @@ const swaggerDefinition = {
         properties: {
           isValid: { type: "boolean", description: "Whether the schedule is valid" },
           message: { type: "string", description: "Validation message" },
+          requiresRegeneration: { type: "boolean", description: "Whether existing schedules must be regenerated" },
+          regenerationKey: { type: "string", description: "Confirmation key required for schedule regeneration", nullable: true },
+          affectedScheduleCount: { type: "integer", description: "Number of existing schedules affected by the update", nullable: true },
           preview: {
             type: "object",
             properties: {

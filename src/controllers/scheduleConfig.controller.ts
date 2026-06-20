@@ -179,7 +179,10 @@ export class ScheduleConfigController {
 
       const { totalMatches, ...configData }: any = req.body;
 
-      if (!Number.isInteger(totalMatches) || totalMatches <= 0) {
+      if (
+        totalMatches !== undefined &&
+        (!Number.isInteger(totalMatches) || totalMatches <= 0)
+      ) {
         throw new BadRequestError(
           "totalMatches must be a positive integer"
         );
