@@ -390,6 +390,8 @@ router.get(
  *       - All datetime updates are validated against existing tournament dates
  *       - Lunch break can be added, modified, or removed
  *       - All time and date constraints are enforced (see POST /schedule-configs for rules)
+ *       - If schedules already exist and schedule-affecting fields are changed,
+ *         call preview-update first, then send regenerateSchedule=true with the returned regenerationKey
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -495,6 +497,12 @@ router.get(
  *                 type: string
  *                 nullable: true
  *                 description: Additional notes
+ *               regenerateSchedule:
+ *                 type: boolean
+ *                 description: Required when schedule-affecting changes must regenerate existing schedules
+ *               regenerationKey:
+ *                 type: string
+ *                 description: Key returned by preview-update for confirmed regeneration
  *           examples:
  *             partial_update:
  *               summary: Update only time window
@@ -513,6 +521,12 @@ router.get(
  *                 dailyEndHour: 21
  *                 lunchBreakStartHour: 12
  *                 lunchBreakEndHour: 13
+ *             regenerate_existing_schedule:
+ *               summary: Update and regenerate existing schedules
+ *               value:
+ *                 matchDurationMinutes: 45
+ *                 regenerateSchedule: true
+ *                 regenerationKey: "sha256-key-from-preview-update"
  *     responses:
  *       200:
  *         description: Schedule configuration updated successfully
@@ -900,9 +914,11 @@ router.post(
  *       - Merges provided fields with current configuration
  *       - Calculates impact on match scheduling
  *       - Returns updated metrics without persisting to database
+ *       - Returns regenerationKey when existing schedules must be regenerated
  *
  *       **Use Case:** Allow users to experiment with configuration changes and see impact
- *       before confirming the update.
+ *       before confirming the update. If requiresRegeneration=true, pass the regenerationKey
+ *       to PATCH with regenerateSchedule=true.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -920,13 +936,12 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [totalMatches]
  *             properties:
  *               totalMatches:
  *                 type: integer
  *                 minimum: 1
  *                 example: 127
- *                 description: Total number of matches (required for preview calculation)
+ *                 description: Optional override; if omitted, total matches are calculated from tournament categories
  *               startDate:
  *                 type: string
  *                 format: date-time
