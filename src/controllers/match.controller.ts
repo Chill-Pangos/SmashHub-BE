@@ -6,6 +6,7 @@ import {
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { MatchStatus } from "../models/match.model";
+import { parsePagination } from "../utils/request.helper";
 
 export class MatchController {
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -33,9 +34,7 @@ export class MatchController {
         throw new BadRequestError("entryAName and entryBName are required");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const tournamentId = req.query.tournamentId !== undefined ? Number(req.query.tournamentId) : undefined;
       const categoryId = req.query.categoryId !== undefined ? Number(req.query.categoryId) : undefined;
 
@@ -177,9 +176,7 @@ export class MatchController {
       if (isNaN(tournamentId)) {
         throw new BadRequestError("Invalid tournament ID");
       }
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await matchService.findPendingMatches(chiefRefereeId, tournamentId, offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -203,9 +200,7 @@ export class MatchController {
         throw new BadRequestError("Invalid category ID");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await matchService.findCategorySchedulesAndMatchesForChiefReferee(
         chiefRefereeId,
@@ -221,9 +216,7 @@ export class MatchController {
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -241,9 +234,7 @@ export class MatchController {
         throw new BadRequestError("User not authenticated");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       if (!req.query.categoryId) {
         throw new BadRequestError("categoryId is required");
       }
@@ -275,9 +266,7 @@ export class MatchController {
         categoryId,
         statuses: statusFilters ?? null,
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -291,9 +280,7 @@ export class MatchController {
         throw new BadRequestError("Invalid user ID");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await matchService.findUpcomingMatchesByAthlete(
         userId,
@@ -303,9 +290,7 @@ export class MatchController {
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -319,9 +304,7 @@ export class MatchController {
         throw new BadRequestError("Invalid user ID");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await matchService.findMatchHistoryByAthlete(
         userId,
@@ -331,9 +314,7 @@ export class MatchController {
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);

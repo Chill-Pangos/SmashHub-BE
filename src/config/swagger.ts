@@ -683,7 +683,7 @@ const swaggerDefinition = {
           userId: { type: "integer" },
           status: {
             type: "string",
-            enum: ["pending", "approved"],
+            enum: ["pending", "approved", "rejected"],
             default: "pending",
           },
           rejectionReason: { type: "string", maxLength: 255, nullable: true },

@@ -52,6 +52,20 @@ interface MatchFinalizeSummary {
   winnerEntryId?: number;
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+interface PaginatedMatches {
+  matches: Match[];
+  pagination: PaginationMeta;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const createEntryMemberInclude = () => ({
@@ -231,6 +245,20 @@ async function paginateMatchIds(options: {
   };
 }
 
+function buildPagination(count: number, offset: number, limit: number): PaginationMeta {
+  const totalPages = Math.ceil(count / limit);
+  const page = Math.floor(offset / limit) + 1;
+
+  return {
+    total: count,
+    page,
+    limit,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1,
+  };
+}
+
 async function loadMatchesByIds(
   ids: number[],
   include: any[],
@@ -317,7 +345,7 @@ export class MatchService {
     filters: { tournamentId?: number; categoryId?: number } = {},
     offset = 0,
     limit = 10,
-  ): Promise<{ matches: Match[]; count: number; offset: number; limit: number }> {
+  ): Promise<PaginatedMatches> {
     const firstNamePattern = `%${entryAName.trim()}%`;
     const secondNamePattern = `%${entryBName.trim()}%`;
     const scheduleWhere = filters.categoryId ? { categoryId: filters.categoryId } : undefined;
@@ -399,7 +427,10 @@ export class MatchService {
       ],
     );
 
-    return { matches, count, offset, limit };
+    return {
+      matches,
+      pagination: buildPagination(count, offset, limit),
+    };
   }
 
   // ── 1. Bắt đầu trận ───────────────────────────────────────────────────────
@@ -542,7 +573,7 @@ export class MatchService {
     tournamentId: number,
     offset = 0,
     limit = 10,
-  ): Promise<{ matches: Match[]; count: number }> {
+  ): Promise<PaginatedMatches> {
     await assertChiefReferee(chiefRefereeId, tournamentId);
 
     const filterInclude = [
@@ -597,7 +628,10 @@ export class MatchService {
       ],
     );
 
-    return { matches, count };
+    return {
+      matches,
+      pagination: buildPagination(count, offset, limit),
+    };
   }
 
   // ── 5.1 Category schedules & matches (chief referee dashboard) ───────────
@@ -606,7 +640,7 @@ export class MatchService {
     chiefRefereeId: number,
     categoryId: number,
     filters: CategoryMatchesFilters = {},
-  ): Promise<{ matches: Match[]; count: number }> {
+  ): Promise<PaginatedMatches> {
     assertValidStage(filters.stage);
     assertValidMatchStatus(filters.status);
     assertValidResultStatus(filters.resultStatus);
@@ -682,7 +716,14 @@ export class MatchService {
       ],
     );
 
-    return { matches, count };
+    return {
+      matches,
+      pagination: buildPagination(
+        count,
+        filters.offset ?? 0,
+        filters.limit ?? 10,
+      ),
+    };
   }
 
   // ── 5.2 Assigned matches (referee dashboard) ─────────────────────────────
@@ -690,7 +731,7 @@ export class MatchService {
   async findAssignedMatchesForReferee(
     refereeId: number,
     filters: RefereeAssignedMatchesFilters,
-  ): Promise<{ matches: Match[]; count: number }> {
+  ): Promise<PaginatedMatches> {
     assertValidMatchStatuses(filters.statuses);
 
     const where = filters.statuses ? { status: { [Op.in]: filters.statuses } } : {};
@@ -760,7 +801,14 @@ export class MatchService {
       ],
     );
 
-    return { matches, count };
+    return {
+      matches,
+      pagination: buildPagination(
+        count,
+        filters.offset ?? 0,
+        filters.limit ?? 10,
+      ),
+    };
   }
 
   async getPendingMatch(
@@ -852,9 +900,11 @@ export class MatchService {
     userId: number,
     offset = 0,
     limit = 10,
-  ): Promise<{ matches: Match[]; count: number }> {
+  ): Promise<PaginatedMatches> {
     const entryIds = await this.getEntryIdsByUser(userId);
-    if (entryIds.length === 0) return { matches: [], count: 0 };
+    if (entryIds.length === 0) {
+      return { matches: [], pagination: buildPagination(0, offset, limit) };
+    }
 
     const where = {
       [Op.or]: [
@@ -880,16 +930,21 @@ export class MatchService {
 
     const matches = await loadMatchesByIds(ids, createMatchDetailInclude());
 
-    return { matches, count };
+    return {
+      matches,
+      pagination: buildPagination(count, offset, limit),
+    };
   }
 
   async findMatchHistoryByAthlete(
     userId: number,
     offset = 0,
     limit = 10,
-  ): Promise<{ matches: Match[]; count: number }> {
+  ): Promise<PaginatedMatches> {
     const entryIds = await this.getEntryIdsByUser(userId);
-    if (entryIds.length === 0) return { matches: [], count: 0 };
+    if (entryIds.length === 0) {
+      return { matches: [], pagination: buildPagination(0, offset, limit) };
+    }
 
     const where = {
       [Op.or]: [
@@ -925,7 +980,10 @@ export class MatchService {
       ],
     );
 
-    return { matches, count };
+    return {
+      matches,
+      pagination: buildPagination(count, offset, limit),
+    };
   }
 
   /**
