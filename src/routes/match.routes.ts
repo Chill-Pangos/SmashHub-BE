@@ -47,6 +47,30 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Matching matches. Entry order can be A-B or B-A.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  */
@@ -133,9 +157,27 @@ router.get("/search/by-entries", matchController.findByEntryNames.bind(matchCont
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
- *                 count:
- *                   type: integer
- *                   example: 5
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 5
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 1
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: false
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -192,6 +234,30 @@ router.get("/pending", authenticate, checkPermission('matches:approve_result'), 
  *     responses:
  *       200:
  *         description: Schedules with nested matches
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -297,7 +363,7 @@ router.post(
  *           application/json:
  *             schema:
  *               type: object
- *               required: [message, categoryId, statuses, matches, count, offset, limit]
+ *               required: [message, categoryId, statuses, matches, pagination]
  *               properties:
  *                 message:
  *                   type: string
@@ -361,19 +427,32 @@ router.post(
  *                         type: array
  *                         items:
  *                           type: object
- *                 count:
- *                   type: integer
- *                 offset:
- *                   type: integer
- *                 limit:
- *                   type: integer
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     hasNextPage:
+ *                       type: boolean
+ *                     hasPrevPage:
+ *                       type: boolean
  *             example:
  *               message: Assigned matches retrieved successfully
  *               categoryId: 1
  *               statuses: null
- *               count: 1
- *               offset: 0
- *               limit: 10
+ *               pagination:
+ *                 total: 1
+ *                 page: 1
+ *                 limit: 10
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  *               matches:
  *                 - id: 42
  *                   scheduleId: 15
@@ -913,18 +992,27 @@ router.post("/:id/approve",
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
- *                 count:
- *                   type: integer
- *                   description: Total count of upcoming matches for this user
- *                   example: 5
- *                 offset:
- *                   type: integer
- *                   description: Records offset for this page
- *                   example: 0
- *                 limit:
- *                   type: integer
- *                   description: Maximum records per page
- *                   example: 10
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 5
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 1
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: false
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -1072,18 +1160,27 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *                       updatedAt:
  *                         type: string
  *                         format: date-time
- *                 count:
- *                   type: integer
- *                   description: Total count of history matches for this user
- *                   example: 15
- *                 offset:
- *                   type: integer
- *                   description: Records offset for this page
- *                   example: 0
- *                 limit:
- *                   type: integer
- *                   description: Maximum records per page
- *                   example: 10
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       example: 15
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 2
+ *                     hasNextPage:
+ *                       type: boolean
+ *                       example: true
+ *                     hasPrevPage:
+ *                       type: boolean
+ *                       example: false
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
