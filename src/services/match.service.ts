@@ -54,7 +54,7 @@ interface MatchFinalizeSummary {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ENTRY_MEMBER_INCLUDE = {
+const createEntryMemberInclude = () => ({
   model: EntryMember,
   as: "members",
   include: [
@@ -64,16 +64,16 @@ const ENTRY_MEMBER_INCLUDE = {
       attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
     },
   ],
-};
+});
 
-const MATCH_DETAIL_INCLUDE = [
+const createMatchDetailInclude = () => [
   {
     model: Schedule,
     as: "schedule",
     include: [{ model: TournamentCategory, as: "tournamentCategory" }],
   },
-  { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
-  { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
+  { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
+  { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
   {
     model: MatchReferee,
     as: "matchReferees",
@@ -260,8 +260,8 @@ export class MatchService {
   async findById(matchId: number): Promise<Match | null> {
     return Match.findByPk(matchId, {
       include: [
-        ...MATCH_DETAIL_INCLUDE,
-        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        ...createMatchDetailInclude(),
+        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
         { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
       ],
       order: [
@@ -314,9 +314,9 @@ export class MatchService {
             },
           ],
         },
-        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE], required: true },
-        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE], required: true },
-        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryA", include: [createEntryMemberInclude()], required: true },
+        { model: Entry, as: "entryB", include: [createEntryMemberInclude()], required: true },
+        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
         {
           model: MatchReferee,
           as: "matchReferees",
@@ -570,9 +570,9 @@ export class MatchService {
           include: [{ model: TournamentCategory, as: "tournamentCategory" }],
           required: true,
         },
-        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
+        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
+        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
         {
           model: MatchReferee,
           as: "matchReferees",
@@ -620,9 +620,9 @@ export class MatchService {
           include: [{ model: TournamentCategory, as: "tournamentCategory" }],
           required: true,
         },
-        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
+        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
+        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
         {
           model: MatchReferee,
           as: "matchReferees",
@@ -683,8 +683,8 @@ export class MatchService {
           as: "schedule",
           include: [{ model: TournamentCategory, as: "tournamentCategory" }],
         },
-        { model: Entry, as: "entryA", include: [ENTRY_MEMBER_INCLUDE] },
-        { model: Entry, as: "entryB", include: [ENTRY_MEMBER_INCLUDE] },
+        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
+        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
         {
           model: MatchReferee,
           as: "matchReferees",
@@ -755,7 +755,7 @@ export class MatchService {
         ],
         status: { [Op.in]: ["scheduled", "in_progress"] },
       },
-      include: MATCH_DETAIL_INCLUDE,
+      include: createMatchDetailInclude(),
       order: [[{ model: Schedule, as: "schedule" }, "scheduledAt", "ASC"]],
       offset,
       limit,
@@ -783,8 +783,8 @@ export class MatchService {
         resultStatus: "approved",
       },
       include: [
-        ...MATCH_DETAIL_INCLUDE,
-        { model: Entry, as: "winnerEntry", include: [ENTRY_MEMBER_INCLUDE] },
+        ...createMatchDetailInclude(),
+        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
         { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
       ],
       order: [["updatedAt", "DESC"]],
