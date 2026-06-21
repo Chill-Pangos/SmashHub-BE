@@ -186,6 +186,7 @@ WHERE `name` IN (
   'matches:start',
   'matches:report_result',
   'matches:approve_result',
+  'knockouts:update',
   'submatches:view',
   'matchsets:view',
   'schedules:view',
@@ -220,7 +221,6 @@ WHERE `name` IN (
   'matches:update',
   'matches:start',
   'matches:report_result',
-  'matches:approve_result',
   'schedules:view',
   'schedules:create',
   'schedules:update',
@@ -230,7 +230,6 @@ WHERE `name` IN (
   'groups:delete',
   'knockouts:view',
   'knockouts:create',
-  'knockouts:update',
   'knockouts:delete',
   'submatches:view',
   'submatches:create',
@@ -1177,4 +1176,3 @@ WITH RECURSIVE seq AS (
 )
 SELECT id, 3, '2026-05-20 00:00:00', '2026-05-20 00:00:00'
 FROM seq;
-
