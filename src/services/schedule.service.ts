@@ -1082,7 +1082,7 @@ export class ScheduleService {
 
     await Schedule.update(
       { tableNumber: availableTable },
-      { where: { id: match.scheduleId }, transaction: t },
+      { where: { id: match.scheduleId }, transaction: t, validate: false },
     );
 
     return availableTable;
