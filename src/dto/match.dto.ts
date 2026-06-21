@@ -5,14 +5,14 @@ export interface CreateMatchDto {
   entryBId: number;
   status: "scheduled" | "in_progress" | "completed" | "cancelled";
   winnerEntryId?: number;
-  resultStatus?: "pending" | "approved" | "rejected";
+  resultStatus?: "pending" | "approved";
   reviewNotes?: string;
 }
 
 export interface UpdateMatchDto {
   status?: "scheduled" | "in_progress" | "completed" | "cancelled";
   winnerEntryId?: number;
-  resultStatus?: "pending" | "approved" | "rejected";
+  resultStatus?: "pending" | "approved";
   reviewNotes?: string;
 }
 
@@ -23,7 +23,7 @@ export interface MatchResponseDto {
   entryBId: number;
   status: string;
   winnerEntryId?: number;
-  resultStatus?: "pending" | "approved" | "rejected";
+  resultStatus?: "pending" | "approved";
   reviewNotes?: string;
   createdAt: Date;
   updatedAt: Date;
