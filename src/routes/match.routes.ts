@@ -64,9 +64,8 @@ router.get("/search/by-entries", matchController.findByEntryNames.bind(matchCont
  *
  *       Business Logic:
  *       - Only returns matches where status = 'completed' AND resultStatus = 'pending'
- *       - Chief referee can then approve or reject these results
+ *       - Chief referee can then approve these results
  *       - Approval updates standings/brackets and Elo scores
- *       - Rejection resets match to 'in_progress' for referee resubmission
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -122,7 +121,7 @@ router.get("/search/by-entries", matchController.findByEntryNames.bind(matchCont
  *                         example: 101
  *                       resultStatus:
  *                         type: string
- *                         enum: [pending, approved, rejected]
+ *                         enum: [pending, approved]
  *                         example: pending
  *                       reviewNotes:
  *                         type: string
@@ -179,7 +178,7 @@ router.get("/pending", authenticate, checkPermission('matches:approve_result'), 
  *         name: resultStatus
  *         schema:
  *           type: string
- *           enum: [pending, approved, rejected]
+ *           enum: [pending, approved]
  *       - in: query
  *         name: page
  *         schema:
@@ -331,7 +330,7 @@ router.post(
  *                         enum: [scheduled, in_progress, completed, cancelled]
  *                       resultStatus:
  *                         type: string
- *                         enum: [pending, approved, rejected]
+ *                         enum: [pending, approved]
  *                         nullable: true
  *                       reviewNotes:
  *                         type: string
@@ -558,7 +557,7 @@ router.get(
  *                   example: null
  *                 resultStatus:
  *                   type: string
- *                   enum: [pending, approved, rejected]
+ *                   enum: [pending, approved]
  *                   nullable: true
  *                   example: null
  *                 createdAt:
@@ -598,7 +597,7 @@ router.post("/:id/start",
  *     summary: Submit match result for chief referee approval
  *     description: |
  *       Assigned referee submits the final match result. Match transitions to 'completed' with 'pending' resultStatus.
- *       Result will be reviewed and approved/rejected by chief referee before affecting standings and Elo.
+ *       Result will be reviewed and approved by chief referee before affecting standings and Elo.
  *
  *       Business Logic:
  *       - Match must be in 'in_progress' status
@@ -607,7 +606,6 @@ router.post("/:id/start",
  *       - Sets winner automatically based on sets won
  *       - Changes match status to 'completed', resultStatus to 'pending'
  *       - Chief referee must approve before standings/ELO are updated
- *       - If rejected by chief referee, match returns to 'in_progress' for re-submission
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -658,7 +656,7 @@ router.post("/:id/start",
  *                       example: 101
  *                     resultStatus:
  *                       type: string
- *                       enum: [pending, approved, rejected]
+ *                       enum: [pending, approved]
  *                       example: pending
  *                     reviewNotes:
  *                       type: string
@@ -767,7 +765,7 @@ router.post("/:id/finalize",
  *                       example: 101
  *                     resultStatus:
  *                       type: string
- *                       enum: [pending, approved, rejected]
+ *                       enum: [pending, approved]
  *                       example: approved
  *                     reviewNotes:
  *                       type: string
@@ -805,123 +803,6 @@ router.post("/:id/approve",
   authenticate,
   checkPermission('matches:approve_result'),
   matchController.approveMatchResult.bind(matchController)
-);
-
-/**
- * @swagger
- * /matches/{id}/reject:
- *   post:
- *     tags: [Matches]
- *     summary: Reject match result (Chief Referee only)
- *     description: |
- *       Chief referee rejects a pending match result and sends it back for resubmission.
- *
- *       Business Logic:
- *       - Match must be in 'completed' status with resultStatus = 'pending'
- *       - Only chief referee of the tournament can reject
- *       - Changes resultStatus to 'rejected'
- *       - Resets match status to 'in_progress' so referee can resubmit
- *       - Clears winner entry so referee must resubmit scores
- *       - Review notes explaining rejection are recorded
- *       - Referee must submit the match result again after rejection
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Match ID to reject
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - reviewNotes
- *             properties:
- *               reviewNotes:
- *                 type: string
- *                 maxLength: 1000
- *                 description: Required explanation for why the result was rejected
- *           example:
- *             reviewNotes: "Set scores don't match the recorded points. Please resubmit with correct scores."
- *     responses:
- *       200:
- *         description: Match result rejected successfully, match returned to in_progress status
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Match result rejected. Referee needs to resubmit the result."
- *                 match:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 42
- *                     scheduleId:
- *                       type: integer
- *                       example: 15
- *                     entryAId:
- *                       type: integer
- *                       example: 101
- *                     entryBId:
- *                       type: integer
- *                       example: 102
- *                     status:
- *                       type: string
- *                       enum: [scheduled, in_progress, completed, cancelled]
- *                       example: in_progress
- *                     winnerEntryId:
- *                       type: integer
- *                       nullable: true
- *                       example: null
- *                     resultStatus:
- *                       type: string
- *                       enum: [pending, approved, rejected]
- *                       example: rejected
- *                     reviewNotes:
- *                       type: string
- *                       example: "Set scores don't match the recorded points. Please resubmit with correct scores."
- *                     createdAt:
- *                       type: string
- *                       format: date-time
- *                     updatedAt:
- *                       type: string
- *                       format: date-time
- *       400:
- *         description: Bad request - Invalid match state or missing review notes
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               example:
- *                 message: "Review notes are required when rejecting a match result"
- *       401:
- *         $ref: '#/components/responses/Unauthorized401'
- *       403:
- *         description: Forbidden - User is not the chief referee of the tournament
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               example:
- *                 message: "Only the chief referee can perform this action"
- *       404:
- *         $ref: '#/components/responses/NotFound404'
- *       500:
- *         $ref: '#/components/responses/InternalError500'
- */
-router.post("/:id/reject",
-  authenticate,
-  checkPermission('matches:approve_result'),
-  matchController.rejectMatchResult.bind(matchController)
 );
 
 /**
@@ -993,7 +874,7 @@ router.post("/:id/reject",
  *                         nullable: true
  *                       resultStatus:
  *                         type: string
- *                         enum: [pending, approved, rejected]
+ *                         enum: [pending, approved]
  *                         nullable: true
  *                       schedule:
  *                         type: object
@@ -1124,7 +1005,7 @@ router.get("/athlete/:userId/upcoming", authenticate, matchController.getUpcomin
  *                         example: 101
  *                       resultStatus:
  *                         type: string
- *                         enum: [pending, approved, rejected]
+ *                         enum: [pending, approved]
  *                         example: approved
  *                       reviewNotes:
  *                         type: string

@@ -27,7 +27,7 @@ export const MATCH_STATUSES = [
 ] as const;
 export type MatchStatus = (typeof MATCH_STATUSES)[number];
 
-export const RESULT_STATUSES = ["pending", "approved", "rejected"] as const;
+export const RESULT_STATUSES = ["pending", "approved"] as const;
 export type ResultStatus = (typeof RESULT_STATUSES)[number];
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -85,14 +85,14 @@ export default class Match extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare winnerEntryId?: number;
+  declare winnerEntryId?: number | null;
 
   @Column({
     type: DataType.ENUM(...RESULT_STATUSES),
     allowNull: true,
     comment: "Status of match result approval by chief referee",
   })
-  declare resultStatus?: ResultStatus;
+  declare resultStatus?: ResultStatus | null;
 
   @Column({
     type: DataType.TEXT,

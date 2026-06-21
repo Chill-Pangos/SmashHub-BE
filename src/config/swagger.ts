@@ -536,7 +536,7 @@ const swaggerDefinition = {
           winnerEntryId: { type: "integer", nullable: true },
           resultStatus: {
             type: "string",
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved"],
             nullable: true,
           },
           reviewNotes: { type: "string", nullable: true, maxLength: 1000 },
@@ -683,7 +683,7 @@ const swaggerDefinition = {
           userId: { type: "integer" },
           status: {
             type: "string",
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved"],
             default: "pending",
           },
           rejectionReason: { type: "string", maxLength: 255, nullable: true },
@@ -1060,7 +1060,7 @@ const swaggerDefinition = {
           },
           resultStatus: {
             type: "string",
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved"],
           },
           winnerEntryId: { type: "integer" },
           reviewNotes: { type: "string" },

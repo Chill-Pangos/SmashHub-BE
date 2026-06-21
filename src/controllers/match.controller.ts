@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import matchService from "../services/match.service";
 import {
   ApprovePendingMatchResultDto,
-  RejectPendingMatchResultDto,
 } from "../dto/pendingMatchResult.dto";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
@@ -161,31 +160,6 @@ export class MatchController {
       const match = await matchService.approveMatchResult(matchId, req.userId, reviewNotes);
       res.status(200).json({
         message: "Match result approved successfully. Standings and Elo scores updated.",
-        match,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async rejectMatchResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const matchId = Number(req.params.id);
-      if (isNaN(matchId)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      if (!req.userId) {
-        throw new BadRequestError("User not authenticated");
-      }
-      const { reviewNotes } = req.body as RejectPendingMatchResultDto;
-
-      if (!reviewNotes) {
-        throw new BadRequestError("Review notes are required when rejecting");
-      }
-
-      const match = await matchService.rejectMatchResult(matchId, req.userId, reviewNotes);
-      res.status(200).json({
-        message: "Match result rejected. Referee needs to resubmit the result.",
         match,
       });
     } catch (error) {

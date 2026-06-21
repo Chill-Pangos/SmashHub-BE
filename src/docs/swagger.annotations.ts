@@ -433,7 +433,7 @@
  *           enum: [scheduled, in_progress, completed, cancelled]
  *         resultStatus:
  *           type: string
- *           enum: [pending, approved, rejected]
+ *           enum: [pending, approved]
  *         winnerEntryId:
  *           type: integer
  *         reviewNotes:
@@ -530,7 +530,7 @@
  *           description: ID of the assistant umpire
  *         resultStatus:
  *           type: string
- *           enum: [pending, approved, rejected]
+ *           enum: [pending, approved]
  *           description: Match result approval status
  *         reviewNotes:
  *           type: string
