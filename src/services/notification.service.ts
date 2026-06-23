@@ -9,6 +9,7 @@ import type CronLog from "../models/cronLog.model";
 import User from "../models/user.model";
 import Role from "../models/role.model";
 import authService from "./auth.service";
+import { NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -523,7 +524,7 @@ class NotificationService {
     const notification = await Notification.findOne({
       where: { id: notificationId, userId },
     });
-    if (!notification) throw new Error("Notification not found");
+    if (!notification) throw new NotFoundError("Notification not found");
     if (notification.isRead) return; // idempotent
 
     await notification.update({ isRead: true, readAt: new Date() });
