@@ -17,12 +17,12 @@ const router = Router();
  * /admin/system/summary:
  *   get:
  *     tags: [Admin System]
- *     summary: Get full admin system dashboard snapshot
+ *     summary: Get concise FE-friendly system summary
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Full system dashboard snapshot
+ *         description: Concise system summary
  *         content:
  *           application/json:
  *             schema:
@@ -34,24 +34,111 @@ const router = Router();
  *                 data:
  *                   type: object
  *                   properties:
- *                     app:
+ *                     status:
+ *                       type: string
+ *                       enum: [ok, warning, critical]
+ *                     resources:
  *                       type: object
- *                     infra:
+ *                       properties:
+ *                         cpu:
+ *                           type: object
+ *                           properties:
+ *                             percent:
+ *                               type: number
+ *                               example: 12.4
+ *                             status:
+ *                               type: string
+ *                               enum: [ok, warning, critical]
+ *                             label:
+ *                               type: string
+ *                               example: "12.4%"
+ *                         ram:
+ *                           type: object
+ *                           properties:
+ *                             percent:
+ *                               type: number
+ *                               example: 63.8
+ *                             status:
+ *                               type: string
+ *                               enum: [ok, warning, critical]
+ *                             label:
+ *                               type: string
+ *                               example: "63.8%"
+ *                             usedGb:
+ *                               type: number
+ *                               example: 2.8
+ *                             totalGb:
+ *                               type: number
+ *                               example: 8
+ *                         disk:
+ *                           type: object
+ *                           properties:
+ *                             percent:
+ *                               type: number
+ *                               nullable: true
+ *                               example: 41.2
+ *                             status:
+ *                               type: string
+ *                               enum: [ok, warning, critical]
+ *                             label:
+ *                               type: string
+ *                               example: "41.2%"
+ *                             path:
+ *                               type: string
+ *                               nullable: true
+ *                             usedGb:
+ *                               type: number
+ *                               nullable: true
+ *                               example: 24.5
+ *                             totalGb:
+ *                               type: number
+ *                               nullable: true
+ *                               example: 100
+ *                     services:
  *                       type: object
- *                     apiRuntime:
+ *                       properties:
+ *                         db:
+ *                           type: string
+ *                           enum: [up, down, degraded]
+ *                         redis:
+ *                           type: string
+ *                           enum: [up, down, degraded]
+ *                         socket:
+ *                           type: string
+ *                           enum: [up, down, degraded]
+ *                         cron:
+ *                           type: string
+ *                           enum: [up, down, degraded]
+ *                     traffic:
  *                       type: object
- *                     socket:
+ *                       properties:
+ *                         window:
+ *                           type: string
+ *                           example: 5m
+ *                         requestCount:
+ *                           type: integer
+ *                         errorPercent:
+ *                           type: number
+ *                         p95LatencyMs:
+ *                           type: number
+ *                     realtime:
  *                       type: object
- *                     cron:
- *                       type: object
- *                     errors:
- *                       type: array
- *                       items:
- *                         type: object
+ *                       properties:
+ *                         connectedUsers:
+ *                           type: integer
+ *                         roomCount:
+ *                           type: integer
  *                     alerts:
- *                       type: array
- *                       items:
- *                         type: object
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: integer
+ *                         critical:
+ *                           type: integer
+ *                         warning:
+ *                           type: integer
+ *                     uptimeSeconds:
+ *                       type: integer
  *                     generatedAt:
  *                       type: string
  *                       format: date-time

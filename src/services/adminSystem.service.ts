@@ -13,6 +13,7 @@ import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntim
 
 type HealthStatus = "up" | "down" | "degraded";
 type EventType = "error" | "alert" | "cron";
+type ResourceStatus = "ok" | "warning" | "critical";
 
 const STARTED_AT = new Date();
 const REALTIME_ROOM = "admin:system";
@@ -28,6 +29,10 @@ class AdminSystemService {
   private lastHealthSignature: string | null = null;
 
   async getSummary() {
+    return this.getOverview();
+  }
+
+  async getOverview() {
     const [app, infra, socket, cron, metrics] = await Promise.all([
       this.getAppHealth(),
       this.getInfraHealth(),
@@ -36,21 +41,7 @@ class AdminSystemService {
       Promise.resolve(systemRuntimeService.getMetrics("5m")),
     ]);
     const alerts = this.evaluateAlerts({ infra, cron, metrics, app });
-
-    return {
-      app,
-      infra,
-      apiRuntime: {
-        "1m": systemRuntimeService.getMetrics("1m"),
-        "5m": metrics,
-        "15m": systemRuntimeService.getMetrics("15m"),
-      },
-      socket,
-      cron,
-      errors: systemRuntimeService.getErrors(50),
-      alerts,
-      generatedAt: new Date().toISOString(),
-    };
+    return this.buildOverview({ app, infra, socket, cron, metrics, alerts });
   }
 
   async getHealth() {
@@ -66,6 +57,9 @@ class AdminSystemService {
       redis: infra.redis.status,
       socket: socket.status,
       cron: cron.status,
+      cpuPercent: infra.cpu.usagePercent,
+      ramPercent: this.toPercent(infra.systemMemory.usedRatio),
+      diskPercent: this.getMaxDiskUsagePercent(infra.disks),
       generatedAt: new Date().toISOString(),
     };
     return health;
@@ -144,31 +138,102 @@ class AdminSystemService {
 
   private async publishRealtimeSnapshot(): Promise<void> {
     try {
-      const [health, metrics] = await Promise.all([
-        this.getHealth(),
-        Promise.resolve(systemRuntimeService.getMetrics("5m")),
-      ]);
+      const overview = await this.getOverview();
 
       notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
-        type: "metrics",
-        data: metrics,
+        type: "overview",
+        data: overview,
         generatedAt: new Date().toISOString(),
       });
 
       const signature = JSON.stringify({
-        app: health.app,
-        db: health.db,
-        redis: health.redis,
-        socket: health.socket,
-        cron: health.cron,
+        status: overview.status,
+        db: overview.services.db,
+        redis: overview.services.redis,
+        socket: overview.services.socket,
+        cron: overview.services.cron,
+        cpu: overview.resources.cpu.status,
+        ram: overview.resources.ram.status,
+        disk: overview.resources.disk.status,
       });
       if (signature !== this.lastHealthSignature) {
         this.lastHealthSignature = signature;
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_health_changed", health);
+        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_health_changed", {
+          status: overview.status,
+          services: overview.services,
+          resources: overview.resources,
+          alerts: overview.alerts,
+          generatedAt: overview.generatedAt,
+        });
       }
     } catch (error) {
       console.error("Failed to publish admin system realtime snapshot:", error);
     }
+  }
+
+  private buildOverview(input: {
+    app: Awaited<ReturnType<AdminSystemService["getAppHealth"]>>;
+    infra: Awaited<ReturnType<AdminSystemService["getInfraHealth"]>>;
+    socket: ReturnType<AdminSystemService["getSocketStats"]>;
+    cron: Awaited<ReturnType<AdminSystemService["getCronSummary"]>>;
+    metrics: ReturnType<typeof systemRuntimeService.getMetrics>;
+    alerts: SystemAlert[];
+  }) {
+    const disk = this.getPrimaryDisk(input.infra.disks);
+    const ramPercent = this.toPercent(input.infra.systemMemory.usedRatio);
+    const diskPercent = disk?.usedRatio !== undefined ? this.toPercent(disk.usedRatio) : null;
+    const apiErrorPercent = this.toPercent(input.metrics.errorRate);
+    const criticalAlerts = input.alerts.filter((alert) => alert.severity === "critical").length;
+    const warningAlerts = input.alerts.filter((alert) => alert.severity === "warning").length;
+
+    return {
+      status: criticalAlerts > 0 ? "critical" as ResourceStatus : warningAlerts > 0 ? "warning" as ResourceStatus : "ok" as ResourceStatus,
+      uptimeSeconds: input.app.uptimeSeconds,
+      resources: {
+        cpu: {
+          percent: input.infra.cpu.usagePercent,
+          status: this.resourceStatus(input.infra.cpu.usagePercent),
+          label: `${input.infra.cpu.usagePercent}%`,
+        },
+        ram: {
+          percent: ramPercent,
+          status: this.resourceStatus(ramPercent),
+          label: `${ramPercent}%`,
+          usedGb: this.toGb(input.infra.systemMemory.total - input.infra.systemMemory.free),
+          totalGb: this.toGb(input.infra.systemMemory.total),
+        },
+        disk: {
+          percent: diskPercent,
+          status: diskPercent === null ? "warning" as ResourceStatus : this.resourceStatus(diskPercent),
+          label: diskPercent === null ? "N/A" : `${diskPercent}%`,
+          path: disk?.path ?? null,
+          usedGb: disk && "used" in disk ? this.toGb(disk.used ?? 0) : null,
+          totalGb: disk && "total" in disk ? this.toGb(disk.total ?? 0) : null,
+        },
+      },
+      services: {
+        db: input.infra.db.status,
+        redis: input.infra.redis.status,
+        socket: input.socket.status,
+        cron: input.cron.status,
+      },
+      traffic: {
+        window: input.metrics.window,
+        requestCount: input.metrics.requestCount,
+        errorPercent: apiErrorPercent,
+        p95LatencyMs: input.metrics.latency.p95Ms,
+      },
+      realtime: {
+        connectedUsers: input.socket.totalConnectedUsers,
+        roomCount: input.socket.roomCount,
+      },
+      alerts: {
+        total: input.alerts.length,
+        critical: criticalAlerts,
+        warning: warningAlerts,
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   private async getAppHealth() {
@@ -405,6 +470,46 @@ class AdminSystemService {
       count: stat.count,
       avgDurationMs: this.round(stat.total / stat.count),
     }));
+  }
+
+  private getPrimaryDisk(
+    disks: Array<{
+      path: string;
+      total?: number;
+      used?: number;
+      usedRatio?: number;
+      error?: string;
+    }>,
+  ) {
+    const usableDisks = disks.filter((disk) => typeof disk.usedRatio === "number");
+    if (usableDisks.length === 0) return null;
+    return usableDisks.reduce((max, disk) => (
+      (disk.usedRatio ?? 0) > (max.usedRatio ?? 0) ? disk : max
+    ));
+  }
+
+  private getMaxDiskUsagePercent(
+    disks: Array<{
+      path: string;
+      usedRatio?: number;
+    }>,
+  ): number | null {
+    const primaryDisk = this.getPrimaryDisk(disks);
+    return primaryDisk?.usedRatio !== undefined ? this.toPercent(primaryDisk.usedRatio) : null;
+  }
+
+  private resourceStatus(percent: number): ResourceStatus {
+    if (percent >= 85) return "critical";
+    if (percent >= 70) return "warning";
+    return "ok";
+  }
+
+  private toPercent(ratio: number): number {
+    return this.round(ratio * 100);
+  }
+
+  private toGb(bytes: number): number {
+    return this.round(bytes / 1024 / 1024 / 1024);
   }
 
   private async getPackageInfo(): Promise<{ version: string }> {
