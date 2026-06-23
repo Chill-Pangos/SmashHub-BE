@@ -1,16 +1,113 @@
 import { Request, Response, NextFunction } from "express";
+import type { AuthRequest } from "../middlewares/auth.middleware";
 import NotificationService from "../services/notification.service";
+import { NOTIFICATION_TYPES, type NotificationType } from "../models/notification.model";
 import {
   CreateNotificationDto,
   NotificationResponseDto,
-  ConnectedUsersDto,
   UserConnectionStatusDto,
-  SendEventDto,
   NotificationStatsDto,
+  SendEventDto,
 } from "../dto/notification.dto";
-import { BadRequestError } from "../utils/errors.helper";
+import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
+import { parsePositiveInt } from "../utils/request.helper";
+
+const NOTIFICATION_TYPE_SET = new Set<string>(NOTIFICATION_TYPES);
+
+function parseBoolean(value: unknown, fieldName: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === "true" || value === true) return true;
+  if (value === "false" || value === false) return false;
+  throw new BadRequestError(`${fieldName} must be true or false`);
+}
+
+function parseOffset(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new BadRequestError("offset must be a non-negative integer");
+  }
+  return parsed;
+}
+
+function parseLimit(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  return Math.min(parsePositiveInt(value, "limit"), 100);
+}
 
 export class NotificationController {
+  /**
+   * Get current user's notification inbox
+   */
+  async getMyNotifications(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) throw new UnauthorizedError("Authentication required");
+
+      const type = req.query.type ? String(req.query.type) : undefined;
+      if (type && !NOTIFICATION_TYPE_SET.has(type)) {
+        throw new BadRequestError("Invalid notification type");
+      }
+
+      const options: {
+        offset?: number;
+        limit?: number;
+        isRead?: boolean;
+        type?: NotificationType;
+      } = {};
+      const offset = parseOffset(req.query.offset);
+      const limit = parseLimit(req.query.limit);
+      const isRead = parseBoolean(req.query.isRead, "isRead");
+
+      if (offset !== undefined) options.offset = offset;
+      if (limit !== undefined) options.limit = limit;
+      if (isRead !== undefined) options.isRead = isRead;
+      if (type) options.type = type as NotificationType;
+
+      const result = await NotificationService.getByUser(req.userId, options);
+
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Mark one notification as read for current user
+   */
+  async markAsRead(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) throw new UnauthorizedError("Authentication required");
+
+      const notificationId = parsePositiveInt(req.params.notificationId, "notificationId");
+      await NotificationService.markAsRead(notificationId, req.userId);
+
+      res.status(200).json({
+        success: true,
+        message: "Notification marked as read",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Mark all notifications as read for current user
+   */
+  async markAllAsRead(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) throw new UnauthorizedError("Authentication required");
+
+      await NotificationService.markAllAsRead(req.userId);
+
+      res.status(200).json({
+        success: true,
+        message: "All notifications marked as read",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Send notification
    */
