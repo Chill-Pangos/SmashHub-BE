@@ -135,6 +135,7 @@ export const NotificationTemplates = {
 
 class NotificationService {
   private io: SocketIOServer | null = null;
+  private lastSocketError: string | null = null;
 
   // socketId → userId (reverse map để disconnect lookup O(1))
   private socketToUser = new Map<string, string>();
@@ -163,6 +164,7 @@ class NotificationService {
     });
 
     this.setupRedisAdapter().catch((error) => {
+      this.lastSocketError = error instanceof Error ? error.message : String(error);
       console.error("Socket.IO Redis adapter failed:", error);
     });
     this.setupConnectionHandlers();
@@ -227,8 +229,23 @@ class NotificationService {
         socket.leave(userRoom(authenticatedUserId));
       });
 
-      socket.on("join-room", (roomId: string) => {
-        if (roomId) socket.join(roomId);
+      socket.on("join-room", async (roomId: string) => {
+        if (!roomId) return;
+
+        if (roomId === "admin:system") {
+          try {
+            const adminUserIds = await this.getAdminUserIds();
+            if (!adminUserIds.includes(Number(authenticatedUserId))) {
+              socket.emit("room_join_error", { roomId, message: "Admin access required" });
+              return;
+            }
+          } catch {
+            socket.emit("room_join_error", { roomId, message: "Admin access check failed" });
+            return;
+          }
+        }
+
+        socket.join(roomId);
       });
 
       socket.on("leave-room", (roomId: string) => {
@@ -240,6 +257,10 @@ class NotificationService {
         if (userId) {
           this.removeUser(userId);
         }
+      });
+
+      socket.on("error", (error) => {
+        this.lastSocketError = error instanceof Error ? error.message : String(error);
       });
     });
   }
@@ -389,6 +410,21 @@ class NotificationService {
 
   getConnectedUserIds(): string[] {
     return Array.from(this.userToSocket.keys());
+  }
+
+  getRoomCount(): number {
+    if (!this.io) return 0;
+    return this.io.sockets.adapter.rooms.size;
+  }
+
+  getAdapterMode(): "memory" | "redis" {
+    if (!this.io) return "memory";
+    const adapterName = this.io.sockets.adapter.constructor.name.toLowerCase();
+    return adapterName.includes("redis") ? "redis" : "memory";
+  }
+
+  getLastSocketError(): string | null {
+    return this.lastSocketError;
   }
 
   forceDisconnectUser(userId: string): void {
