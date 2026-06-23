@@ -28,6 +28,17 @@ const PING_TIMEOUT = 60_000;
 const PING_INTERVAL = 25_000;
 const REALTIME_NOTIFICATION_CHANNEL = "realtime:notifications";
 const REALTIME_CRON_LOG_CHANNEL = "realtime:cron-logs";
+const SOCKET_DEBUG_LOGS = process.env.SOCKET_DEBUG_LOGS !== "false";
+
+function socketLog(
+  level: "info" | "warn" | "error",
+  message: string,
+  meta?: Record<string, unknown>,
+): void {
+  if (!SOCKET_DEBUG_LOGS) return;
+  const payload = meta ? ` ${JSON.stringify(meta)}` : "";
+  console[level](`[socket] ${message}${payload}`);
+}
 
 function userRoom(userId: string): string {
   return `user:${userId}`;
@@ -53,6 +64,23 @@ function getSocketToken(socket: Socket): string | null {
   }
 
   return null;
+}
+
+function maskToken(token: string | null): string | null {
+  if (!token) return null;
+  if (token.length <= 12) return "***";
+  return `${token.slice(0, 6)}...${token.slice(-4)}`;
+}
+
+function getSocketRequestMeta(socket: Socket): Record<string, unknown> {
+  return {
+    socketId: socket.id,
+    origin: socket.handshake.headers.origin ?? null,
+    referer: socket.handshake.headers.referer ?? null,
+    userAgent: socket.handshake.headers["user-agent"] ?? null,
+    transport: socket.conn.transport.name,
+    address: socket.handshake.address,
+  };
 }
 
 // ─── Notification builders ────────────────────────────────────────────────────
@@ -164,25 +192,58 @@ class NotificationService {
       pingInterval: PING_INTERVAL,
     });
 
+    socketLog("info", "initialized", {
+      corsOrigin: CORS_ORIGIN,
+      transports: ["websocket"],
+      pingTimeout: PING_TIMEOUT,
+      pingInterval: PING_INTERVAL,
+      debugLogs: SOCKET_DEBUG_LOGS,
+    });
+
+    this.setupEngineDebugHandlers();
     this.setupRedisAdapter().catch((error) => {
       this.lastSocketError = error instanceof Error ? error.message : String(error);
+      socketLog("error", "redis adapter failed", { error: this.lastSocketError });
       console.error("Socket.IO Redis adapter failed:", error);
     });
     this.setupConnectionHandlers();
     this.startRealtimeSubscriber().catch((error) => {
+      socketLog("error", "realtime subscriber failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       console.error("Realtime subscriber failed:", error);
+    });
+  }
+
+  private setupEngineDebugHandlers(): void {
+    assertInitialized(this.io);
+
+    this.io.engine.on("connection_error", (error) => {
+      socketLog("warn", "engine connection error", {
+        code: error.code,
+        message: error.message,
+        context: error.context,
+        origin: error.req?.headers.origin ?? null,
+        referer: error.req?.headers.referer ?? null,
+        userAgent: error.req?.headers["user-agent"] ?? null,
+        url: error.req?.url,
+      });
     });
   }
 
   private async setupRedisAdapter(): Promise<void> {
     assertInitialized(this.io);
     await connectRedis();
-    if (!redisClient.isReady) return;
+    if (!redisClient.isReady) {
+      socketLog("warn", "redis adapter skipped because redis is not ready");
+      return;
+    }
 
     const pubClient = redisClient.duplicate();
     const subClient = redisClient.duplicate();
     await Promise.all([pubClient.connect(), subClient.connect()]);
     this.io.adapter(createAdapter(pubClient, subClient));
+    socketLog("info", "redis adapter ready");
   }
 
   private setupConnectionHandlers(): void {
@@ -190,7 +251,15 @@ class NotificationService {
 
     this.io.on("connection", async (socket: Socket) => {
       const token = getSocketToken(socket);
+      socketLog("info", "connection attempt", {
+        ...getSocketRequestMeta(socket),
+        token: maskToken(token),
+        hasAuthToken: typeof socket.handshake.auth?.token === "string",
+        hasAuthorizationHeader: typeof socket.handshake.headers.authorization === "string",
+      });
+
       if (!token) {
+        socketLog("warn", "disconnect missing token", getSocketRequestMeta(socket));
         socket.disconnect(true);
         return;
       }
@@ -199,13 +268,32 @@ class NotificationService {
       try {
         const decoded = await authService.verifyToken(token);
         authenticatedUserId = String(decoded.userId);
-      } catch {
+        socketLog("info", "authenticated", {
+          ...getSocketRequestMeta(socket),
+          userId: authenticatedUserId,
+        });
+      } catch (error) {
+        socketLog("warn", "disconnect invalid token", {
+          ...getSocketRequestMeta(socket),
+          error: error instanceof Error ? error.message : String(error),
+        });
         socket.disconnect(true);
         return;
       }
 
       socket.on("register", (userId: string) => {
+        socketLog("info", "register requested", {
+          socketId: socket.id,
+          requestedUserId: userId || null,
+          authenticatedUserId,
+        });
+
         if (userId && userId !== authenticatedUserId) {
+          socketLog("warn", "register denied different user", {
+            socketId: socket.id,
+            requestedUserId: userId,
+            authenticatedUserId,
+          });
           socket.emit("registration_error", { message: "Cannot register another user" });
           return;
         }
@@ -213,6 +301,11 @@ class NotificationService {
         // Kick previous session nếu user đăng nhập từ thiết bị khác
         const prevSocketId = this.userToSocket.get(authenticatedUserId);
         if (prevSocketId && prevSocketId !== socket.id) {
+          socketLog("info", "replace previous socket", {
+            userId: authenticatedUserId,
+            previousSocketId: prevSocketId,
+            newSocketId: socket.id,
+          });
           this.userToSocket.delete(authenticatedUserId);
           this.socketToUser.delete(prevSocketId);
         }
@@ -222,46 +315,110 @@ class NotificationService {
         socket.join(userRoom(authenticatedUserId));
 
         socket.emit("registered", { userId: authenticatedUserId });
+        socketLog("info", "registered", {
+          socketId: socket.id,
+          userId: authenticatedUserId,
+          room: userRoom(authenticatedUserId),
+          connectedUsers: this.getConnectedUsersCount(),
+        });
       });
 
       socket.on("unregister", (userId: string) => {
-        if (userId && userId !== authenticatedUserId) return;
+        if (userId && userId !== authenticatedUserId) {
+          socketLog("warn", "unregister ignored different user", {
+            socketId: socket.id,
+            requestedUserId: userId,
+            authenticatedUserId,
+          });
+          return;
+        }
         this.removeUser(authenticatedUserId);
         socket.leave(userRoom(authenticatedUserId));
+        socketLog("info", "unregistered", {
+          socketId: socket.id,
+          userId: authenticatedUserId,
+          connectedUsers: this.getConnectedUsersCount(),
+        });
       });
 
       socket.on("join-room", async (roomId: string) => {
-        if (!roomId) return;
+        if (!roomId) {
+          socketLog("warn", "join-room ignored empty room", {
+            socketId: socket.id,
+            userId: authenticatedUserId,
+          });
+          return;
+        }
+
+        socketLog("info", "join-room requested", {
+          socketId: socket.id,
+          userId: authenticatedUserId,
+          roomId,
+        });
 
         if (roomId === "admin:system") {
           try {
             const adminUserIds = await this.getAdminUserIds();
             if (!adminUserIds.includes(Number(authenticatedUserId))) {
+              socketLog("warn", "join-room denied admin required", {
+                socketId: socket.id,
+                userId: authenticatedUserId,
+                roomId,
+              });
               socket.emit("room_join_error", { roomId, message: "Admin access required" });
               return;
             }
-          } catch {
+          } catch (error) {
+            socketLog("error", "join-room admin check failed", {
+              socketId: socket.id,
+              userId: authenticatedUserId,
+              roomId,
+              error: error instanceof Error ? error.message : String(error),
+            });
             socket.emit("room_join_error", { roomId, message: "Admin access check failed" });
             return;
           }
         }
 
         socket.join(roomId);
+        socketLog("info", "joined room", {
+          socketId: socket.id,
+          userId: authenticatedUserId,
+          roomId,
+        });
       });
 
       socket.on("leave-room", (roomId: string) => {
-        if (roomId) socket.leave(roomId);
+        if (roomId) {
+          socket.leave(roomId);
+          socketLog("info", "left room", {
+            socketId: socket.id,
+            userId: authenticatedUserId,
+            roomId,
+          });
+        }
       });
 
-      socket.on("disconnect", () => {
+      socket.on("disconnect", (reason) => {
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
           this.removeUser(userId);
         }
+        socketLog("info", "disconnected", {
+          socketId: socket.id,
+          userId: userId ?? authenticatedUserId,
+          reason,
+          connectedUsers: this.getConnectedUsersCount(),
+        });
       });
 
       socket.on("error", (error) => {
         this.lastSocketError = error instanceof Error ? error.message : String(error);
+        socketLog("error", "socket error", {
+          socketId: socket.id,
+          userId: authenticatedUserId,
+          error: this.lastSocketError,
+        });
       });
     });
   }
