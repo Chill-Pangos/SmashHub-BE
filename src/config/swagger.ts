@@ -49,6 +49,7 @@ const swaggerDefinition = {
     { name: "ELO Histories", description: "ELO history tracking endpoints" },
     { name: "Payments", description: "Payment and entry fee management endpoints" },
     { name: "Notifications", description: "Real-time notifications endpoints" },
+    { name: "Admin System", description: "Admin system health and realtime operations endpoints" },
   ],
   components: {
     securitySchemes: {

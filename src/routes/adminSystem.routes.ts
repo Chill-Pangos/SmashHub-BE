@@ -5,6 +5,61 @@ import { checkPermission } from "../middlewares/permission.middleware";
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   name: Admin System
+ *   description: Admin-only system health, runtime metrics, events, and audit logs
+ */
+
+/**
+ * @swagger
+ * /admin/system/summary:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get full admin system dashboard snapshot
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Full system dashboard snapshot
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     app:
+ *                       type: object
+ *                     infra:
+ *                       type: object
+ *                     apiRuntime:
+ *                       type: object
+ *                     socket:
+ *                       type: object
+ *                     cron:
+ *                       type: object
+ *                     errors:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     alerts:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     generatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ */
 router.get(
   "/summary",
   authenticate,
@@ -12,6 +67,51 @@ router.get(
   adminSystemController.summary.bind(adminSystemController),
 );
 
+/**
+ * @swagger
+ * /admin/system/health:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get current system health status
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: System health status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     app:
+ *                       type: string
+ *                       enum: [up, down, degraded]
+ *                     db:
+ *                       type: string
+ *                       enum: [up, down, degraded]
+ *                     redis:
+ *                       type: string
+ *                       enum: [up, down, degraded]
+ *                     socket:
+ *                       type: string
+ *                       enum: [up, down, degraded]
+ *                     cron:
+ *                       type: string
+ *                       enum: [up, down, degraded]
+ *                     generatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ */
 router.get(
   "/health",
   authenticate,
@@ -19,6 +119,62 @@ router.get(
   adminSystemController.health.bind(adminSystemController),
 );
 
+/**
+ * @swagger
+ * /admin/system/metrics:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get API runtime metrics for a rolling window
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: window
+ *         schema:
+ *           type: string
+ *           enum: [1m, 5m, 15m]
+ *           default: 5m
+ *         description: Rolling metrics window
+ *     responses:
+ *       200:
+ *         description: Runtime metrics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     window:
+ *                       type: string
+ *                     requestCount:
+ *                       type: integer
+ *                     statusGroups:
+ *                       type: object
+ *                     errorCount:
+ *                       type: integer
+ *                     errorRate:
+ *                       type: number
+ *                     latency:
+ *                       type: object
+ *                     slowRoutes:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     generatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Invalid window
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ */
 router.get(
   "/metrics",
   authenticate,
@@ -26,6 +182,49 @@ router.get(
   adminSystemController.metrics.bind(adminSystemController),
 );
 
+/**
+ * @swagger
+ * /admin/system/events:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get recent system events
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [error, alert, cron]
+ *         description: Event type filter
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum events returned
+ *     responses:
+ *       200:
+ *         description: Recent system events
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Invalid query
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ */
 router.get(
   "/events",
   authenticate,
@@ -33,6 +232,61 @@ router.get(
   adminSystemController.events.bind(adminSystemController),
 );
 
+/**
+ * @swagger
+ * /admin/system/audit-logs:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get admin audit logs
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: action
+ *         schema:
+ *           type: string
+ *           enum: [create, update, delete]
+ *         description: Action filter
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *           minimum: 0
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           minimum: 1
+ *           maximum: 100
+ *     responses:
+ *       200:
+ *         description: Admin audit logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     pagination:
+ *                       type: object
+ *       400:
+ *         description: Invalid query
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ */
 router.get(
   "/audit-logs",
   authenticate,
