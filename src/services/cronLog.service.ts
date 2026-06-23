@@ -1,6 +1,7 @@
 import { Op, WhereOptions } from "sequelize";
 import CronLog, { CronLogLevel, CronLogStatus } from "../models/cronLog.model";
 import notificationService from "./notification.service";
+import adminSystemService from "./adminSystem.service";
 
 export type CreateCronLogInput = {
   jobName: string;
@@ -39,6 +40,9 @@ class CronLogService {
 
     notificationService.publishCronLog(log).catch((error) => {
       console.error("Failed to publish cron log realtime event:", error);
+    });
+    adminSystemService.publishCronEvent(log).catch((error) => {
+      console.error("Failed to publish admin system cron event:", error);
     });
     return log;
   }

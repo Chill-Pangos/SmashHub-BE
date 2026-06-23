@@ -5,6 +5,7 @@ import config from "./config/config";
 import sequelize from "./config/database";
 import { connectRedis, disconnectRedis } from "./config/redis";
 import NotificationService from "./services/notification.service";
+import adminSystemService from "./services/adminSystem.service";
 
 const checkConnection = async () => {
   try {
@@ -27,6 +28,7 @@ checkConnection().then(() => {
 
   // Initialize Socket.IO
   NotificationService.initialize(httpServer);
+  adminSystemService.startRealtimePublisher();
 
   httpServer.listen(config.port, () => {
     console.log(`Server is running on port ${config.port}`);

@@ -8,6 +8,8 @@ import routes from "./routes";
 import swaggerSpec from "./config/swagger";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.middleware";
 import config from "./config/config";
+import { systemMetricsMiddleware } from "./middlewares/systemMetrics.middleware";
+import { auditMiddleware } from "./middlewares/audit.middleware";
 
 const app: Application = express();
 
@@ -15,6 +17,8 @@ const app: Application = express();
 app.use(helmet());
 app.use(cors());
 app.use(morgan("dev"));
+app.use(systemMetricsMiddleware);
+app.use(auditMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(config.upload.avatarUrlPath, express.static(config.upload.avatarDir));

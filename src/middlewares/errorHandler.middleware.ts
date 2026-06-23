@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError, formatErrorResponse } from "../utils/errors.helper";
+import systemRuntimeService from "../services/systemRuntime.service";
 
 /**
  * Global error handler middleware
@@ -43,6 +44,20 @@ export const errorHandler = (
   // Include stack trace in development mode
   if (process.env.NODE_ENV === "development") {
     response.error.stack = err.stack;
+  }
+
+  const errorEvent = {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    path: req.originalUrl,
+    statusCode,
+    errorCode,
+    message: errorResponse.message,
+  };
+  if (typeof req.headers["x-request-id"] === "string") {
+    systemRuntimeService.recordError({ ...errorEvent, requestId: req.headers["x-request-id"] });
+  } else {
+    systemRuntimeService.recordError(errorEvent);
   }
 
   res.status(statusCode).json(response);
