@@ -17,8 +17,11 @@ import User from "../models/user.model";
 import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
+import notificationService from "./notification.service";
 import { Stage, STAGES } from "../models/schedule.model";
 import { MATCH_STATUSES, MatchStatus, RESULT_STATUSES, ResultStatus } from "../models/match.model";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +71,8 @@ interface PaginatedMatches {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const MATCH_START_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 const createEntryMemberInclude = () => ({
   model: EntryMember,
   as: "members",
@@ -75,7 +80,7 @@ const createEntryMemberInclude = () => ({
     {
       model: User,
       as: "user",
-      attributes: ["id", "firstName", "lastName", "email", "avatarUrl"],
+      attributes: [...PUBLIC_USER_ATTRIBUTES],
     },
   ],
 });
@@ -95,7 +100,7 @@ const createMatchDetailInclude = () => [
       {
         model: User,
         as: "referee",
-        attributes: ["id", "firstName", "lastName", "email"],
+        attributes: [...PUBLIC_USER_ATTRIBUTES],
       },
     ],
   },
@@ -103,8 +108,11 @@ const createMatchDetailInclude = () => [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getMatchWithContext(matchId: number): Promise<MatchWithContext> {
-  const instance = await Match.findByPk(matchId, {
+async function getMatchWithContext(
+  matchId: number,
+  options: { transaction?: Transaction; lock?: boolean } = {},
+): Promise<MatchWithContext> {
+  const queryOptions: any = {
     include: [
       {
         model: Schedule,
@@ -118,41 +126,86 @@ async function getMatchWithContext(matchId: number): Promise<MatchWithContext> {
         ],
       },
     ],
-  });
-  if (!instance) throw new Error("Match not found");
+  };
+  if (options.transaction) queryOptions.transaction = options.transaction;
+  if (options.transaction && options.lock) {
+    queryOptions.lock = options.transaction.LOCK.UPDATE;
+  }
+
+  const instance = await Match.findByPk(matchId, queryOptions);
+  if (!instance) throw new NotFoundError("Match not found");
 
   const category = instance.schedule?.tournamentCategory;
-  if (!category) throw new Error("Match schedule or category not found");
+  if (!category) throw new NotFoundError("Match schedule or category not found");
 
   const tournament = category.tournament;
-  if (!tournament) throw new Error("Tournament not found");
+  if (!tournament) throw new NotFoundError("Tournament not found");
 
   return { instance, category, tournament };
+}
+
+function formatCalendarDateInTimeZone(
+  date: Date,
+  timeZone = MATCH_START_TIME_ZONE,
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function assertMatchScheduledForToday(match: Match): void {
+  const scheduledAt = match.schedule?.scheduledAt;
+  if (!scheduledAt) throw new BadRequestError("Match schedule time not found");
+
+  const scheduledDate = formatCalendarDateInTimeZone(new Date(scheduledAt));
+  const currentDate = formatCalendarDateInTimeZone(new Date());
+
+  if (scheduledDate !== currentDate) {
+    throw new BadRequestError(
+      `Cannot start match outside scheduled date. Scheduled date is ${scheduledDate}, current date is ${currentDate}`,
+    );
+  }
 }
 
 async function assertChiefReferee(
   userId: number,
   tournamentId: number,
+  transaction?: Transaction,
 ): Promise<void> {
   const ref = await TournamentReferee.findOne({
     where: { refereeId: userId, tournamentId, role: "chief" },
+    ...(transaction && { transaction }),
   });
-  if (!ref) throw new Error("Only the chief referee can perform this action");
+  if (!ref) throw new ForbiddenError("Only the chief referee can perform this action");
 }
 
 async function assertMatchReferee(
   userId: number,
   matchId: number,
+  transaction?: Transaction,
 ): Promise<void> {
   const ref = await MatchReferee.findOne({
     where: { matchId, refereeId: userId },
+    ...(transaction && { transaction }),
   });
-  if (!ref) throw new Error("Only an assigned referee can perform this action");
+  if (!ref) throw new ForbiddenError("Only an assigned referee can perform this action");
 }
 
 async function assertTournamentReferee(
   userId: number,
   tournamentId: number,
+  transaction?: Transaction,
 ): Promise<void> {
   const ref = await TournamentReferee.findOne({
     where: {
@@ -160,8 +213,9 @@ async function assertTournamentReferee(
       tournamentId,
       role: { [Op.in]: ["referee", "chief"] },
     },
+    ...(transaction && { transaction }),
   });
-  if (!ref) throw new Error("Only a tournament referee can perform this action");
+  if (!ref) throw new ForbiddenError("Only a tournament referee can perform this action");
 }
 
 function countSubMatchWins(subMatches: SubMatch[]): {
@@ -178,9 +232,21 @@ function countSubMatchWins(subMatches: SubMatch[]): {
   );
 }
 
+function toMatchRealtimePayload(match: Match): Record<string, unknown> {
+  return {
+    id: match.id,
+    scheduleId: match.scheduleId,
+    entryAId: match.entryAId,
+    entryBId: match.entryBId,
+    status: match.status,
+    winnerEntryId: match.winnerEntryId,
+    resultStatus: match.resultStatus,
+  };
+}
+
 function assertValidStage(stage?: string): asserts stage is Stage | undefined {
   if (stage && !STAGES.includes(stage as Stage)) {
-    throw new Error(`Invalid stage. Must be one of: ${STAGES.join(", ")}`);
+    throw new BadRequestError(`Invalid stage. Must be one of: ${STAGES.join(", ")}`);
   }
 }
 
@@ -188,7 +254,7 @@ function assertValidMatchStatus(
   status?: string,
 ): asserts status is MatchStatus | undefined {
   if (status && !MATCH_STATUSES.includes(status as MatchStatus)) {
-    throw new Error(
+    throw new BadRequestError(
       `Invalid match status. Must be one of: ${MATCH_STATUSES.join(", ")}`,
     );
   }
@@ -199,7 +265,7 @@ function assertValidMatchStatuses(statuses?: string[]): asserts statuses is Matc
     (status) => !MATCH_STATUSES.includes(status as MatchStatus),
   );
   if (invalidStatus) {
-    throw new Error(
+    throw new BadRequestError(
       `Invalid match status "${invalidStatus}". Must be one of: ${MATCH_STATUSES.join(", ")}`,
     );
   }
@@ -209,7 +275,7 @@ function assertValidResultStatus(
   resultStatus?: string,
 ): asserts resultStatus is ResultStatus | undefined {
   if (resultStatus && !RESULT_STATUSES.includes(resultStatus as ResultStatus)) {
-    throw new Error(
+    throw new BadRequestError(
       `Invalid result status. Must be one of: ${RESULT_STATUSES.join(", ")}`,
     );
   }
@@ -410,7 +476,7 @@ export class MatchService {
             {
               model: User,
               as: "referee",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: [...PUBLIC_USER_ATTRIBUTES],
             },
           ],
         },
@@ -441,19 +507,23 @@ export class MatchService {
    * Assign trọng tài động từ pool của tournament.
    */
   async startMatch(matchId: number, refereeId: number): Promise<Match> {
-    const { instance, tournament } = await getMatchWithContext(matchId);
-    await assertTournamentReferee(refereeId, tournament.id);
+    const match = await sequelize.transaction(async (t) => {
+      const { instance, tournament } = await getMatchWithContext(matchId, {
+        transaction: t,
+        lock: true,
+      });
+      await assertTournamentReferee(refereeId, tournament.id, t);
 
-    if (instance.status !== "scheduled") {
-      throw new Error(
-        `Cannot start match. Status is "${instance.status}", must be "scheduled"`,
-      );
-    }
-    if (!instance.entryAId || !instance.entryBId) {
-      throw new Error("Cannot start match before both entries are assigned");
-    }
+      if (instance.status !== "scheduled") {
+        throw new BadRequestError(
+          `Cannot start match. Status is "${instance.status}", must be "scheduled"`,
+        );
+      }
+      if (!instance.entryAId || !instance.entryBId) {
+        throw new BadRequestError("Cannot start match before both entries are assigned");
+      }
+      assertMatchScheduledForToday(instance);
 
-    return await sequelize.transaction(async (t) => {
       await instance.update({ status: "in_progress" }, { transaction: t });
 
       // Assign bàn thi đấu động (tìm bàn trống)
@@ -467,6 +537,12 @@ export class MatchService {
 
       return instance.reload({ transaction: t });
     });
+
+    notificationService.publishMatchResultUpdate(matchId, "match_started", {
+      match: toMatchRealtimePayload(match),
+    });
+
+    return match;
   }
 
   // ── 2. Nộp kết quả (trọng tài) ────────────────────────────────────────────
@@ -476,47 +552,59 @@ export class MatchService {
    * Chief referee sẽ approve sau.
    */
   async finalizeMatch(matchId: number, refereeId: number): Promise<Match> {
-    const { instance } = await getMatchWithContext(matchId);
-    await assertMatchReferee(refereeId, matchId);
+    const match = await sequelize.transaction(async (t) => {
+      const { instance } = await getMatchWithContext(matchId, {
+        transaction: t,
+        lock: true,
+      });
+      await assertMatchReferee(refereeId, matchId, t);
 
-    if (instance.status !== "in_progress") {
-      throw new Error(
-        `Cannot finalize match. Status is "${instance.status}", must be "in_progress"`,
-      );
-    }
-    if (!instance.entryAId || !instance.entryBId) {
-      throw new Error("Cannot finalize match before both entries are assigned");
-    }
+      if (instance.status !== "in_progress") {
+        throw new BadRequestError(
+          `Cannot finalize match. Status is "${instance.status}", must be "in_progress"`,
+        );
+      }
+      if (!instance.entryAId || !instance.entryBId) {
+        throw new BadRequestError("Cannot finalize match before both entries are assigned");
+      }
 
-    const subMatches = await SubMatch.findAll({
-      where: { matchId },
-      order: [["subMatchNumber", "ASC"]],
+      const subMatches = await SubMatch.findAll({
+        where: { matchId },
+        order: [["subMatchNumber", "ASC"]],
+        transaction: t,
+      });
+      if (subMatches.length === 0) throw new NotFoundError("No sub-matches found for this match");
+
+      const { entryASubMatchWins, entryBSubMatchWins } =
+        countSubMatchWins(subMatches);
+      const winsToFinalize = Math.floor(subMatches.length / 2) + 1;
+
+      if (
+        entryASubMatchWins < winsToFinalize &&
+        entryBSubMatchWins < winsToFinalize
+      ) {
+        throw new BadRequestError(
+          `Match not complete. Need ${winsToFinalize} sub-match wins. Entry A: ${entryASubMatchWins}, Entry B: ${entryBSubMatchWins}`,
+        );
+      }
+
+      const winnerEntryId =
+        entryASubMatchWins >= winsToFinalize ? instance.entryAId : instance.entryBId;
+
+      await instance.update({
+        status: "completed",
+        winnerEntryId,
+        resultStatus: "pending",
+      }, { transaction: t });
+
+      return instance.reload({ transaction: t });
     });
-    if (subMatches.length === 0) throw new Error("No sub-matches found for this match");
 
-    const { entryASubMatchWins, entryBSubMatchWins } =
-      countSubMatchWins(subMatches);
-    const winsToFinalize = Math.floor(subMatches.length / 2) + 1;
-
-    if (
-      entryASubMatchWins < winsToFinalize &&
-      entryBSubMatchWins < winsToFinalize
-    ) {
-      throw new Error(
-        `Match not complete. Need ${winsToFinalize} sub-match wins. Entry A: ${entryASubMatchWins}, Entry B: ${entryBSubMatchWins}`,
-      );
-    }
-
-    const winnerEntryId =
-      entryASubMatchWins >= winsToFinalize ? instance.entryAId : instance.entryBId;
-
-    await instance.update({
-      status: "completed",
-      winnerEntryId,
-      resultStatus: "pending",
+    notificationService.publishMatchResultUpdate(matchId, "match_result_submitted", {
+      match: toMatchRealtimePayload(match),
     });
 
-    return instance;
+    return match;
   }
 
   // ── 3. Approve kết quả (chief referee) ───────────────────────────────────
@@ -526,44 +614,57 @@ export class MatchService {
     chiefRefereeId: number,
     reviewNotes?: string,
   ): Promise<Match> {
-    const { instance, category, tournament } =
-      await getMatchWithContext(matchId);
-    await assertChiefReferee(chiefRefereeId, tournament.id);
+    const approved = await sequelize.transaction(async (t) => {
+      const { instance, tournament } = await getMatchWithContext(matchId, {
+        transaction: t,
+        lock: true,
+      });
+      await assertChiefReferee(chiefRefereeId, tournament.id, t);
 
-    if (instance.status !== "completed") {
-      throw new Error(
-        `Cannot approve. Status is "${instance.status}", must be "completed"`,
+      if (instance.status !== "completed") {
+        throw new BadRequestError(
+          `Cannot approve. Status is "${instance.status}", must be "completed"`,
+        );
+      }
+      if (instance.resultStatus !== "pending") {
+        throw new BadRequestError(
+          `Cannot approve. Result status is "${instance.resultStatus}", must be "pending"`,
+        );
+      }
+      if (!instance.winnerEntryId) {
+        throw new BadRequestError("Match has no winner set");
+      }
+
+      await instance.update(
+        { resultStatus: "approved", reviewNotes },
+        { transaction: t },
       );
-    }
-    if (instance.resultStatus !== "pending") {
-      throw new Error(
-        `Cannot approve. Result status is "${instance.resultStatus}", must be "pending"`,
-      );
-    }
-    if (!instance.winnerEntryId) {
-      throw new Error("Match has no winner set");
-    }
 
-    await instance.update({ resultStatus: "approved", reviewNotes });
+      return {
+        match: await instance.reload({ transaction: t }),
+        stage: instance.schedule?.stage,
+        winnerEntryId: instance.winnerEntryId,
+      };
+    });
 
-    // Cập nhật standings hoặc bracket
-    const stage = instance.schedule?.stage;
-    // match.service.ts — sửa trong approveMatchResult()
-
-    if (stage === "group") {
+    if (approved.stage === "group") {
       await groupStandingService.updateStandingsAfterMatch(
-        chiefRefereeId, // ← thêm vào
+        chiefRefereeId,
         matchId,
       );
-    } else if (stage === "knockout") {
+    } else if (approved.stage === "knockout") {
       await knockoutBracketService.advanceWinner(
         chiefRefereeId,
         await this.getBracketIdByMatch(matchId),
-        instance.winnerEntryId,
+        approved.winnerEntryId!,
       );
     }
 
-    return instance;
+    notificationService.publishMatchResultUpdate(matchId, "match_result_approved", {
+      match: toMatchRealtimePayload(approved.match),
+    });
+
+    return approved.match;
   }
 
   // ── 5. Pending matches (chief referee dashboard) ──────────────────────────
@@ -646,7 +747,7 @@ export class MatchService {
     assertValidResultStatus(filters.resultStatus);
 
     const category = await TournamentCategory.findByPk(categoryId);
-    if (!category) throw new Error("Category not found");
+    if (!category) throw new NotFoundError("Category not found");
 
     await assertChiefReferee(chiefRefereeId, category.tournamentId);
 
@@ -695,7 +796,7 @@ export class MatchService {
             {
               model: User,
               as: "referee",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: [...PUBLIC_USER_ATTRIBUTES],
             },
           ],
         },
@@ -780,7 +881,7 @@ export class MatchService {
             {
               model: User,
               as: "referee",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: [...PUBLIC_USER_ATTRIBUTES],
             },
           ],
         },
@@ -819,7 +920,7 @@ export class MatchService {
     await assertChiefReferee(chiefRefereeId, tournament.id);
 
     if (instance.resultStatus !== "pending") {
-      throw new Error(
+      throw new BadRequestError(
         `Result status is "${instance.resultStatus}", must be "pending" to preview`,
       );
     }
@@ -849,7 +950,7 @@ export class MatchService {
             {
               model: User,
               as: "referee",
-              attributes: ["id", "firstName", "lastName", "email"],
+              attributes: [...PUBLIC_USER_ATTRIBUTES],
             },
           ],
         },
@@ -869,7 +970,7 @@ export class MatchService {
         ],
       ],
     });
-    if (!match) throw new Error("Match not found");
+    if (!match) throw new NotFoundError("Match not found");
 
     const subMatches = match.subMatches ?? [];
     const { entryASubMatchWins, entryBSubMatchWins } =
@@ -999,7 +1100,7 @@ export class MatchService {
     succeeded: Match[];
     failed: { matchId: number; reason: string }[];
   }> {
-    if (matchIds.length === 0) throw new Error("matchIds must not be empty");
+    if (matchIds.length === 0) throw new BadRequestError("matchIds must not be empty");
 
     const succeeded: Match[] = [];
     const failed: { matchId: number; reason: string }[] = [];

@@ -3,6 +3,7 @@
 import { Request, Response, NextFunction } from "express";
 import rolePermissionService from "../services/rolePermission.service";
 import { CreateRolePermissionDto } from "../dto/rolePermission.dto";
+import { parsePagination } from "../utils/request.helper";
 
 export class RolePermissionController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -16,9 +17,7 @@ export class RolePermissionController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await rolePermissionService.findAll(offset, limit);
       res.status(200).json(data);
     } catch (error) {
@@ -28,9 +27,7 @@ export class RolePermissionController {
 
   async findByRoleId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await rolePermissionService.findByRoleId(Number(req.params.roleId), offset, limit);
       res.status(200).json(data);
     } catch (error) {
@@ -40,9 +37,7 @@ export class RolePermissionController {
 
   async findByPermissionId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await rolePermissionService.findByPermissionId(Number(req.params.permissionId), offset, limit);
       res.status(200).json(data);
     } catch (error) {

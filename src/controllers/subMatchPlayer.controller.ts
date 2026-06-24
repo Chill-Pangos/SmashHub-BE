@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import subMatchPlayerService from "../services/subMatchPlayer.service";
 import { BadRequestError } from "../utils/errors.helper";
+import { parsePagination } from "../utils/request.helper";
 
 export class SubMatchPlayerController {
   async submitTeamLineup(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -128,9 +129,7 @@ export class SubMatchPlayerController {
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const subMatchId = Number(req.params.subMatchId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await subMatchPlayerService.getPlayersBySubMatch(subMatchId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -146,9 +145,7 @@ export class SubMatchPlayerController {
     try {
       const subMatchId = Number(req.params.subMatchId);
       const team = req.params.team as "A" | "B";
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       if (team !== "A" && team !== "B") {
         throw new BadRequestError("Team must be 'A' or 'B'");
@@ -168,9 +165,7 @@ export class SubMatchPlayerController {
   async getByEntryMemberId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const entryMemberId = Number(req.params.entryMemberId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const matches = await subMatchPlayerService.getMatchesByEntryMember(
         entryMemberId,

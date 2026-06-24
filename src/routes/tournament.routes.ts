@@ -148,17 +148,17 @@ router.get("/", tournamentController.findAllWithCategoriesFiltered.bind(tourname
  *     description: Get all tournaments with their categories filtered by various criteria including user participation, age, ELO, gender, and other category properties
  *     parameters:
  *       - in: query
- *         name: offset
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *         description: Number of records to offset for pagination
+ *           default: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Maximum number of records to return. Use 0 to get all tournaments without limit
+ *         description: Maximum number of records per page
  *       - in: query
  *         name: userId
  *         schema:
@@ -440,12 +440,12 @@ router.get(
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: offset
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *         description: Number of items to offset for pagination
- *         example: 0
+ *           default: 1
+ *         description: Page number for pagination
+ *         example: 1
  *       - in: query
  *         name: limit
  *         schema:
@@ -524,12 +524,12 @@ router.get(
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: offset
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *         description: Number of items to offset for pagination
- *         example: 0
+ *           default: 1
+ *         description: Page number for pagination
+ *         example: 1
  *       - in: query
  *         name: limit
  *         schema:

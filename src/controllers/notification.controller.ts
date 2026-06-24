@@ -10,7 +10,7 @@ import {
   SendEventDto,
 } from "../dto/notification.dto";
 import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
-import { parsePositiveInt } from "../utils/request.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 const NOTIFICATION_TYPE_SET = new Set<string>(NOTIFICATION_TYPES);
 
@@ -19,20 +19,6 @@ function parseBoolean(value: unknown, fieldName: string): boolean | undefined {
   if (value === "true" || value === true) return true;
   if (value === "false" || value === false) return false;
   throw new BadRequestError(`${fieldName} must be true or false`);
-}
-
-function parseOffset(value: unknown): number | undefined {
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new BadRequestError("offset must be a non-negative integer");
-  }
-  return parsed;
-}
-
-function parseLimit(value: unknown): number | undefined {
-  if (value === undefined) return undefined;
-  return Math.min(parsePositiveInt(value, "limit"), 100);
 }
 
 export class NotificationController {
@@ -54,12 +40,11 @@ export class NotificationController {
         isRead?: boolean;
         type?: NotificationType;
       } = {};
-      const offset = parseOffset(req.query.offset);
-      const limit = parseLimit(req.query.limit);
+      const { offset, limit } = parsePagination(req.query);
       const isRead = parseBoolean(req.query.isRead, "isRead");
 
-      if (offset !== undefined) options.offset = offset;
-      if (limit !== undefined) options.limit = limit;
+      options.offset = offset;
+      options.limit = limit;
       if (isRead !== undefined) options.isRead = isRead;
       if (type) options.type = type as NotificationType;
 

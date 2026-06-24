@@ -85,6 +85,7 @@ class AdminSystemService {
   async getAuditLogs(filters: { action?: string; offset?: number; limit?: number }) {
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
     const offset = Math.max(filters.offset ?? 0, 0);
+    const page = Math.floor(offset / limit) + 1;
     const where: Record<string, unknown> = {};
     if (filters.action) where.action = filters.action;
 
@@ -99,9 +100,11 @@ class AdminSystemService {
       rows,
       pagination: {
         total: count,
-        offset,
+        page,
         limit,
+        totalPages: Math.ceil(count / limit),
         hasNextPage: offset + rows.length < count,
+        hasPrevPage: page > 1,
       },
     };
   }

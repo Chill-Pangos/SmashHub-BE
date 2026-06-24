@@ -9,6 +9,7 @@ import matchSetScoreCacheService, {
   LiveMatchSetScoreCache,
   MatchSetScoreCache,
 } from "./matchSetScoreCache.service";
+import notificationService from "./notification.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,16 @@ interface FinalizationNotice {
   winningTeam: "A" | "B";
   matchWillBeCompleted: boolean;
   winnerEntryId?: number;
+}
+
+function toMatchSetRealtimePayload(set: MatchSet | MatchSetScoreCache): Record<string, unknown> {
+  return {
+    id: set.id,
+    subMatchId: set.subMatchId,
+    setNumber: set.setNumber,
+    entryAScore: set.entryAScore,
+    entryBScore: set.entryBScore,
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -367,6 +378,10 @@ export class MatchSetService {
     });
 
     await cacheSetScore(set);
+    notificationService.publishMatchResultUpdate(match.id, "set_created", {
+      set: toMatchSetRealtimePayload(set),
+    });
+
     return set;
   }
 
@@ -421,6 +436,13 @@ export class MatchSetService {
           console.error("Failed to reopen persisted set as live score:", error);
         }
 
+        notificationService.publishMatchResultUpdate(subMatch.matchId, "set_deleted", {
+          set: toMatchSetRealtimePayload(setToCorrect),
+        });
+        notificationService.publishMatchResultUpdate(subMatch.matchId, "live_score_updated", {
+          liveScore: reopenedLiveScore,
+        });
+
         return {
           message: "Persisted set reopened as live score.",
           liveScore: reopenedLiveScore,
@@ -473,6 +495,10 @@ export class MatchSetService {
     } catch (error) {
       console.error("Failed to cache live match set score:", error);
     }
+
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "live_score_updated", {
+      liveScore,
+    });
 
     if (!isSetCompleted(data.entryAScore, data.entryBScore, 11)) {
       return {
@@ -557,6 +583,11 @@ export class MatchSetService {
     } catch (error) {
       console.error("Failed to delete live match set score cache:", error);
     }
+
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "set_created", {
+      set: toMatchSetRealtimePayload(set),
+    });
+
     return set;
   }
 
@@ -603,6 +634,11 @@ export class MatchSetService {
 
     const updatedSet = await set.update({ entryAScore, entryBScore });
     await cacheSetScore(updatedSet);
+
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "set_score_updated", {
+      set: toMatchSetRealtimePayload(updatedSet),
+    });
+
     return updatedSet;
   }
 
@@ -653,6 +689,7 @@ export class MatchSetService {
       throw new Error("Can only delete the latest set");
     }
 
+    const deletedSetPayload = toMatchSetRealtimePayload(set);
     await set.destroy();
 
     try {
@@ -660,6 +697,10 @@ export class MatchSetService {
     } catch (error) {
       console.error("Failed to delete match set score cache:", error);
     }
+
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "set_deleted", {
+      set: deletedSetPayload,
+    });
   }
 }
 

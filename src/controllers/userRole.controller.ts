@@ -3,6 +3,7 @@
 import { Request, Response, NextFunction } from "express";
 import userRoleService from "../services/userRole.service";
 import { CreateUserRoleDto } from "../dto/userRole.dto";
+import { parsePagination } from "../utils/request.helper";
 
 export class UserRoleController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -16,9 +17,7 @@ export class UserRoleController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await userRoleService.findAll(offset, limit);
       res.status(200).json(data);
     } catch (error) {
@@ -28,9 +27,7 @@ export class UserRoleController {
 
   async findByUserId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await userRoleService.findByUserId(Number(req.params.userId), offset, limit);
       res.status(200).json(data);
     } catch (error) {
@@ -40,9 +37,7 @@ export class UserRoleController {
 
   async findByRoleId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await userRoleService.findByRoleId(Number(req.params.roleId), offset, limit);
       res.status(200).json(data);
     } catch (error) {

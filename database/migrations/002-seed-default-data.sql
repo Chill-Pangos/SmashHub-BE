@@ -126,7 +126,6 @@ SELECT
 FROM `permissions` 
 WHERE `name` IN (
   'users:view',
-  'users:update',
   'tournaments:view',
   'category:view',
   'entries:view',
@@ -139,7 +138,7 @@ WHERE `name` IN (
   'notifications:view',
   'payments:view',
   'payments:create',
-  'payments:update';
+  'payments:update'
 );
 
 -- Referee permissions
@@ -150,7 +149,6 @@ SELECT
 FROM `permissions` 
 WHERE `name` IN (
   'users:view',
-  'users:update',
   'tournaments:view',
   'category:view',
   'entries:view',
@@ -176,7 +174,6 @@ SELECT
 FROM `permissions` 
 WHERE `name` IN (
   'users:view',
-  'users:update',
   'tournaments:view',
   'category:view',
   'entries:view',
@@ -201,7 +198,6 @@ SELECT
 FROM `permissions` 
 WHERE `name` IN (
   'users:view',
-  'users:update',
   'tournaments:view',
   'tournaments:create',
   'tournaments:update',

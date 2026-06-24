@@ -12,7 +12,6 @@ export interface RegisterDto {
   lastName: string;
   email: string;
   password: string;
-  role?: string;
 }
 
 export interface AuthResponseDto {

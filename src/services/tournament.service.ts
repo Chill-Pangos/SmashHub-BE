@@ -18,6 +18,7 @@ import {
 import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
 import { removeUndefinedFields } from "../utils/object.helper";
+import { assertTournamentOwnerOrAdmin } from "../utils/access.helper";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
 const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
@@ -414,7 +415,9 @@ export class TournamentService {
   async update(
     id: number,
     data: UpdateTournamentDto,
+    userId: number,
   ): Promise<Tournament | null> {
+    await assertTournamentOwnerOrAdmin(userId, id);
     const transaction = await sequelize.transaction();
 
     try {
@@ -511,11 +514,24 @@ export class TournamentService {
     }
   }
 
-  async delete(id: number): Promise<number> {
+  async delete(id: number, userId: number): Promise<number> {
+    await assertTournamentOwnerOrAdmin(userId, id);
     return await Tournament.destroy({ where: { id } });
   }
 
-  async completeTournament(id: number): Promise<CompleteTournamentResult | null> {
+  async calculateTournamentElo(
+    id: number,
+    userId: number,
+  ): Promise<TournamentEloUpdateResult> {
+    await assertTournamentOwnerOrAdmin(userId, id);
+    return await eloCalculationService.updateEloForTournament(id);
+  }
+
+  async completeTournament(
+    id: number,
+    userId: number,
+  ): Promise<CompleteTournamentResult | null> {
+    await assertTournamentOwnerOrAdmin(userId, id);
     const tournament = await Tournament.findByPk(id, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
@@ -546,15 +562,13 @@ export class TournamentService {
   }
 
   async cancelTournament(id: number, organizerId: number): Promise<Tournament | null> {
+    await assertTournamentOwnerOrAdmin(organizerId, id);
     const tournament = await Tournament.findByPk(id, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
 
     if (!tournament) {
       return null;
-    }
-    if (tournament.createdBy !== organizerId) {
-      throw new Error("Only the tournament organizer can cancel this tournament");
     }
     if (tournament.status === "completed") {
       throw new Error("Completed tournaments cannot be cancelled");

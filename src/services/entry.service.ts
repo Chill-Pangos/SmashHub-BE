@@ -11,6 +11,7 @@ import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
 import notificationService, { NotificationTemplates } from "./notification.service";
 import { removeUndefinedFields } from "../utils/object.helper";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -382,12 +383,12 @@ export class EntryService {
               { lastName: { [Op.like]: `%${captainName.trim()}%` } },
             ],
           },
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: [...PUBLIC_USER_ATTRIBUTES],
         }
       : {
           model: User,
           as: "captain",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: [...PUBLIC_USER_ATTRIBUTES],
         };
 
     return await Entry.findAndCountAll({
