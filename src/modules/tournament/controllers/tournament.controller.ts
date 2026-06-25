@@ -1,0 +1,326 @@
+import { Request, Response, NextFunction } from "express";
+import tournamentService from "../services/tournament.service";
+import { BadRequestError, NotFoundError } from "../../../utils/errors.helper";
+import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
+import { parsePagination } from "../../../utils/request.helper";
+import { AuthRequest } from "../../../middlewares/auth.middleware";
+import { assertAdmin } from "../../../utils/access.helper";
+
+export class TournamentController {
+  private getAuthenticatedUserId(req: Request): number {
+    const userId = (req as AuthRequest).userId ?? (req as any).user?.id;
+    if (!userId) {
+      throw new BadRequestError("Unauthorized - User not authenticated");
+    }
+    return userId;
+  }
+
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      // Get user ID from authenticated request
+      const userId = this.getAuthenticatedUserId(req);
+
+      const tournamentData = {
+        ...req.body,
+        createdBy: userId,
+      };
+
+      const tournament = await tournamentService.create(tournamentData);
+      res.status(201).json(tournament);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findAllWithCategoriesFiltered(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { offset, limit } = parsePagination(req.query);
+      const name = typeof req.query.name === "string" ? req.query.name : undefined;
+      const userId = req.query.userId ? Number(req.query.userId) : undefined;
+      const createdBy = req.query.createdBy ? Number(req.query.createdBy) : undefined;
+      const minAge = req.query.minAge ? Number(req.query.minAge) : undefined;
+      const maxAge = req.query.maxAge ? Number(req.query.maxAge) : undefined;
+      const minElo = req.query.minElo ? Number(req.query.minElo) : undefined;
+      const maxElo = req.query.maxElo ? Number(req.query.maxElo) : undefined;
+      const gender = req.query.gender as 'male' | 'female' | 'mixed' | undefined;
+      const isGroupStage = req.query.isGroupStage === 'true' ? true : req.query.isGroupStage === 'false' ? false : undefined;
+
+      const result = await tournamentService.findAllWithCategoriesFiltered({
+        offset,
+        limit,
+        name,
+        userId,
+        createdBy,
+        minAge,
+        maxAge,
+        minElo,
+        maxElo,
+        gender,
+        isGroupStage,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const tournament = await tournamentService.findById(id);
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findByIdWithCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const tournament = await tournamentService.findByIdWithCategories(id);
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const tournament = await tournamentService.update(
+        id,
+        req.body,
+        this.getAuthenticatedUserId(req),
+      );
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateWithCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const tournament = await tournamentService.update(
+        id,
+        req.body,
+        this.getAuthenticatedUserId(req),
+      );
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+      res.status(200).json(tournament);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const deleted = await tournamentService.delete(id, this.getAuthenticatedUserId(req));
+      if (!deleted) {
+        throw new NotFoundError("Tournament not found");
+      }
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Manually trigger tournament status update
+   * POST /tournaments/update-statuses
+   */
+  async updateStatuses(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await assertAdmin(this.getAuthenticatedUserId(req));
+      const result = await tournamentService.updateTournamentStatuses();
+      try {
+        await tournamentStatusNotificationService.notifyTransitions(result.events);
+      } catch (notifyError) {
+        console.error("Failed to notify tournament status changes:", notifyError);
+      }
+      res.status(200).json({
+        success: true,
+        message: "Tournament statuses updated successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get upcoming tournament status changes
+   * GET /tournaments/upcoming-changes?hours=24
+   */
+  async getUpcomingChanges(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const hours = parseInt(req.query.hours as string) || 24;
+      const result = await tournamentService.getUpcomingStatusChanges(hours);
+      res.status(200).json({
+        success: true,
+        data: result,
+        metadata: {
+          lookAheadHours: hours,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async calculateTournamentElo(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const result = await tournamentService.calculateTournamentElo(
+        id,
+        this.getAuthenticatedUserId(req),
+      );
+      res.status(200).json({
+        success: true,
+        message: "Tournament Elo calculated successfully",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async completeTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const result = await tournamentService.completeTournament(
+        id,
+        this.getAuthenticatedUserId(req),
+      );
+      if (!result) {
+        throw new NotFoundError("Tournament not found");
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Tournament completed successfully. Awards and Elo updated.",
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async cancelTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params.id);
+
+      if (isNaN(id) || id <= 0) {
+        throw new BadRequestError("Invalid tournament ID");
+      }
+
+      const organizerId = this.getAuthenticatedUserId(req);
+
+      const tournament = await tournamentService.cancelTournament(id, organizerId);
+      if (!tournament) {
+        throw new NotFoundError("Tournament not found");
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Tournament cancelled successfully",
+        data: tournament,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMyOrganizedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const organizerId = this.getAuthenticatedUserId(req);
+
+      const { offset, limit } = parsePagination(req.query);
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+
+      const result = await tournamentService.getTournamentsByOrganizer(organizerId, {
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMyRefereedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const refereeId = this.getAuthenticatedUserId(req);
+
+      const { offset, limit } = parsePagination(req.query);
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+
+      const result = await tournamentService.getTournamentsByReferee(refereeId, {
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+}
+
+export default new TournamentController();

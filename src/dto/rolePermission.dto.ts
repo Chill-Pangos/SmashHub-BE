@@ -1,16 +1,2 @@
-// RolePermission DTOs
-export interface CreateRolePermissionDto {
-  roleId: number;
-  permissionId: number;
-}
+export * from "../modules/identity/dto/rolePermission.dto";
 
-export interface UpdateRolePermissionDto {
-  permissionId?: number;
-}
-
-export interface RolePermissionResponseDto {
-  roleId: number;
-  permissionId: number;
-  createdAt: Date;
-  updatedAt: Date;
-}

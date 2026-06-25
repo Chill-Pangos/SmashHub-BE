@@ -1,19 +1,2 @@
-// EntryMember DTOs
-export interface CreateEntryMemberDto {
-  entryId: number;
-  userId: number;
-  eloAtEntry: number;
-}
+export * from "../modules/registration/dto/entryMember.dto";
 
-export interface UpdateEntryMemberDto {
-  eloAtEntry?: number;
-}
-
-export interface EntryMemberResponseDto {
-  id: number;
-  entryId: number;
-  userId: number;
-  eloAtEntry: number;
-  createdAt: Date;
-  updatedAt: Date;
-}

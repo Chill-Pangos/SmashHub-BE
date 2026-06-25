@@ -1,16 +1,2 @@
-// UserRole DTOs
-export interface CreateUserRoleDto {
-  userId: number;
-  roleId: number;
-}
+export * from "../modules/identity/dto/userRole.dto";
 
-export interface UpdateUserRoleDto {
-  roleId?: number;
-}
-
-export interface UserRoleResponseDto {
-  userId: number;
-  roleId: number;
-  createdAt: Date;
-  updatedAt: Date;
-}

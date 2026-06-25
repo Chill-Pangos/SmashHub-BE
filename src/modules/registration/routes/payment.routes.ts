@@ -1,0 +1,984 @@
+import { Router } from "express";
+import paymentController from "../controllers/payment.controller";
+import { authenticate } from "../../../middlewares/auth.middleware";
+import { checkPermission } from "../../../middlewares/permission.middleware";
+
+const router = Router();
+
+/**
+ * @swagger
+ * /payments:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Create pending payment for entry
+ *     description: |
+ *       Create a pending bank transfer payment record for an entry.
+ *       The payment amount MUST match the category's entry fee exactly (within 0.01 tolerance).
+ *
+ *       Business Logic:
+ *       - Only one active payment (pending or completed) is allowed per entry
+ *       - Proof image must be uploaded before organizer confirmation
+ *       - Authenticated user is recording the payment attempt
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [entryId, amount]
+ *             properties:
+ *               entryId:
+ *                 type: integer
+ *                 minimum: 1
+ *                 description: ID of the entry that requires payment
+ *                 example: 42
+ *               amount:
+ *                 type: number
+ *                 format: double
+ *                 minimum: 0.01
+ *                 description: Payment amount in VND. Must match the category's entry fee exactly
+ *                 example: 250000
+ *           examples:
+ *             BankTransfer:
+ *               value:
+ *                 entryId: 42
+ *                 amount: 250000
+ *     responses:
+ *       201:
+ *         description: Payment created successfully with pending status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       format: double
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: pending
+ *                     proofImageUrl:
+ *                       type: string
+ *                       nullable: true
+ *                       description: URL of bank transfer proof (null until confirmed)
+ *                       example: null
+ *                     confirmedBy:
+ *                       type: integer
+ *                       nullable: true
+ *                       description: ID of organizer who confirmed the payment (null until confirmed)
+ *                       example: null
+ *                     confirmedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                       description: Timestamp when payment was confirmed (null until confirmed)
+ *                       example: null
+ *                     refundedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                       description: Timestamp when payment was refunded (null unless refunded)
+ *                       example: null
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:30:00Z"
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:30:00Z"
+ *                 message:
+ *                   type: string
+ *                   example: "Payment created successfully"
+ *       400:
+ *         description: Invalid request (entry not found, amount mismatch, category has no fee, etc.)
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         description: Authentication required or invalid token
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       409:
+ *         description: Conflict - entry already has pending or completed payment
+ *         $ref: '#/components/responses/Conflict409'
+ *       500:
+ *         description: Server error
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/",
+  authenticate,
+  checkPermission('payments:create'),
+  paymentController.createPayment.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/entry/{entryId}:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get payments for an entry
+ *     description: |
+ *       Retrieve all payments for a specific entry with pagination and optional status filtering.
+ *
+ *       Business Logic:
+ *       - Typically a team captain would check their entry's payment status
+ *       - Returns latest payments first (sorted by createdAt DESC)
+ *       - Team captain can view their payment status
+ *       - Entry must exist
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: entryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Entry ID to retrieve payments for
+ *         example: 42
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *           minimum: 1
+ *         description: Page number for pagination (1-indexed)
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Maximum number of records per page
+ *         example: 10
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, completed, failed, refunded]
+ *         description: Filter by payment status (optional)
+ *         example: pending
+ *     responses:
+ *       200:
+ *         description: List of payments for entry with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 1
+ *                           entryId:
+ *                             type: integer
+ *                             example: 42
+ *                           amount:
+ *                             type: number
+ *                             format: double
+ *                             example: 250000
+ *                           status:
+ *                             type: string
+ *                             enum: [pending, completed, failed, refunded]
+ *                             example: completed
+ *                           proofImageUrl:
+ *                             type: string
+ *                             nullable: true
+ *                             example: null
+ *                           confirmedBy:
+ *                             type: integer
+ *                             nullable: true
+ *                             description: Organizer user ID
+ *                             example: 5
+ *                           confirmedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                             example: "2026-05-27T10:35:00Z"
+ *                           refundedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                             example: null
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2026-05-27T10:30:00Z"
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2026-05-27T10:35:00Z"
+ *                     count:
+ *                       type: integer
+ *                       description: Total number of payments for this entry
+ *                       example: 1
+ *       404:
+ *         description: Entry not found
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         description: Server error
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/entry/:entryId",
+  authenticate,
+  paymentController.getPaymentsByEntry.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/category/{categoryId}:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get payments by category (organizer only)
+ *     description: Retrieve all payments for a tournament category with optional filtering by status. Only tournament organizers can access this endpoint.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament category ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records per page
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, completed, failed, refunded]
+ *         description: Filter by payment status
+ *     responses:
+ *       200:
+ *         description: List of payments for category with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 1
+ *                           entryId:
+ *                             type: integer
+ *                             example: 42
+ *                           amount:
+ *                             type: number
+ *                             example: 250000
+ *                           status:
+ *                             type: string
+ *                             enum: [pending, completed, failed, refunded]
+ *                             example: completed
+ *                           proofImageUrl:
+ *                             type: string
+ *                             nullable: true
+ *                             example: "https://s3.example.com/proof-123.jpg"
+ *                           confirmedBy:
+ *                             type: integer
+ *                             nullable: true
+ *                             example: 5
+ *                           confirmedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                             example: "2026-05-27T10:35:00Z"
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2026-05-27T10:30:00Z"
+ *                           entry:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               captainId:
+ *                                 type: integer
+ *                           confirmer:
+ *                             type: object
+ *                             nullable: true
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               firstName:
+ *                                 type: string
+ *                               lastName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                     count:
+ *                       type: integer
+ *                       description: Total number of records
+ *                       example: 25
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/category/:categoryId",
+  authenticate,
+  checkPermission('payments:view'),
+  paymentController.getPaymentsByCategory.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/category/{categoryId}/stats:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get payment statistics for category (organizer only)
+ *     description: Retrieve aggregated payment statistics for a tournament category including totals, completion rates, and amounts collected. Only tournament organizers can access this endpoint.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament category ID
+ *     responses:
+ *       200:
+ *         description: Payment statistics for category
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                       description: Total number of payments
+ *                       example: 50
+ *                     completed:
+ *                       type: integer
+ *                       description: Number of completed payments
+ *                       example: 35
+ *                     pending:
+ *                       type: integer
+ *                       description: Number of pending payments
+ *                       example: 10
+ *                     failed:
+ *                       type: integer
+ *                       description: Number of failed/rejected payments
+ *                       example: 3
+ *                     refunded:
+ *                       type: integer
+ *                       description: Number of refunded payments
+ *                       example: 2
+ *                     totalAmount:
+ *                       type: number
+ *                       description: Total amount of all payments
+ *                       example: 12500000
+ *                     collectedAmount:
+ *                       type: number
+ *                       description: Total amount collected from completed payments
+ *                       example: 8750000
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/category/:categoryId/stats",
+  authenticate,
+  checkPermission('payments:view'),
+  paymentController.getPaymentStats.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/pending/{categoryId}:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get pending payments by category (organizer only)
+ *     description: Retrieve all pending payments for a tournament category. Ordered by oldest first for priority processing. Only tournament organizers can access this endpoint.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Tournament category ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Maximum number of records per page
+ *     responses:
+ *       200:
+ *         description: List of pending payments ordered by oldest first
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 5
+ *                           entryId:
+ *                             type: integer
+ *                             example: 42
+ *                           amount:
+ *                             type: number
+ *                             example: 250000
+ *                           status:
+ *                             type: string
+ *                             enum: [pending, completed, failed, refunded]
+ *                             example: pending
+ *                           proofImageUrl:
+ *                             type: string
+ *                             nullable: true
+ *                             example: "https://s3.example.com/proof-123.jpg"
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                             example: "2026-05-27T09:00:00Z"
+ *                           entry:
+ *                             type: object
+ *                             properties:
+ *                               id:
+ *                                 type: integer
+ *                               categoryId:
+ *                                 type: integer
+ *                               captainId:
+ *                                 type: integer
+ *                               category:
+ *                                 type: object
+ *                                 properties:
+ *                                   id:
+ *                                     type: integer
+ *                                   tournamentId:
+ *                                     type: integer
+ *                                   name:
+ *                                     type: string
+ *                                   entryFee:
+ *                                     type: number
+ *                     count:
+ *                       type: integer
+ *                       description: Total number of pending payments
+ *                       example: 5
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/pending/:categoryId",
+  authenticate,
+  checkPermission('payments:view'),
+  paymentController.getPendingPayments.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/{paymentId}:
+ *   get:
+ *     tags: [Payments]
+ *     summary: Get payment by ID
+ *     description: Retrieve detailed information about a specific payment including entry details, confirmation status, and proof images.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Payment ID
+ *     responses:
+ *       200:
+ *         description: Payment details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: pending
+ *                     proofImageUrl:
+ *                       type: string
+ *                       nullable: true
+ *                       maxLength: 500
+ *                       example: "https://s3.example.com/proof-123.jpg"
+ *                     confirmedBy:
+ *                       type: integer
+ *                       nullable: true
+ *                       description: ID of organizer who confirmed
+ *                       example: null
+ *                     confirmedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                       example: null
+ *                     refundedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                       example: null
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:30:00Z"
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:30:00Z"
+ *                     entry:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                           example: 42
+ *                         categoryId:
+ *                           type: integer
+ *                           example: 10
+ *                         captainId:
+ *                           type: integer
+ *                           example: 100
+ *                     confirmer:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                         firstName:
+ *                           type: string
+ *                         lastName:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.get(
+  "/:paymentId",
+  authenticate,
+  paymentController.getPaymentById.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/{paymentId}/confirm:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Confirm payment (organizer only)
+ *     description: Confirm a pending payment. A proof image must already be uploaded. Only tournament organizers can confirm payments.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Payment ID to confirm
+ *     responses:
+ *       200:
+ *         description: Payment confirmed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: completed
+ *                     proofImageUrl:
+ *                       type: string
+ *                       example: "https://s3.example.com/proof-123.jpg"
+ *                     confirmedBy:
+ *                       type: integer
+ *                       example: 5
+ *                     confirmedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:35:00Z"
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:35:00Z"
+ *                 message:
+ *                   type: string
+ *                   example: "Payment confirmed successfully"
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:paymentId/confirm",
+  authenticate,
+  checkPermission('payments:update'),
+  paymentController.confirmPayment.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/{paymentId}/reject:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Reject pending payment (organizer only)
+ *     description: Reject a pending payment, marking it as failed. Only tournament organizers can reject payments. Can only reject payments in pending status.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Payment ID to reject
+ *     responses:
+ *       200:
+ *         description: Payment rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: failed
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:40:00Z"
+ *                 message:
+ *                   type: string
+ *                   example: "Payment rejected successfully"
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:paymentId/reject",
+  authenticate,
+  checkPermission('payments:update'),
+  paymentController.rejectPayment.bind(paymentController)
+);
+
+/**
+ * @swagger
+ * /payments/{paymentId}/refund:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Refund completed payment (organizer only)
+ *     description: Initiate a refund for a completed payment. Only tournament organizers can process refunds. Refund proof image is required.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Payment ID to refund
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [refundProof]
+ *             properties:
+ *               refundProof:
+ *                 type: string
+ *                 format: binary
+ *                 description: Refund proof image file (jpeg, jpg, png, webp). Max 5MB.
+ *     responses:
+ *       200:
+ *         description: Payment refunded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: refunded
+ *                     refundedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:45:00Z"
+ *                     refundProofImageUrl:
+ *                       type: string
+ *                       maxLength: 500
+ *                       example: "/uploads/payments/refund-proof.webp"
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:45:00Z"
+ *                 message:
+ *                   type: string
+ *                   example: "Payment refunded successfully"
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:paymentId/refund",
+  authenticate,
+  checkPermission('payments:update'),
+  ...paymentController.refundPayment
+);
+
+/**
+ * @swagger
+ * /payments/{paymentId}/proof:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Upload payment proof image
+ *     description: Upload or update proof image for payments. Only the team captain or tournament organizer can upload proof. Proof can only be updated for pending payments.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Payment ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [proof]
+ *             properties:
+ *               proof:
+ *                 type: string
+ *                 format: binary
+ *                 description: Proof image file (jpeg, jpg, png, webp). Max 5MB.
+ *     responses:
+ *       200:
+ *         description: Proof image uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     entryId:
+ *                       type: integer
+ *                       example: 42
+ *                     amount:
+ *                       type: number
+ *                       example: 250000
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, completed, failed, refunded]
+ *                       example: pending
+ *                     proofImageUrl:
+ *                       type: string
+ *                       maxLength: 500
+ *                       example: "https://s3.example.com/proof-transfer-123.jpg"
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2026-05-27T10:32:00Z"
+ *                 message:
+ *                   type: string
+ *                   example: "Payment proof uploaded successfully"
+ *       400:
+ *         $ref: '#/components/responses/BadRequest400'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized401'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden403'
+ *       404:
+ *         $ref: '#/components/responses/NotFound404'
+ *       500:
+ *         $ref: '#/components/responses/InternalError500'
+ */
+router.post(
+  "/:paymentId/proof",
+  authenticate,
+  ...paymentController.uploadPaymentProof
+);
+
+export default router;

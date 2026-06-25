@@ -1,6 +1,6 @@
 import { Sequelize } from "sequelize-typescript";
 import config from "./config";
-import {join} from "path"
+import { join } from "path";
 
 const sequelize = new Sequelize({
   database: config.mysql.database,
@@ -22,8 +22,7 @@ const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-  models: [
-    join(__dirname + "/../models/*.model.{js,ts}")],
+  models: [join(__dirname, "../modules/**/*.model.{js,ts}")],
 });
 
 export { sequelize };

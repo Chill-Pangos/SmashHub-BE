@@ -1,15 +1,2 @@
-// Permission DTOs
-export interface CreatePermissionDto {
-  name: string;
-}
+export * from "../modules/identity/dto/permission.dto";
 
-export interface UpdatePermissionDto {
-  name?: string;
-}
-
-export interface PermissionResponseDto {
-  id: number;
-  name: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
