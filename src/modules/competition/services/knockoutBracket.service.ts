@@ -4,13 +4,11 @@ import { sequelize } from "../../../config/database";
 import KnockoutBracket, {
   BracketStatus,
 } from "../models/knockoutBracket.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Tournament from "../../../models/tournament.model";
-import TournamentReferee from "../../../models/tournamentReferee.model";
-import Entry from "../../../models/entry.model";
+import { TournamentCategory, Tournament, TournamentReferee } from "../../tournament/public.models";
+import { Entry } from "../../registration/public.models";
+import { entryService } from "../../registration/public.services";
 import GroupStanding from "../models/groupStanding.model";
 import groupStandingService from "./groupStanding.service";
-import entryService from "../../../services/entry.service";
 import { KnockoutRound } from "../models/schedule.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 

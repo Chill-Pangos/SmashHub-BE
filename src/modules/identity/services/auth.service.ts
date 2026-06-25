@@ -20,7 +20,7 @@ import {
 } from "../dto/auth.dto";
 import UserRole from "../models/userRole.model";
 import Role from "../models/role.model";
-import EloScore from "../../../models/eloScore.model";
+import { EloScore } from "../../ranking/public.models";
 import { sequelize } from "../../../config/database";
 
 export class AuthService {

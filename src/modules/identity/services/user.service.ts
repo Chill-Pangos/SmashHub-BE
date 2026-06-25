@@ -1,7 +1,7 @@
 import User from "../models/user.model";
 import Role from "../models/role.model";
-import EloScore from "../../../models/eloScore.model";
-import TournamentReferee from "../../../models/tournamentReferee.model";
+import { EloScore } from "../../ranking/public.models";
+import { TournamentReferee } from "../../tournament/public.models";
 import UserRole from "../models/userRole.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { col, fn, Op, where } from "sequelize";

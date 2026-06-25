@@ -1,7 +1,7 @@
 // eloScore.service.ts
 import { Op } from "sequelize";
 import EloScore from "../models/eloScore.model";
-import User from "../../../models/user.model";
+import { User } from "../../identity/public.models";
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
 

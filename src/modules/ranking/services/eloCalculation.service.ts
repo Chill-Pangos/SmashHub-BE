@@ -1,15 +1,11 @@
 // eloCalculation.service.ts
 import { Transaction } from "sequelize";
 import sequelize from "../../../config/database";
-import Match from "../../../models/match.model";
-import SubMatch from "../../../models/subMatch.model";
-import Entry from "../../../models/entry.model";
-import EntryMember from "../../../models/entryMember.model";
+import { Match, SubMatch, Schedule } from "../../competition/public.models";
+import { Entry, EntryMember } from "../../registration/public.models";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Schedule from "../../../models/schedule.model";
-import Tournament from "../../../models/tournament.model";
+import { TournamentCategory, Tournament } from "../../tournament/public.models";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

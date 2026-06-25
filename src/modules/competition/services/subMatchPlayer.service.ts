@@ -3,13 +3,12 @@ import { sequelize } from "../../../config/database";
 import { getRedisClient } from "../../../config/redis";
 import SubMatchPlayer from "../models/subMatchPlayer.model";
 import SubMatch from "../models/subMatch.model";
-import EntryMember from "../../../models/entryMember.model";
-import User from "../../../models/user.model";
+import { EntryMember, Entry } from "../../registration/public.models";
+import { User } from "../../identity/public.models";
 import { Team } from "../models/subMatch.model";
 import Match from "../models/match.model";
 import Schedule from "../models/schedule.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Entry from "../../../models/entry.model";
+import { TournamentCategory } from "../../tournament/public.models";
 
 interface TeamLineupRequest {
   subMatchId: number;

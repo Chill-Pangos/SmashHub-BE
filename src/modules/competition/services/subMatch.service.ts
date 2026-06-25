@@ -6,11 +6,10 @@ import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import Schedule from "../models/schedule.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import EntryMember from "../../../models/entryMember.model";
-import Entry from "../../../models/entry.model";
-import User from "../../../models/user.model";
-import notificationService from "../../../services/notification.service";
+import { TournamentCategory } from "../../tournament/public.models";
+import { EntryMember, Entry } from "../../registration/public.models";
+import { User } from "../../identity/public.models";
+import { notificationService } from "../../notification/public.services";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

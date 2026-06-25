@@ -2,10 +2,9 @@ import { Op } from "sequelize";
 import { sequelize } from "../../../config/database";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Tournament from "../../../models/tournament.model";
-import EloScore from "../../../models/eloScore.model";
-import User from "../../../models/user.model";
+import { TournamentCategory, Tournament } from "../../tournament/public.models";
+import { EloScore } from "../../ranking/public.models";
+import { User } from "../../identity/public.models";
 import JoinRequest from "../models/joinRequest.model";
 import {
   CreateEntryMemberDto,
@@ -17,9 +16,10 @@ import {
   assertUserEligible,
   assertNotAlreadyRegistered,
 } from "./entry.service";
-import notificationService, {
+import {
+  notificationService,
   NotificationTemplates,
-} from "../../../services/notification.service";
+} from "../../notification/public.services";
 import { removeUndefinedFields } from "../../../utils/object.helper";
 
 export class EntryMemberService {

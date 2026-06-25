@@ -3,7 +3,7 @@ import groupStandingService, {
   GroupAssignment,
 } from "../services/groupStanding.service";
 import GroupStanding from "../models/groupStanding.model";
-import Entry from "../../../models/entry.model";
+import { Entry } from "../../registration/public.models";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
 import { UnauthorizedError, BadRequestError } from "../../../utils/errors.helper";
 import { parsePagination } from "../../../utils/request.helper";

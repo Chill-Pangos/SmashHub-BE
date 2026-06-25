@@ -2,9 +2,8 @@
 import { Op, Transaction } from "sequelize";
 import { sequelize } from "../../../config/database";
 import GroupStanding from "../models/groupStanding.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Tournament from "../../../models/tournament.model";
-import Entry from "../../../models/entry.model";
+import { TournamentCategory, Tournament } from "../../tournament/public.models";
+import { Entry } from "../../registration/public.models";
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
 import SubMatch from "../models/subMatch.model";

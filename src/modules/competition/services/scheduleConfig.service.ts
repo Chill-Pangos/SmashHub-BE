@@ -2,11 +2,10 @@
 import crypto from "crypto";
 import { Op } from "sequelize";
 import ScheduleConfig from "../models/scheduleConfig.model";
-import Tournament from "../../../models/tournament.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
+import { Tournament, TournamentCategory } from "../../tournament/public.models";
 import Schedule from "../models/schedule.model";
 import Match from "../models/match.model";
-import Entry from "../../../models/entry.model";
+import { Entry } from "../../registration/public.models";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../../../utils/errors.helper";

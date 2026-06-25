@@ -1,6 +1,6 @@
 // eloHistory.service.ts
 import EloHistory from "../models/eloHistory.model";
-import Match from "../../../models/match.model";
+import { Match } from "../../competition/public.models";
 import { Op } from "sequelize";
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];

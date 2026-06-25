@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import AuditLog from "../models/auditLog.model";
-import Role from "../models/role.model";
-import User from "../models/user.model";
-import notificationService from "../services/notification.service";
+import { AuditLog } from "../modules/admin/public.models";
+import { Role, User } from "../modules/identity/public.models";
+import { domainEvents } from "../shared/events/domainEvents";
 import type { AuthRequest } from "./auth.middleware";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -76,10 +75,7 @@ export const auditMiddleware = (
           durationMs,
         } as any);
 
-        notificationService.sendEventToRoom("admin:system", "admin_system_audit_created", {
-          auditLog: log.get({ plain: true }),
-          generatedAt: new Date().toISOString(),
-        });
+        domainEvents.publish("auditLog.created", { auditLog: log });
       } catch (error) {
         console.error("Failed to write audit log:", error);
       }

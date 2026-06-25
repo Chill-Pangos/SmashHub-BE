@@ -8,7 +8,7 @@ import config from "../../../config/config";
 import redisClient, { connectRedis } from "../../../config/redis";
 import AuditLog from "../models/auditLog.model";
 import CronLog from "../models/cronLog.model";
-import notificationService from "../../../services/notification.service";
+import { notificationService } from "../../notification/public.services";
 import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntime.service";
 
 type HealthStatus = "up" | "down" | "degraded";

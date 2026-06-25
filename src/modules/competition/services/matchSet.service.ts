@@ -3,13 +3,13 @@ import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
-import TournamentCategory from "../../../models/tournamentCategory.model";
+import { TournamentCategory } from "../../tournament/public.models";
 import MatchReferee from "../models/matchReferee.model";
 import matchSetScoreCacheService, {
   LiveMatchSetScoreCache,
   MatchSetScoreCache,
 } from "./matchSetScoreCache.service";
-import notificationService from "../../../services/notification.service";
+import { notificationService } from "../../notification/public.services";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

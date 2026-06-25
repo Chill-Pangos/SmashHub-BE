@@ -1,7 +1,7 @@
 import { Op, WhereOptions } from "sequelize";
 import CronLog, { CronLogLevel, CronLogStatus } from "../models/cronLog.model";
-import notificationService from "../../../services/notification.service";
-import adminSystemService from "./adminSystem.service";
+import { domainEvents } from "../../../shared/events/domainEvents";
+import { registerAdminEventHandlers } from "../admin.events";
 
 export type CreateCronLogInput = {
   jobName: string;
@@ -26,6 +26,8 @@ export type CronLogFilter = {
 
 class CronLogService {
   async create(input: CreateCronLogInput): Promise<CronLog> {
+    registerAdminEventHandlers();
+
     const log = await CronLog.create({
       jobName: input.jobName,
       tournamentId: input.tournamentId ?? null,
@@ -38,12 +40,7 @@ class CronLogService {
       durationMs: input.durationMs ?? null,
     } as any);
 
-    notificationService.publishCronLog(log).catch((error) => {
-      console.error("Failed to publish cron log realtime event:", error);
-    });
-    adminSystemService.publishCronEvent(log).catch((error) => {
-      console.error("Failed to publish admin system cron event:", error);
-    });
+    domainEvents.publish("cronLog.created", { log });
     return log;
   }
 

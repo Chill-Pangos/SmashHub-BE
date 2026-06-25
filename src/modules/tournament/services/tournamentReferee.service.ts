@@ -6,15 +6,11 @@ import RefereeInvitation, {
   INVITATION_EXPIRY_HOURS,
 } from "../models/refereeInvitation.model";
 import Tournament from "../models/tournament.model";
-import User from "../../../models/user.model";
-import notificationService from "../../../services/notification.service";
-import { NotificationTemplates } from "../../../services/notification.service";
-import UserRole from "../../../models/userRole.model";
-import Role from "../../../models/role.model";
-import EntryMember from "../../../models/entryMember.model";
+import { User, UserRole, Role } from "../../identity/public.models";
+import { notificationService, NotificationTemplates } from "../../notification/public.services";
+import { EntryMember, Entry } from "../../registration/public.models";
 import TournamentCategory from "../models/tournamentCategory.model";
-import Entry from "../../../models/entry.model";
-import ScheduleConfig from "../../../models/scheduleConfig.model";
+import { ScheduleConfig } from "../../competition/public.models";
 import { PUBLIC_USER_ATTRIBUTES } from "../../../utils/userProjection.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────

@@ -1,15 +1,11 @@
 import Tournament, { TournamentStatus } from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
-import Entry from "../../../models/entry.model";
-import EntryMember from "../../../models/entryMember.model";
+import { Entry, EntryMember, Payment } from "../../registration/public.models";
 import TournamentReferee from "../models/tournamentReferee.model";
-import ScheduleConfig from "../../../models/scheduleConfig.model";
-import Payment from "../../../models/payment.model";
-import GroupStanding from "../../../models/groupStanding.model";
-import KnockoutBracket from "../../../models/knockoutBracket.model";
-import User from "../../../models/user.model";
-import eloCalculationService, { TournamentEloUpdateResult } from "../../../services/eloCalculation.service";
-import knockoutBracketService from "../../../services/knockoutBracket.service";
+import { ScheduleConfig, GroupStanding, KnockoutBracket } from "../../competition/public.models";
+import { knockoutBracketService } from "../../competition/public.services";
+import { User } from "../../identity/public.models";
+import { eloCalculationService, type TournamentEloUpdateResult } from "../../ranking/public.services";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,

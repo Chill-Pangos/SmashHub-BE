@@ -5,11 +5,10 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import Notification, { NotificationType } from "../models/notification.model";
 import { Op } from "sequelize";
 import redisClient, { connectRedis } from "../../../config/redis";
-import type CronLog from "../../../models/cronLog.model";
-import User from "../../../models/user.model";
-import Role from "../../../models/role.model";
-import Match from "../../../models/match.model";
-import authService from "../../../services/auth.service";
+import type { CronLog } from "../../admin/public.models";
+import { User, Role } from "../../identity/public.models";
+import { authService } from "../../identity/public.services";
+import { Match } from "../../competition/public.models";
 import { NotFoundError } from "../../../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

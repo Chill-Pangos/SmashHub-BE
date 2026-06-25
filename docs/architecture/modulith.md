@@ -16,7 +16,13 @@ The backend is organized as a modular monolith under `src/modules`.
 
 The old flat folders (`src/controllers`, `src/services`, `src/models`, `src/routes`, `src/dto`) now act as compatibility facades. They re-export module-owned files so existing imports keep working while the rest of the code is migrated to module public APIs.
 
-New code should import from `src/modules/<module>` or from a module facade, not from another module's private folders. Cross-module access should go through public service/facade exports.
+New code should import from module public facades, not from another module's private folders.
+
+- Runtime model exports live in `src/modules/<module>/public.models.ts`.
+- Runtime service exports live in `src/modules/<module>/public.services.ts`.
+- `src/modules/<module>/index.ts` re-exports those public files for discoverability.
+- Private paths such as `src/modules/<module>/services/*` are module-internal.
+- Sequelize model association imports are the only documented exception while decorators remain in model classes.
 
 ## Runtime Wiring
 
@@ -27,14 +33,32 @@ New code should import from `src/modules/<module>` or from a module facade, not 
 
 ## Current Guardrails
 
-- `yarn build` must pass after every phase.
-- Route import smoke check:
+- `yarn build`: TypeScript compile gate.
+- `yarn smoke:routes`: route import smoke gate.
+- `yarn check:arch`: module boundary gate.
+- `yarn madge:app`: app-level circular dependency gate, excluding ORM model decorators.
+- `yarn madge:orm`: ORM cycle budget gate. Current accepted cap: 27.
+- `yarn verify`: build + smoke + architecture + app-cycle gates.
+
+Route import smoke check:
 
 ```sh
-node -e "require('./dist/routes').default; console.log('routes ok')"
+yarn smoke:routes
 ```
+
+## Domain Events
+
+`src/shared/events/domainEvent.bus.ts` provides the in-process domain event bus. Handler failures are logged and do not roll back the caller.
+
+Current events:
+
+- `cronLog.created`: realtime cron log publish + admin system event.
+- `auditLog.created`: admin audit realtime event.
+
+Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `CronLogService` also registers them before publishing so the cron process gets handlers even when HTTP routes are not loaded.
 
 ## Known Follow-Up
 
-Sequelize decorators still create circular imports between associated models. This existed before the modulith move and remains visible in `madge --circular --extensions ts src`. Next hardening step: move association wiring out of model class imports or configure an architecture check that ignores known Sequelize association edges while enforcing module-boundary imports.
+Sequelize decorators still create circular imports between associated models. This existed before the modulith move. `yarn madge:orm` keeps the debt bounded while `yarn madge:app` enforces zero app-level cycles.
 
+Next hardening step: move association wiring out of model class imports, then lower the ORM cycle cap.

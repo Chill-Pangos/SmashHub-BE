@@ -1,9 +1,8 @@
-import Entry from "../../../models/entry.model";
-import EntryMember from "../../../models/entryMember.model";
+import { Entry, EntryMember } from "../../registration/public.models";
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import TournamentReferee from "../models/tournamentReferee.model";
-import notificationService, { NotificationTemplates } from "../../../services/notification.service";
+import { notificationService, NotificationTemplates } from "../../notification/public.services";
 import { TournamentStatusTransition } from "./tournament.service";
 
 const STATUS_LABELS: Record<string, string> = {
