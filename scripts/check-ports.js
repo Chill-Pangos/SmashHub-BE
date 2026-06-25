@@ -4,7 +4,7 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(repoRoot, "src");
 const modulesRoot = path.join(srcRoot, "modules");
-const publicModelFreeLeaves = new Set(["notification", "ranking", "registration"]);
+const publicModelFreeLeaves = new Set(["notification", "ranking", "registration", "identity"]);
 
 function walk(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -101,6 +101,7 @@ const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
 const { tournamentReadService } = require("../src/modules/tournament/public.read");
 const { rankingReadService } = require("../src/modules/ranking/public.read");
+const { rankingWriteService } = require("../src/modules/ranking/public.write");
 require("../src/modules/notification/public.contracts");
 require("../src/modules/competition/public.contracts");
 require("../src/modules/tournament/public.contracts");
@@ -126,8 +127,12 @@ for (const [name, value] of [
   ["tournamentReadService.getCategoryRegistrationContext", tournamentReadService.getCategoryRegistrationContext],
   ["tournamentReadService.getCategoriesRegistrationContext", tournamentReadService.getCategoriesRegistrationContext],
   ["tournamentReadService.getCategoryPaymentContext", tournamentReadService.getCategoryPaymentContext],
+  ["tournamentReadService.getAssignedChiefRefereeIds", tournamentReadService.getAssignedChiefRefereeIds],
   ["rankingReadService.getUserElo", rankingReadService.getUserElo],
   ["rankingReadService.getUserElos", rankingReadService.getUserElos],
+  ["rankingReadService.getUserEloView", rankingReadService.getUserEloView],
+  ["rankingReadService.getUserEloViews", rankingReadService.getUserEloViews],
+  ["rankingWriteService.createInitialUserElo", rankingWriteService.createInitialUserElo],
 ]) {
   if (typeof value !== "function") {
     console.error(`Missing port method: ${name}`);

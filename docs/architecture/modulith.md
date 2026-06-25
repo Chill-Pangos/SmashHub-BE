@@ -21,6 +21,7 @@ New code should import from module public facades, not from another module's pri
 - Runtime model exports live in `src/modules/<module>/public.models.ts`.
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
 - Runtime read-port exports may live in `src/modules/<module>/public.read.ts` when a narrow service entrypoint avoids importing the full service graph.
+- Runtime write-port exports may live in `src/modules/<module>/public.write.ts` when command use-cases need a narrow public entrypoint.
 - Public DTO and port types live in `src/modules/<module>/public.contracts.ts`.
 - `src/modules/<module>/index.ts` re-exports those public files for discoverability.
 - Private paths such as `src/modules/<module>/services/*` are module-internal.
@@ -33,12 +34,13 @@ Cross-module service calls should exchange plain DTOs through public ports. A mo
 Leaf port rules:
 
 - `notification` and `ranking` must not import cross-module `public.models.ts`.
-- `registration` must not import cross-module `public.models.ts`.
+- `registration` and `identity` must not import cross-module `public.models.ts`.
 - `notification` publishes through command/realtime DTOs from `notification/public.contracts.ts`.
 - `ranking` reads tournament/match/member data through read ports and owns only ranking models.
 - `registration` reads user, ELO, category/tournament, and registration-window data through read ports.
+- `identity` creates initial ELO through ranking write port and reads ELO/referee assignment through read ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
-- `public.models.ts` remains for compatibility, but new leaf-module work should prefer `public.contracts.ts`, `public.read.ts`, or `public.services.ts`.
+- `public.models.ts` remains for compatibility, but new leaf-module work should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
 
 ## Runtime Wiring
 
@@ -90,4 +92,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: expand the `public.models.ts` ban beyond the `notification`, `ranking`, and `registration` leaves once the remaining core modules have stable read/write ports.
+Next hardening step: expand the `public.models.ts` ban beyond the `notification`, `ranking`, `registration`, and `identity` leaves once the remaining core modules have stable read/write ports.

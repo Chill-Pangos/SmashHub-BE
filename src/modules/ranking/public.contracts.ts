@@ -17,3 +17,11 @@ export interface UserEloSnapshot {
   userId: number;
   score: number;
 }
+
+export interface UserEloView {
+  id: number;
+  userId: number;
+  score: number;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}

@@ -114,6 +114,7 @@ for (const filePath of walk(modulesRoot)) {
       "public.models.ts",
       "public.read.ts",
       "public.services.ts",
+      "public.write.ts",
     ]);
 
     if (!publicEntrypoints.has(path.basename(resolved))) {

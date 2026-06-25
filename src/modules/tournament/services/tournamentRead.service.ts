@@ -5,6 +5,7 @@ import type {
 } from "../public.contracts";
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
+import TournamentReferee from "../models/tournamentReferee.model";
 
 export class TournamentReadService {
   async getTournamentForElo(tournamentId: number): Promise<TournamentForElo | null> {
@@ -47,6 +48,16 @@ export class TournamentReadService {
     categoryId: number,
   ): Promise<TournamentCategoryRegistrationContext | null> {
     return this.getCategoryRegistrationContext(categoryId);
+  }
+
+  async getAssignedChiefRefereeIds(): Promise<number[]> {
+    const refs = await TournamentReferee.findAll({
+      attributes: ["refereeId"],
+      where: { role: "chief" },
+      raw: true,
+    });
+
+    return refs.map((ref) => ref.refereeId);
   }
 }
 

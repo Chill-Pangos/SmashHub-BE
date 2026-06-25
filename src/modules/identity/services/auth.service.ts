@@ -20,7 +20,7 @@ import {
 } from "../dto/auth.dto";
 import UserRole from "../models/userRole.model";
 import Role from "../models/role.model";
-import { EloScore } from "../../ranking/public.models";
+import { rankingWriteService } from "../../ranking/public.write";
 import { sequelize } from "../../../config/database";
 
 export class AuthService {
@@ -198,13 +198,7 @@ export class AuthService {
           } as any,
           { transaction },
         ),
-        EloScore.create(
-          {
-            userId: createdUser.id,
-            score: 1000,
-          } as any,
-          { transaction },
-        ),
+        rankingWriteService.createInitialUserElo(createdUser.id, { transaction }),
       ]);
 
       return createdUser;

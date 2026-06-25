@@ -1,7 +1,5 @@
 import User from "../models/user.model";
 import Role from "../models/role.model";
-import { EloScore } from "../../ranking/public.models";
-import { TournamentReferee } from "../../tournament/public.models";
 import UserRole from "../models/userRole.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { col, fn, Op, where } from "sequelize";
@@ -15,6 +13,33 @@ import { sequelize } from "../../../config/database";
 import { validateEmail, validatePassword } from "../../../utils/validation.helper";
 import { BadRequestError, ConflictError, NotFoundError } from "../../../utils/errors.helper";
 import { PUBLIC_USER_ATTRIBUTES } from "../../../utils/userProjection.helper";
+import { rankingReadService } from "../../ranking/public.read";
+import { rankingWriteService } from "../../ranking/public.write";
+import { tournamentReadService } from "../../tournament/public.read";
+
+function setAssociation(
+  instance: { setDataValue?: (key: string, value: unknown) => void },
+  key: string,
+  value: unknown,
+): void {
+  if (instance.setDataValue) {
+    instance.setDataValue(key, value);
+    return;
+  }
+  (instance as Record<string, unknown>)[key] = value;
+}
+
+async function attachEloScores(users: User[]): Promise<void> {
+  const userIds = users.map((user) => user.id);
+  if (userIds.length === 0) return;
+
+  const eloScores = await rankingReadService.getUserEloViews(userIds);
+  const eloByUserId = new Map(eloScores.map((eloScore) => [eloScore.userId, eloScore]));
+
+  for (const user of users) {
+    setAssociation(user, "eloScore", eloByUserId.get(user.id) ?? null);
+  }
+}
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
@@ -65,13 +90,7 @@ export class UserService {
         { transaction },
       );
 
-      await EloScore.create(
-        {
-          userId: user.id,
-          score: 1000,
-        } as any,
-        { transaction },
-      );
+      await rankingWriteService.createInitialUserElo(user.id, { transaction });
 
       return user.id;
     });
@@ -137,14 +156,6 @@ export class UserService {
         ],
       },
       attributes: [...PUBLIC_USER_ATTRIBUTES],
-      include: [
-        {
-          model: EloScore,
-          as: "eloScore",
-          attributes: ["id", "userId", "score", "createdAt", "updatedAt"],
-          required: false,
-        },
-      ],
       offset,
       limit,
       order: [
@@ -153,6 +164,7 @@ export class UserService {
       ],
       distinct: true,
     });
+    await attachEloScores(rows);
 
     const totalPages = Math.ceil(count / limit);
     const page = Math.floor(offset / limit) + 1;
@@ -171,21 +183,15 @@ export class UserService {
   }
 
   async findById(id: number): Promise<User | null> {
-    return await User.findByPk(id, {
+    const user = await User.findByPk(id, {
       attributes: [...PUBLIC_USER_ATTRIBUTES],
-      include: [
-        {
-          model: EloScore,
-          as: "eloScore",
-          attributes: ["id", "userId", "score", "createdAt", "updatedAt"],
-          required: false,
-        },
-      ],
     });
+    if (user) await attachEloScores([user]);
+    return user;
   }
 
   async findMe(userId: number): Promise<User | null> {
-    return await User.findByPk(userId, {
+    const user = await User.findByPk(userId, {
       attributes: {
         exclude: ["password"],
       },
@@ -196,13 +202,10 @@ export class UserService {
           attributes: ["id", "name"],
           through: { attributes: [] },
         },
-        {
-          model: EloScore,
-          as: "eloScore",
-          required: false,
-        },
       ],
     });
+    if (user) await attachEloScores([user]);
+    return user;
   }
 
   async update(
@@ -255,15 +258,7 @@ export class UserService {
     offset: number = 0,
     limit: number = 10,
   ): Promise<{ referees: User[]; pagination?: any }> {
-    const assignedRefereeIds = await TournamentReferee.findAll({
-      attributes: ["refereeId"],
-      where: {
-        role: "chief",
-      },
-      raw: true,
-    });
-
-    const assignedIds = assignedRefereeIds.map((ref) => ref.refereeId);
+    const assignedIds = await tournamentReadService.getAssignedChiefRefereeIds();
 
     // If pagination is requested
     if (offset !== undefined || limit !== undefined) {
