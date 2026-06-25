@@ -118,7 +118,7 @@ async function getMatchWithContext(
           {
             model: TournamentCategory,
             as: "tournamentCategory",
-            include: [{ model: Tournament }],
+            include: [{ model: Tournament, as: "tournament" }],
           },
         ],
       },

@@ -18,7 +18,7 @@ export async function getCategoryWithTournament(
   categoryId: number,
 ): Promise<TournamentCategory> {
   const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament }],
+    include: [{ model: Tournament, as: "tournament" }],
   });
   if (!category) throw new Error("Category not found");
   return category;
@@ -132,6 +132,7 @@ export async function assertNotAlreadyRegistered(
     include: [
       {
         model: Entry,
+        as: "entry",
         where: { categoryId },
         required: true,
       },
@@ -160,7 +161,8 @@ export class EntryService {
       include: [
         {
           model: TournamentCategory,
-          include: [{ model: Tournament }],
+          as: "category",
+          include: [{ model: Tournament, as: "tournament" }],
         },
         {
           model: User,
@@ -400,6 +402,7 @@ export class EntryService {
           include: [
             {
               model: User,
+              as: "user",
               attributes: ["id", "firstName", "lastName"],
             },
           ],
@@ -424,7 +427,12 @@ export class EntryService {
       include: [
         {
           model: Entry,
-          include: [{ model: TournamentCategory, include: [Tournament] }],
+          as: "entry",
+          include: [{
+            model: TournamentCategory,
+            as: "category",
+            include: [{ model: Tournament, as: "tournament" }],
+          }],
         },
       ],
     });
@@ -552,6 +560,7 @@ export class EntryService {
         include: [
           {
             model: User,
+            as: "user",
             attributes: ["id", "firstName", "lastName", "email", "gender", "dob"],
           },
         ],
@@ -585,6 +594,7 @@ export class EntryService {
       include: [
         {
           model: User,
+          as: "user",
           attributes: ["id", "firstName", "lastName", "email", "gender", "dob"],
         },
       ],
@@ -598,7 +608,11 @@ export class EntryService {
   async getById(entryId: number): Promise<Entry> {
     const entry = await Entry.findByPk(entryId, {
       include: [
-        { model: TournamentCategory, include: [Tournament] },
+        {
+          model: TournamentCategory,
+          as: "category",
+          include: [{ model: Tournament, as: "tournament" }],
+        },
         {
           model: User,
           as: "captain",
@@ -610,6 +624,7 @@ export class EntryService {
           include: [
             {
               model: User,
+              as: "user",
               attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
             },
           ],
@@ -633,7 +648,11 @@ export class EntryService {
     },
   ): Promise<Entry> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
@@ -676,7 +695,11 @@ export class EntryService {
    */
   async delete(captainId: number, entryId: number): Promise<void> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
@@ -707,7 +730,11 @@ export class EntryService {
     newCaptainId: number,
   ): Promise<Entry> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== currentCaptainId) {
@@ -740,7 +767,11 @@ export class EntryService {
     count: number,
   ): Promise<Entry> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
@@ -781,7 +812,11 @@ export class EntryService {
   async confirmLineup(captainId: number, entryId: number): Promise<Entry> {
     const entry = await Entry.findByPk(entryId, {
       include: [
-        { model: TournamentCategory, include: [{ model: Tournament }] },
+        {
+          model: TournamentCategory,
+          as: "category",
+          include: [{ model: Tournament, as: "tournament" }],
+        },
       ],
     });
     if (!entry) throw new Error("Entry not found");
@@ -1031,7 +1066,8 @@ export class EntryService {
       include: [
         {
           model: TournamentCategory,
-          include: [{ model: Tournament }],
+          as: "category",
+          include: [{ model: Tournament, as: "tournament" }],
         },
         { model: EntryMember, as: "members" },
       ],

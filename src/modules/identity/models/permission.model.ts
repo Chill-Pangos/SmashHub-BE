@@ -4,11 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  BelongsToMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import Role from "./role.model";
-import RolePermission from "./rolePermission.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,8 +39,7 @@ export default class Permission extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsToMany(() => Role, () => RolePermission)
-  declare roles?: Role[];
+  declare roles?: any[];
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

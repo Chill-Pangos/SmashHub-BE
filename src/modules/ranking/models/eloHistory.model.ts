@@ -4,13 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Match from "../../../models/match.model";
-import User from "../../../models/user.model";
-import Tournament from "../../../models/tournament.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,14 +32,12 @@ export default class EloHistory extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Match)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare matchId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -76,7 +69,6 @@ export default class EloHistory extends Model {
   })
   declare changeReason: string;
 
-  @ForeignKey(() => Tournament)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true, // null = legacy records từ trước khi đổi logic
@@ -86,14 +78,11 @@ export default class EloHistory extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
   
-  @BelongsTo(() => Tournament, { foreignKey: "tournamentId" })
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
-  @BelongsTo(() => Match, { foreignKey: "matchId" })
-  declare match?: Match;
+  declare match?: any;
 
-  @BelongsTo(() => User, { foreignKey: "userId" })
-  declare user?: User;
+  declare user?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

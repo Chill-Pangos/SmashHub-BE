@@ -3,11 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Tournament from "../../../models/tournament.model";
 
 export const CRON_LOG_LEVELS = ["info", "warn", "error"] as const;
 export type CronLogLevel = (typeof CRON_LOG_LEVELS)[number];
@@ -41,7 +38,6 @@ export default class CronLog extends Model {
   })
   declare jobName: string;
 
-  @ForeignKey(() => Tournament)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -92,8 +88,7 @@ export default class CronLog extends Model {
   })
   declare durationMs?: number | null;
 
-  @BelongsTo(() => Tournament, { foreignKey: "tournamentId" })
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
   @BeforeValidate
   static validateJobName(instance: CronLog): void {

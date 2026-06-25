@@ -1,6 +1,7 @@
 import { Sequelize } from "sequelize-typescript";
 import config from "./config";
-import { join } from "path";
+import { registerModelAssociations } from "../modules/model.associations";
+import { moduleModels } from "../modules/model.registry";
 
 const sequelize = new Sequelize({
   database: config.mysql.database,
@@ -22,8 +23,10 @@ const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-  models: [join(__dirname, "../modules/**/*.model.{js,ts}")],
+  models: moduleModels,
 });
+
+registerModelAssociations();
 
 export { sequelize };
 export default sequelize;

@@ -86,10 +86,6 @@ for (const filePath of walk(modulesRoot)) {
 
     for (const flatDir of flatCompatibilityDirs) {
       if (isInside(resolved, flatDir)) {
-        const isOrmModelException =
-          filePath.endsWith(".model.ts") && flatDir === path.join(srcRoot, "models");
-        if (isOrmModelException) continue;
-
         violations.push({
           filePath,
           specifier,
@@ -100,6 +96,14 @@ for (const filePath of walk(modulesRoot)) {
 
     if (!isInside(resolved, modulesRoot)) continue;
     if (moduleSharedFiles.has(resolved)) continue;
+
+    if (filePath.endsWith(".model.ts") && resolved.endsWith(".model.ts")) {
+      violations.push({
+        filePath,
+        specifier,
+        reason: "model imports another model; wire associations in src/modules/model.associations.ts",
+      });
+    }
 
     const targetModule = moduleNameFor(resolved);
     if (!targetModule || targetModule === currentModule) continue;

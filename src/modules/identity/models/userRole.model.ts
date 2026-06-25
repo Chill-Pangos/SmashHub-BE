@@ -4,13 +4,7 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  BeforeValidate,
 } from "sequelize-typescript";
-import User from "./user.model";
-import Role from "./role.model";
-import { SYSTEM_ROLES, COMPATIBLE_ROLES, type SystemRole } from "./role.model";
 
 @Table({
   tableName: "user_roles",
@@ -21,7 +15,6 @@ import { SYSTEM_ROLES, COMPATIBLE_ROLES, type SystemRole } from "./role.model";
   ],
 })
 export default class UserRole extends Model {
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -29,7 +22,6 @@ export default class UserRole extends Model {
   })
   declare userId: number;
 
-  @ForeignKey(() => Role)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -39,9 +31,7 @@ export default class UserRole extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => User, { foreignKey: "userId" })
-  declare user?: User;
+  declare user?: any;
 
-  @BelongsTo(() => Role, { foreignKey: "roleId" })
-  declare role?: Role;
+  declare role?: any;
 }

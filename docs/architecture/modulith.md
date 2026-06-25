@@ -22,23 +22,35 @@ New code should import from module public facades, not from another module's pri
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
 - `src/modules/<module>/index.ts` re-exports those public files for discoverability.
 - Private paths such as `src/modules/<module>/services/*` are module-internal.
-- Sequelize model association imports are the only documented exception while decorators remain in model classes.
+- Model files must not import other model files. Cross-model associations are wired centrally.
 
 ## Runtime Wiring
 
 - `src/routes/index.ts` delegates route registration to `src/modules`.
-- `src/config/database.ts` loads Sequelize models from `src/modules/**/*.model.{js,ts}`.
+- `src/config/database.ts` loads the explicit model list from `src/modules/model.registry.ts`.
+- `src/modules/model.associations.ts` wires Sequelize associations after model registration.
 - Existing API paths stay unchanged under `/api`.
 - PM2 app/cron split stays unchanged.
+
+## ORM Associations
+
+Model classes own table columns, validators, constants, and lightweight association property declarations. They do not own association decorators or cross-model imports.
+
+Association rules:
+
+- Add every model to `src/modules/model.registry.ts`.
+- Add every `belongsTo`, `hasOne`, `hasMany`, or `belongsToMany` call to `src/modules/model.associations.ts`.
+- Always preserve explicit `as` aliases used by services, especially multi-FK relations such as `entryA`, `entryB`, `winnerEntry`, `umpire`, `assistantUmpire`, `referee`, and `inviter`.
+- Keep enum/constants that are shared by multiple models in non-model helper files such as `*.constants.ts`.
 
 ## Current Guardrails
 
 - `yarn build`: TypeScript compile gate.
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
-- `yarn madge:app`: app-level circular dependency gate, excluding ORM model decorators.
-- `yarn madge:orm`: ORM cycle budget gate. Current accepted cap: 27.
-- `yarn verify`: build + smoke + architecture + app-cycle gates.
+- `yarn madge:app`: app-level circular dependency gate.
+- `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
+- `yarn verify`: build + smoke + architecture + app-cycle + ORM-cycle gates.
 
 Route import smoke check:
 
@@ -59,6 +71,6 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ## Known Follow-Up
 
-Sequelize decorators still create circular imports between associated models. This existed before the modulith move. `yarn madge:orm` keeps the debt bounded while `yarn madge:app` enforces zero app-level cycles.
+ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: move association wiring out of model class imports, then lower the ORM cycle cap.
+Next hardening step: introduce repository/application ports per module so cross-module services depend on stable use-case APIs instead of runtime models. Good first extraction candidates are `notification` and `ranking`.

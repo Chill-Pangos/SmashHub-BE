@@ -4,12 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Entry from "./entry.model";
-import User from "../../../models/user.model";
 
 const PROOF_IMAGE_URL_MAX_LENGTH = 500;
 
@@ -39,7 +35,6 @@ export default class Payment extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -66,7 +61,6 @@ export default class Payment extends Model {
   })
   declare proofImageUrl?: string;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -93,11 +87,9 @@ export default class Payment extends Model {
   })
   declare refundProofImageUrl?: string;
 
-  @BelongsTo(() => Entry, { foreignKey: "entryId" })
-  declare entry?: Entry;
+  declare entry?: any;
 
-  @BelongsTo(() => User, { foreignKey: "confirmedBy" })
-  declare confirmer?: User;
+  declare confirmer?: any;
 
   @BeforeValidate
   static validateAmount(instance: Payment): void {

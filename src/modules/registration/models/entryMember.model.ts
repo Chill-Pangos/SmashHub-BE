@@ -3,12 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import User from "../../../models/user.model";
-import Entry from "./entry.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,14 +33,12 @@ export default class EntryMember extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare entryId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -59,11 +53,9 @@ export default class EntryMember extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Entry, { foreignKey: "entryId" })
-  declare entry?: Entry;
+  declare entry?: any;
 
-  @BelongsTo(() => User, { foreignKey: "userId" })
-  declare user?: User;
+  declare user?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

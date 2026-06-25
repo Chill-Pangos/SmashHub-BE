@@ -63,8 +63,8 @@ export class RolePermissionService {
       offset,
       limit,
       include: [
-        { model: Role, attributes: ROLE_ATTRIBUTES },
-        { model: Permission, attributes: PERMISSION_ATTRIBUTES },
+        { model: Role, as: "role", attributes: ROLE_ATTRIBUTES },
+        { model: Permission, as: "permission", attributes: PERMISSION_ATTRIBUTES },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -91,7 +91,7 @@ export class RolePermissionService {
         where: { roleId },
         offset,
         limit,
-        include: [{ model: Permission, attributes: PERMISSION_ATTRIBUTES }],
+        include: [{ model: Permission, as: "permission", attributes: PERMISSION_ATTRIBUTES }],
       }),
     ]);
 
@@ -119,7 +119,7 @@ export class RolePermissionService {
         where: { permissionId },
         offset,
         limit,
-        include: [{ model: Role, attributes: ROLE_ATTRIBUTES }],
+        include: [{ model: Role, as: "role", attributes: ROLE_ATTRIBUTES }],
       }),
     ]);
 

@@ -91,7 +91,11 @@ export class EntryMemberService {
     inviteeId: number,
   ): Promise<JoinRequest> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId)
@@ -165,7 +169,12 @@ export class EntryMemberService {
       include: [
         {
           model: Entry,
-          include: [{ model: TournamentCategory, include: [Tournament] }],
+          as: "entry",
+          include: [{
+            model: TournamentCategory,
+            as: "category",
+            include: [{ model: Tournament, as: "tournament" }],
+          }],
         },
       ],
     });
@@ -244,7 +253,11 @@ export class EntryMemberService {
     memberId: number,
   ): Promise<void> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId)
@@ -287,6 +300,7 @@ export class EntryMemberService {
     const memberInclude = [
       {
         model: User,
+        as: "user",
         attributes: [
           "id",
           "firstName",
@@ -340,7 +354,11 @@ export class EntryMemberService {
    */
   async leaveEntry(userId: number, entryId: number): Promise<void> {
     const entry = await Entry.findByPk(entryId, {
-      include: [{ model: TournamentCategory, include: [Tournament] }],
+      include: [{
+        model: TournamentCategory,
+        as: "category",
+        include: [{ model: Tournament, as: "tournament" }],
+      }],
     });
     if (!entry) throw new Error("Entry not found");
 

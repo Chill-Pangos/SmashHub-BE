@@ -4,12 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Entry from "./entry.model";
-import User from "../../../models/user.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,14 +50,12 @@ export default class JoinRequest extends Model {
   })
   declare type: JoinRequestType;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare entryId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -92,11 +86,9 @@ export default class JoinRequest extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Entry, { foreignKey: "entryId" })
-  declare entry?: Entry;
+  declare entry?: any;
 
-  @BelongsTo(() => User, { foreignKey: "userId" })
-  declare user?: User;
+  declare user?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

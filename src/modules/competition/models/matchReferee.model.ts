@@ -4,11 +4,7 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
 } from "sequelize-typescript";
-import Match from "./match.model";
-import User from "../../../models/user.model";
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
@@ -32,14 +28,12 @@ export default class MatchReferee extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Match)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare matchId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -48,9 +42,7 @@ export default class MatchReferee extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Match, { foreignKey: "matchId" })
-  declare match?: Match;
+  declare match?: any;
 
-  @BelongsTo(() => User, { foreignKey: "refereeId" })
-  declare referee?: User;
+  declare referee?: any;
 }

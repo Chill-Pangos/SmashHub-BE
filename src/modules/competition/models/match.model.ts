@@ -4,16 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  HasMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import Schedule from "./schedule.model";
-import EloHistory from "../../../models/eloHistory.model";
-import Entry from "../../../models/entry.model";
-import SubMatch from "./subMatch.model";
-import MatchReferee from "./matchReferee.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,21 +44,18 @@ export default class Match extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Schedule)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare scheduleId: number;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare entryAId?: number | null;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -80,7 +69,6 @@ export default class Match extends Model {
   })
   declare status: MatchStatus;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -103,26 +91,19 @@ export default class Match extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Schedule, { foreignKey: "scheduleId" })
-  declare schedule?: Schedule;
+  declare schedule?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "entryAId" })
-  declare entryA?: Entry;
+  declare entryA?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "entryBId" })
-  declare entryB?: Entry;
+  declare entryB?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "winnerEntryId" })
-  declare winnerEntry?: Entry;
+  declare winnerEntry?: any;
 
-  @HasMany(() => EloHistory, { foreignKey: "matchId" })
-  declare eloHistories?: EloHistory[];
+  declare eloHistories?: any[];
 
-  @HasMany(() => SubMatch, { foreignKey: "matchId" })
-  declare subMatches?: SubMatch[];
+  declare subMatches?: any[];
 
-  @HasMany(() => MatchReferee, { foreignKey: "matchId" })
-  declare matchReferees?: MatchReferee[];
+  declare matchReferees?: any[];
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

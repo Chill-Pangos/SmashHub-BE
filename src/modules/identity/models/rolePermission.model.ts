@@ -4,11 +4,7 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
 } from "sequelize-typescript";
-import Role from "./role.model";
-import Permission from "./permission.model";
 
 @Table({
   tableName: "role_permissions",
@@ -19,7 +15,6 @@ import Permission from "./permission.model";
   ],
 })
 export default class RolePermission extends Model {
-  @ForeignKey(() => Role)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -27,7 +22,6 @@ export default class RolePermission extends Model {
   })
   declare roleId: number;
 
-  @ForeignKey(() => Permission)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -37,9 +31,7 @@ export default class RolePermission extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Role, { foreignKey: "roleId" })
-  declare role?: Role;
+  declare role?: any;
 
-  @BelongsTo(() => Permission, { foreignKey: "permissionId" })
-  declare permission?: Permission;
+  declare permission?: any;
 }

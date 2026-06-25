@@ -4,15 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  HasMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Match from "../../../models/match.model";
-import User from "../../../models/user.model";
-import EntryMember from "./entryMember.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,14 +31,12 @@ export default class Entry extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare categoryId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -94,23 +85,17 @@ export default class Entry extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
-  declare category?: TournamentCategory;
+  declare category?: any;
 
-  @BelongsTo(() => User, { foreignKey: "captainId" })
-  declare captain?: User;
+  declare captain?: any;
 
-  @HasMany(() => EntryMember, { foreignKey: "entryId" })
-  declare members?: EntryMember[];
+  declare members?: any[];
 
-  @HasMany(() => Match, { foreignKey: "entryAId" })
-  declare matchesAsA?: Match[];
+  declare matchesAsA?: any[];
 
-  @HasMany(() => Match, { foreignKey: "entryBId" })
-  declare matchesAsB?: Match[];
+  declare matchesAsB?: any[];
 
-  @HasMany(() => Match, { foreignKey: "winnerEntryId" })
-  declare wonMatches?: Match[];
+  declare wonMatches?: any[];
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

@@ -4,18 +4,12 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
 } from "sequelize-typescript";
-import Tournament from "./tournament.model";
-import User from "../../../models/user.model";
+export { REFEREE_ROLES } from "./referee.constants";
+export type { RefereeRole } from "./referee.constants";
+import { REFEREE_ROLES, type RefereeRole } from "./referee.constants";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-export const REFEREE_ROLES = ["chief", "referee"] as const;
-export type RefereeRole = (typeof REFEREE_ROLES)[number];
-
-// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "tournament_referees",
@@ -38,14 +32,12 @@ export default class TournamentReferee extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Tournament)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare tournamentId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -61,9 +53,7 @@ export default class TournamentReferee extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Tournament, { foreignKey: "tournamentId" })
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
-  @BelongsTo(() => User, { foreignKey: "refereeId" })
-  declare referee?: User;
+  declare referee?: any;
 }

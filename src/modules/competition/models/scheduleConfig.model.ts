@@ -3,11 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Tournament from "../../../models/tournament.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,7 +51,6 @@ export default class ScheduleConfig extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Tournament)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -182,8 +178,7 @@ export default class ScheduleConfig extends Model {
 
   // ─── Associations ────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Tournament)
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
   // ─── Validators ──────────────────────────────────────────────────────────
 

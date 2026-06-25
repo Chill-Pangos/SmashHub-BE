@@ -4,11 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import User from "./user.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -35,7 +32,6 @@ export default class Otp extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -75,8 +71,7 @@ export default class Otp extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => User, { foreignKey: "userId" })
-  declare user?: User;
+  declare user?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

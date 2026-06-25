@@ -39,7 +39,12 @@ async function getPaymentWithTournament(paymentId: number): Promise<Payment> {
     include: [
       {
         model: Entry,
-        include: [{ model: TournamentCategory, include: [{ model: Tournament }] }],
+        as: "entry",
+        include: [{
+          model: TournamentCategory,
+          as: "category",
+          include: [{ model: Tournament, as: "tournament" }],
+        }],
       },
     ],
   });
@@ -49,7 +54,11 @@ async function getPaymentWithTournament(paymentId: number): Promise<Payment> {
 
 async function getEntryWithCategory(entryId: number): Promise<Entry> {
   const entry = await Entry.findByPk(entryId, {
-    include: [{ model: TournamentCategory, include: [{ model: Tournament }] }],
+    include: [{
+      model: TournamentCategory,
+      as: "category",
+      include: [{ model: Tournament, as: "tournament" }],
+    }],
   });
   if (!entry) throw new NotFoundError("Entry not found");
   return entry;
@@ -59,7 +68,7 @@ async function getCategoryWithTournament(
   categoryId: number
 ): Promise<TournamentCategory> {
   const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament }],
+    include: [{ model: Tournament, as: "tournament" }],
   });
   if (!category) throw new NotFoundError("Category not found");
   return category;
@@ -285,7 +294,11 @@ export class PaymentService {
 
     const detailedPayment = await Payment.findByPk(paymentId, {
       include: [
-        { model: Entry, include: [{ model: TournamentCategory }] },
+        {
+          model: Entry,
+          as: "entry",
+          include: [{ model: TournamentCategory, as: "category" }],
+        },
         CONFIRMER_INCLUDE,
       ],
     });
@@ -337,6 +350,7 @@ export class PaymentService {
       include: [
         {
           model: Entry,
+          as: "entry",
           where: { categoryId },
           required: true,
           attributes: ["id", "captainId"],
@@ -369,9 +383,10 @@ export class PaymentService {
       include: [
         {
           model: Entry,
+          as: "entry",
           where: { categoryId },
           required: true,
-          include: [{ model: TournamentCategory }],
+          include: [{ model: TournamentCategory, as: "category" }],
         },
       ],
       offset,
@@ -392,7 +407,7 @@ export class PaymentService {
 
     const payments = await Payment.findAll({
       include: [
-        { model: Entry, where: { categoryId }, required: true, attributes: [] },
+        { model: Entry, as: "entry", where: { categoryId }, required: true, attributes: [] },
       ],
       attributes: ["status", "amount"],
     });

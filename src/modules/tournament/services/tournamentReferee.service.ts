@@ -196,7 +196,7 @@ export class TournamentRefereeService {
     invitationId: number
   ): Promise<RefereeInvitation> {
     const invitation = await RefereeInvitation.findByPk(invitationId, {
-      include: [{ model: Tournament }],
+      include: [{ model: Tournament, as: "tournament" }],
     });
     if (!invitation) throw new Error("Invitation not found");
     assertOrganizer(organizerId, invitation.tournament!);
@@ -281,6 +281,7 @@ private async assertNotCompetingInTournament(
     where: { userId },
     include: [{
       model: Entry,
+      as: "entry",
       where: { categoryId: { [Op.in]: categoryIds } },
       required: true,
     }],
@@ -424,6 +425,7 @@ private async assertNotCompetingInTournament(
       include: [
         {
           model: Role,
+          as: "role",
           where: { name: { [Op.in]: acceptedSystemRoles } },
           required: true,
           attributes: [],
@@ -621,6 +623,7 @@ private async assertNotCompetingInTournament(
   const userRole = await UserRole.findOne({
     include: [{
       model: Role,
+      as: "role",
       where: { name: { [Op.in]: acceptedSystemRoles } },
       required: true,
     }],

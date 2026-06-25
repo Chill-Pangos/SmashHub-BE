@@ -348,7 +348,7 @@ async function getCategoryWithTournament(
   categoryId: number,
 ): Promise<TournamentCategory> {
   const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament }],
+    include: [{ model: Tournament, as: "tournament" }],
   });
   if (!category) throw new Error("Category not found");
   return category;

@@ -3,10 +3,7 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
 } from "sequelize-typescript";
-import User from "../../../models/user.model";
 
 const ACTION_MAX_LENGTH = 100;
 const RESOURCE_MAX_LENGTH = 100;
@@ -32,7 +29,6 @@ export default class AuditLog extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -93,6 +89,5 @@ export default class AuditLog extends Model {
   })
   declare durationMs?: number | null;
 
-  @BelongsTo(() => User, { foreignKey: "actorUserId" })
-  declare actor?: User;
+  declare actor?: any;
 }

@@ -51,8 +51,8 @@ export class UserRoleService {
       offset,
       limit,
       include: [
-        { model: User, attributes: USER_ATTRIBUTES },
-        { model: Role, attributes: ROLE_ATTRIBUTES },
+        { model: User, as: "user", attributes: USER_ATTRIBUTES },
+        { model: Role, as: "role", attributes: ROLE_ATTRIBUTES },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -79,7 +79,7 @@ export class UserRoleService {
         where: { userId },
         offset,
         limit,
-        include: [{ model: Role, attributes: ROLE_ATTRIBUTES }],
+        include: [{ model: Role, as: "role", attributes: ROLE_ATTRIBUTES }],
       }),
     ]);
 
@@ -107,7 +107,7 @@ export class UserRoleService {
         where: { roleId },
         offset,
         limit,
-        include: [{ model: User, attributes: USER_ATTRIBUTES }],
+        include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
       }),
     ]);
 

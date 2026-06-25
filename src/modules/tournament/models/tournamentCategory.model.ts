@@ -3,14 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  HasMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import Tournament from "./tournament.model";
-import Entry from "../../../models/entry.model";
-import Schedule from "../../../models/schedule.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,7 +46,6 @@ export default class TournamentCategory extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Tournament)
   @Column({ type: DataType.INTEGER.UNSIGNED, allowNull: false })
   declare tournamentId: number;
 
@@ -116,14 +109,11 @@ export default class TournamentCategory extends Model {
 
   // ─── Associations ─────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Tournament, { foreignKey: "tournamentId" })
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
-  @HasMany(() => Entry, { foreignKey: "categoryId" })
-  declare entries?: Entry[];
+  declare entries?: any[];
 
-  @HasMany(() => Schedule, { foreignKey: "categoryId" })
-  declare schedules?: Schedule[];
+  declare schedules?: any[];
 
   // ─── Validators ───────────────────────────────────────────────────────────
 

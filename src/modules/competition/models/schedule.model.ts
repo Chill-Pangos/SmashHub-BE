@@ -3,13 +3,16 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  HasMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Match from "./match.model";
+export { KNOCKOUT_ROUNDS, STAGES } from "./schedule.constants";
+export type { KnockoutRound, Stage } from "./schedule.constants";
+import {
+  KNOCKOUT_ROUNDS,
+  STAGES,
+  type KnockoutRound,
+  type Stage,
+} from "./schedule.constants";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -17,22 +20,6 @@ const GROUP_NAME_MAX_LENGTH = 50;
 const MIN_TABLE_NUMBER = 1;
 const MAX_TABLE_NUMBER = 100;
 const GROUP_NAME_REGEX = /^[\p{L}\p{N}\s\-]+$/u;
-
-export const STAGES = ["group", "knockout"] as const;
-export type Stage = (typeof STAGES)[number];
-
-export const KNOCKOUT_ROUNDS = [
-  "Round of 64",
-  "Round of 32",
-  "Round of 16",
-  "Quarter-final",
-  "Semi-final",
-  "Third-place",
-  "Final",
-] as const;
-export type KnockoutRound = (typeof KNOCKOUT_ROUNDS)[number];
-
-// ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
   tableName: "schedules",
@@ -53,7 +40,6 @@ export default class Schedule extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -99,11 +85,9 @@ export default class Schedule extends Model {
 
   // ─── Associations ─────────────────────────────────────────────────────────
 
-  @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
-  declare tournamentCategory?: TournamentCategory;
+  declare tournamentCategory?: any;
 
-  @HasMany(() => Match, { foreignKey: "scheduleId" })
-  declare scheduledMatches?: Match[];
+  declare scheduledMatches?: any[];
 
   // ─── Validators ───────────────────────────────────────────────────────────
 

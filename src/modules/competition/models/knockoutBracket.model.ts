@@ -4,16 +4,9 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import TournamentCategory from "../../../models/tournamentCategory.model";
-import Schedule from "./schedule.model";
-import Match from "./match.model";
-import Entry from "../../../models/entry.model";
-import { KNOCKOUT_ROUNDS } from "./schedule.model";
-import type { KnockoutRound } from "./schedule.model";
+import { KNOCKOUT_ROUNDS, type KnockoutRound } from "./schedule.constants";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -58,7 +51,6 @@ export default class KnockoutBracket extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => TournamentCategory)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -90,14 +82,12 @@ export default class KnockoutBracket extends Model {
 
   // ── Match ──────────────────────────────────────────────────────────────────
 
-  @ForeignKey(() => Schedule)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare scheduleId?: number;
 
-  @ForeignKey(() => Match)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -106,21 +96,18 @@ export default class KnockoutBracket extends Model {
 
   // ── Entries ────────────────────────────────────────────────────────────────
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare entryAId?: number;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare entryBId?: number;
 
-  @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -129,21 +116,18 @@ export default class KnockoutBracket extends Model {
 
   // ── Bracket tree navigation ────────────────────────────────────────────────
 
-  @ForeignKey(() => KnockoutBracket)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare nextBracketId?: number;
 
-  @ForeignKey(() => KnockoutBracket)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
   declare previousBracketAId?: number;
 
-  @ForeignKey(() => KnockoutBracket)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -169,32 +153,23 @@ export default class KnockoutBracket extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
-  declare category?: TournamentCategory;
+  declare category?: any;
 
-  @BelongsTo(() => Schedule, { foreignKey: "scheduleId" })
-  declare schedule?: Schedule;
+  declare schedule?: any;
 
-  @BelongsTo(() => Match, { foreignKey: "matchId" })
-  declare match?: Match;
+  declare match?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "entryAId" })
-  declare entryA?: Entry;
+  declare entryA?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "entryBId" })
-  declare entryB?: Entry;
+  declare entryB?: any;
 
-  @BelongsTo(() => Entry, { foreignKey: "winnerEntryId" })
-  declare winnerEntry?: Entry;
+  declare winnerEntry?: any;
 
-  @BelongsTo(() => KnockoutBracket, { foreignKey: "nextBracketId" })
-  declare nextBracket?: KnockoutBracket;
+  declare nextBracket?: any;
 
-  @BelongsTo(() => KnockoutBracket, { foreignKey: "previousBracketAId" })
-  declare previousBracketA?: KnockoutBracket;
+  declare previousBracketA?: any;
 
-  @BelongsTo(() => KnockoutBracket, { foreignKey: "previousBracketBId" })
-  declare previousBracketB?: KnockoutBracket;
+  declare previousBracketB?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

@@ -3,16 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  HasMany,
-  HasOne,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import TournamentCategory from "./tournamentCategory.model";
-import User from "../../../models/user.model";
-import TournamentReferee from "./tournamentReferee.model";
-import ScheduleConfig from "../../../models/scheduleConfig.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -84,21 +76,16 @@ export default class Tournament extends Model {
   @Column({ type: DataType.STRING(100), allowNull: false })
   declare location: string;
 
-  @ForeignKey(() => User)
   @Column({ type: DataType.INTEGER.UNSIGNED, allowNull: false })
   declare createdBy: number;
 
-  @BelongsTo(() => User)
-  creator?: User;
+  declare creator?: any;
 
-  @HasMany(() => TournamentCategory)
-  categories?: TournamentCategory[];
+  declare categories?: any[];
 
-  @HasMany(() => TournamentReferee)
-  referees?: TournamentReferee[];
+  declare referees?: any[];
 
-  @HasOne(() => ScheduleConfig)
-  scheduleConfig?: ScheduleConfig;
+  declare scheduleConfig?: any;
 
   // ─── Validators ─────────────────────────────────────────────────────────────
 

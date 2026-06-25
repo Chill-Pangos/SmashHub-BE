@@ -4,14 +4,9 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import Tournament from "./tournament.model";
-import User from "../../../models/user.model";
-import { REFEREE_ROLES } from "./tournamentReferee.model";
-import type { RefereeRole } from "./tournamentReferee.model";
+import { REFEREE_ROLES, type RefereeRole } from "./referee.constants";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,14 +49,12 @@ export default class RefereeInvitation extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Tournament)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare tournamentId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -69,7 +62,6 @@ export default class RefereeInvitation extends Model {
   })
   declare refereeId: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -114,14 +106,11 @@ export default class RefereeInvitation extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Tournament, { foreignKey: "tournamentId" })
-  declare tournament?: Tournament;
+  declare tournament?: any;
 
-  @BelongsTo(() => User, { foreignKey: "refereeId" })
-  declare referee?: User;
+  declare referee?: any;
 
-  @BelongsTo(() => User, { foreignKey: "invitedBy" })
-  declare inviter?: User;
+  declare inviter?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

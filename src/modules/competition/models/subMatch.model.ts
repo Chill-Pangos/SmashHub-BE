@@ -4,15 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  HasMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import Match from "./match.model";
-import MatchSet from "./matchSet.model";
-import SubMatchPlayer from "./subMatchPlayer.model";
-import User from "../../../models/user.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,7 +45,6 @@ export default class SubMatch extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => Match)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -78,7 +70,6 @@ export default class SubMatch extends Model {
   })
   declare winnerTeam?: Team;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -86,7 +77,6 @@ export default class SubMatch extends Model {
   })
   declare umpireId?: number;
 
-  @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
@@ -96,20 +86,15 @@ export default class SubMatch extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => Match, { foreignKey: "matchId" })
-  declare match?: Match;
+  declare match?: any;
 
-  @BelongsTo(() => User, { foreignKey: "umpireId" })
-  declare umpire?: User;
+  declare umpire?: any;
 
-  @BelongsTo(() => User, { foreignKey: "assistantUmpireId" })
-  declare assistantUmpire?: User;
+  declare assistantUmpire?: any;
 
-  @HasMany(() => MatchSet, { foreignKey: "subMatchId" })
-  declare matchSets?: MatchSet[];
+  declare matchSets?: any[];
 
-  @HasMany(() => SubMatchPlayer, { foreignKey: "subMatchId" })
-  declare subMatchPlayers?: SubMatchPlayer[];
+  declare subMatchPlayers?: any[];
 
   // ─── Validators ────────────────────────────────────────────────────────────
 

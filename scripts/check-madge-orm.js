@@ -2,7 +2,7 @@ const path = require("path");
 const madge = require("madge");
 
 const repoRoot = path.resolve(__dirname, "..");
-const MAX_KNOWN_ORM_CYCLES = 27;
+const MAX_KNOWN_ORM_CYCLES = 0;
 
 madge(path.join(repoRoot, "src"), {
   fileExtensions: ["ts"],
@@ -23,4 +23,3 @@ madge(path.join(repoRoot, "src"), {
   console.error(error);
   process.exit(1);
 });
-

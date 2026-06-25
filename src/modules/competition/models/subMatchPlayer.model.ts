@@ -4,12 +4,7 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
-  BeforeValidate,
 } from "sequelize-typescript";
-import SubMatch from "./subMatch.model";
-import EntryMember from "../../../models/entryMember.model";
 
 const PLAYER_TEAMS = ["A", "B"] as const;
 type Team = (typeof PLAYER_TEAMS)[number];
@@ -38,14 +33,12 @@ export default class SubMatchPlayer extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => SubMatch)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
   })
   declare subMatchId: number;
 
-  @ForeignKey(() => EntryMember)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -60,9 +53,7 @@ export default class SubMatchPlayer extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => SubMatch, { foreignKey: "subMatchId" })
-  declare subMatch?: SubMatch;
+  declare subMatch?: any;
 
-  @BelongsTo(() => EntryMember, { foreignKey: "entryMemberId" })
-  declare entryMember?: EntryMember;
+  declare entryMember?: any;
 }

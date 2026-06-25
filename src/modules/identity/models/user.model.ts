@@ -3,16 +3,8 @@ import {
   Column,
   Model,
   DataType,
-  HasOne,
-  HasMany,
-  BelongsToMany,
   BeforeValidate,
 } from "sequelize-typescript";
-import EloScore from "../../../models/eloScore.model";
-import EloHistory from "../../../models/eloHistory.model";
-import UserRole from "./userRole.model";
-import Role from "./role.model";
-import EntryMember from "../../../models/entryMember.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -84,17 +76,13 @@ export default class User extends Model {
   @Column({ type: DataType.STRING(20), allowNull: true })
   declare phoneNumber?: string;
 
-  @HasOne(() => EloScore)
-  eloScore?: EloScore;
+  declare eloScore?: any;
 
-  @HasMany(() => EloHistory)
-  eloHistories?: EloHistory[];
+  declare eloHistories?: any[];
 
-  @HasMany(() => EntryMember)
-  entryMembers?: EntryMember[];
+  declare entryMembers?: any[];
 
-  @BelongsToMany(() => Role, () => UserRole)
-  roles?: Role[];
+  declare roles?: any[];
 
   // ─── Validators ─────────────────────────────────────────────────────────────
 

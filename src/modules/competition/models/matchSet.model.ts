@@ -4,11 +4,8 @@ import {
   Column,
   Model,
   DataType,
-  ForeignKey,
-  BelongsTo,
   BeforeValidate,
 } from "sequelize-typescript";
-import SubMatch from "./subMatch.model";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,7 +33,6 @@ export default class MatchSet extends Model {
   })
   declare id: number;
 
-  @ForeignKey(() => SubMatch)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
@@ -65,8 +61,7 @@ export default class MatchSet extends Model {
 
   // ─── Associations ──────────────────────────────────────────────────────────
 
-  @BelongsTo(() => SubMatch, { foreignKey: "subMatchId" })
-  declare subMatch?: SubMatch;
+  declare subMatch?: any;
 
   // ─── Validators ────────────────────────────────────────────────────────────
 
