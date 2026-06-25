@@ -10,6 +10,7 @@ import TournamentCategory from "../models/tournamentCategory.model";
 import EntryMember from "../models/entryMember.model";
 import Entry from "../models/entry.model";
 import User from "../models/user.model";
+import notificationService from "./notification.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,27 @@ function assertAssignedUmpire(subMatch: SubMatch, userId: number): void {
   if (subMatch.umpireId !== userId && subMatch.assistantUmpireId !== userId) {
     throw new Error("Only assigned umpire can perform this action");
   }
+}
+
+function toSubMatchRealtimePayload(subMatch: SubMatch): Record<string, unknown> {
+  return {
+    id: subMatch.id,
+    matchId: subMatch.matchId,
+    subMatchNumber: subMatch.subMatchNumber,
+    status: subMatch.status,
+    winnerTeam: subMatch.winnerTeam,
+    umpireId: subMatch.umpireId,
+    assistantUmpireId: subMatch.assistantUmpireId,
+  };
+}
+
+function toSubMatchPlayerRealtimePayload(player: SubMatchPlayer): Record<string, unknown> {
+  return {
+    id: player.id,
+    subMatchId: player.subMatchId,
+    entryMemberId: player.entryMemberId,
+    team: player.team,
+  };
 }
 
 function getWinningTeamFromSets(
@@ -190,6 +212,10 @@ export class SubMatchService {
 
     const updatedSubMatch = await this.getSubMatchById(subMatchId);
 
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "sub_match_started", {
+      subMatch: toSubMatchRealtimePayload(updatedSubMatch),
+    });
+
     return {
       message: "Sub-match started successfully",
       subMatch: updatedSubMatch,
@@ -229,6 +255,11 @@ export class SubMatchService {
     });
     const matchReadyToFinalize = await isMatchReadyToFinalize(match.id);
 
+    notificationService.publishMatchResultUpdate(match.id, "sub_match_finalized", {
+      subMatch: toSubMatchRealtimePayload(updatedSubMatch),
+      matchReadyToFinalize,
+    });
+
     return {
       message: matchReadyToFinalize
         ? "Sub-match finalized. Match is ready to finalize."
@@ -259,7 +290,7 @@ export class SubMatchService {
       throw new Error("Both teams must have at least 1 player");
     }
 
-    return await sequelize.transaction(async (t) => {
+    const assignedPlayers = await sequelize.transaction(async (t) => {
       // Xóa assignments cũ
       await SubMatchPlayer.destroy({ where: { subMatchId }, transaction: t });
 
@@ -268,6 +299,13 @@ export class SubMatchService {
         { transaction: t }
       );
     });
+
+    notificationService.publishMatchResultUpdate(subMatch.matchId, "sub_match_players_assigned", {
+      subMatchId,
+      players: assignedPlayers.map(toSubMatchPlayerRealtimePayload),
+    });
+
+    return assignedPlayers;
   }
 
   // ── 5. Queries ────────────────────────────────────────────────────────────

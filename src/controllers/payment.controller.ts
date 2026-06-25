@@ -1,9 +1,11 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
-import { parsePagination, parsePositiveInt } from "../utils/request.helper";
+import { parseEnumQuery, parsePagination, parsePositiveInt } from "../utils/request.helper";
 import { paymentProofUpload } from "../config/multer";
+
+const PAYMENT_STATUSES = ["pending", "completed", "failed", "refunded"] as const;
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -27,6 +29,7 @@ export class PaymentController {
       const payment = await paymentService.createPayment(
         parsePositiveInt(entryId, "entryId"),
         amount,
+        userId,
       );
       res.status(201).json({
         success: true,
@@ -115,11 +118,14 @@ export class PaymentController {
   /**
    * 5. Get payment by ID
    */
-  async getPaymentById(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
+
       const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
-      const payment = await paymentService.getPaymentById(paymentId);
+      const payment = await paymentService.getPaymentById(paymentId, userId);
       res.status(200).json({
         success: true,
         data: payment,
@@ -132,16 +138,14 @@ export class PaymentController {
   /**
    * 6. Get payments by entry
    */
-  async getPaymentsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentsByEntry(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
+
       const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const { offset, limit } = parsePagination(req.query);
-      const status = req.query.status as
-        | "pending"
-        | "completed"
-        | "failed"
-        | "refunded"
-        | undefined;
+      const status = parseEnumQuery(req.query.status, "status", PAYMENT_STATUSES);
 
       const options: {
         offset: number;
@@ -156,7 +160,7 @@ export class PaymentController {
         options.status = status;
       }
 
-      const result = await paymentService.getPaymentsByEntry(entryId, options);
+      const result = await paymentService.getPaymentsByEntry(entryId, userId, options);
       res.status(200).json({
         success: true,
         data: result,
@@ -176,12 +180,7 @@ export class PaymentController {
 
       const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
       const { offset, limit } = parsePagination(req.query);
-      const status = req.query.status as
-        | "pending"
-        | "completed"
-        | "failed"
-        | "refunded"
-        | undefined;
+      const status = parseEnumQuery(req.query.status, "status", PAYMENT_STATUSES);
 
       const options: {
         offset: number;

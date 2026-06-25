@@ -1,13 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import eloHistoryService from "../services/eloHistory.service";
-import { NotFoundError } from "../utils/errors.helper";
+import { parsePagination } from "../utils/request.helper";
 
 export class EloHistoryController {
   async findByUserId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await eloHistoryService.getByUser(
         Number(req.params.userId),
         { offset, limit }

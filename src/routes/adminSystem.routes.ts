@@ -335,16 +335,16 @@ router.get(
  *           enum: [create, update, delete]
  *         description: Action filter
  *       - in: query
- *         name: offset
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *           minimum: 0
+ *           default: 1
+ *           minimum: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 50
+ *           default: 10
  *           minimum: 1
  *           maximum: 100
  *     responses:

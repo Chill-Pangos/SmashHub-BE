@@ -4,12 +4,14 @@ import { sequelize } from "../config/database";
 import Payment, { PaymentStatus } from "../models/payment.model";
 import Entry from "../models/entry.model";
 import User from "../models/user.model";
+import Role from "../models/role.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import config from "../config/config";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +45,7 @@ async function getPaymentWithTournament(paymentId: number): Promise<Payment> {
       },
     ],
   });
-  if (!payment) throw new Error("Payment not found");
+  if (!payment) throw new NotFoundError("Payment not found");
   return payment;
 }
 
@@ -51,7 +53,7 @@ async function getEntryWithCategory(entryId: number): Promise<Entry> {
   const entry = await Entry.findByPk(entryId, {
     include: [{ model: TournamentCategory, include: [{ model: Tournament }] }],
   });
-  if (!entry) throw new Error("Entry not found");
+  if (!entry) throw new NotFoundError("Entry not found");
   return entry;
 }
 
@@ -61,26 +63,64 @@ async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
 function assertOrganizer(userId: number, tournament: Tournament): void {
   if (tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new ForbiddenError("Only the tournament organizer can perform this action");
   }
 }
 
 function assertHasEntryFee(category: TournamentCategory): void {
   if (!category.entryFee || category.entryFee <= 0) {
-    throw new Error("This category does not require payment");
+    throw new BadRequestError("This category does not require payment");
   }
 }
 
 function assertAmountMatchesFee(amount: number, entryFee: number): void {
   if (Math.abs(amount - entryFee) > 0.01) {
-    throw new Error(`Payment amount must equal entry fee of ${entryFee}`);
+    throw new BadRequestError(`Payment amount must equal entry fee of ${entryFee}`);
   }
+}
+
+async function isAdmin(userId: number): Promise<boolean> {
+  const count = await User.count({
+    where: { id: userId },
+    include: [
+      {
+        model: Role,
+        as: "roles",
+        where: { name: "admin" },
+        required: true,
+        through: { attributes: [] },
+      },
+    ],
+  });
+  return count > 0;
+}
+
+async function assertCanAccessEntryPayment(
+  userId: number,
+  entry: Entry,
+): Promise<void> {
+  const isCaptain = entry.captainId === userId;
+  const isOrganizer = entry.category?.tournament?.createdBy === userId;
+  const admin = await isAdmin(userId);
+
+  if (!isCaptain && !isOrganizer && !admin) {
+    throw new ForbiddenError("Only the entry captain, tournament organizer, or admin can access this payment");
+  }
+}
+
+async function assertCanAccessPayment(
+  userId: number,
+  payment: Payment,
+): Promise<void> {
+  const entry = payment.entry;
+  if (!entry) throw new Error("Payment entry not found");
+  await assertCanAccessEntryPayment(userId, entry);
 }
 
 // confirmer include — dùng lại nhiều chỗ
@@ -118,16 +158,18 @@ export class PaymentService {
    */
   async createPayment(
     entryId: number,
-    amount: number
+    amount: number,
+    userId: number,
   ): Promise<Payment> {
     const entry = await getEntryWithCategory(entryId);
+    await assertCanAccessEntryPayment(userId, entry);
     assertHasEntryFee(entry.category!);
     assertAmountMatchesFee(amount, entry.category!.entryFee!);
 
     const existing = await Payment.findOne({
       where: { entryId, status: { [Op.in]: ["pending", "completed"] } },
     });
-    if (existing) throw new Error("A pending or completed payment already exists for this entry");
+    if (existing) throw new ConflictError("A pending or completed payment already exists for this entry");
 
     return await Payment.create({ entryId, amount, status: "pending" });
   }
@@ -142,10 +184,10 @@ export class PaymentService {
     assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
     if (payment.status !== "pending") {
-      throw new Error("Only pending payments can be confirmed");
+      throw new BadRequestError("Only pending payments can be confirmed");
     }
     if (!payment.proofImageUrl) {
-      throw new Error("Proof image is required for bank transfer confirmation");
+      throw new BadRequestError("Proof image is required for bank transfer confirmation");
     }
 
     return await payment.update({
@@ -162,7 +204,7 @@ export class PaymentService {
     assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
     if (payment.status !== "pending") {
-      throw new Error("Only pending payments can be rejected");
+      throw new BadRequestError("Only pending payments can be rejected");
     }
 
     return await payment.update({ status: "failed" });
@@ -180,7 +222,7 @@ export class PaymentService {
       assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
       if (payment.status !== "completed") {
-        throw new Error("Only completed payments can be refunded");
+        throw new BadRequestError("Only completed payments can be refunded");
       }
 
       const refundProofImageUrl = await savePaymentImage(file);
@@ -203,57 +245,66 @@ export class PaymentService {
     userId: number,
     file: Express.Multer.File
   ): Promise<Payment> {
-    const payment = await getPaymentWithTournament(paymentId);
+    try {
+      const payment = await getPaymentWithTournament(paymentId);
 
-    // Chỉ captain của entry hoặc organizer mới được upload
-    const isCaptain = payment.entry?.captainId === userId;
-    const isOrganizer =
-      payment.entry?.category?.tournament?.createdBy === userId;
+      // Chỉ captain của entry hoặc organizer mới được upload
+      const isCaptain = payment.entry?.captainId === userId;
+      const isOrganizer =
+        payment.entry?.category?.tournament?.createdBy === userId;
 
-    if (!isCaptain && !isOrganizer) {
+      if (!isCaptain && !isOrganizer) {
+        throw new ForbiddenError("Only the team captain or organizer can upload payment proof");
+      }
+      if (payment.status !== "pending") {
+        throw new BadRequestError("Can only update proof for pending payments");
+      }
+
+      const oldProofImageUrl = payment.proofImageUrl;
+      const proofImageUrl = await savePaymentImage(file);
+      const updated = await payment.update({ proofImageUrl });
+
+      if (oldProofImageUrl) {
+        const oldPath = path.join(
+          config.upload.paymentDir,
+          path.basename(oldProofImageUrl)
+        );
+        await fs.unlink(oldPath).catch(() => {});
+      }
+
+      return updated;
+    } catch (error) {
       await fs.unlink(file.path).catch(() => {});
-      throw new Error("Only the team captain or organizer can upload payment proof");
+      throw error;
     }
-    if (payment.status !== "pending") {
-      await fs.unlink(file.path).catch(() => {});
-      throw new Error("Can only update proof for pending payments");
-    }
-
-    const oldProofImageUrl = payment.proofImageUrl;
-    const proofImageUrl = await savePaymentImage(file);
-    const updated = await payment.update({ proofImageUrl });
-
-    if (oldProofImageUrl) {
-      const oldPath = path.join(
-        config.upload.paymentDir,
-        path.basename(oldProofImageUrl)
-      );
-      await fs.unlink(oldPath).catch(() => {});
-    }
-
-    return updated;
   }
 
   // ── 6. Get payment theo ID ────────────────────────────────────────────────
 
-  async getPaymentById(paymentId: number): Promise<Payment> {
-    const payment = await Payment.findByPk(paymentId, {
+  async getPaymentById(paymentId: number, userId: number): Promise<Payment> {
+    const payment = await getPaymentWithTournament(paymentId);
+    await assertCanAccessPayment(userId, payment);
+
+    const detailedPayment = await Payment.findByPk(paymentId, {
       include: [
         { model: Entry, include: [{ model: TournamentCategory }] },
         CONFIRMER_INCLUDE,
       ],
     });
-    if (!payment) throw new Error("Payment not found");
-    return payment;
+    if (!detailedPayment) throw new NotFoundError("Payment not found");
+    return detailedPayment;
   }
 
   // ── 7. Get payments theo entry ────────────────────────────────────────────
 
   async getPaymentsByEntry(
     entryId: number,
+    userId: number,
     options: PaymentListOptions = {}
   ): Promise<{ rows: Payment[]; count: number }> {
     const { offset = 0, limit = 10, status } = options;
+    const entry = await getEntryWithCategory(entryId);
+    await assertCanAccessEntryPayment(userId, entry);
 
     const where: WhereOptions = { entryId };
     if (status) where.status = status;

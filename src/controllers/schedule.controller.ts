@@ -3,6 +3,7 @@ import scheduleService from "../services/schedule.service";
 import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { KnockoutRound } from "../models/schedule.model";
+import { parsePagination } from "../utils/request.helper";
 
 export class ScheduleController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -200,9 +201,7 @@ export class ScheduleController {
       const categoryId = Number(req.params.categoryId);
       if (isNaN(categoryId)) throw new BadRequestError("Invalid category ID");
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 20;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { page, offset, limit } = parsePagination(req.query);
 
       const stage = req.query.stage as "group" | "knockout" | undefined;
       if (stage && !["group", "knockout"].includes(stage)) {

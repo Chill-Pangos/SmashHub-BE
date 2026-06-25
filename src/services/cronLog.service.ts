@@ -51,13 +51,16 @@ class CronLogService {
     logs: CronLog[];
     pagination: {
       total: number;
-      offset: number;
+      page: number;
       limit: number;
+      totalPages: number;
       hasNextPage: boolean;
+      hasPrevPage: boolean;
     };
   }> {
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
     const offset = Math.max(filters.offset ?? 0, 0);
+    const page = Math.floor(offset / limit) + 1;
     const where: WhereOptions<any> = {};
 
     if (filters.jobName) where.jobName = filters.jobName;
@@ -76,9 +79,11 @@ class CronLogService {
       logs: rows,
       pagination: {
         total: count,
-        offset,
+        page,
         limit,
+        totalPages: Math.ceil(count / limit),
         hasNextPage: offset + rows.length < count,
+        hasPrevPage: page > 1,
       },
     };
   }
