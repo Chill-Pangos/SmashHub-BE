@@ -5,41 +5,19 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import Notification, { NotificationType } from "../models/notification.model";
 import { Op } from "sequelize";
 import redisClient, { connectRedis } from "../../../config/redis";
-import type { CronLog } from "../../admin/public.models";
-import { User, Role } from "../../identity/public.models";
-import { authService } from "../../identity/public.services";
-import { Match } from "../../competition/public.models";
+import { identityReadService } from "../../identity/public.read";
+import { competitionReadService } from "../../competition/public.read";
 import { NotFoundError } from "../../../utils/errors.helper";
+import type {
+  MatchRealtimeEventType,
+  MatchRealtimePayload,
+  NotificationCommandInput,
+  NotificationPayload,
+  RealtimeCronLogPayload,
+  RealtimeMetrics,
+} from "../public.contracts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface NotificationPayload {
-  type: string;
-  title: string;
-  message: string;
-  data?: unknown;
-  timestamp?: Date;
-}
-
-export type MatchRealtimeEventType =
-  | "match_started"
-  | "sub_match_players_assigned"
-  | "sub_match_started"
-  | "live_score_updated"
-  | "set_created"
-  | "set_score_updated"
-  | "set_deleted"
-  | "sub_match_finalized"
-  | "match_result_submitted"
-  | "match_result_approved";
-
-export interface MatchRealtimePayload {
-  roomId: string;
-  matchId: number;
-  type: MatchRealtimeEventType;
-  data: unknown;
-  occurredAt: string;
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -245,7 +223,7 @@ class NotificationService {
 
       let authenticatedUserId: string;
       try {
-        const decoded = await authService.verifyToken(token);
+        const decoded = await identityReadService.verifyToken(token);
         authenticatedUserId = String(decoded.userId);
       } catch {
         socket.disconnect(true);
@@ -370,14 +348,13 @@ class NotificationService {
     }
 
     if (roomId === "admin:system") {
-      const adminUserIds = await this.getAdminUserIds();
+      const adminUserIds = await identityReadService.getAdminUserIds();
       return adminUserIds.includes(Number(authenticatedUserId));
     }
 
     const matchId = parseMatchRoomId(roomId);
     if (matchId) {
-      const match = await Match.findByPk(matchId, { attributes: ["id"] });
-      return Boolean(match);
+      return competitionReadService.matchExists(matchId);
     }
 
     return false;
@@ -418,6 +395,10 @@ class NotificationService {
     this.io.to(roomId).emit(event, data);
   }
 
+  emitRoomEvent(roomId: string, event: string, data: unknown): void {
+    this.sendEventToRoom(roomId, event, data);
+  }
+
   publishMatchResultUpdate(
     matchId: number,
     type: MatchRealtimeEventType,
@@ -435,6 +416,14 @@ class NotificationService {
     };
 
     this.io.to(roomId).emit("match_result_updated", payload);
+  }
+
+  publishMatchRealtime(
+    matchId: number,
+    type: MatchRealtimeEventType,
+    data: unknown,
+  ): void {
+    this.publishMatchResultUpdate(matchId, type, data);
   }
 
   private sendLocalToUsers(userIds: string[], payload: NotificationPayload): void {
@@ -496,37 +485,20 @@ class NotificationService {
     );
   }
 
-  async publishCronLog(log: CronLog): Promise<void> {
+  async publishCronLog(log: RealtimeCronLogPayload): Promise<void> {
     await connectRedis();
     if (!redisClient.isReady) return;
 
-    const userIds = await this.getAdminUserIds();
+    const userIds = await identityReadService.getAdminUserIds();
     if (userIds.length === 0) return;
 
     await redisClient.publish(
       REALTIME_CRON_LOG_CHANNEL,
       JSON.stringify({
         userIds: userIds.map(String),
-        log: log.get ? log.get({ plain: true }) : log,
+        log,
       }),
     );
-  }
-
-  private async getAdminUserIds(): Promise<number[]> {
-    const admins = await User.findAll({
-      attributes: ["id"],
-      include: [
-        {
-          model: Role,
-          as: "roles",
-          where: { name: "admin" },
-          through: { attributes: [] },
-          required: true,
-        },
-      ],
-    });
-
-    return admins.map((admin) => admin.id);
   }
 
   // ── User state ─────────────────────────────────────────────────────────────
@@ -558,6 +530,15 @@ class NotificationService {
     return this.lastSocketError;
   }
 
+  getRealtimeMetrics(): RealtimeMetrics {
+    return {
+      totalConnectedUsers: this.getConnectedUsersCount(),
+      roomCount: this.getRoomCount(),
+      adapterMode: this.getAdapterMode(),
+      lastSocketError: this.getLastSocketError(),
+    };
+  }
+
   forceDisconnectUser(userId: string): void {
     assertInitialized(this.io);
     const socketId = this.userToSocket.get(userId);
@@ -573,14 +554,7 @@ class NotificationService {
    */
   async create(
     userId: number,
-    payload: {
-      type: NotificationType;
-      title: string;
-      message: string;
-      referenceId?: number;
-      referenceType?: string;
-      data?: unknown;
-    }
+    payload: NotificationCommandInput
   ): Promise<Notification> {
     const notification = await Notification.create({
       userId,
@@ -609,19 +583,16 @@ class NotificationService {
     return notification;
   }
 
+  async notifyUser(userId: number, input: NotificationCommandInput): Promise<void> {
+    await this.create(userId, input);
+  }
+
   /**
    * Gửi cho nhiều users cùng lúc
    */
   async createBulk(
     userIds: number[],
-    payload: {
-      type: NotificationType;
-      title: string;
-      message: string;
-      referenceId?: number;
-      referenceType?: string;
-      data?: unknown;
-    }
+    payload: NotificationCommandInput
   ): Promise<void> {
     const notifications = await Notification.bulkCreate(
       userIds.map((userId) => ({ userId, ...payload, isRead: false }))
@@ -645,6 +616,10 @@ class NotificationService {
     } else {
       await this.publishRealtimeNotification(stringUserIds, notificationPayload);
     }
+  }
+
+  async notifyUsers(userIds: number[], input: NotificationCommandInput): Promise<void> {
+    await this.createBulk(userIds, input);
   }
 
   /**

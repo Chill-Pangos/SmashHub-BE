@@ -7,10 +7,11 @@
     "dev": "dotenvx run -f .env.development -- ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "check:arch": "node scripts/check-architecture.js",
+    "check:ports": "node scripts/check-ports.js",
     "madge:app": "node scripts/check-madge-app.js",
     "madge:orm": "node scripts/check-madge-orm.js",
     "smoke:routes": "node scripts/smoke-routes.js",
-    "verify": "yarn build && yarn smoke:routes && yarn check:arch && yarn madge:app && yarn madge:orm",
+    "verify": "yarn build && yarn smoke:routes && yarn check:arch && yarn check:ports && yarn madge:app && yarn madge:orm",
     "start": "pm2 startOrReload ecosystem.config.json"
   },
   "dependencies": {

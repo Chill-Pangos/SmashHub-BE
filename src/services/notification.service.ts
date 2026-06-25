@@ -6,5 +6,4 @@ export type {
   NotificationPayload,
   MatchRealtimeEventType,
   MatchRealtimePayload,
-} from "../modules/notification/services/notification.service";
-
+} from "../modules/notification/public.contracts";

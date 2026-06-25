@@ -1,9 +1,21 @@
 // eloScore.service.ts
 import { Op } from "sequelize";
 import EloScore from "../models/eloScore.model";
-import { User } from "../../identity/public.models";
+import { identityReadService } from "../../identity/public.read";
 
-const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
+type EloScoreResponse = ReturnType<EloScore["get"]> & {
+  user: Awaited<ReturnType<typeof identityReadService.getPublicUsersByIds>>[number] | null;
+};
+
+async function attachUsers(rows: EloScore[]): Promise<EloScoreResponse[]> {
+  const users = await identityReadService.getPublicUsersByIds(rows.map((row) => row.userId));
+  const userById = new Map(users.map((user) => [user.id, user]));
+
+  return rows.map((row) => ({
+    ...row.get({ plain: true }),
+    user: userById.get(row.userId) ?? null,
+  }) as EloScoreResponse);
+}
 
 export class EloScoreService {
   /**
@@ -18,13 +30,12 @@ export class EloScoreService {
     return score;
   }
 
-  async getByUserId(userId: number): Promise<EloScore> {
+  async getByUserId(userId: number): Promise<EloScoreResponse> {
     const score = await EloScore.findOne({
       where: { userId },
-      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
     });
     if (!score) throw new Error("ELO score not found for this user");
-    return score;
+    return (await attachUsers([score]))[0]!;
   }
 
   /**
@@ -32,16 +43,17 @@ export class EloScoreService {
    */
   async getLeaderboard(
     options: { offset?: number; limit?: number } = {}
-  ): Promise<{ rows: EloScore[]; count: number }> {
+  ): Promise<{ rows: EloScoreResponse[]; count: number }> {
     const { offset = 0, limit = 20 } = options;
 
-    return await EloScore.findAndCountAll({
-      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
+    const { rows, count } = await EloScore.findAndCountAll({
       order: [["score", "DESC"]],
       offset,
       limit,
       distinct: true,
     });
+
+    return { rows: await attachUsers(rows), count };
   }
 
   /**
@@ -51,7 +63,7 @@ export class EloScoreService {
     minScore?: number,
     maxScore?: number,
     options: { offset?: number; limit?: number } = {}
-  ): Promise<{ rows: EloScore[]; count: number }> {
+  ): Promise<{ rows: EloScoreResponse[]; count: number }> {
     const { offset = 0, limit = 20 } = options;
 
     const where: Record<string, unknown> = {};
@@ -60,14 +72,15 @@ export class EloScoreService {
       where.score = { ...(where.score as object), [Op.lte]: maxScore };
     }
 
-    return await EloScore.findAndCountAll({
+    const { rows, count } = await EloScore.findAndCountAll({
       where,
-      include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
       order: [["score", "DESC"]],
       offset,
       limit,
       distinct: true,
     });
+
+    return { rows: await attachUsers(rows), count };
   }
 }
 

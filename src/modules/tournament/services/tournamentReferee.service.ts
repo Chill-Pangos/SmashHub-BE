@@ -127,7 +127,7 @@ export class TournamentRefereeService {
     expiresAt: buildExpiresAt(),
   });
 
-  await notificationService.create(refereeId, {
+  await notificationService.notifyUser(refereeId, {
     ...NotificationTemplates.refereeInvitation(tournament.name),
     referenceId: invitation.id,
     referenceType: "referee_invitation",

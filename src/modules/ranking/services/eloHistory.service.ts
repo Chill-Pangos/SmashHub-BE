@@ -1,9 +1,22 @@
 // eloHistory.service.ts
 import EloHistory from "../models/eloHistory.model";
-import { Match } from "../../competition/public.models";
+import { competitionReadService } from "../../competition/public.read";
 import { Op } from "sequelize";
 
-const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
+type EloHistoryResponse = ReturnType<EloHistory["get"]> & {
+  match: Awaited<ReturnType<typeof competitionReadService.getMatchSummariesByIds>>[number] | null;
+};
+
+async function attachMatches(rows: EloHistory[]): Promise<EloHistoryResponse[]> {
+  const matchIds = rows.map((row) => row.matchId);
+  const matches = await competitionReadService.getMatchSummariesByIds(matchIds);
+  const matchById = new Map(matches.map((match) => [match.id, match]));
+
+  return rows.map((row) => ({
+    ...row.get({ plain: true }),
+    match: matchById.get(row.matchId) ?? null,
+  }) as EloHistoryResponse);
+}
 
 export class EloHistoryService {
   /**
@@ -12,17 +25,18 @@ export class EloHistoryService {
   async getByUser(
     userId: number,
     options: { offset?: number; limit?: number } = {}
-  ): Promise<{ rows: EloHistory[]; count: number }> {
+  ): Promise<{ rows: EloHistoryResponse[]; count: number }> {
     const { offset = 0, limit = 20 } = options;
 
-    return await EloHistory.findAndCountAll({
+    const { rows, count } = await EloHistory.findAndCountAll({
       where: { userId },
-      include: [{ model: Match, as: "match", attributes: ["id", "status"] }],
       order: [["createdAt", "DESC"]],
       offset,
       limit,
       distinct: true,
     });
+
+    return { rows: await attachMatches(rows), count };
   }
   
   /**

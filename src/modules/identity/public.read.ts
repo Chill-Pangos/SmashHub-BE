@@ -1,4 +1,3 @@
-export { default as authService, AuthService } from "./services/auth.service";
 export {
   default as identityReadService,
   IdentityReadService,

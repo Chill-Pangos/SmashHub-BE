@@ -535,7 +535,7 @@ export class MatchService {
       return instance.reload({ transaction: t });
     });
 
-    notificationService.publishMatchResultUpdate(matchId, "match_started", {
+    notificationService.publishMatchRealtime(matchId, "match_started", {
       match: toMatchRealtimePayload(match),
     });
 
@@ -597,7 +597,7 @@ export class MatchService {
       return instance.reload({ transaction: t });
     });
 
-    notificationService.publishMatchResultUpdate(matchId, "match_result_submitted", {
+    notificationService.publishMatchRealtime(matchId, "match_result_submitted", {
       match: toMatchRealtimePayload(match),
     });
 
@@ -657,7 +657,7 @@ export class MatchService {
       );
     }
 
-    notificationService.publishMatchResultUpdate(matchId, "match_result_approved", {
+    notificationService.publishMatchRealtime(matchId, "match_result_approved", {
       match: toMatchRealtimePayload(approved.match),
     });
 

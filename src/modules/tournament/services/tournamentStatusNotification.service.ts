@@ -34,7 +34,7 @@ class TournamentStatusNotificationService {
       STATUS_LABELS[event.toStatus] ?? event.toStatus,
     );
 
-    await notificationService.createBulk(recipientIds, {
+    await notificationService.notifyUsers(recipientIds, {
       ...template,
       referenceId: tournament.id,
       referenceType: "tournament",

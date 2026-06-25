@@ -1,28 +1,15 @@
 // eloCalculation.service.ts
 import { Transaction } from "sequelize";
 import sequelize from "../../../config/database";
-import { Match, SubMatch, Schedule } from "../../competition/public.models";
-import { Entry, EntryMember } from "../../registration/public.models";
+import { competitionReadService } from "../../competition/public.read";
+import { tournamentReadService } from "../../tournament/public.read";
+import type { ApprovedTournamentMatch } from "../../competition/public.contracts";
 import EloScore from "../models/eloScore.model";
 import EloHistory from "../models/eloHistory.model";
-import { TournamentCategory, Tournament } from "../../tournament/public.models";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface TournamentEloChange {
-  userId: number;
-  currentElo: number;
-  finalElo: number;
-  totalDelta: number;
-}
-
-export interface TournamentEloUpdateResult {
-  tournamentId: number;
-  totalMatches: number;
-  tierMultiplier: number;
-  historyRecordsCreated: number;
-  changes: TournamentEloChange[];
-}
+import type {
+  TournamentEloChange,
+  TournamentEloUpdateResult,
+} from "../public.contracts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -92,7 +79,7 @@ function averageElo(members: { currentElo: number }[]): number {
   return members.reduce((sum, m) => sum + m.currentElo, 0) / members.length;
 }
 
-function countSubMatchResults(subMatches: SubMatch[]): {
+function countSubMatchResults(subMatches: ApprovedTournamentMatch["subMatches"]): {
   entryAWins: number;
   entryBWins: number;
   total: number;
@@ -107,7 +94,7 @@ function countSubMatchResults(subMatches: SubMatch[]): {
  * currentElos là snapshot ELO tại thời điểm bắt đầu tính (trước giải).
  */
 function calcMatchDeltas(
-  match: Match,
+  match: ApprovedTournamentMatch,
   entryAMemberElos: { userId: number; currentElo: number }[],
   entryBMemberElos: { userId: number; currentElo: number }[],
   tierMultiplier: number
@@ -149,7 +136,7 @@ export class EloCalculationService {
    * Tính delta từng trận, cộng dồn, ghi 1 lần per user.
    */
   async updateEloForTournament(tournamentId: number): Promise<TournamentEloUpdateResult> {
-    const tournament = await Tournament.findByPk(tournamentId);
+    const tournament = await tournamentReadService.getTournamentForElo(tournamentId);
     if (!tournament) {
       throw new Error("Tournament not found");
     }
@@ -164,7 +151,7 @@ export class EloCalculationService {
       throw new Error("ELO has already been calculated for this tournament");
     }
 
-    const matches = await this.getApprovedMatchesInTournament(tournamentId);
+    const matches = await competitionReadService.getApprovedTournamentMatchesForElo(tournamentId);
 
     if (matches.length === 0) {
       throw new Error("No approved matches found in this tournament");
@@ -241,44 +228,12 @@ export class EloCalculationService {
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
 
-  private async getApprovedMatchesInTournament(
-    tournamentId: number
-  ): Promise<Match[]> {
-    return await Match.findAll({
-      where: { status: "completed", resultStatus: "approved" },
-      include: [
-        {
-          model: Schedule,
-          as: "schedule",
-          required: true,
-          include: [{
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            where: { tournamentId },
-            required: true,
-          }],
-        },
-        { model: SubMatch, as: "subMatches" },
-        {
-          model: Entry,
-          as: "entryA",
-          include: [{ model: EntryMember, as: "members" }],
-        },
-        {
-          model: Entry,
-          as: "entryB",
-          include: [{ model: EntryMember, as: "members" }],
-        },
-      ],
-    });
-  }
-
   /**
    * Build snapshot ELO hiện tại của tất cả users tham gia giải.
    * Dùng ELO trước giải (không bị ảnh hưởng bởi các trận trong giải).
    */
   private async buildUserEloSnapshot(
-    matches: Match[]
+    matches: ApprovedTournamentMatch[]
   ): Promise<Map<number, number>> {
     const userIds = new Set<number>();
 
@@ -300,7 +255,7 @@ export class EloCalculationService {
   }
 
   private getMembersFromEntry(
-    entry: Entry | undefined,
+    entry: ApprovedTournamentMatch["entryA"] | undefined,
     snapshot: Map<number, number>
   ): { userId: number; currentElo: number }[] {
     return (entry?.members ?? []).map((m) => ({

@@ -5,6 +5,8 @@ export {
 export type {
   MatchRealtimeEventType,
   MatchRealtimePayload,
+  NotificationCommandInput,
   NotificationPayload,
-} from "./services/notification.service";
-
+  RealtimeCronLogPayload,
+  RealtimeMetrics,
+} from "./public.contracts";

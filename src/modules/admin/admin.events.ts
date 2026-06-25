@@ -11,15 +11,14 @@ export function registerAdminEventHandlers(): void {
   registered = true;
 
   domainEvents.subscribe("cronLog.created", async ({ log }) => {
-    await notificationService.publishCronLog(log);
+    await notificationService.publishCronLog(log.get({ plain: true }));
     await adminSystemService.publishCronEvent(log);
   });
 
   domainEvents.subscribe("auditLog.created", ({ auditLog }) => {
-    notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_audit_created", {
+    notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_audit_created", {
       auditLog: auditLog.get({ plain: true }),
       generatedAt: new Date().toISOString(),
     });
   });
 }
-

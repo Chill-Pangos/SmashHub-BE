@@ -211,7 +211,7 @@ export class SubMatchService {
 
     const updatedSubMatch = await this.getSubMatchById(subMatchId);
 
-    notificationService.publishMatchResultUpdate(subMatch.matchId, "sub_match_started", {
+    notificationService.publishMatchRealtime(subMatch.matchId, "sub_match_started", {
       subMatch: toSubMatchRealtimePayload(updatedSubMatch),
     });
 
@@ -254,7 +254,7 @@ export class SubMatchService {
     });
     const matchReadyToFinalize = await isMatchReadyToFinalize(match.id);
 
-    notificationService.publishMatchResultUpdate(match.id, "sub_match_finalized", {
+    notificationService.publishMatchRealtime(match.id, "sub_match_finalized", {
       subMatch: toSubMatchRealtimePayload(updatedSubMatch),
       matchReadyToFinalize,
     });
@@ -299,7 +299,7 @@ export class SubMatchService {
       );
     });
 
-    notificationService.publishMatchResultUpdate(subMatch.matchId, "sub_match_players_assigned", {
+    notificationService.publishMatchRealtime(subMatch.matchId, "sub_match_players_assigned", {
       subMatchId,
       players: assignedPlayers.map(toSubMatchPlayerRealtimePayload),
     });

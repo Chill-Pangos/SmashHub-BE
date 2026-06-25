@@ -110,7 +110,9 @@ for (const filePath of walk(modulesRoot)) {
 
     const publicEntrypoints = new Set([
       "index.ts",
+      "public.contracts.ts",
       "public.models.ts",
+      "public.read.ts",
       "public.services.ts",
     ]);
 

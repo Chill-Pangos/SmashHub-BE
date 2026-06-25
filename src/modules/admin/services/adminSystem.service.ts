@@ -119,7 +119,7 @@ class AdminSystemService {
 
   async publishCronEvent(log: CronLog): Promise<void> {
     const plainLog = log.get ? log.get({ plain: true }) : log;
-    notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
+    notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_metrics_updated", {
       type: "cron",
       data: plainLog,
       generatedAt: new Date().toISOString(),
@@ -134,7 +134,7 @@ class AdminSystemService {
         data: plainLog,
       };
       if (systemRuntimeService.recordAlert(alert)) {
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
+        notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_alert_created", alert);
       }
     }
   }
@@ -143,7 +143,7 @@ class AdminSystemService {
     try {
       const overview = await this.getOverview();
 
-      notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
+      notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_metrics_updated", {
         type: "overview",
         data: overview,
         generatedAt: new Date().toISOString(),
@@ -161,7 +161,7 @@ class AdminSystemService {
       });
       if (signature !== this.lastHealthSignature) {
         this.lastHealthSignature = signature;
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_health_changed", {
+        notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_health_changed", {
           status: overview.status,
           services: overview.services,
           resources: overview.resources,
@@ -291,12 +291,13 @@ class AdminSystemService {
   }
 
   private getSocketStats() {
+    const realtime = notificationService.getRealtimeMetrics();
     return {
       status: "up" as HealthStatus,
-      totalConnectedUsers: notificationService.getConnectedUsersCount(),
-      roomCount: notificationService.getRoomCount(),
-      adapterMode: notificationService.getAdapterMode(),
-      lastSocketError: notificationService.getLastSocketError(),
+      totalConnectedUsers: realtime.totalConnectedUsers,
+      roomCount: realtime.roomCount,
+      adapterMode: realtime.adapterMode,
+      lastSocketError: realtime.lastSocketError,
     };
   }
 
@@ -369,15 +370,16 @@ class AdminSystemService {
     if (input.cron.failedCount24h > 0) {
       activeAlerts.push({ key: "cron_failed_24h", severity: "critical", message: "Cron failures in last 24h", createdAt: now, data: { failedCount24h: input.cron.failedCount24h } });
     }
-    if (notificationService.getLastSocketError()) {
-      activeAlerts.push({ key: "socket_adapter_error", severity: "warning", message: "Socket.IO adapter error", createdAt: now, data: { error: notificationService.getLastSocketError() } });
+    const realtime = notificationService.getRealtimeMetrics();
+    if (realtime.lastSocketError) {
+      activeAlerts.push({ key: "socket_adapter_error", severity: "warning", message: "Socket.IO adapter error", createdAt: now, data: { error: realtime.lastSocketError } });
     }
 
     const activeKeys = new Set(activeAlerts.map((alert) => alert.key));
     systemRuntimeService.resolveAlerts(activeKeys);
     for (const alert of activeAlerts) {
       if (systemRuntimeService.recordAlert(alert)) {
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
+        notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_alert_created", alert);
       }
     }
     return activeAlerts;

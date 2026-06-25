@@ -149,7 +149,7 @@ export class EntryMemberService {
     // Notify invitee
     const entryName = entry.name ?? `Entry #${entryId}`;
     const captainName = `Captain`; // hoặc truyền vào nếu có
-    await notificationService.create(inviteeId, {
+    await notificationService.notifyUser(inviteeId, {
       ...NotificationTemplates.joinRequest(captainName, entryName),
       referenceId: invitation.id,
       referenceType: "join_request",

@@ -320,7 +320,7 @@ export class EntryService {
       const requesterName = `${user.firstName} ${user.lastName}`.trim();
 
       if (targetEntry.captainId) {
-        await notificationService.create(targetEntry.captainId, {
+        await notificationService.notifyUser(targetEntry.captainId, {
           ...NotificationTemplates.joinRequest(requesterName, targetEntry.name),
           referenceId: joinRequest.id,
           referenceType: "join_request",
