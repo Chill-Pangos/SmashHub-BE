@@ -1,7 +1,12 @@
-import type { ApprovedTournamentMatch, MatchSummary } from "../public.contracts";
+import type {
+  ApprovedTournamentMatch,
+  MatchSummary,
+  RegistrationWindow,
+} from "../public.contracts";
 import Match from "../models/match.model";
 import Schedule from "../models/schedule.model";
 import SubMatch from "../models/subMatch.model";
+import ScheduleConfig from "../models/scheduleConfig.model";
 import { TournamentCategory } from "../../tournament/public.models";
 import { Entry, EntryMember } from "../../registration/public.models";
 
@@ -9,6 +14,20 @@ export class CompetitionReadService {
   async matchExists(matchId: number): Promise<boolean> {
     const match = await Match.findByPk(matchId, { attributes: ["id"] });
     return Boolean(match);
+  }
+
+  async getRegistrationWindow(tournamentId: number): Promise<RegistrationWindow | null> {
+    const config = await ScheduleConfig.findOne({
+      where: { tournamentId },
+      attributes: ["tournamentId", "registrationStartDate", "registrationEndDate"],
+    });
+    if (!config) return null;
+
+    return {
+      tournamentId: config.tournamentId,
+      registrationStartDate: config.registrationStartDate,
+      registrationEndDate: config.registrationEndDate,
+    };
   }
 
   async getApprovedTournamentMatchesForElo(

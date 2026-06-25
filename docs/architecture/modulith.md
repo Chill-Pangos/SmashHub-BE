@@ -30,11 +30,13 @@ New code should import from module public facades, not from another module's pri
 
 Cross-module service calls should exchange plain DTOs through public ports. A module should not hold another module's Sequelize `Model` instance unless that dependency is still part of the temporary compatibility surface.
 
-Phase 4 leaf rule:
+Leaf port rules:
 
 - `notification` and `ranking` must not import cross-module `public.models.ts`.
+- `registration` must not import cross-module `public.models.ts`.
 - `notification` publishes through command/realtime DTOs from `notification/public.contracts.ts`.
 - `ranking` reads tournament/match/member data through read ports and owns only ranking models.
+- `registration` reads user, ELO, category/tournament, and registration-window data through read ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
 - `public.models.ts` remains for compatibility, but new leaf-module work should prefer `public.contracts.ts`, `public.read.ts`, or `public.services.ts`.
 
@@ -88,4 +90,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: expand the `public.models.ts` ban beyond the `notification` and `ranking` leaves once the remaining core modules have stable read/write ports.
+Next hardening step: expand the `public.models.ts` ban beyond the `notification`, `ranking`, and `registration` leaves once the remaining core modules have stable read/write ports.

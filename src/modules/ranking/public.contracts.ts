@@ -12,3 +12,8 @@ export interface TournamentEloUpdateResult {
   historyRecordsCreated: number;
   changes: TournamentEloChange[];
 }
+
+export interface UserEloSnapshot {
+  userId: number;
+  score: number;
+}

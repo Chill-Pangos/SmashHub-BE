@@ -4,6 +4,7 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(repoRoot, "src");
 const modulesRoot = path.join(srcRoot, "modules");
+const publicModelFreeLeaves = new Set(["notification", "ranking", "registration"]);
 
 function walk(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -63,7 +64,7 @@ for (const filePath of walk(modulesRoot)) {
     if (!targetModule || targetModule === currentModule) continue;
 
     if (
-      (currentModule === "notification" || currentModule === "ranking") &&
+      publicModelFreeLeaves.has(currentModule) &&
       path.basename(resolved) === "public.models.ts"
     ) {
       violations.push({
@@ -99,6 +100,7 @@ const { notificationService } = require("../src/modules/notification/public.serv
 const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
 const { tournamentReadService } = require("../src/modules/tournament/public.read");
+const { rankingReadService } = require("../src/modules/ranking/public.read");
 require("../src/modules/notification/public.contracts");
 require("../src/modules/competition/public.contracts");
 require("../src/modules/tournament/public.contracts");
@@ -113,9 +115,19 @@ for (const [name, value] of [
   ["notificationService.getRealtimeMetrics", notificationService.getRealtimeMetrics],
   ["identityReadService.verifyToken", identityReadService.verifyToken],
   ["identityReadService.getAdminUserIds", identityReadService.getAdminUserIds],
+  ["identityReadService.getRegistrationUser", identityReadService.getRegistrationUser],
+  ["identityReadService.getRegistrationUsersByIds", identityReadService.getRegistrationUsersByIds],
+  ["identityReadService.searchUserIdsByName", identityReadService.searchUserIdsByName],
+  ["identityReadService.isAdmin", identityReadService.isAdmin],
   ["competitionReadService.matchExists", competitionReadService.matchExists],
   ["competitionReadService.getApprovedTournamentMatchesForElo", competitionReadService.getApprovedTournamentMatchesForElo],
+  ["competitionReadService.getRegistrationWindow", competitionReadService.getRegistrationWindow],
   ["tournamentReadService.getTournamentForElo", tournamentReadService.getTournamentForElo],
+  ["tournamentReadService.getCategoryRegistrationContext", tournamentReadService.getCategoryRegistrationContext],
+  ["tournamentReadService.getCategoriesRegistrationContext", tournamentReadService.getCategoriesRegistrationContext],
+  ["tournamentReadService.getCategoryPaymentContext", tournamentReadService.getCategoryPaymentContext],
+  ["rankingReadService.getUserElo", rankingReadService.getUserElo],
+  ["rankingReadService.getUserElos", rankingReadService.getUserElos],
 ]) {
   if (typeof value !== "function") {
     console.error(`Missing port method: ${name}`);

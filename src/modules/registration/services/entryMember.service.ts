@@ -2,9 +2,6 @@ import { Op } from "sequelize";
 import { sequelize } from "../../../config/database";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
-import { TournamentCategory, Tournament } from "../../tournament/public.models";
-import { EloScore } from "../../ranking/public.models";
-import { User } from "../../identity/public.models";
 import JoinRequest from "../models/joinRequest.model";
 import {
   CreateEntryMemberDto,
@@ -12,15 +9,19 @@ import {
 } from "../dto/entryMember.dto";
 
 import {
+  attachMemberUsers,
   assertRegistrationOpen,
   assertUserEligible,
   assertNotAlreadyRegistered,
+  getEntryCategory,
 } from "./entry.service";
 import {
   notificationService,
   NotificationTemplates,
 } from "../../notification/public.services";
 import { removeUndefinedFields } from "../../../utils/object.helper";
+import { identityReadService } from "../../identity/public.read";
+import { rankingReadService } from "../../ranking/public.read";
 
 export class EntryMemberService {
   // ─── CRUD gốc ─────────────────────────────────────────────────────────────
@@ -90,20 +91,15 @@ export class EntryMemberService {
     entryId: number,
     inviteeId: number,
   ): Promise<JoinRequest> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
+    const category = await getEntryCategory(entry);
     if (entry.captainId !== captainId)
       throw new Error("Only the team captain can invite members");
-    if (entry.category?.type === "single")
+    if (category.type === "single")
       throw new Error("Cannot invite members to a single entry");
 
-    await assertRegistrationOpen(entry.category?.tournament!);
+    await assertRegistrationOpen(category.tournament);
 
     if (!entry.isAcceptingMembers)
       throw new Error("This team is not accepting new members");
@@ -113,18 +109,18 @@ export class EntryMemberService {
     )
       throw new Error("Team is already full");
     if (
-      entry.category?.maxMembersPerEntry != null &&
-      entry.currentMemberCount >= entry.category.maxMembersPerEntry
+      category.maxMembersPerEntry != null &&
+      entry.currentMemberCount >= category.maxMembersPerEntry
     )
       throw new Error(
-        `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
+        `Team cannot exceed ${category.maxMembersPerEntry} members`,
       );
 
-    const invitee = await User.findByPk(inviteeId);
+    const invitee = await identityReadService.getRegistrationUser(inviteeId);
     if (!invitee) throw new Error("User not found");
 
     // Kiểm tra eligibility sớm (age, gender, elo...) — check lại lần nữa lúc accept
-    await assertUserEligible(invitee, entry.category!);
+    await assertUserEligible(invitee, category);
     await assertNotAlreadyRegistered(inviteeId, entry.categoryId);
 
     // Kiểm tra đã có pending invitation/request chưa
@@ -170,20 +166,16 @@ export class EntryMemberService {
         {
           model: Entry,
           as: "entry",
-          include: [{
-            model: TournamentCategory,
-            as: "category",
-            include: [{ model: Tournament, as: "tournament" }],
-          }],
         },
       ],
     });
     if (!invitation) throw new Error("Invitation not found");
 
     const entry = invitation.entry!;
+    const category = await getEntryCategory(entry);
 
     // Re-check tất cả điều kiện tại thời điểm accept
-    await assertRegistrationOpen(entry.category?.tournament!);
+    await assertRegistrationOpen(category.tournament);
 
     if (!entry.isAcceptingMembers)
       throw new Error("This team is no longer accepting new members");
@@ -193,17 +185,17 @@ export class EntryMemberService {
     )
       throw new Error("Team is already full");
     if (
-      entry.category?.maxMembersPerEntry != null &&
-      entry.currentMemberCount >= entry.category.maxMembersPerEntry
+      category.maxMembersPerEntry != null &&
+      entry.currentMemberCount >= category.maxMembersPerEntry
     )
       throw new Error(
-        `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
+        `Team cannot exceed ${category.maxMembersPerEntry} members`,
       );
 
-    const invitee = await User.findByPk(userId);
+    const invitee = await identityReadService.getRegistrationUser(userId);
     if (!invitee) throw new Error("User not found");
 
-    await assertUserEligible(invitee, entry.category!);
+    await assertUserEligible(invitee, category);
     await assertNotAlreadyRegistered(userId, entry.categoryId);
 
     return await sequelize.transaction(async (t) => {
@@ -212,9 +204,9 @@ export class EntryMemberService {
         { transaction: t },
       );
 
-      const eloScore = await EloScore.findOne({ where: { userId } });
+      const eloAtEntry = await rankingReadService.getUserElo(userId);
       const member = await EntryMember.create(
-        { entryId: entry.id, userId, eloAtEntry: eloScore?.score ?? 0 },
+        { entryId: entry.id, userId, eloAtEntry },
         { transaction: t },
       );
 
@@ -252,18 +244,13 @@ export class EntryMemberService {
     entryId: number,
     memberId: number,
   ): Promise<void> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
+    const category = await getEntryCategory(entry);
     if (entry.captainId !== captainId)
       throw new Error("Only the team captain can remove members");
 
-    await assertRegistrationOpen(entry.category?.tournament!);
+    await assertRegistrationOpen(category.tournament);
 
     if (memberId === captainId)
       throw new Error(
@@ -297,33 +284,17 @@ export class EntryMemberService {
     const offset = options?.offset ?? 0;
     const limit = options?.limit ?? 10;
 
-    const memberInclude = [
-      {
-        model: User,
-        as: "user",
-        attributes: [
-          "id",
-          "firstName",
-          "lastName",
-          "email",
-          "gender",
-          "dob",
-          "avatarUrl",
-        ],
-      },
-    ];
-
     if (
       options &&
       (options.offset !== undefined || options.limit !== undefined)
     ) {
       const { count, rows } = await EntryMember.findAndCountAll({
         where: { entryId },
-        include: memberInclude,
         order: [["createdAt", "ASC"]],
         offset,
         limit,
       });
+      await attachMemberUsers(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -341,11 +312,12 @@ export class EntryMemberService {
       };
     }
 
-    return await EntryMember.findAll({
+    const rows = await EntryMember.findAll({
       where: { entryId },
-      include: memberInclude,
       order: [["createdAt", "ASC"]],
     });
+    await attachMemberUsers(rows);
+    return rows;
   }
 
   /**
@@ -353,16 +325,11 @@ export class EntryMemberService {
    * Moved from EntryService.leaveEntry
    */
   async leaveEntry(userId: number, entryId: number): Promise<void> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
+    const category = await getEntryCategory(entry);
 
-    await assertRegistrationOpen(entry.category?.tournament!);
+    await assertRegistrationOpen(category.tournament);
 
     if (entry.captainId === userId)
       throw new Error(

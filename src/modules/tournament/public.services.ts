@@ -9,4 +9,8 @@ export type {
   TournamentStatusTransitionTrigger,
   TournamentStatusUpdateResult,
 } from "./services/tournament.service";
-export type { TournamentForElo } from "./public.contracts";
+export type {
+  TournamentCategoryRegistrationContext,
+  TournamentForElo,
+  TournamentRegistrationContext,
+} from "./public.contracts";

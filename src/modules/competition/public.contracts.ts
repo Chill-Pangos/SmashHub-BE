@@ -15,3 +15,9 @@ export interface MatchSummary {
   id: number;
   status: string;
 }
+
+export interface RegistrationWindow {
+  tournamentId: number;
+  registrationStartDate: Date;
+  registrationEndDate: Date;
+}

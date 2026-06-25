@@ -1,42 +1,145 @@
-import { Op, WhereOptions, Includeable, Transaction } from "sequelize";
+import { Op, WhereOptions, Transaction } from "sequelize";
 import { sequelize } from "../../../config/database";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
-import { TournamentCategory, Tournament } from "../../tournament/public.models";
-import { ScheduleConfig } from "../../competition/public.models";
-import { EloScore } from "../../ranking/public.models";
-import { User } from "../../identity/public.models";
 import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
 import { notificationService, NotificationTemplates } from "../../notification/public.services";
 import { removeUndefinedFields } from "../../../utils/object.helper";
-import { PUBLIC_USER_ATTRIBUTES } from "../../../utils/userProjection.helper";
+import { identityReadService } from "../../identity/public.read";
+import { rankingReadService } from "../../ranking/public.read";
+import { tournamentReadService } from "../../tournament/public.read";
+import { competitionReadService } from "../../competition/public.read";
+import type { RegistrationUserSummary } from "../../identity/public.contracts";
+import type {
+  TournamentCategoryRegistrationContext,
+  TournamentRegistrationContext,
+} from "../../tournament/public.contracts";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function setAssociation(
+  instance: { setDataValue?: (key: string, value: unknown) => void },
+  key: string,
+  value: unknown,
+): void {
+  if (instance.setDataValue) {
+    instance.setDataValue(key, value);
+    return;
+  }
+  (instance as Record<string, unknown>)[key] = value;
+}
+
+function asNumber(value: number | string | null | undefined): number {
+  if (value == null) return 0;
+  return typeof value === "number" ? value : Number(value);
+}
+
+function userMap(users: RegistrationUserSummary[]): Map<number, RegistrationUserSummary> {
+  return new Map(users.map((user) => [user.id, user]));
+}
+
+function categoryMap(
+  categories: TournamentCategoryRegistrationContext[],
+): Map<number, TournamentCategoryRegistrationContext> {
+  return new Map(categories.map((category) => [category.id, category]));
+}
+
+async function attachCaptains(entries: Entry[]): Promise<void> {
+  const captainIds = entries
+    .map((entry) => entry.captainId)
+    .filter((id): id is number => id != null);
+  const users = userMap(await identityReadService.getRegistrationUsersByIds(captainIds));
+
+  for (const entry of entries) {
+    setAssociation(entry, "captain", entry.captainId ? users.get(entry.captainId) ?? null : null);
+  }
+}
+
+export async function attachMemberUsers(members: EntryMember[]): Promise<void> {
+  const users = userMap(
+    await identityReadService.getRegistrationUsersByIds(members.map((member) => member.userId)),
+  );
+
+  for (const member of members) {
+    setAssociation(member, "user", users.get(member.userId) ?? null);
+  }
+}
+
+async function attachEntryMembers(entries: Entry[]): Promise<void> {
+  const entryIds = entries.map((entry) => entry.id);
+  if (entryIds.length === 0) return;
+
+  const members = await EntryMember.findAll({
+    where: { entryId: { [Op.in]: entryIds } },
+    order: [["createdAt", "ASC"]],
+  });
+  await attachMemberUsers(members);
+
+  const membersByEntryId = new Map<number, EntryMember[]>();
+  for (const member of members) {
+    const list = membersByEntryId.get(member.entryId) ?? [];
+    list.push(member);
+    membersByEntryId.set(member.entryId, list);
+  }
+
+  for (const entry of entries) {
+    setAssociation(entry, "members", membersByEntryId.get(entry.id) ?? []);
+  }
+}
+
+async function attachCategories(entries: Entry[]): Promise<void> {
+  const categories = categoryMap(
+    await tournamentReadService.getCategoriesRegistrationContext(
+      entries.map((entry) => entry.categoryId),
+    ),
+  );
+
+  for (const entry of entries) {
+    setAssociation(entry, "category", categories.get(entry.categoryId) ?? null);
+  }
+}
+
+async function attachJoinRequestUsers(joinRequests: JoinRequest[]): Promise<void> {
+  const users = userMap(
+    await identityReadService.getRegistrationUsersByIds(
+      joinRequests.map((request) => request.userId),
+    ),
+  );
+
+  for (const request of joinRequests) {
+    setAssociation(request, "user", users.get(request.userId) ?? null);
+  }
+}
+
+async function attachEntryDetails(entry: Entry): Promise<Entry> {
+  await Promise.all([
+    attachCategories([entry]),
+    attachCaptains([entry]),
+    attachEntryMembers([entry]),
+  ]);
+  return entry;
+}
+
 export async function getCategoryWithTournament(
   categoryId: number,
-): Promise<TournamentCategory> {
-  const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament, as: "tournament" }],
-  });
+): Promise<TournamentCategoryRegistrationContext> {
+  const category = await tournamentReadService.getCategoryRegistrationContext(categoryId);
   if (!category) throw new Error("Category not found");
   return category;
 }
 
-export async function assertRegistrationOpen(tournament: Tournament): Promise<void> {
+export async function getEntryCategory(entry: Entry): Promise<TournamentCategoryRegistrationContext> {
+  return getCategoryWithTournament(entry.categoryId);
+}
+
+export async function assertRegistrationOpen(
+  tournament: TournamentRegistrationContext,
+): Promise<void> {
   const now = new Date();
-  // Use ScheduleConfig where registration dates now reside
-  let regStart: Date | undefined;
-  let regEnd: Date | undefined;
-  if (tournament.scheduleConfig) {
-    regStart = tournament.scheduleConfig.registrationStartDate;
-    regEnd = tournament.scheduleConfig.registrationEndDate;
-  } else {
-    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
-    regStart = cfg?.registrationStartDate;
-    regEnd = cfg?.registrationEndDate;
-  }
+  const registrationWindow = await competitionReadService.getRegistrationWindow(tournament.id);
+  const regStart = registrationWindow?.registrationStartDate;
+  const regEnd = registrationWindow?.registrationEndDate;
 
   if (!regStart || !regEnd) {
     throw new Error("Registration window is not configured for this tournament");
@@ -47,14 +150,11 @@ export async function assertRegistrationOpen(tournament: Tournament): Promise<vo
   }
 }
 
-export async function assertRegistrationClosed(tournament: Tournament): Promise<void> {
-  let regEnd: Date | undefined;
-  if (tournament.scheduleConfig && tournament.scheduleConfig.registrationEndDate) {
-    regEnd = tournament.scheduleConfig.registrationEndDate;
-  } else {
-    const cfg = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
-    regEnd = cfg?.registrationEndDate;
-  }
+export async function assertRegistrationClosed(
+  tournament: TournamentRegistrationContext,
+): Promise<void> {
+  const registrationWindow = await competitionReadService.getRegistrationWindow(tournament.id);
+  const regEnd = registrationWindow?.registrationEndDate;
 
   if (!regEnd) {
     throw new Error("Registration end date is not configured for this tournament");
@@ -66,8 +166,8 @@ export async function assertRegistrationClosed(tournament: Tournament): Promise<
 }
 
 export async function assertUserEligible(
-  user: User,
-  category: TournamentCategory,
+  user: RegistrationUserSummary,
+  category: TournamentCategoryRegistrationContext,
 ): Promise<void> {
   const errors: string[] = [];
 
@@ -100,8 +200,7 @@ export async function assertUserEligible(
   }
 
   // ELO check
-  const eloScore = await EloScore.findOne({ where: { userId: user.id } });
-  const elo = eloScore?.score ?? 0;
+  const elo = await rankingReadService.getUserElo(user.id);
 
   if (category.minElo != null && elo < category.minElo) {
     errors.push(`Minimum ELO requirement is ${category.minElo}`);
@@ -158,23 +257,12 @@ export class EntryService {
       where: {
         name: { [Op.like]: `%${query}%` },
       },
-      include: [
-        {
-          model: TournamentCategory,
-          as: "category",
-          include: [{ model: Tournament, as: "tournament" }],
-        },
-        {
-          model: User,
-          as: "captain",
-          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
-        },
-      ],
       offset,
       limit,
       order: [["name", "ASC"]],
       distinct: true,
     });
+    await Promise.all([attachCategories(rows), attachCaptains(rows)]);
 
     const totalPages = Math.ceil(count / limit);
     const page = Math.floor(offset / limit) + 1;
@@ -209,7 +297,7 @@ export class EntryService {
 
     await assertRegistrationOpen(tournament);
 
-    const user = await User.findByPk(userId);
+    const user = await identityReadService.getRegistrationUser(userId);
     if (!user) throw new Error("User not found");
     const defaultEntryName = `${user.firstName} ${user.lastName}`.trim() || `Entry ${user.id}`;
     const name = entryName?.trim() || defaultEntryName;
@@ -232,12 +320,12 @@ export class EntryService {
           { transaction: t },
         );
 
-        const eloScore = await EloScore.findOne({ where: { userId } });
+        const eloAtEntry = await rankingReadService.getUserElo(userId);
         await EntryMember.create(
           {
             entryId: newEntry.id,
             userId,
-            eloAtEntry: eloScore?.score ?? 0,
+            eloAtEntry,
           },
           { transaction: t },
         );
@@ -265,12 +353,12 @@ export class EntryService {
           { transaction: t },
         );
 
-        const eloScore = await EloScore.findOne({ where: { userId } });
+        const eloAtEntry = await rankingReadService.getUserElo(userId);
         await EntryMember.create(
           {
             entryId: newEntry.id,
             userId,
-            eloAtEntry: eloScore?.score ?? 0,
+            eloAtEntry,
           },
           { transaction: t },
         );
@@ -373,45 +461,20 @@ export class EntryService {
       };
     }
 
-    // Build captain include riêng để tránh where: undefined
-    const captainInclude: Includeable = captainName?.trim()
-      ? {
-          model: User,
-          as: "captain",
-          where: {
-            [Op.or]: [
-              { firstName: { [Op.like]: `%${captainName.trim()}%` } },
-              { lastName: { [Op.like]: `%${captainName.trim()}%` } },
-            ],
-          },
-          attributes: [...PUBLIC_USER_ATTRIBUTES],
-        }
-      : {
-          model: User,
-          as: "captain",
-          attributes: [...PUBLIC_USER_ATTRIBUTES],
-        };
+    if (captainName?.trim()) {
+      const captainIds = await identityReadService.searchUserIdsByName(captainName);
+      if (captainIds.length === 0) return { rows: [], count: 0 };
+      where.captainId = { [Op.in]: captainIds };
+    }
 
-    return await Entry.findAndCountAll({
+    const result = await Entry.findAndCountAll({
       where,
-      include: [
-        captainInclude,
-        {
-          model: EntryMember,
-          as: "members",
-          include: [
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "firstName", "lastName"],
-            },
-          ],
-        },
-      ],
       offset,
       limit,
       distinct: true,
     });
+    await Promise.all([attachCaptains(result.rows), attachEntryMembers(result.rows)]);
+    return result;
   }
 
   /**
@@ -428,11 +491,6 @@ export class EntryService {
         {
           model: Entry,
           as: "entry",
-          include: [{
-            model: TournamentCategory,
-            as: "category",
-            include: [{ model: Tournament, as: "tournament" }],
-          }],
         },
       ],
     });
@@ -442,12 +500,13 @@ export class EntryService {
     }
 
     const entry = joinRequest.entry!;
+    const category = await getEntryCategory(entry);
+    setAssociation(entry, "category", category);
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can respond to join requests");
     }
 
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
+    await assertRegistrationOpen(category.tournament);
 
     // ── Reject ────────────────────────────────────────────────────────────────
     if (action === "reject") {
@@ -478,30 +537,28 @@ export class EntryService {
       throw new Error("Team is already full");
     }
     if (
-      entry.category?.maxMembersPerEntry != null &&
-      entry.currentMemberCount >= entry.category.maxMembersPerEntry
+      category.maxMembersPerEntry != null &&
+      entry.currentMemberCount >= category.maxMembersPerEntry
     ) {
       throw new Error(
-        `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
+        `Team cannot exceed ${category.maxMembersPerEntry} members`,
       );
     }
 
     // Re-validate điều kiện user tại thời điểm approve
-    const user = await User.findByPk(joinRequest.userId);
+    const user = await identityReadService.getRegistrationUser(joinRequest.userId);
     if (!user) throw new Error("User not found");
-    await assertUserEligible(user, entry.category!);
+    await assertUserEligible(user, category);
     await assertNotAlreadyRegistered(joinRequest.userId, entry.categoryId);
 
     await sequelize.transaction(async (t) => {
-      const eloScore = await EloScore.findOne({
-        where: { userId: joinRequest.userId },
-      });
+      const eloAtEntry = await rankingReadService.getUserElo(joinRequest.userId);
 
       await EntryMember.create(
         {
           entryId: entry.id,
           userId: joinRequest.userId,
-          eloAtEntry: eloScore?.score ?? 0,
+          eloAtEntry,
         },
         { transaction: t },
       );
@@ -557,17 +614,11 @@ export class EntryService {
           entryId,
           ...(status ? { status } : {}),
         },
-        include: [
-          {
-            model: User,
-            as: "user",
-            attributes: ["id", "firstName", "lastName", "email", "gender", "dob"],
-          },
-        ],
         order: [["createdAt", "DESC"]],
         offset,
         limit: limit,
       });
+      await attachJoinRequestUsers(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -586,53 +637,24 @@ export class EntryService {
     }
 
     // Without pagination (backward compatibility)
-    return await JoinRequest.findAll({
+    const rows = await JoinRequest.findAll({
       where: {
         entryId,
         ...(status ? { status } : {}),
       },
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "firstName", "lastName", "email", "gender", "dob"],
-        },
-      ],
       order: [["createdAt", "DESC"]],
     });
+    await attachJoinRequestUsers(rows);
+    return rows;
   }
 
   /**
    * 7. Lấy chi tiết 1 entry
    */
   async getById(entryId: number): Promise<Entry> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [
-        {
-          model: TournamentCategory,
-          as: "category",
-          include: [{ model: Tournament, as: "tournament" }],
-        },
-        {
-          model: User,
-          as: "captain",
-          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
-        },
-        {
-          model: EntryMember,
-          as: "members",
-          include: [
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
-            },
-          ],
-        },
-      ],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
-    return entry;
+    return attachEntryDetails(entry);
   }
 
   /**
@@ -647,24 +669,19 @@ export class EntryService {
       isAcceptingMembers?: boolean;
     },
   ): Promise<Entry> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can update the entry");
     }
 
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
+    const category = await getEntryCategory(entry);
+    setAssociation(entry, "category", category);
+    await assertRegistrationOpen(category.tournament);
 
     // Kiểm tra requiredMemberCount nếu thay đổi
     if (data.requiredMemberCount != null) {
-      if (entry.category?.type === "single") {
+      if (category.type === "single") {
         throw new Error(
           "Cannot change required member count for single entries",
         );
@@ -677,37 +694,33 @@ export class EntryService {
 
       // Kiểm tra maxMembersPerEntry
       if (
-        entry.category?.type === "team" &&
-        entry.category?.maxMembersPerEntry != null &&
-        data.requiredMemberCount > entry.category.maxMembersPerEntry
+        category.type === "team" &&
+        category.maxMembersPerEntry != null &&
+        data.requiredMemberCount > category.maxMembersPerEntry
       ) {
         throw new Error(
-          `Required member count cannot exceed ${entry.category.maxMembersPerEntry}`,
+          `Required member count cannot exceed ${category.maxMembersPerEntry}`,
         );
       }
     }
 
-    return await entry.update(removeUndefinedFields(data as Record<string, unknown>));
+    const updated = await entry.update(removeUndefinedFields(data as Record<string, unknown>));
+    setAssociation(updated, "category", category);
+    return updated;
   }
 
   /**
    * 9. Xóa entry (chỉ captain, phải trong thời gian đăng ký)
    */
   async delete(captainId: number, entryId: number): Promise<void> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can delete the entry");
     }
 
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
+    const category = await getEntryCategory(entry);
+    await assertRegistrationOpen(category.tournament);
 
     await sequelize.transaction(async (t) => {
       // Xóa tất cả join request
@@ -729,20 +742,15 @@ export class EntryService {
     entryId: number,
     newCaptainId: number,
   ): Promise<Entry> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== currentCaptainId) {
       throw new Error("Only the current captain can transfer captaincy");
     }
 
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
+    const category = await getEntryCategory(entry);
+    setAssociation(entry, "category", category);
+    await assertRegistrationOpen(category.tournament);
 
     // Kiểm tra new captain là member của entry
     const newCaptainMember = await EntryMember.findOne({
@@ -752,10 +760,12 @@ export class EntryService {
       throw new Error("New captain must be a member of the entry");
     }
 
-    const newCaptain = await User.findByPk(newCaptainId);
+    const newCaptain = await identityReadService.getRegistrationUser(newCaptainId);
     if (!newCaptain) throw new Error("User not found");
 
-    return await entry.update({ captainId: newCaptainId });
+    const updated = await entry.update({ captainId: newCaptainId });
+    setAssociation(updated, "category", category);
+    return updated;
   }
 
   /**
@@ -766,24 +776,20 @@ export class EntryService {
     entryId: number,
     count: number,
   ): Promise<Entry> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [{
-        model: TournamentCategory,
-        as: "category",
-        include: [{ model: Tournament, as: "tournament" }],
-      }],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can set required member count");
     }
 
-    if (entry.category?.type !== "team") {
+    const category = await getEntryCategory(entry);
+    setAssociation(entry, "category", category);
+
+    if (category.type !== "team") {
       throw new Error("Required member count can only be set for team entries");
     }
 
-    const tournament = entry.category?.tournament!;
-    await assertRegistrationOpen(tournament);
+    await assertRegistrationOpen(category.tournament);
 
     // Kiểm tra count >= currentMemberCount
     if (count < entry.currentMemberCount) {
@@ -794,15 +800,17 @@ export class EntryService {
 
     // Kiểm tra maxMembersPerEntry
     if (
-      entry.category?.maxMembersPerEntry != null &&
-      count > entry.category.maxMembersPerEntry
+      category.maxMembersPerEntry != null &&
+      count > category.maxMembersPerEntry
     ) {
       throw new Error(
-        `Required member count cannot exceed ${entry.category.maxMembersPerEntry}`,
+        `Required member count cannot exceed ${category.maxMembersPerEntry}`,
       );
     }
 
-    return await entry.update({ requiredMemberCount: count });
+    const updated = await entry.update({ requiredMemberCount: count });
+    setAssociation(updated, "category", category);
+    return updated;
   }
 
   /**
@@ -810,15 +818,7 @@ export class EntryService {
    * Chỉ được confirm khi đã đủ thành viên và trong thời gian đăng ký.
    */
   async confirmLineup(captainId: number, entryId: number): Promise<Entry> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [
-        {
-          model: TournamentCategory,
-          as: "category",
-          include: [{ model: Tournament, as: "tournament" }],
-        },
-      ],
-    });
+    const entry = await Entry.findByPk(entryId);
     if (!entry) throw new Error("Entry not found");
     if (entry.captainId !== captainId) {
       throw new Error("Only the team captain can confirm the lineup");
@@ -827,9 +827,9 @@ export class EntryService {
       throw new Error("Lineup has already been confirmed");
     }
 
-    const tournament = entry.category?.tournament;
-    if (!tournament) throw new Error("Tournament not found");
-    await assertRegistrationOpen(tournament);
+    const category = await getEntryCategory(entry);
+    setAssociation(entry, "category", category);
+    await assertRegistrationOpen(category.tournament);
 
     // Kiểm tra đủ thành viên
     if (
@@ -842,6 +842,7 @@ export class EntryService {
     }
 
     await entry.update({ isConfirmed: true, confirmedAt: new Date() });
+    setAssociation(entry, "category", category);
     return entry;
   }
 
@@ -861,8 +862,7 @@ export class EntryService {
     eligible: Entry[];
     ineligible: { entry: Entry; reasons: string[] }[];
   }> {
-    const category = await TournamentCategory.findByPk(categoryId);
-    if (!category) throw new Error("Category not found");
+    const category = await getCategoryWithTournament(categoryId);
 
     const entries = await Entry.findAll({
       where: { categoryId },
@@ -891,7 +891,7 @@ export class EntryService {
       }
 
       // 3. Đã thanh toán lệ phí
-      if (category.entryFee && category.entryFee > 0) {
+      if (asNumber(category.entryFee) > 0) {
         const payment = await Payment.findOne({
           where: { entryId: entry.id, status: "completed" },
         });
@@ -1060,18 +1060,10 @@ export class EntryService {
     // Paginate results
     const paginatedEntryIds = allEntryIds.slice(offset, offset + limit);
 
-    // Lấy entries với thông tin chi tiết kèm Tournament và TournamentCategory
     const entries = await Entry.findAll({
       where: { id: { [Op.in]: paginatedEntryIds } },
-      include: [
-        {
-          model: TournamentCategory,
-          as: "category",
-          include: [{ model: Tournament, as: "tournament" }],
-        },
-        { model: EntryMember, as: "members" },
-      ],
     });
+    await Promise.all([attachCategories(entries), attachEntryMembers(entries)]);
 
     // Thêm role cho mỗi entry
     const rowsWithRole = entries.map((entry) => ({
