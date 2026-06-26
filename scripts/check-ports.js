@@ -94,6 +94,7 @@ require("ts-node/register/transpile-only");
 
 const { notificationService } = require("../src/modules/notification/public.services");
 const { identityCleanupService } = require("../src/modules/identity/public.services");
+const { adminWriteService } = require("../src/modules/admin/public.write");
 const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
 const { competitionWriteService } = require("../src/modules/competition/public.write");
@@ -103,6 +104,7 @@ const { tournamentStatusNotificationService } = require("../src/modules/tourname
 const { rankingReadService } = require("../src/modules/ranking/public.read");
 const { rankingWriteService } = require("../src/modules/ranking/public.write");
 require("../src/modules/notification/public.contracts");
+require("../src/modules/admin/public.contracts");
 require("../src/modules/competition/public.contracts");
 require("../src/modules/registration/public.contracts");
 require("../src/modules/tournament/public.contracts");
@@ -115,6 +117,7 @@ for (const [name, value] of [
   ["notificationService.publishCronLog", notificationService.publishCronLog],
   ["notificationService.emitRoomEvent", notificationService.emitRoomEvent],
   ["notificationService.getRealtimeMetrics", notificationService.getRealtimeMetrics],
+  ["adminWriteService.createAuditLog", adminWriteService.createAuditLog],
   ["identityReadService.verifyToken", identityReadService.verifyToken],
   ["identityReadService.isTokenBlacklisted", identityReadService.isTokenBlacklisted],
   ["identityReadService.getAuthenticatedUserByToken", identityReadService.getAuthenticatedUserByToken],

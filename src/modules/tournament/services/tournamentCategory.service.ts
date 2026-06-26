@@ -5,7 +5,7 @@ import {
 } from "../dto/tournamentCategory.dto";
 import { NotFoundError } from "../../../utils/errors.helper";
 import { removeUndefinedFields } from "../../../utils/object.helper";
-import { assertCategoryOwnerOrAdmin, assertTournamentOwnerOrAdmin } from "../../../utils/access.helper";
+import { assertCategoryOwnerOrAdmin, assertTournamentOwnerOrAdmin } from "./tournamentAccess.service";
 
 export class TournamentCategoryService {
   /**

@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { AuditLog } from "../modules/admin/public.models";
+import { adminWriteService } from "../modules/admin/public.write";
 import { identityReadService } from "../modules/identity/public.read";
-import { domainEvents } from "../shared/events/domainEvents";
 import type { AuthRequest } from "./auth.middleware";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -44,7 +43,7 @@ export const auditMiddleware = (
 
         const durationMs = Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000);
         const { resourceType, resourceId } = resourceFromPath(req.originalUrl);
-        const log = await AuditLog.create({
+        await adminWriteService.createAuditLog({
           actorUserId,
           action: actionFromMethod(req.method),
           resourceType,
@@ -55,9 +54,7 @@ export const auditMiddleware = (
           ip: req.ip?.slice(0, 100) ?? null,
           userAgent: req.get("user-agent")?.slice(0, 500) ?? null,
           durationMs,
-        } as any);
-
-        domainEvents.publish("auditLog.created", { auditLog: log });
+        });
       } catch (error) {
         console.error("Failed to write audit log:", error);
       }

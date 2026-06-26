@@ -155,6 +155,14 @@ for (const filePath of walk(srcRoot)) {
         });
       }
     }
+
+    if (isInside(resolved, modulesRoot) && path.basename(resolved) === "public.models.ts") {
+      violations.push({
+        filePath,
+        specifier,
+        reason: "runtime imports module public models; use public read/write/contracts/services",
+      });
+    }
   }
 }
 

@@ -18,6 +18,7 @@ The old flat folders (`src/controllers`, `src/services`, `src/models`, `src/rout
 
 New code should import from module public facades, not from another module's private folders.
 Runtime code outside `src/modules` (middlewares, crons, utils, shared helpers) must also import module public APIs.
+Runtime code outside `src/modules` must not import module `public.models.ts`; use public read/write/contracts/services instead.
 
 - Runtime model exports live in `src/modules/<module>/public.models.ts`.
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
@@ -44,6 +45,7 @@ Leaf port rules:
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
 - `public.models.ts` remains for compatibility outside module-to-module application code, but modules should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
 - `src/controllers`, `src/services`, `src/models`, `src/routes`, and `src/dto` must not exist.
+- Runtime outside modules must not import module `public.models.ts`.
 
 ## Runtime Wiring
 
@@ -69,7 +71,7 @@ Association rules:
 - `yarn build`: TypeScript compile gate.
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
-- `yarn check:arch`: also blocks imports from removed flat folders and fails if those folders are recreated.
+- `yarn check:arch`: also blocks imports from removed flat folders, fails if those folders are recreated, and blocks runtime imports of module `public.models.ts`.
 - `yarn check:ports`: application-port boundary gate.
 - `yarn madge:app`: app-level circular dependency gate.
 - `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
@@ -96,4 +98,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: add write ports for remaining runtime writes and continue shrinking public model exposure.
+Next hardening step: continue shrinking `public.models.ts` exposure and move remaining shared helpers behind module-owned ports.

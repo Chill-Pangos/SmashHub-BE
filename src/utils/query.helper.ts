@@ -1,38 +1,7 @@
-import { TournamentCategory } from "../modules/tournament/public.models";
-import { EntryMember } from "../modules/registration/public.models";
-
 /**
  * Common include options for queries
  */
 export class QueryHelper {
-  /**
-   * Include options for Entry with related data
-   */
-  static entryWithRelations() {
-    return [
-      {
-        model: EntryMember,
-        as: 'members',
-      },
-      {
-        model: TournamentCategory,
-        as: 'category',
-      },
-    ];
-  }
-
-  /**
-   * Include options for Tournament with categories
-   */
-  static tournamentWithCategories() {
-    return [
-      {
-        model: TournamentCategory,
-        as: "categories",
-      },
-    ];
-  }
-
   /**
    * Calculate pagination info
    */

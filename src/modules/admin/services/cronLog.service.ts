@@ -2,6 +2,7 @@ import { Op, WhereOptions } from "sequelize";
 import CronLog, { CronLogLevel, CronLogStatus } from "../models/cronLog.model";
 import { domainEvents } from "../../../shared/events/domainEvents";
 import { registerAdminEventHandlers } from "../admin.events";
+import type { CronLogPayload } from "../public.contracts";
 
 export type CreateCronLogInput = {
   jobName: string;
@@ -40,7 +41,7 @@ class CronLogService {
       durationMs: input.durationMs ?? null,
     } as any);
 
-    domainEvents.publish("cronLog.created", { log });
+    domainEvents.publish("cronLog.created", { log: this.toCronLogPayload(log) });
     return log;
   }
 
@@ -94,6 +95,10 @@ class CronLogService {
       limit: Math.min(Math.max(limit, 1), 100),
       order: [["createdAt", "DESC"]],
     });
+  }
+
+  private toCronLogPayload(log: CronLog): CronLogPayload {
+    return log.get({ plain: true }) as CronLogPayload;
   }
 }
 

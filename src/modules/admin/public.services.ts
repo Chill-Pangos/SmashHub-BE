@@ -1,4 +1,5 @@
 export { default as adminSystemService } from "./services/adminSystem.service";
+export { default as adminWriteService } from "./services/adminWrite.service";
 export { default as cronLogService } from "./services/cronLog.service";
 export type {
   CreateCronLogInput,
@@ -11,4 +12,3 @@ export type {
   SanitizedErrorEvent,
   SystemAlert,
 } from "./services/systemRuntime.service";
-

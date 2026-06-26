@@ -9,6 +9,7 @@ import redisClient, { connectRedis } from "../../../config/redis";
 import AuditLog from "../models/auditLog.model";
 import CronLog from "../models/cronLog.model";
 import { notificationService } from "../../notification/public.services";
+import type { CronLogPayload } from "../public.contracts";
 import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntime.service";
 
 type HealthStatus = "up" | "down" | "degraded";
@@ -117,11 +118,10 @@ class AdminSystemService {
     }, REALTIME_INTERVAL_MS);
   }
 
-  async publishCronEvent(log: CronLog): Promise<void> {
-    const plainLog = log.get ? log.get({ plain: true }) : log;
+  async publishCronEvent(log: CronLogPayload): Promise<void> {
     notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_metrics_updated", {
       type: "cron",
-      data: plainLog,
+      data: log,
       generatedAt: new Date().toISOString(),
     });
 
@@ -131,7 +131,7 @@ class AdminSystemService {
         severity: "critical" as const,
         message: `Cron job failed: ${log.jobName}`,
         createdAt: new Date().toISOString(),
-        data: plainLog,
+        data: log,
       };
       if (systemRuntimeService.recordAlert(alert)) {
         notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_alert_created", alert);

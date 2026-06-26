@@ -21,7 +21,7 @@ import {
 import { sequelize } from "../../../config/database";
 import { Op, WhereOptions } from "sequelize";
 import { removeUndefinedFields } from "../../../utils/object.helper";
-import { assertTournamentOwnerOrAdmin } from "../../../utils/access.helper";
+import { assertTournamentOwnerOrAdmin } from "./tournamentAccess.service";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
 const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
