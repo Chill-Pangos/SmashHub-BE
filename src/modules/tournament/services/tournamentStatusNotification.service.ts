@@ -1,7 +1,8 @@
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import TournamentReferee from "../models/tournamentReferee.model";
-import { notificationService, NotificationTemplates } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
+import { NotificationTemplates } from "../../notification/public.templates";
 import { registrationReadService } from "../../registration/public.read";
 import { TournamentStatusTransition } from "./tournament.service";
 
@@ -34,7 +35,7 @@ class TournamentStatusNotificationService {
       STATUS_LABELS[event.toStatus] ?? event.toStatus,
     );
 
-    await notificationService.notifyUsers(recipientIds, {
+    await notificationWriteService.notifyUsers(recipientIds, {
       ...template,
       referenceId: tournament.id,
       referenceType: "tournament",

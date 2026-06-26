@@ -112,6 +112,8 @@ require("ts-node/register/transpile-only");
 
 const { notificationService } = require("../src/modules/notification/public.services");
 const { notificationRuntimeService } = require("../src/modules/notification/public.runtime");
+const { notificationWriteService } = require("../src/modules/notification/public.write");
+const { NotificationTemplates } = require("../src/modules/notification/public.templates");
 const { identityCleanupService } = require("../src/modules/identity/public.services");
 const { identityRuntimeService } = require("../src/modules/identity/public.runtime");
 const { adminWriteService } = require("../src/modules/admin/public.write");
@@ -141,6 +143,13 @@ for (const [name, value] of [
   ["notificationService.emitRoomEvent", notificationService.emitRoomEvent],
   ["notificationService.getRealtimeMetrics", notificationService.getRealtimeMetrics],
   ["notificationRuntimeService.initialize", notificationRuntimeService.initialize],
+  ["notificationRuntimeService.getRealtimeMetrics", notificationRuntimeService.getRealtimeMetrics],
+  ["notificationWriteService.notifyUser", notificationWriteService.notifyUser],
+  ["notificationWriteService.notifyUsers", notificationWriteService.notifyUsers],
+  ["notificationWriteService.publishMatchRealtime", notificationWriteService.publishMatchRealtime],
+  ["notificationWriteService.publishCronLog", notificationWriteService.publishCronLog],
+  ["notificationWriteService.emitRoomEvent", notificationWriteService.emitRoomEvent],
+  ["NotificationTemplates.joinRequest", NotificationTemplates.joinRequest],
   ["adminWriteService.createAuditLog", adminWriteService.createAuditLog],
   ["adminWriteService.createCronLog", adminWriteService.createCronLog],
   ["adminRuntimeService.startRealtimePublisher", adminRuntimeService.startRealtimePublisher],
@@ -227,6 +236,7 @@ for (const [name, value] of [
   ["rankingReadService.getUserEloView", rankingReadService.getUserEloView],
   ["rankingReadService.getUserEloViews", rankingReadService.getUserEloViews],
   ["rankingWriteService.createInitialUserElo", rankingWriteService.createInitialUserElo],
+  ["rankingWriteService.updateEloForTournament", rankingWriteService.updateEloForTournament],
 ]) {
   if (typeof value !== "function") {
     console.error(`Missing port method: ${name}`);

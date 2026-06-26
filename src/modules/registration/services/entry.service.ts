@@ -4,7 +4,8 @@ import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
-import { notificationService, NotificationTemplates } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
+import { NotificationTemplates } from "../../notification/public.templates";
 import { removeUndefinedFields } from "../../../utils/object.helper";
 import { identityReadService } from "../../identity/public.read";
 import { rankingReadService } from "../../ranking/public.read";
@@ -408,7 +409,7 @@ export class EntryService {
       const requesterName = `${user.firstName} ${user.lastName}`.trim();
 
       if (targetEntry.captainId) {
-        await notificationService.notifyUser(targetEntry.captainId, {
+        await notificationWriteService.notifyUser(targetEntry.captainId, {
           ...NotificationTemplates.joinRequest(requesterName, targetEntry.name),
           referenceId: joinRequest.id,
           referenceType: "join_request",
@@ -517,7 +518,7 @@ export class EntryService {
       });
 
       // Gửi thông báo cho người dùng
-      // await notificationService.send(joinRequest.userId, {
+      // await notificationWriteService.send(joinRequest.userId, {
       //   type: "join_request_rejected",
       //   entryId: entry.id,
       //   reason: rejectionReason,
@@ -581,7 +582,7 @@ export class EntryService {
     });
 
     // Gửi thông báo cho người dùng
-    // await notificationService.send(joinRequest.userId, {
+    // await notificationWriteService.send(joinRequest.userId, {
     //   type: "join_request_approved",
     //   entryId: entry.id,
     // });

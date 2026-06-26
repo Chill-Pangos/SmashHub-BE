@@ -2,4 +2,4 @@ export {
   default as rankingWriteService,
   RankingWriteService,
 } from "./services/rankingWrite.service";
-export type { UserEloView } from "./public.contracts";
+export type { TournamentEloUpdateResult, UserEloView } from "./public.contracts";

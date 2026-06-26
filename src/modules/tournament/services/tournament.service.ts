@@ -12,7 +12,7 @@ import {
   type RegistrationEntryWithMembers,
 } from "../../registration/public.read";
 import { identityReadService, type TournamentUserSummary } from "../../identity/public.read";
-import { eloCalculationService, type TournamentEloUpdateResult } from "../../ranking/public.services";
+import { rankingWriteService, type TournamentEloUpdateResult } from "../../ranking/public.write";
 import {
   CreateTournamentDto,
   UpdateTournamentDto,
@@ -567,7 +567,7 @@ export class TournamentService {
     userId: number,
   ): Promise<TournamentEloUpdateResult> {
     await assertTournamentOwnerOrAdmin(userId, id);
-    return await eloCalculationService.updateEloForTournament(id);
+    return await rankingWriteService.updateEloForTournament(id);
   }
 
   async completeTournament(
@@ -595,7 +595,7 @@ export class TournamentService {
       tournament.status = "completed";
     }
 
-    const elo = await eloCalculationService.updateEloForTournament(id);
+    const elo = await rankingWriteService.updateEloForTournament(id);
 
     return {
       tournament,

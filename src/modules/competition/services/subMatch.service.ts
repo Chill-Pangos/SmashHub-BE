@@ -6,7 +6,7 @@ import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import Schedule from "../models/schedule.model";
-import { notificationService } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
 import {
   tournamentReadService,
   type CompetitionCategoryContext,
@@ -210,7 +210,7 @@ export class SubMatchService {
 
     const updatedSubMatch = await this.getSubMatchById(subMatchId);
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "sub_match_started", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "sub_match_started", {
       subMatch: toSubMatchRealtimePayload(updatedSubMatch),
     });
 
@@ -253,7 +253,7 @@ export class SubMatchService {
     });
     const matchReadyToFinalize = await isMatchReadyToFinalize(match.id);
 
-    notificationService.publishMatchRealtime(match.id, "sub_match_finalized", {
+    notificationWriteService.publishMatchRealtime(match.id, "sub_match_finalized", {
       subMatch: toSubMatchRealtimePayload(updatedSubMatch),
       matchReadyToFinalize,
     });
@@ -298,7 +298,7 @@ export class SubMatchService {
       );
     });
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "sub_match_players_assigned", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "sub_match_players_assigned", {
       subMatchId,
       players: assignedPlayers.map(toSubMatchPlayerRealtimePayload),
     });

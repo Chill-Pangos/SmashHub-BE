@@ -1,5 +1,5 @@
 import { domainEvents } from "../../shared/events/domainEvents";
-import { notificationService } from "../notification/public.services";
+import { notificationWriteService } from "../notification/public.write";
 import adminSystemService from "./services/adminSystem.service";
 
 const REALTIME_ROOM = "admin:system";
@@ -11,12 +11,12 @@ export function registerAdminEventHandlers(): void {
   registered = true;
 
   domainEvents.subscribe("cronLog.created", async ({ log }) => {
-    await notificationService.publishCronLog(log);
+    await notificationWriteService.publishCronLog(log);
     await adminSystemService.publishCronEvent(log);
   });
 
   domainEvents.subscribe("auditLog.created", ({ auditLog }) => {
-    notificationService.emitRoomEvent(REALTIME_ROOM, "admin_system_audit_created", {
+    notificationWriteService.emitRoomEvent(REALTIME_ROOM, "admin_system_audit_created", {
       auditLog,
       generatedAt: new Date().toISOString(),
     });

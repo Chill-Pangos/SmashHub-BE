@@ -6,7 +6,8 @@ import RefereeInvitation, {
   INVITATION_EXPIRY_HOURS,
 } from "../models/refereeInvitation.model";
 import Tournament from "../models/tournament.model";
-import { notificationService, NotificationTemplates } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
+import { NotificationTemplates } from "../../notification/public.templates";
 import { identityReadService, type TournamentUserSummary } from "../../identity/public.read";
 import { registrationReadService } from "../../registration/public.read";
 import TournamentCategory from "../models/tournamentCategory.model";
@@ -132,7 +133,7 @@ export class TournamentRefereeService {
     expiresAt: buildExpiresAt(),
   });
 
-  await notificationService.notifyUser(refereeId, {
+  await notificationWriteService.notifyUser(refereeId, {
     ...NotificationTemplates.refereeInvitation(tournament.name),
     referenceId: invitation.id,
     referenceType: "referee_invitation",

@@ -12,7 +12,7 @@ import matchSetScoreCacheService, {
   LiveMatchSetScoreCache,
   MatchSetScoreCache,
 } from "./matchSetScoreCache.service";
-import { notificationService } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -380,7 +380,7 @@ export class MatchSetService {
     });
 
     await cacheSetScore(set);
-    notificationService.publishMatchRealtime(match.id, "set_created", {
+    notificationWriteService.publishMatchRealtime(match.id, "set_created", {
       set: toMatchSetRealtimePayload(set),
     });
 
@@ -438,10 +438,10 @@ export class MatchSetService {
           console.error("Failed to reopen persisted set as live score:", error);
         }
 
-        notificationService.publishMatchRealtime(subMatch.matchId, "set_deleted", {
+        notificationWriteService.publishMatchRealtime(subMatch.matchId, "set_deleted", {
           set: toMatchSetRealtimePayload(setToCorrect),
         });
-        notificationService.publishMatchRealtime(subMatch.matchId, "live_score_updated", {
+        notificationWriteService.publishMatchRealtime(subMatch.matchId, "live_score_updated", {
           liveScore: reopenedLiveScore,
         });
 
@@ -498,7 +498,7 @@ export class MatchSetService {
       console.error("Failed to cache live match set score:", error);
     }
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "live_score_updated", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "live_score_updated", {
       liveScore,
     });
 
@@ -586,7 +586,7 @@ export class MatchSetService {
       console.error("Failed to delete live match set score cache:", error);
     }
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "set_created", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "set_created", {
       set: toMatchSetRealtimePayload(set),
     });
 
@@ -637,7 +637,7 @@ export class MatchSetService {
     const updatedSet = await set.update({ entryAScore, entryBScore });
     await cacheSetScore(updatedSet);
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "set_score_updated", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "set_score_updated", {
       set: toMatchSetRealtimePayload(updatedSet),
     });
 
@@ -700,7 +700,7 @@ export class MatchSetService {
       console.error("Failed to delete match set score cache:", error);
     }
 
-    notificationService.publishMatchRealtime(subMatch.matchId, "set_deleted", {
+    notificationWriteService.publishMatchRealtime(subMatch.matchId, "set_deleted", {
       set: deletedSetPayload,
     });
   }

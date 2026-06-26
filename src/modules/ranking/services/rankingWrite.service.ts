@@ -1,6 +1,7 @@
 import type { Transaction } from "sequelize";
 import EloScore from "../models/eloScore.model";
-import type { UserEloView } from "../public.contracts";
+import eloCalculationService from "./eloCalculation.service";
+import type { TournamentEloUpdateResult, UserEloView } from "../public.contracts";
 
 const DEFAULT_ELO = 1000;
 
@@ -19,6 +20,10 @@ export class RankingWriteService {
     );
 
     return score.get({ plain: true }) as UserEloView;
+  }
+
+  async updateEloForTournament(tournamentId: number): Promise<TournamentEloUpdateResult> {
+    return eloCalculationService.updateEloForTournament(tournamentId);
   }
 }
 

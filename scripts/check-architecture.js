@@ -140,6 +140,7 @@ for (const filePath of walk(modulesRoot)) {
       "public.read.ts",
       "public.runtime.ts",
       "public.services.ts",
+      "public.templates.ts",
       "public.write.ts",
     ]);
 
@@ -148,6 +149,14 @@ for (const filePath of walk(modulesRoot)) {
         filePath,
         specifier,
         reason: `private cross-module import: ${currentModule} -> ${targetModule}`,
+      });
+    }
+
+    if (path.basename(resolved) === "public.services.ts") {
+      violations.push({
+        filePath,
+        specifier,
+        reason: `cross-module public services import: ${currentModule} -> ${targetModule}`,
       });
     }
   }

@@ -11,7 +11,7 @@ import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
 import competitionViewService from "./competitionView.service";
-import { notificationService } from "../../notification/public.services";
+import { notificationWriteService } from "../../notification/public.write";
 import { registrationReadService } from "../../registration/public.read";
 import {
   tournamentReadService,
@@ -543,7 +543,7 @@ export class MatchService {
       return instance.reload({ transaction: t });
     });
 
-    notificationService.publishMatchRealtime(matchId, "match_started", {
+    notificationWriteService.publishMatchRealtime(matchId, "match_started", {
       match: toMatchRealtimePayload(match),
     });
 
@@ -605,7 +605,7 @@ export class MatchService {
       return instance.reload({ transaction: t });
     });
 
-    notificationService.publishMatchRealtime(matchId, "match_result_submitted", {
+    notificationWriteService.publishMatchRealtime(matchId, "match_result_submitted", {
       match: toMatchRealtimePayload(match),
     });
 
@@ -665,7 +665,7 @@ export class MatchService {
       );
     }
 
-    notificationService.publishMatchRealtime(matchId, "match_result_approved", {
+    notificationWriteService.publishMatchRealtime(matchId, "match_result_approved", {
       match: toMatchRealtimePayload(approved.match),
     });
 

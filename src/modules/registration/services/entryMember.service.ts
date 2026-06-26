@@ -16,9 +16,9 @@ import {
   getEntryCategory,
 } from "./entry.service";
 import {
-  notificationService,
-  NotificationTemplates,
-} from "../../notification/public.services";
+  notificationWriteService,
+} from "../../notification/public.write";
+import { NotificationTemplates } from "../../notification/public.templates";
 import { removeUndefinedFields } from "../../../utils/object.helper";
 import { identityReadService } from "../../identity/public.read";
 import { rankingReadService } from "../../ranking/public.read";
@@ -145,7 +145,7 @@ export class EntryMemberService {
     // Notify invitee
     const entryName = entry.name ?? `Entry #${entryId}`;
     const captainName = `Captain`; // hoặc truyền vào nếu có
-    await notificationService.notifyUser(inviteeId, {
+    await notificationWriteService.notifyUser(inviteeId, {
       ...NotificationTemplates.joinRequest(captainName, entryName),
       referenceId: invitation.id,
       referenceType: "join_request",
