@@ -91,6 +91,14 @@ for (const filePath of walk(modulesRoot)) {
 
   const source = fs.readFileSync(filePath, "utf8");
   for (const specifier of extractImports(source)) {
+    if (path.basename(filePath) === "index.ts" && specifier === "./public.models") {
+      violations.push({
+        filePath,
+        specifier,
+        reason: "module root must not re-export public models",
+      });
+    }
+
     const resolved = resolveImport(filePath, specifier);
     if (!resolved) continue;
 

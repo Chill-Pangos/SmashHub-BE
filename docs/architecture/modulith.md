@@ -20,12 +20,12 @@ New code should import from module public facades, not from another module's pri
 Runtime code outside `src/modules` (middlewares, crons, utils, shared helpers) must also import module public APIs.
 Runtime code outside `src/modules` must not import module `public.models.ts`; use public read/write/contracts/services instead.
 
-- Runtime model exports live in `src/modules/<module>/public.models.ts`.
+- Runtime model exports live only in explicit `src/modules/<module>/public.models.ts` files.
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
 - Runtime read-port exports may live in `src/modules/<module>/public.read.ts` when a narrow service entrypoint avoids importing the full service graph.
 - Runtime write-port exports may live in `src/modules/<module>/public.write.ts` when command use-cases need a narrow public entrypoint.
 - Public DTO and port types live in `src/modules/<module>/public.contracts.ts`.
-- `src/modules/<module>/index.ts` re-exports those public files for discoverability.
+- `src/modules/<module>/index.ts` re-exports non-model public files for discoverability.
 - Private paths such as `src/modules/<module>/services/*` are module-internal.
 - Model files must not import other model files. Cross-model associations are wired centrally.
 
@@ -46,6 +46,7 @@ Leaf port rules:
 - `public.models.ts` remains for compatibility outside module-to-module application code, but modules should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
 - `src/controllers`, `src/services`, `src/models`, `src/routes`, and `src/dto` must not exist.
 - Runtime outside modules must not import module `public.models.ts`.
+- Module root `index.ts` files must not re-export `public.models.ts`.
 
 ## Runtime Wiring
 
@@ -72,6 +73,7 @@ Association rules:
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
 - `yarn check:arch`: also blocks imports from removed flat folders, fails if those folders are recreated, and blocks runtime imports of module `public.models.ts`.
+- `yarn check:arch`: also blocks module root re-exports of `public.models.ts`.
 - `yarn check:ports`: application-port boundary gate.
 - `yarn madge:app`: app-level circular dependency gate.
 - `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
@@ -98,4 +100,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: continue shrinking `public.models.ts` exposure and move remaining shared helpers behind module-owned ports.
+Next hardening step: keep `public.models.ts` direct-use only for explicit compatibility and migrate remaining script/test probes to module-owned smoke helpers.
