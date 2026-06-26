@@ -1260,9 +1260,9 @@ const swaggerDefinition = {
 const options = {
   swaggerDefinition,
   apis: [
-    "./src/routes/*.ts",
-    "./src/controllers/*.ts",
-    "./src/dto/*.ts",
+    "./src/modules/**/*.routes.ts",
+    "./src/modules/**/*.controller.ts",
+    "./src/modules/**/*.dto.ts",
     "./src/docs/*.ts",
   ],
 };

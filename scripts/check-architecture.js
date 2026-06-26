@@ -73,6 +73,16 @@ function extractImports(source) {
 
 const violations = [];
 
+for (const flatDir of flatCompatibilityDirs) {
+  if (fs.existsSync(flatDir)) {
+    violations.push({
+      filePath: flatDir,
+      specifier: path.relative(repoRoot, flatDir),
+      reason: "flat compatibility layer was removed; import module public APIs",
+    });
+  }
+}
+
 for (const filePath of walk(modulesRoot)) {
   if (moduleSharedFiles.has(filePath)) continue;
 
