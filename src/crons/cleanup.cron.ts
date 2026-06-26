@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { identityCleanupService } from "../modules/identity/public.services";
+import { identityRuntimeService } from "../modules/identity/public.runtime";
 import { formatDateGMT7 } from "../utils/date.helper";
 
 /**
@@ -8,7 +8,7 @@ import { formatDateGMT7 } from "../utils/date.helper";
  */
 export const cleanupExpiredOtps = cron.schedule("*/5 * * * *", async () => {
   try {
-    const deleted = await identityCleanupService.cleanupExpiredOtps();
+    const deleted = await identityRuntimeService.cleanupExpiredOtps();
 
     if (deleted > 0) {
       console.log(
@@ -28,7 +28,7 @@ export const cleanupExpiredAccessTokens = cron.schedule(
   "*/30 * * * *",
   async () => {
     try {
-      const deleted = await identityCleanupService.cleanupExpiredAccessTokens();
+      const deleted = await identityRuntimeService.cleanupExpiredAccessTokens();
 
       if (deleted > 0) {
         console.log(
@@ -49,7 +49,7 @@ export const cleanupExpiredRefreshTokens = cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      const deleted = await identityCleanupService.cleanupExpiredRefreshTokens();
+      const deleted = await identityRuntimeService.cleanupExpiredRefreshTokens();
 
       if (deleted > 0) {
         console.log(

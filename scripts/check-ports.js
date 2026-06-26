@@ -111,14 +111,18 @@ if (violations.length > 0) {
 require("ts-node/register/transpile-only");
 
 const { notificationService } = require("../src/modules/notification/public.services");
+const { notificationRuntimeService } = require("../src/modules/notification/public.runtime");
 const { identityCleanupService } = require("../src/modules/identity/public.services");
+const { identityRuntimeService } = require("../src/modules/identity/public.runtime");
 const { adminWriteService } = require("../src/modules/admin/public.write");
+const { adminRuntimeService, adminMetricsRuntimeService } = require("../src/modules/admin/public.runtime");
 const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
 const { competitionWriteService } = require("../src/modules/competition/public.write");
 const { registrationReadService } = require("../src/modules/registration/public.read");
 const { tournamentReadService } = require("../src/modules/tournament/public.read");
 const { tournamentStatusNotificationService } = require("../src/modules/tournament/public.services");
+const { tournamentRuntimeService } = require("../src/modules/tournament/public.runtime");
 const { rankingReadService } = require("../src/modules/ranking/public.read");
 const { rankingWriteService } = require("../src/modules/ranking/public.write");
 const { validateTournamentEloIncludeGraph } = require("../src/modules/model.diagnostics");
@@ -136,7 +140,12 @@ for (const [name, value] of [
   ["notificationService.publishCronLog", notificationService.publishCronLog],
   ["notificationService.emitRoomEvent", notificationService.emitRoomEvent],
   ["notificationService.getRealtimeMetrics", notificationService.getRealtimeMetrics],
+  ["notificationRuntimeService.initialize", notificationRuntimeService.initialize],
   ["adminWriteService.createAuditLog", adminWriteService.createAuditLog],
+  ["adminWriteService.createCronLog", adminWriteService.createCronLog],
+  ["adminRuntimeService.startRealtimePublisher", adminRuntimeService.startRealtimePublisher],
+  ["adminMetricsRuntimeService.recordRequest", adminMetricsRuntimeService.recordRequest],
+  ["adminMetricsRuntimeService.recordError", adminMetricsRuntimeService.recordError],
   ["identityReadService.verifyToken", identityReadService.verifyToken],
   ["identityReadService.isTokenBlacklisted", identityReadService.isTokenBlacklisted],
   ["identityReadService.getAuthenticatedUserByToken", identityReadService.getAuthenticatedUserByToken],
@@ -158,6 +167,9 @@ for (const [name, value] of [
   ["identityCleanupService.cleanupExpiredOtps", identityCleanupService.cleanupExpiredOtps],
   ["identityCleanupService.cleanupExpiredAccessTokens", identityCleanupService.cleanupExpiredAccessTokens],
   ["identityCleanupService.cleanupExpiredRefreshTokens", identityCleanupService.cleanupExpiredRefreshTokens],
+  ["identityRuntimeService.cleanupExpiredOtps", identityRuntimeService.cleanupExpiredOtps],
+  ["identityRuntimeService.cleanupExpiredAccessTokens", identityRuntimeService.cleanupExpiredAccessTokens],
+  ["identityRuntimeService.cleanupExpiredRefreshTokens", identityRuntimeService.cleanupExpiredRefreshTokens],
   ["competitionReadService.matchExists", competitionReadService.matchExists],
   ["competitionReadService.getApprovedTournamentMatchesForElo", competitionReadService.getApprovedTournamentMatchesForElo],
   ["competitionReadService.getRegistrationWindow", competitionReadService.getRegistrationWindow],
@@ -203,6 +215,13 @@ for (const [name, value] of [
   ["tournamentReadService.isTournamentReferee", tournamentReadService.isTournamentReferee],
   ["tournamentReadService.getActiveTournamentIds", tournamentReadService.getActiveTournamentIds],
   ["tournamentStatusNotificationService.notifyTransitions", tournamentStatusNotificationService.notifyTransitions],
+  ["tournamentRuntimeService.openRegistrations", tournamentRuntimeService.openRegistrations],
+  ["tournamentRuntimeService.closeRegistrations", tournamentRuntimeService.closeRegistrations],
+  ["tournamentRuntimeService.generateBracketsOrCancel", tournamentRuntimeService.generateBracketsOrCancel],
+  ["tournamentRuntimeService.startTournaments", tournamentRuntimeService.startTournaments],
+  ["tournamentRuntimeService.reconcileTournamentStatuses", tournamentRuntimeService.reconcileTournamentStatuses],
+  ["tournamentRuntimeService.getUpcomingStatusChanges", tournamentRuntimeService.getUpcomingStatusChanges],
+  ["tournamentRuntimeService.notifyTransitions", tournamentRuntimeService.notifyTransitions],
   ["rankingReadService.getUserElo", rankingReadService.getUserElo],
   ["rankingReadService.getUserElos", rankingReadService.getUserElos],
   ["rankingReadService.getUserEloView", rankingReadService.getUserEloView],

@@ -2,19 +2,7 @@ import { Op, WhereOptions } from "sequelize";
 import CronLog, { CronLogLevel, CronLogStatus } from "../models/cronLog.model";
 import { domainEvents } from "../../../shared/events/domainEvents";
 import { registerAdminEventHandlers } from "../admin.events";
-import type { CronLogPayload } from "../public.contracts";
-
-export type CreateCronLogInput = {
-  jobName: string;
-  tournamentId?: number | null;
-  level?: CronLogLevel;
-  status?: CronLogStatus;
-  message: string;
-  meta?: unknown;
-  startedAt?: Date;
-  finishedAt?: Date | null;
-  durationMs?: number | null;
-};
+import type { CreateCronLogInput, CronLogPayload } from "../public.contracts";
 
 export type CronLogFilter = {
   jobName?: string;

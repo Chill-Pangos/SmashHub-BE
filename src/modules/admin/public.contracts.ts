@@ -27,6 +27,18 @@ export type CreateAuditLogInput = {
   durationMs?: number | null;
 };
 
+export type CreateCronLogInput = {
+  jobName: string;
+  tournamentId?: number | null;
+  level?: "info" | "warn" | "error";
+  status?: "success" | "failed" | "skipped";
+  message: string;
+  meta?: unknown;
+  startedAt?: Date;
+  finishedAt?: Date | null;
+  durationMs?: number | null;
+};
+
 export type CronLogPayload = {
   id?: number;
   jobName: string;

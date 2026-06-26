@@ -4,8 +4,8 @@ import app from "./app";
 import config from "./config/config";
 import sequelize from "./config/database";
 import { connectRedis, disconnectRedis } from "./config/redis";
-import { notificationService } from "./modules/notification/public.services";
-import { adminSystemService } from "./modules/admin/public.services";
+import { notificationRuntimeService } from "./modules/notification/public.runtime";
+import { adminRuntimeService } from "./modules/admin/public.runtime";
 
 const checkConnection = async () => {
   try {
@@ -27,8 +27,8 @@ checkConnection().then(() => {
   const httpServer = createServer(app);
 
   // Initialize Socket.IO
-  notificationService.initialize(httpServer);
-  adminSystemService.startRealtimePublisher();
+  notificationRuntimeService.initialize(httpServer);
+  adminRuntimeService.startRealtimePublisher();
 
   httpServer.listen(config.port, () => {
     console.log(`Server is running on port ${config.port}`);

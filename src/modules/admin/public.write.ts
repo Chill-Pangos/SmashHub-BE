@@ -5,5 +5,6 @@ export {
 export type {
   AuditLogPayload,
   CreateAuditLogInput,
+  CreateCronLogInput,
   CronLogPayload,
 } from "./public.contracts";

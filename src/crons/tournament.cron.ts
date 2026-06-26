@@ -1,10 +1,9 @@
 import cron from "node-cron";
 import {
-  tournamentService,
-  tournamentStatusNotificationService,
   type TournamentStatusTransition,
   type TournamentStatusUpdateResult,
-} from "../modules/tournament/public.services";
+  tournamentRuntimeService,
+} from "../modules/tournament/public.runtime";
 import {
   competitionReadService,
   type ScheduleConfigDateField,
@@ -13,7 +12,7 @@ import redisClient, { connectRedis } from "../config/redis";
 import { formatDateGMT7 } from "../utils/date.helper";
 import { TOURNAMENT_STATUS_REFRESH_CHANNEL } from "../utils/tournamentStatusScheduler.helper";
 import { withDbLock } from "../utils/dbLock.helper";
-import { cronLogService } from "../modules/admin/public.services";
+import { adminWriteService } from "../modules/admin/public.write";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const PERIODIC_REFRESH_CRON = "*/5 * * * *";
@@ -35,28 +34,28 @@ const statusJobs: StatusJobConfig[] = [
     label: "tournament-status-open",
     dateField: "registrationStartDate",
     lockName: "cron:tournament-status:open",
-    handler: () => tournamentService.openRegistrations(),
+    handler: () => tournamentRuntimeService.openRegistrations(),
   },
   {
     jobName: "close",
     label: "tournament-status-close",
     dateField: "registrationEndDate",
     lockName: "cron:tournament-status:close",
-    handler: () => tournamentService.closeRegistrations(),
+    handler: () => tournamentRuntimeService.closeRegistrations(),
   },
   {
     jobName: "bracket",
     label: "tournament-status-bracket",
     dateField: "bracketGenerationDate",
     lockName: "cron:tournament-status:bracket",
-    handler: () => tournamentService.generateBracketsOrCancel(),
+    handler: () => tournamentRuntimeService.generateBracketsOrCancel(),
   },
   {
     jobName: "start",
     label: "tournament-status-start",
     dateField: "startDate",
     lockName: "cron:tournament-status:start",
-    handler: () => tournamentService.startTournaments(),
+    handler: () => tournamentRuntimeService.startTournaments(),
   },
 ];
 
@@ -100,7 +99,7 @@ function summarizeEvents(events: TournamentStatusTransition[]): TournamentStatus
 
 async function writeEventLogs(jobName: string, events: TournamentStatusTransition[]): Promise<void> {
   for (const event of events) {
-    await cronLogService.create({
+    await adminWriteService.createCronLog({
       jobName,
       tournamentId: event.tournamentId,
       level: "info",
@@ -121,9 +120,9 @@ async function notifyStatusTransitions(
   if (events.length === 0) return;
 
   try {
-    await tournamentStatusNotificationService.notifyTransitions(events);
+    await tournamentRuntimeService.notifyTransitions(events);
   } catch (error) {
-    await cronLogService.create({
+    await adminWriteService.createCronLog({
       jobName,
       level: "error",
       status: "failed",
@@ -145,7 +144,7 @@ async function runStatusJob(
   const locked = await withDbLock(lockName, handler);
 
   if (!locked.acquired) {
-    await cronLogService.create({
+    await adminWriteService.createCronLog({
       jobName,
       level: "warn",
       status: "skipped",
@@ -162,7 +161,7 @@ async function runStatusJob(
   const summary = summarizeEvents(events);
   const finishedAt = new Date();
 
-  await cronLogService.create({
+  await adminWriteService.createCronLog({
     jobName,
     level: "info",
     status: "success",
@@ -186,7 +185,7 @@ async function runConfiguredStatusJob(job: StatusJobConfig): Promise<TournamentS
   try {
     return await runStatusJob(job.label, job.lockName, job.handler);
   } catch (error) {
-    await cronLogService.create({
+    await adminWriteService.createCronLog({
       jobName: job.label,
       level: "error",
       status: "failed",
@@ -204,12 +203,12 @@ async function runConfiguredStatusJob(job: StatusJobConfig): Promise<TournamentS
 async function runReconcileTournamentStatuses(): Promise<void> {
   const startedAt = new Date();
   const locked = await withDbLock("cron:tournament-status:reconcile", async () => {
-    const result = await tournamentService.reconcileTournamentStatuses();
+    const result = await tournamentRuntimeService.reconcileTournamentStatuses();
     return result.events;
   });
 
   if (!locked.acquired) {
-    await cronLogService.create({
+    await adminWriteService.createCronLog({
       jobName: "tournament-status-reconcile",
       level: "warn",
       status: "skipped",
@@ -224,7 +223,7 @@ async function runReconcileTournamentStatuses(): Promise<void> {
   const events = locked.result;
   const summary = summarizeEvents(events);
   const finishedAt = new Date();
-  await cronLogService.create({
+  await adminWriteService.createCronLog({
     jobName: "tournament-status-reconcile",
     level: "info",
     status: "success",
@@ -334,7 +333,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
   async () => {
     try {
       const { openingSoon, closingSoon, bracketsSoon } =
-        await tournamentService.getUpcomingStatusChanges(24);
+        await tournamentRuntimeService.getUpcomingStatusChanges(24);
 
       if (
         openingSoon.length > 0 ||

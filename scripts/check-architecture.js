@@ -138,6 +138,7 @@ for (const filePath of walk(modulesRoot)) {
       "index.ts",
       "public.contracts.ts",
       "public.read.ts",
+      "public.runtime.ts",
       "public.services.ts",
       "public.write.ts",
     ]);
@@ -176,6 +177,14 @@ for (const filePath of walk(srcRoot)) {
         filePath,
         specifier,
         reason: "runtime imports module public models; use public read/write/contracts/services",
+      });
+    }
+
+    if (isInside(resolved, modulesRoot) && path.basename(resolved) === "public.services.ts") {
+      violations.push({
+        filePath,
+        specifier,
+        reason: "runtime imports full public services; use public runtime/read/write/contracts",
       });
     }
   }

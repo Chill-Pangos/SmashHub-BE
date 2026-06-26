@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { systemRuntimeService } from "../modules/admin/public.services";
+import { adminMetricsRuntimeService } from "../modules/admin/public.runtime";
 
 export const systemMetricsMiddleware = (
   req: Request,
@@ -10,10 +10,10 @@ export const systemMetricsMiddleware = (
 
   res.on("finish", () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-    systemRuntimeService.recordRequest({
+    adminMetricsRuntimeService.recordRequest({
       method: req.method,
       path: req.originalUrl,
-      route: systemRuntimeService.routeFromRequest(req),
+      route: adminMetricsRuntimeService.routeFromRequest(req),
       statusCode: res.statusCode,
       durationMs,
       timestamp: Date.now(),

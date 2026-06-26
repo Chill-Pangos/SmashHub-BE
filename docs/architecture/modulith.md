@@ -24,6 +24,7 @@ Runtime code outside `src/modules` must not import module models; use public rea
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
 - Runtime read-port exports may live in `src/modules/<module>/public.read.ts` when a narrow service entrypoint avoids importing the full service graph.
 - Runtime write-port exports may live in `src/modules/<module>/public.write.ts` when command use-cases need a narrow public entrypoint.
+- Runtime lifecycle/cron exports may live in `src/modules/<module>/public.runtime.ts` for app boot, middleware, and cron processes.
 - Public DTO and port types live in `src/modules/<module>/public.contracts.ts`.
 - `src/modules/<module>/index.ts` re-exports non-model public files for discoverability.
 - Private paths such as `src/modules/<module>/services/*` are module-internal.
@@ -46,6 +47,7 @@ Leaf port rules:
 - `public.models.ts` files must not exist; model access stays module-internal or diagnostics-only.
 - `src/controllers`, `src/services`, `src/models`, `src/routes`, and `src/dto` must not exist.
 - Runtime outside modules must not import module models.
+- Runtime outside modules must not import full `public.services.ts`; use `public.runtime.ts`, `public.read.ts`, `public.write.ts`, or `public.contracts.ts`.
 - Module root `index.ts` files must not re-export model files.
 
 ## Runtime Wiring
@@ -75,6 +77,7 @@ Association rules:
 - `yarn check:arch`: module boundary gate.
 - `yarn check:arch`: also blocks imports from removed flat folders, fails if those folders are recreated, and fails if `public.models.ts` files are recreated.
 - `yarn check:arch`: also blocks module root re-exports of model files.
+- `yarn check:arch`: also blocks runtime imports of full `public.services.ts`.
 - `yarn check:ports`: application-port boundary gate.
 - `yarn check:ports`: also blocks script imports of removed module `public.models.ts`; scripts use module diagnostics or public ports.
 - `yarn madge:app`: app-level circular dependency gate.

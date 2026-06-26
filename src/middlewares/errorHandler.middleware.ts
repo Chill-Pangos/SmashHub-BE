@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError, formatErrorResponse, getErrorStatusCode } from "../utils/errors.helper";
-import { systemRuntimeService } from "../modules/admin/public.services";
+import { adminMetricsRuntimeService } from "../modules/admin/public.runtime";
 
 function getDefaultErrorCode(statusCode: number): string {
   switch (statusCode) {
@@ -81,9 +81,9 @@ export const errorHandler = (
     message: errorResponse.message,
   };
   if (typeof req.headers["x-request-id"] === "string") {
-    systemRuntimeService.recordError({ ...errorEvent, requestId: req.headers["x-request-id"] });
+    adminMetricsRuntimeService.recordError({ ...errorEvent, requestId: req.headers["x-request-id"] });
   } else {
-    systemRuntimeService.recordError(errorEvent);
+    adminMetricsRuntimeService.recordError(errorEvent);
   }
 
   res.status(statusCode).json(response);
