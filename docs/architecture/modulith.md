@@ -18,9 +18,9 @@ The old flat folders (`src/controllers`, `src/services`, `src/models`, `src/rout
 
 New code should import from module public facades, not from another module's private folders.
 Runtime code outside `src/modules` (middlewares, crons, utils, shared helpers) must also import module public APIs.
-Runtime code outside `src/modules` must not import module `public.models.ts`; use public read/write/contracts/services instead.
+Runtime code outside `src/modules` must not import module models; use public read/write/contracts/services instead.
 
-- Runtime model exports live only in explicit `src/modules/<module>/public.models.ts` files.
+- Public model exports were removed; modules expose behavior through ports/contracts.
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
 - Runtime read-port exports may live in `src/modules/<module>/public.read.ts` when a narrow service entrypoint avoids importing the full service graph.
 - Runtime write-port exports may live in `src/modules/<module>/public.write.ts` when command use-cases need a narrow public entrypoint.
@@ -35,7 +35,7 @@ Cross-module service calls should exchange plain DTOs through public ports. A mo
 
 Leaf port rules:
 
-- Modules must not import another module's `public.models.ts`.
+- Modules must not import another module's models.
 - `notification` publishes through command/realtime DTOs from `notification/public.contracts.ts`.
 - `ranking` reads tournament/match/member data through read ports and owns only ranking models.
 - `registration` reads user, ELO, category/tournament, and registration-window data through read ports.
@@ -43,16 +43,17 @@ Leaf port rules:
 - `tournament` reads registration participants/payments, identity user/role data, and competition schedule/standing data through read/write ports.
 - `competition` reads tournament category/referee context, registration entries/members, and identity user views through read ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
-- `public.models.ts` remains for compatibility outside module-to-module application code, but modules should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
+- `public.models.ts` files must not exist; model access stays module-internal or diagnostics-only.
 - `src/controllers`, `src/services`, `src/models`, `src/routes`, and `src/dto` must not exist.
-- Runtime outside modules must not import module `public.models.ts`.
-- Module root `index.ts` files must not re-export `public.models.ts`.
+- Runtime outside modules must not import module models.
+- Module root `index.ts` files must not re-export model files.
 
 ## Runtime Wiring
 
 - `src/modules/index.ts` creates the API router and delegates route registration to module descriptors.
 - `src/config/database.ts` loads the explicit model list from `src/modules/model.registry.ts`.
 - `src/modules/model.associations.ts` wires Sequelize associations after model registration.
+- `src/modules/model.diagnostics.ts` owns ORM include-alias smoke probes that need direct model access.
 - Existing API paths stay unchanged under `/api`.
 - PM2 app/cron split stays unchanged.
 
@@ -72,9 +73,10 @@ Association rules:
 - `yarn build`: TypeScript compile gate.
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
-- `yarn check:arch`: also blocks imports from removed flat folders, fails if those folders are recreated, and blocks runtime imports of module `public.models.ts`.
-- `yarn check:arch`: also blocks module root re-exports of `public.models.ts`.
+- `yarn check:arch`: also blocks imports from removed flat folders, fails if those folders are recreated, and fails if `public.models.ts` files are recreated.
+- `yarn check:arch`: also blocks module root re-exports of model files.
 - `yarn check:ports`: application-port boundary gate.
+- `yarn check:ports`: also blocks script imports of removed module `public.models.ts`; scripts use module diagnostics or public ports.
 - `yarn madge:app`: app-level circular dependency gate.
 - `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
 - `yarn verify`: build + smoke + architecture + port + app-cycle + ORM-cycle gates.
@@ -100,4 +102,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: keep `public.models.ts` direct-use only for explicit compatibility and migrate remaining script/test probes to module-owned smoke helpers.
+Next hardening step: shrink public service return types that still expose Sequelize models to controllers.

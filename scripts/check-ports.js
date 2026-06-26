@@ -4,14 +4,15 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(repoRoot, "src");
 const modulesRoot = path.join(srcRoot, "modules");
+const scriptsRoot = path.join(repoRoot, "scripts");
 
-function walk(dir) {
+function walk(dir, extensions = new Set([".ts"])) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) files.push(...walk(fullPath));
-    else if (entry.isFile() && fullPath.endsWith(".ts")) files.push(fullPath);
+    if (entry.isDirectory()) files.push(...walk(fullPath, extensions));
+    else if (entry.isFile() && extensions.has(path.extname(fullPath))) files.push(fullPath);
   }
   return files;
 }
@@ -26,8 +27,9 @@ function extractImports(source) {
   const specs = [];
   const importExportRe = /\b(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/g;
   const dynamicImportRe = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+  const requireRe = /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
 
-  for (const re of [importExportRe, dynamicImportRe]) {
+  for (const re of [importExportRe, dynamicImportRe, requireRe]) {
     let match;
     while ((match = re.exec(source)) !== null) {
       specs.push(match[1]);
@@ -82,6 +84,22 @@ for (const filePath of walk(modulesRoot)) {
   }
 }
 
+for (const filePath of walk(scriptsRoot, new Set([".js"]))) {
+  const source = fs.readFileSync(filePath, "utf8");
+  for (const specifier of extractImports(source)) {
+    const resolved = resolveImport(filePath, specifier);
+    if (!resolved || !resolved.startsWith(modulesRoot)) continue;
+
+    if (path.basename(resolved) === "public.models.ts") {
+      violations.push({
+        filePath,
+        specifier,
+        reason: "script imports module public models; use module diagnostics or public ports",
+      });
+    }
+  }
+}
+
 if (violations.length > 0) {
   console.error("Port boundary violations:");
   for (const violation of violations) {
@@ -103,6 +121,7 @@ const { tournamentReadService } = require("../src/modules/tournament/public.read
 const { tournamentStatusNotificationService } = require("../src/modules/tournament/public.services");
 const { rankingReadService } = require("../src/modules/ranking/public.read");
 const { rankingWriteService } = require("../src/modules/ranking/public.write");
+const { validateTournamentEloIncludeGraph } = require("../src/modules/model.diagnostics");
 require("../src/modules/notification/public.contracts");
 require("../src/modules/admin/public.contracts");
 require("../src/modules/competition/public.contracts");
@@ -196,35 +215,6 @@ for (const [name, value] of [
   }
 }
 
-const { Match, Schedule, SubMatch } = require("../src/modules/competition/public.models");
-const { TournamentCategory } = require("../src/modules/tournament/public.models");
-const { Entry, EntryMember } = require("../src/modules/registration/public.models");
-
-Match._validateIncludedElements({
-  include: [
-    {
-      model: Schedule,
-      as: "schedule",
-      required: true,
-      include: [{
-        model: TournamentCategory,
-        as: "tournamentCategory",
-        where: { tournamentId: 1 },
-        required: true,
-      }],
-    },
-    { model: SubMatch, as: "subMatches", attributes: ["winnerTeam"] },
-    {
-      model: Entry,
-      as: "entryA",
-      include: [{ model: EntryMember, as: "members", attributes: ["userId"] }],
-    },
-    {
-      model: Entry,
-      as: "entryB",
-      include: [{ model: EntryMember, as: "members", attributes: ["userId"] }],
-    },
-  ],
-});
+validateTournamentEloIncludeGraph();
 
 console.log("ports ok");

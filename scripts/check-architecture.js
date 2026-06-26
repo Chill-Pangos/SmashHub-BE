@@ -86,6 +86,14 @@ for (const flatDir of flatCompatibilityDirs) {
 for (const filePath of walk(modulesRoot)) {
   if (moduleSharedFiles.has(filePath)) continue;
 
+  if (path.basename(filePath) === "public.models.ts") {
+    violations.push({
+      filePath,
+      specifier: path.relative(repoRoot, filePath),
+      reason: "public model compatibility layer was removed; expose ports/contracts instead",
+    });
+  }
+
   const currentModule = moduleNameFor(filePath);
   if (!currentModule) continue;
 
@@ -129,7 +137,6 @@ for (const filePath of walk(modulesRoot)) {
     const publicEntrypoints = new Set([
       "index.ts",
       "public.contracts.ts",
-      "public.models.ts",
       "public.read.ts",
       "public.services.ts",
       "public.write.ts",
