@@ -6,29 +6,34 @@ import RefereeInvitation, {
   INVITATION_EXPIRY_HOURS,
 } from "../models/refereeInvitation.model";
 import Tournament from "../models/tournament.model";
-import { User, UserRole, Role } from "../../identity/public.models";
 import { notificationService, NotificationTemplates } from "../../notification/public.services";
-import { EntryMember, Entry } from "../../registration/public.models";
+import { identityReadService, type TournamentUserSummary } from "../../identity/public.read";
+import { registrationReadService } from "../../registration/public.read";
 import TournamentCategory from "../models/tournamentCategory.model";
-import { ScheduleConfig } from "../../competition/public.models";
-import { PUBLIC_USER_ATTRIBUTES } from "../../../utils/userProjection.helper";
+import { competitionReadService } from "../../competition/public.read";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const REFEREE_PUBLIC_INCLUDE = {
-  model: User,
-  as: "referee",
-  attributes: [...PUBLIC_USER_ATTRIBUTES],
-};
-
-const REFEREE_INCLUDE = {
-  model: User,
-  as: "referee",
-  attributes: ["id", "firstName", "lastName", "email"],
-};
-
-const USER_ATTRIBUTES = ["id", "firstName", "lastName", "email", "avatarUrl"];
 const REINVITABLE_INVITATION_STATUSES = ["cancelled", "expired"];
+
+type PublicRefereeUserSummary = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  gender?: "male" | "female";
+};
+
+type InvitationUserSummary = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+type AvailableRefereeSummary = InvitationUserSummary & {
+  avatarUrl?: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +92,7 @@ export class TournamentRefereeService {
     throw new Error("Organizer cannot invite themselves as referee");
   }
 
-  const referee = await User.findByPk(refereeId);
+  const referee = await identityReadService.getTournamentUser(refereeId);
   if (!referee) throw new Error("User not found");
 
   // Check system role — áp dụng cho cả chief và referee
@@ -265,28 +270,11 @@ private async assertNotCompetingInTournament(
   const categoryIds = categories.map((c) => c.id);
   if (categoryIds.length === 0) return;
 
-  const asCaptain = await Entry.findOne({
-    where: {
-      categoryId: { [Op.in]: categoryIds },
-      captainId: userId,
-    },
-  });
-  if (asCaptain) {
-    throw new Error(
-      "This user is already competing in this tournament and cannot be a referee"
-    );
-  }
-
-  const asMember = await EntryMember.findOne({
-    where: { userId },
-    include: [{
-      model: Entry,
-      as: "entry",
-      where: { categoryId: { [Op.in]: categoryIds } },
-      required: true,
-    }],
-  });
-  if (asMember) {
+  const isCompeting = await registrationReadService.userCompetesInCategories(
+    userId,
+    categoryIds,
+  );
+  if (isCompeting) {
     throw new Error(
       "This user is already competing in this tournament and cannot be a referee"
     );
@@ -310,11 +298,11 @@ private async assertNotCompetingInTournament(
           tournamentId,
           ...(role ? { role } : {}),
         },
-        include: [REFEREE_PUBLIC_INCLUDE],
         order: [["role", "ASC"]],
         offset,
         limit: limit,
       });
+      await this.attachRefereeUsers(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -333,14 +321,15 @@ private async assertNotCompetingInTournament(
     }
 
     // Without pagination (backward compatibility)
-    return await TournamentReferee.findAll({
+    const rows = await TournamentReferee.findAll({
       where: {
         tournamentId,
         ...(role ? { role } : {}),
       },
-      include: [REFEREE_PUBLIC_INCLUDE],
       order: [["role", "ASC"]],
     });
+    await this.attachRefereeUsers(rows);
+    return rows;
   }
 
   async getInvitationsByTournament(
@@ -362,11 +351,11 @@ private async assertNotCompetingInTournament(
           tournamentId,
           ...(status ? { status } : {}),
         },
-        include: [REFEREE_INCLUDE],
         order: [["createdAt", "DESC"]],
         offset,
         limit: limit,
       });
+      await this.attachInvitationUsers(rows, "referee");
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -385,14 +374,15 @@ private async assertNotCompetingInTournament(
     }
 
     // Without pagination (backward compatibility)
-    return await RefereeInvitation.findAll({
+    const rows = await RefereeInvitation.findAll({
       where: {
         tournamentId,
         ...(status ? { status } : {}),
       },
-      include: [REFEREE_INCLUDE],
       order: [["createdAt", "DESC"]],
     });
+    await this.attachInvitationUsers(rows, "referee");
+    return rows;
   }
 
   async getAvailableRefereesForTournament(
@@ -405,7 +395,7 @@ private async assertNotCompetingInTournament(
       limit?: number;
     },
   ): Promise<{
-    referees: User[];
+    referees: AvailableRefereeSummary[];
     pagination: ReturnType<typeof buildPagination>;
   }> {
     const tournament = await getTournament(tournamentId);
@@ -420,19 +410,7 @@ private async assertNotCompetingInTournament(
           ? ["referee", "chief_referee"]
           : ["referee", "chief_referee"];
 
-    const eligibleRoleRows = await UserRole.findAll({
-      attributes: ["userId"],
-      include: [
-        {
-          model: Role,
-          as: "role",
-          where: { name: { [Op.in]: acceptedSystemRoles } },
-          required: true,
-          attributes: [],
-        },
-      ],
-    });
-    const roleUserIds = [...new Set(eligibleRoleRows.map((row) => row.userId))];
+    const roleUserIds = await identityReadService.getUserIdsByRoles(acceptedSystemRoles);
     if (roleUserIds.length === 0) {
       return {
         referees: [],
@@ -443,36 +421,25 @@ private async assertNotCompetingInTournament(
     const excludedUserIds = await this.getUnavailableRefereeIds(tournamentId);
     excludedUserIds.add(tournament.createdBy);
 
-    const search = filters?.search?.trim();
-    const where: any = {
-      id: {
-        [Op.in]: roleUserIds,
-        [Op.notIn]: [...excludedUserIds],
-      },
-    };
-    if (search) {
-      where[Op.or] = [
-        { firstName: { [Op.like]: `%${search}%` } },
-        { lastName: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-      ];
-    }
-
-    const { count, rows } = await User.findAndCountAll({
-      where,
-      attributes: USER_ATTRIBUTES,
-      order: [
-        ["firstName", "ASC"],
-        ["lastName", "ASC"],
-      ],
+    const userSearchInput: {
+      includeIds: number[];
+      excludeIds: number[];
+      search?: string;
+      offset: number;
+      limit: number;
+    } = {
+      includeIds: roleUserIds,
+      excludeIds: [...excludedUserIds],
       offset,
       limit,
-      distinct: true,
-    });
+    };
+    if (filters?.search) userSearchInput.search = filters.search;
+
+    const result = await identityReadService.findTournamentUsersByIds(userSearchInput);
 
     return {
-      referees: rows,
-      pagination: buildPagination(count, offset, limit),
+      referees: result.users.map((user) => this.toAvailableRefereeSummary(user)),
+      pagination: buildPagination(result.total, offset, limit),
     };
   }
 
@@ -526,17 +493,13 @@ private async assertNotCompetingInTournament(
           as: "tournament",
           attributes: ["id", "name", "location", "tier", "status", "createdBy"],
         },
-        {
-          model: User,
-          as: "inviter",
-          attributes: ["id", "firstName", "lastName", "email"],
-        },
       ],
       offset,
       ...(limit > 0 && { limit }),
       order: [[sortBy, sortOrder]],
       distinct: true,
     });
+    await this.attachInvitationUsers(rows, "inviter");
 
     const currentLimit = limit > 0 ? limit : count;
     const currentPage = currentLimit > 0 ? Math.floor(offset / currentLimit) + 1 : 1;
@@ -556,6 +519,68 @@ private async assertNotCompetingInTournament(
   }
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
+
+  private async attachRefereeUsers(rows: TournamentReferee[]): Promise<void> {
+    const users = await identityReadService.getTournamentUsersByIds(
+      rows.map((row) => row.refereeId),
+    );
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    for (const row of rows) {
+      const user = userById.get(row.refereeId);
+      row.setDataValue("referee", user ? this.toPublicRefereeUserSummary(user) : null);
+    }
+  }
+
+  private async attachInvitationUsers(
+    rows: RefereeInvitation[],
+    relation: "referee" | "inviter",
+  ): Promise<void> {
+    const userIds = rows.map((row) =>
+      relation === "referee" ? row.refereeId : row.invitedBy,
+    );
+    const users = await identityReadService.getTournamentUsersByIds(userIds);
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    for (const row of rows) {
+      const userId = relation === "referee" ? row.refereeId : row.invitedBy;
+      const user = userById.get(userId);
+      if (relation === "referee") {
+        row.setDataValue("referee", user ? this.toInvitationUserSummary(user) : null);
+      } else {
+        row.setDataValue("inviter", user ? this.toInvitationUserSummary(user) : null);
+      }
+    }
+  }
+
+  private toPublicRefereeUserSummary(user: TournamentUserSummary): PublicRefereeUserSummary {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+      ...(user.gender ? { gender: user.gender } : {}),
+    };
+  }
+
+  private toInvitationUserSummary(user: TournamentUserSummary): InvitationUserSummary {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    };
+  }
+
+  private toAvailableRefereeSummary(user: TournamentUserSummary): AvailableRefereeSummary {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+    };
+  }
 
   private async getValidPendingInvitation(
     invitationId: number,
@@ -620,17 +645,9 @@ private async assertNotCompetingInTournament(
       ? ["chief_referee"]
       : ["referee", "chief_referee"];
 
-  const userRole = await UserRole.findOne({
-    include: [{
-      model: Role,
-      as: "role",
-      where: { name: { [Op.in]: acceptedSystemRoles } },
-      required: true,
-    }],
-    where: { userId },
-  });
+  const hasRole = await identityReadService.userHasAnyRole(userId, acceptedSystemRoles);
 
-  if (!userRole) {
+  if (!hasRole) {
     throw new Error(
       role === "chief"
         ? "User does not have the chief_referee role"
@@ -687,20 +704,9 @@ private async assertNotCompetingInTournament(
   }
 
   private async getOverlappingTournamentRefereeIds(tournamentId: number): Promise<number[]> {
-    const targetConfig = await ScheduleConfig.findOne({ where: { tournamentId } });
-    if (!targetConfig) {
-      throw new Error("Schedule config not found for this tournament");
-    }
-
-    const overlappingConfigs = await ScheduleConfig.findAll({
-      where: {
-        tournamentId: { [Op.ne]: tournamentId },
-        startDate: { [Op.lt]: targetConfig.endDate },
-        endDate: { [Op.gt]: targetConfig.startDate },
-      },
-      attributes: ["tournamentId"],
-    });
-    const overlappingTournamentIds = overlappingConfigs.map((config) => config.tournamentId);
+    const overlappingTournamentIds = await competitionReadService.getOverlappingTournamentIds(
+      tournamentId,
+    );
     if (overlappingTournamentIds.length === 0) return [];
 
     const activeOverlappingTournaments = await Tournament.findAll({
@@ -729,23 +735,7 @@ private async assertNotCompetingInTournament(
     const categoryIds = categories.map((category) => category.id);
     if (categoryIds.length === 0) return [];
 
-    const entries = await Entry.findAll({
-      where: { categoryId: { [Op.in]: categoryIds } },
-      attributes: ["id", "captainId"],
-    });
-    const entryIds = entries.map((entry) => entry.id);
-    const captainIds = entries
-      .map((entry) => entry.captainId)
-      .filter((captainId): captainId is number => captainId != null);
-
-    const members = entryIds.length
-      ? await EntryMember.findAll({
-          where: { entryId: { [Op.in]: entryIds } },
-          attributes: ["userId"],
-        })
-      : [];
-
-    return [...captainIds, ...members.map((member) => member.userId)];
+    return registrationReadService.getParticipantUserIdsByCategoryIds(categoryIds);
   }
 }
 

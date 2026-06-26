@@ -7,6 +7,12 @@ export {
 } from "./services/competitionRead.service";
 export type {
   ApprovedTournamentMatch,
+  GroupAwardStanding,
+  KnockoutStanding,
   MatchSummary,
   RegistrationWindow,
+  ScheduleConfigFilter,
+  ScheduleDateCondition,
+  TournamentScheduleConfig,
+  TournamentScheduleConfigListItem,
 } from "./public.contracts";

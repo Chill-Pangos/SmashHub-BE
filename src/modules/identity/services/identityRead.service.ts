@@ -1,10 +1,14 @@
 import User from "../models/user.model";
 import Role from "../models/role.model";
+import UserRole from "../models/userRole.model";
 import authService from "./auth.service";
 import { Op } from "sequelize";
 import type {
   PublicUserSummary,
   RegistrationUserSummary,
+  TournamentUserSearchInput,
+  TournamentUserSearchResult,
+  TournamentUserSummary,
 } from "../public.contracts";
 
 export class IdentityReadService {
@@ -97,6 +101,113 @@ export class IdentityReadService {
     return users.map((user) => user.id);
   }
 
+  async getTournamentUser(userId: number): Promise<TournamentUserSummary | null> {
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "firstName", "lastName", "email", "gender", "avatarUrl"],
+    });
+    return user ? this.toTournamentUser(user) : null;
+  }
+
+  async getTournamentUsersByIds(userIds: number[]): Promise<TournamentUserSummary[]> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) return [];
+
+    const users = await User.findAll({
+      where: { id: { [Op.in]: uniqueUserIds } },
+      attributes: ["id", "firstName", "lastName", "email", "gender", "avatarUrl"],
+    });
+
+    return users.map((user) => this.toTournamentUser(user));
+  }
+
+  async userHasRole(userId: number, roleName: string): Promise<boolean> {
+    return this.userHasAnyRole(userId, [roleName]);
+  }
+
+  async userHasAnyRole(userId: number, roleNames: string[]): Promise<boolean> {
+    const uniqueRoleNames = Array.from(new Set(roleNames));
+    if (uniqueRoleNames.length === 0) return false;
+
+    const userRole = await UserRole.findOne({
+      where: { userId },
+      include: [
+        {
+          model: Role,
+          as: "role",
+          where: { name: { [Op.in]: uniqueRoleNames } },
+          required: true,
+          attributes: [],
+        },
+      ],
+    });
+
+    return Boolean(userRole);
+  }
+
+  async getUserIdsByRoles(roleNames: string[]): Promise<number[]> {
+    const uniqueRoleNames = Array.from(new Set(roleNames));
+    if (uniqueRoleNames.length === 0) return [];
+
+    const roleRows = await UserRole.findAll({
+      attributes: ["userId"],
+      include: [
+        {
+          model: Role,
+          as: "role",
+          where: { name: { [Op.in]: uniqueRoleNames } },
+          required: true,
+          attributes: [],
+        },
+      ],
+    });
+
+    return Array.from(new Set(roleRows.map((row) => row.userId)));
+  }
+
+  async findTournamentUsersByIds(
+    input: TournamentUserSearchInput,
+  ): Promise<TournamentUserSearchResult> {
+    const includeIds = Array.from(new Set(input.includeIds));
+    if (includeIds.length === 0) {
+      return { users: [], total: 0 };
+    }
+
+    const excludeIds = Array.from(new Set(input.excludeIds ?? []));
+    const idFilter: Record<symbol, number[]> = {
+      [Op.in]: includeIds,
+    };
+    if (excludeIds.length > 0) {
+      idFilter[Op.notIn] = excludeIds;
+    }
+
+    const where: any = { id: idFilter };
+    const search = input.search?.trim();
+    if (search) {
+      where[Op.or] = [
+        { firstName: { [Op.like]: `%${search}%` } },
+        { lastName: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { count, rows } = await User.findAndCountAll({
+      where,
+      attributes: ["id", "firstName", "lastName", "email", "gender", "avatarUrl"],
+      order: [
+        ["firstName", "ASC"],
+        ["lastName", "ASC"],
+      ],
+      offset: input.offset ?? 0,
+      ...(input.limit != null && input.limit > 0 ? { limit: input.limit } : {}),
+      distinct: true,
+    });
+
+    return {
+      users: rows.map((user) => this.toTournamentUser(user)),
+      total: count,
+    };
+  }
+
   private toRegistrationUser(user: User): RegistrationUserSummary {
     return {
       id: user.id,
@@ -105,6 +216,17 @@ export class IdentityReadService {
       email: user.email,
       ...(user.gender ? { gender: user.gender } : {}),
       ...(user.dob ? { dob: user.dob } : {}),
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+    };
+  }
+
+  private toTournamentUser(user: User): TournamentUserSummary {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      ...(user.gender ? { gender: user.gender } : {}),
       ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
     };
   }

@@ -1,8 +1,8 @@
-import { Entry, EntryMember } from "../../registration/public.models";
 import Tournament from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import { notificationService, NotificationTemplates } from "../../notification/public.services";
+import { registrationReadService } from "../../registration/public.read";
 import { TournamentStatusTransition } from "./tournament.service";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -70,25 +70,11 @@ class TournamentStatusNotificationService {
     const categoryIds = categories.map((category) => category.id);
     if (categoryIds.length === 0) return [...recipientIds];
 
-    const entries = await Entry.findAll({
-      where: { categoryId: categoryIds },
-      attributes: ["id", "captainId"],
-      raw: true,
-    });
-    const entryIds = entries.map((entry) => entry.id);
-    for (const entry of entries) {
-      if (entry.captainId != null) recipientIds.add(entry.captainId);
-    }
-
-    if (entryIds.length === 0) return [...recipientIds];
-
-    const members = await EntryMember.findAll({
-      where: { entryId: entryIds },
-      attributes: ["userId"],
-      raw: true,
-    });
-    for (const member of members) {
-      recipientIds.add(member.userId);
+    const participantIds = await registrationReadService.getParticipantUserIdsByCategoryIds(
+      categoryIds,
+    );
+    for (const userId of participantIds) {
+      recipientIds.add(userId);
     }
 
     return [...recipientIds];

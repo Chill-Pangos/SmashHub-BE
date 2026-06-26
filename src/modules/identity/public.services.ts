@@ -6,4 +6,7 @@ export {
 export type {
   PublicUserSummary,
   RegistrationUserSummary,
+  TournamentUserSearchInput,
+  TournamentUserSearchResult,
+  TournamentUserSummary,
 } from "./public.contracts";

@@ -35,10 +35,12 @@ Leaf port rules:
 
 - `notification` and `ranking` must not import cross-module `public.models.ts`.
 - `registration` and `identity` must not import cross-module `public.models.ts`.
+- `tournament` must not import cross-module `public.models.ts`.
 - `notification` publishes through command/realtime DTOs from `notification/public.contracts.ts`.
 - `ranking` reads tournament/match/member data through read ports and owns only ranking models.
 - `registration` reads user, ELO, category/tournament, and registration-window data through read ports.
 - `identity` creates initial ELO through ranking write port and reads ELO/referee assignment through read ports.
+- `tournament` reads registration participants/payments, identity user/role data, and competition schedule/standing data through read/write ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
 - `public.models.ts` remains for compatibility, but new leaf-module work should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
 
@@ -92,4 +94,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: expand the `public.models.ts` ban beyond the `notification`, `ranking`, `registration`, and `identity` leaves once the remaining core modules have stable read/write ports.
+Next hardening step: make `competition` public-model-free for cross-module imports, then expand the `public.models.ts` ban repo-wide once the remaining core module has stable read/write ports.

@@ -1,10 +1,17 @@
 import Tournament, { TournamentStatus } from "../models/tournament.model";
 import TournamentCategory from "../models/tournamentCategory.model";
-import { Entry, EntryMember, Payment } from "../../registration/public.models";
 import TournamentReferee from "../models/tournamentReferee.model";
-import { ScheduleConfig, GroupStanding, KnockoutBracket } from "../../competition/public.models";
-import { knockoutBracketService } from "../../competition/public.services";
-import { User } from "../../identity/public.models";
+import {
+  competitionReadService,
+  type ScheduleConfigFilter,
+  type TournamentScheduleConfig,
+  type TournamentScheduleConfigListItem,
+} from "../../competition/public.read";
+import {
+  registrationReadService,
+  type RegistrationEntryWithMembers,
+} from "../../registration/public.read";
+import { identityReadService, type TournamentUserSummary } from "../../identity/public.read";
 import { eloCalculationService, type TournamentEloUpdateResult } from "../../ranking/public.services";
 import {
   CreateTournamentDto,
@@ -235,54 +242,14 @@ export class TournamentService {
       tournamentWhere.id = { [Op.in]: tournamentIdsWithMatchingCategory };
     }
 
-    // Build include for all categories (no filter on include)
-    const includeOptions: any[] = [
-      {
-        model: TournamentCategory,
-        as: "categories",
-        required: false, // Include all categories of the tournament
-      },
-      {
-        model: ScheduleConfig,
-        as: "scheduleConfig",
-        required: false,
-        attributes: [
-          "startDate",
-          "endDate",
-          "registrationStartDate",
-          "registrationEndDate",
-          "bracketGenerationDate",
-          "dailyStartHour",
-          "dailyStartMinute",
-          "dailyEndHour",
-          "dailyEndMinute",
-          "numberOfTables",
-        ],
-      },
-    ];
-
     // If userId is provided, filter tournaments where user has entries
     if (userId !== undefined) {
-      // Find tournaments where user has entries
-      const userEntries = await Entry.findAll({
-        include: [
-          {
-            model: EntryMember,
-            as: "members",
-            where: { userId },
-            required: true,
-          },
-        ],
-      });
+      const categoryIds = await registrationReadService.getEntryCategoryIdsByUserId(userId);
 
-      const tournamentIds = [
-        ...new Set(userEntries.map((entry) => entry.categoryId)),
-      ];
-
-      if (tournamentIds.length > 0) {
+      if (categoryIds.length > 0) {
         // Get tournament IDs from category IDs
         const categories = await TournamentCategory.findAll({
-          where: { id: { [Op.in]: tournamentIds } },
+          where: { id: { [Op.in]: categoryIds } },
           attributes: ["tournamentId"],
         });
 
@@ -292,8 +259,9 @@ export class TournamentService {
 
         if (finalTournamentIds.length > 0) {
           // Merge with existing id filter if present
-          if (tournamentWhere.id && tournamentWhere.id[Op.in]) {
-            const existingIds = tournamentWhere.id[Op.in];
+          const existingIdFilter = tournamentWhere.id as Record<symbol, number[]> | undefined;
+          const existingIds = existingIdFilter?.[Op.in];
+          if (existingIds) {
             const intersection = finalTournamentIds.filter((id) =>
               existingIds.includes(id),
             );
@@ -345,16 +313,24 @@ export class TournamentService {
       }
     }
 
-    const { count, rows } = await Tournament.findAndCountAll({
+    const rows = await Tournament.findAll({
       ...(Object.keys(tournamentWhere).length > 0 && {
         where: tournamentWhere,
       }),
-      include: includeOptions,
-      offset: offset,
-      ...(limit && limit > 0 && { limit }),
-      order: [[{ model: ScheduleConfig, as: "scheduleConfig" }, "startDate", "DESC"]],
-      distinct: true,
+      include: [
+        {
+          model: TournamentCategory,
+          as: "categories",
+          required: false,
+        },
+      ],
     });
+    await this.attachListScheduleConfigs(rows);
+    rows.sort((a, b) => this.scheduleStartTime(b) - this.scheduleStartTime(a));
+
+    const count = rows.length;
+    const paginatedRows =
+      limit && limit > 0 ? rows.slice(offset, offset + limit) : rows.slice(offset);
 
     // Calculate pagination info
     const currentLimit = limit && limit > 0 ? limit : count;
@@ -363,7 +339,7 @@ export class TournamentService {
     const totalPages = currentLimit > 0 ? Math.ceil(count / currentLimit) : 1;
 
     return {
-      tournaments: rows,
+      tournaments: paginatedRows,
       pagination: {
         total: count,
         page: currentPage,
@@ -387,25 +363,96 @@ export class TournamentService {
   }
 
   async findByIdWithCategories(id: number): Promise<Tournament | null> {
-    return await Tournament.findByPk(id, {
+    const tournament = await Tournament.findByPk(id, {
       include: [
         {
           model: TournamentCategory,
           as: "categories",
         },
-        {
-          model: ScheduleConfig,
-          as: "scheduleConfig",
-          required: false,
-        },
-        {
-          model: User,
-          as: "creator",
-          attributes: ["id", "firstName", "lastName", "gender", "avatarUrl"],
-          required: false,
-        },
       ],
     });
+
+    if (!tournament) return null;
+
+    const [scheduleConfig, creator] = await Promise.all([
+      competitionReadService.getTournamentScheduleConfig(tournament.id),
+      identityReadService.getTournamentUser(tournament.createdBy),
+    ]);
+    tournament.setDataValue("scheduleConfig", scheduleConfig);
+    tournament.setDataValue("creator", creator ? this.toCreatorSummary(creator) : null);
+
+    return tournament;
+  }
+
+  private async attachListScheduleConfigs(tournaments: Tournament[]): Promise<void> {
+    const configs = await competitionReadService.getScheduleConfigsByTournamentIds(
+      tournaments.map((tournament) => tournament.id),
+    );
+    const configByTournamentId = new Map(
+      configs.map((config) => [config.tournamentId, config]),
+    );
+
+    for (const tournament of tournaments) {
+      const config = configByTournamentId.get(tournament.id);
+      tournament.setDataValue(
+        "scheduleConfig",
+        config ? this.toListScheduleConfig(config) : null,
+      );
+    }
+  }
+
+  private toListScheduleConfig(
+    config: TournamentScheduleConfig,
+  ): TournamentScheduleConfigListItem {
+    return {
+      startDate: config.startDate,
+      endDate: config.endDate,
+      registrationStartDate: config.registrationStartDate,
+      registrationEndDate: config.registrationEndDate,
+      bracketGenerationDate: config.bracketGenerationDate,
+      dailyStartHour: config.dailyStartHour,
+      dailyStartMinute: config.dailyStartMinute,
+      dailyEndHour: config.dailyEndHour,
+      dailyEndMinute: config.dailyEndMinute,
+      numberOfTables: config.numberOfTables,
+    };
+  }
+
+  private toUpcomingScheduleConfig(config: TournamentScheduleConfig): {
+    registrationStartDate: Date;
+    registrationEndDate: Date;
+    bracketGenerationDate: Date;
+  } {
+    return {
+      registrationStartDate: config.registrationStartDate,
+      registrationEndDate: config.registrationEndDate,
+      bracketGenerationDate: config.bracketGenerationDate,
+    };
+  }
+
+  private scheduleStartTime(tournament: Tournament): number {
+    const config = tournament.getDataValue("scheduleConfig") as
+      | { startDate?: Date | string }
+      | null
+      | undefined;
+    if (!config?.startDate) return 0;
+    return new Date(config.startDate).getTime();
+  }
+
+  private toCreatorSummary(user: TournamentUserSummary): {
+    id: number;
+    firstName: string;
+    lastName: string;
+    gender?: "male" | "female";
+    avatarUrl?: string;
+  } {
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      ...(user.gender ? { gender: user.gender } : {}),
+      ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
+    };
   }
 
   async update(
@@ -583,11 +630,9 @@ export class TournamentService {
     const awards: TournamentAward[] = [];
 
     for (const category of categories) {
-      const hasKnockoutBrackets = await KnockoutBracket.count({
-        where: { categoryId: category.id },
-      });
+      const hasKnockoutBrackets = await competitionReadService.hasKnockoutBrackets(category.id);
 
-      if (hasKnockoutBrackets > 0) {
+      if (hasKnockoutBrackets) {
         awards.push(...await this.getKnockoutAwards(category));
         continue;
       }
@@ -599,7 +644,7 @@ export class TournamentService {
   }
 
   private async getKnockoutAwards(category: TournamentCategory): Promise<TournamentAward[]> {
-    const standings = await knockoutBracketService.getStandings(category.id);
+    const standings = await competitionReadService.getKnockoutStandings(category.id);
     const awardItems: {
       entryId: number | undefined;
       placement: number;
@@ -635,80 +680,62 @@ export class TournamentService {
   }
 
   private async getGroupAwards(category: TournamentCategory): Promise<TournamentAward[]> {
-    const standings = await GroupStanding.findAll({
-      where: {
-        categoryId: category.id,
-        position: { [Op.in]: [1, 2, 3] },
-      },
-      include: [
-        {
-          model: Entry,
-          as: "entry",
-          include: [
-            {
-              model: EntryMember,
-              as: "members",
-              include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "avatarUrl"] }],
-            },
-          ],
-        },
-      ],
-      order: [
-        ["groupName", "ASC"],
-        ["position", "ASC"],
-      ],
-    });
-
     const titleByPosition: Record<number, TournamentAward["title"]> = {
       1: "group_winner",
       2: "group_runner_up",
       3: "group_third_place",
     };
+    const standings = await competitionReadService.getTopGroupAwardStandings(category.id);
+    const awards: TournamentAward[] = [];
 
-    return standings
-      .filter((standing) => standing.position != null && standing.entry)
-      .map((standing) => ({
+    for (const standing of standings) {
+      const title = titleByPosition[standing.position];
+      if (!title) continue;
+
+      const entry = await this.findAwardEntry(standing.entryId);
+      if (!entry) continue;
+
+      awards.push({
         categoryId: category.id,
         categoryName: category.name,
-        source: "group" as const,
-        placement: standing.position!,
-        title: titleByPosition[standing.position!]!,
+        source: "group",
+        placement: standing.position,
+        title,
         groupName: standing.groupName,
-        entry: this.toAwardEntry(standing.entry!),
-      }));
+        entry,
+      });
+    }
+
+    return awards;
   }
 
   private async findAwardEntry(entryId: number): Promise<AwardEntry | null> {
-    const entry = await Entry.findByPk(entryId, {
-      include: [
-        {
-          model: EntryMember,
-          as: "members",
-          include: [{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "avatarUrl"] }],
-        },
-      ],
-    });
-
+    const [entry] = await registrationReadService.getEntriesWithMembersByIds([entryId]);
     return entry ? this.toAwardEntry(entry) : null;
   }
 
-  private toAwardEntry(entry: Entry): AwardEntry {
+  private async toAwardEntry(entry: RegistrationEntryWithMembers): Promise<AwardEntry> {
+    const users = await identityReadService.getTournamentUsersByIds(
+      entry.members.map((member) => member.userId),
+    );
+    const userById = new Map(users.map((user) => [user.id, user]));
     const result: AwardEntry = {
       id: entry.id,
       name: entry.name,
-      members: (entry.members ?? []).map((member) => {
+      members: entry.members.map((member) => {
         const item: AwardEntry["members"][number] = {
           userId: member.userId,
           eloAtEntry: member.eloAtEntry,
         };
+        const user = userById.get(member.userId);
 
-        if (member.user) {
+        if (user) {
           item.user = {
-            id: member.user.id,
-            firstName: member.user.firstName,
-            lastName: member.user.lastName,
-            email: member.user.email,
-            ...(member.user.avatarUrl ? { avatarUrl: member.user.avatarUrl } : {}),
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
           };
         }
 
@@ -725,8 +752,8 @@ export class TournamentService {
 
   async openRegistrations(now = new Date()): Promise<TournamentStatusTransition[]> {
     const configs = await this.findScheduleConfigs({
-      registrationStartDate: { [Op.lte]: now, [Op.not]: null },
-      registrationEndDate: { [Op.gt]: now, [Op.not]: null },
+      registrationStartDate: { lte: now, notNull: true },
+      registrationEndDate: { gt: now, notNull: true },
     });
 
     return this.applyStatusTransition({
@@ -741,8 +768,8 @@ export class TournamentService {
   async closeRegistrations(now = new Date()): Promise<TournamentStatusTransition[]> {
     const events: TournamentStatusTransition[] = [];
     const closeConfigs = await this.findScheduleConfigs({
-      registrationEndDate: { [Op.lte]: now, [Op.not]: null },
-      bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
+      registrationEndDate: { lte: now, notNull: true },
+      bracketGenerationDate: { gt: now, notNull: true },
     });
 
     events.push(...await this.applyStatusTransition({
@@ -754,9 +781,9 @@ export class TournamentService {
     }));
 
     const skippedOpenConfigs = await this.findScheduleConfigs({
-      registrationStartDate: { [Op.lte]: now, [Op.not]: null },
-      registrationEndDate: { [Op.lte]: now, [Op.not]: null },
-      bracketGenerationDate: { [Op.gt]: now, [Op.not]: null },
+      registrationStartDate: { lte: now, notNull: true },
+      registrationEndDate: { lte: now, notNull: true },
+      bracketGenerationDate: { gt: now, notNull: true },
     });
 
     events.push(...await this.applyStatusTransition({
@@ -772,7 +799,7 @@ export class TournamentService {
 
   async generateBracketsOrCancel(now = new Date()): Promise<TournamentStatusTransition[]> {
     const configs = await this.findScheduleConfigs({
-      bracketGenerationDate: { [Op.lte]: now, [Op.not]: null },
+      bracketGenerationDate: { lte: now, notNull: true },
     });
     const configByTournamentId = new Map(configs.map((config) => [config.tournamentId, config]));
     const tournamentIds = configs.map((config) => config.tournamentId);
@@ -784,7 +811,7 @@ export class TournamentService {
     events.push(...await this.applyStatusTransition({
       configs: cancellableIds
         .map((id) => configByTournamentId.get(id))
-        .filter((config): config is ScheduleConfig => Boolean(config)),
+        .filter((config): config is TournamentScheduleConfig => Boolean(config)),
       fromStatuses: ["upcoming", "registration_open", "registration_closed"],
       toStatus: "cancelled",
       triggeredBy: "minEligibleEntries",
@@ -794,7 +821,7 @@ export class TournamentService {
     events.push(...await this.applyStatusTransition({
       configs: runnableIds
         .map((id) => configByTournamentId.get(id))
-        .filter((config): config is ScheduleConfig => Boolean(config)),
+        .filter((config): config is TournamentScheduleConfig => Boolean(config)),
       fromStatuses: ["registration_closed", "upcoming", "registration_open"],
       toStatus: "brackets_generated",
       triggeredBy: "bracketGenerationDate",
@@ -806,7 +833,7 @@ export class TournamentService {
 
   async startTournaments(now = new Date()): Promise<TournamentStatusTransition[]> {
     const configs = await this.findScheduleConfigs({
-      startDate: { [Op.lte]: now, [Op.not]: null },
+      startDate: { lte: now, notNull: true },
     });
 
     return this.applyStatusTransition({
@@ -833,21 +860,12 @@ export class TournamentService {
     return this.reconcileTournamentStatuses();
   }
 
-  private async findScheduleConfigs(where: WhereOptions<any>): Promise<ScheduleConfig[]> {
-    return ScheduleConfig.findAll({
-      where,
-      attributes: [
-        "tournamentId",
-        "registrationStartDate",
-        "registrationEndDate",
-        "bracketGenerationDate",
-        "startDate",
-      ],
-    });
+  private async findScheduleConfigs(filter: ScheduleConfigFilter): Promise<TournamentScheduleConfig[]> {
+    return competitionReadService.findScheduleConfigs(filter);
   }
 
   private async applyStatusTransition(input: {
-    configs: ScheduleConfig[];
+    configs: TournamentScheduleConfig[];
     fromStatuses: TournamentStatus[];
     toStatus: TournamentStatus;
     triggeredBy: TournamentStatusTransitionTrigger;
@@ -903,13 +921,7 @@ export class TournamentService {
     });
 
     const categoryIds = categories.map((category) => category.id);
-    const entries = categoryIds.length > 0
-      ? await Entry.findAll({
-          where: { categoryId: { [Op.in]: categoryIds } },
-          attributes: ["id", "categoryId", "requiredMemberCount", "currentMemberCount", "isConfirmed"],
-          raw: true,
-        })
-      : [];
+    const entries = await registrationReadService.getEntriesByCategoryIds(categoryIds);
 
     const paidEntryIds = new Set<number>();
     const entryIdsRequiringPayment = entries
@@ -920,17 +932,11 @@ export class TournamentService {
       .map((entry) => entry.id);
 
     if (entryIdsRequiringPayment.length > 0) {
-      const payments = await Payment.findAll({
-        where: {
-          entryId: { [Op.in]: entryIdsRequiringPayment },
-          status: "completed",
-        },
-        attributes: ["entryId"],
-        raw: true,
-      });
-
-      for (const payment of payments) {
-        paidEntryIds.add(payment.entryId);
+      const paidIds = await registrationReadService.getCompletedPaymentEntryIds(
+        entryIdsRequiringPayment,
+      );
+      for (const entryId of paidIds) {
+        paidEntryIds.add(entryId);
       }
     }
 
@@ -1025,30 +1031,37 @@ export class TournamentService {
 
     const findTournamentsByConfigDates = async (
       status: string,
-      configWhere: WhereOptions<any>
+      configFilter: ScheduleConfigFilter,
     ): Promise<Tournament[]> => {
-      const configs = await ScheduleConfig.findAll({
-        where: configWhere,
-        attributes: ["tournamentId"],
-      });
-      const ids = configs.map((c) => c.tournamentId);
+      const configs = await this.findScheduleConfigs(configFilter);
+      const configByTournamentId = new Map(
+        configs.map((config) => [config.tournamentId, config]),
+      );
+      const ids = configs.map((config) => config.tournamentId);
       if (ids.length === 0) return [];
-      return Tournament.findAll({
+      const tournaments = await Tournament.findAll({
         where: { status, id: { [Op.in]: ids } },
         attributes: ["id", "name", "status"],
-        include: [{ model: ScheduleConfig, as: "scheduleConfig", attributes: ["registrationStartDate", "registrationEndDate", "bracketGenerationDate"] }],
       });
+      for (const tournament of tournaments) {
+        const config = configByTournamentId.get(tournament.id);
+        tournament.setDataValue(
+          "scheduleConfig",
+          config ? this.toUpcomingScheduleConfig(config) : null,
+        );
+      }
+      return tournaments;
     };
 
     const [openingSoon, closingSoon, bracketsSoon] = await Promise.all([
       findTournamentsByConfigDates("upcoming", {
-        registrationStartDate: { [Op.between]: [now, futureTime] },
+        registrationStartDate: { between: [now, futureTime] },
       }),
       findTournamentsByConfigDates("registration_open", {
-        registrationEndDate: { [Op.between]: [now, futureTime] },
+        registrationEndDate: { between: [now, futureTime] },
       }),
       findTournamentsByConfigDates("registration_closed", {
-        bracketGenerationDate: { [Op.between]: [now, futureTime] },
+        bracketGenerationDate: { between: [now, futureTime] },
       }),
     ]);
 

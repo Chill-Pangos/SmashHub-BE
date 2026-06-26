@@ -4,7 +4,13 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(repoRoot, "src");
 const modulesRoot = path.join(srcRoot, "modules");
-const publicModelFreeLeaves = new Set(["notification", "ranking", "registration", "identity"]);
+const publicModelFreeLeaves = new Set([
+  "notification",
+  "ranking",
+  "registration",
+  "identity",
+  "tournament",
+]);
 
 function walk(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -99,11 +105,14 @@ require("ts-node/register/transpile-only");
 const { notificationService } = require("../src/modules/notification/public.services");
 const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
+const { competitionWriteService } = require("../src/modules/competition/public.write");
+const { registrationReadService } = require("../src/modules/registration/public.read");
 const { tournamentReadService } = require("../src/modules/tournament/public.read");
 const { rankingReadService } = require("../src/modules/ranking/public.read");
 const { rankingWriteService } = require("../src/modules/ranking/public.write");
 require("../src/modules/notification/public.contracts");
 require("../src/modules/competition/public.contracts");
+require("../src/modules/registration/public.contracts");
 require("../src/modules/tournament/public.contracts");
 require("../src/modules/ranking/public.contracts");
 
@@ -120,9 +129,30 @@ for (const [name, value] of [
   ["identityReadService.getRegistrationUsersByIds", identityReadService.getRegistrationUsersByIds],
   ["identityReadService.searchUserIdsByName", identityReadService.searchUserIdsByName],
   ["identityReadService.isAdmin", identityReadService.isAdmin],
+  ["identityReadService.getTournamentUser", identityReadService.getTournamentUser],
+  ["identityReadService.getTournamentUsersByIds", identityReadService.getTournamentUsersByIds],
+  ["identityReadService.userHasRole", identityReadService.userHasRole],
+  ["identityReadService.userHasAnyRole", identityReadService.userHasAnyRole],
+  ["identityReadService.getUserIdsByRoles", identityReadService.getUserIdsByRoles],
+  ["identityReadService.findTournamentUsersByIds", identityReadService.findTournamentUsersByIds],
   ["competitionReadService.matchExists", competitionReadService.matchExists],
   ["competitionReadService.getApprovedTournamentMatchesForElo", competitionReadService.getApprovedTournamentMatchesForElo],
   ["competitionReadService.getRegistrationWindow", competitionReadService.getRegistrationWindow],
+  ["competitionReadService.getTournamentScheduleConfig", competitionReadService.getTournamentScheduleConfig],
+  ["competitionReadService.getScheduleConfigsByTournamentIds", competitionReadService.getScheduleConfigsByTournamentIds],
+  ["competitionReadService.findScheduleConfigs", competitionReadService.findScheduleConfigs],
+  ["competitionReadService.getOverlappingTournamentIds", competitionReadService.getOverlappingTournamentIds],
+  ["competitionReadService.hasKnockoutBrackets", competitionReadService.hasKnockoutBrackets],
+  ["competitionReadService.getKnockoutStandings", competitionReadService.getKnockoutStandings],
+  ["competitionReadService.getTopGroupAwardStandings", competitionReadService.getTopGroupAwardStandings],
+  ["competitionWriteService.generateKnockoutBracketForCategory", competitionWriteService.generateKnockoutBracketForCategory],
+  ["registrationReadService.getEntryCategoryIdsByUserId", registrationReadService.getEntryCategoryIdsByUserId],
+  ["registrationReadService.getEntriesByCategoryIds", registrationReadService.getEntriesByCategoryIds],
+  ["registrationReadService.getEntriesWithMembersByIds", registrationReadService.getEntriesWithMembersByIds],
+  ["registrationReadService.getEntryMembersByEntryIds", registrationReadService.getEntryMembersByEntryIds],
+  ["registrationReadService.getCompletedPaymentEntryIds", registrationReadService.getCompletedPaymentEntryIds],
+  ["registrationReadService.userCompetesInCategories", registrationReadService.userCompetesInCategories],
+  ["registrationReadService.getParticipantUserIdsByCategoryIds", registrationReadService.getParticipantUserIdsByCategoryIds],
   ["tournamentReadService.getTournamentForElo", tournamentReadService.getTournamentForElo],
   ["tournamentReadService.getCategoryRegistrationContext", tournamentReadService.getCategoryRegistrationContext],
   ["tournamentReadService.getCategoriesRegistrationContext", tournamentReadService.getCategoriesRegistrationContext],
