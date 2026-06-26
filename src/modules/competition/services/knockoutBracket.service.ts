@@ -4,9 +4,12 @@ import { sequelize } from "../../../config/database";
 import KnockoutBracket, {
   BracketStatus,
 } from "../models/knockoutBracket.model";
-import { TournamentCategory, Tournament, TournamentReferee } from "../../tournament/public.models";
-import { Entry } from "../../registration/public.models";
-import { entryService } from "../../registration/public.services";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+  type CompetitionTournamentContext,
+} from "../../tournament/public.read";
+import { registrationReadService } from "../../registration/public.read";
 import GroupStanding from "../models/groupStanding.model";
 import groupStandingService from "./groupStanding.service";
 import { KnockoutRound } from "../models/schedule.model";
@@ -83,11 +86,6 @@ const ROUND_NAME_MAP: Record<number, KnockoutRound> = {
   32: "Round of 32",
   64: "Round of 64",
 };
-
-const BRACKET_INCLUDE = [
-  { model: Entry, as: "entryA", attributes: ["id", "name"] },
-  { model: Entry, as: "entryB", attributes: ["id", "name"] },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -346,22 +344,17 @@ function getRoundName(playersInRound: number): KnockoutRound {
 
 async function getCategoryWithTournament(
   categoryId: number,
-): Promise<TournamentCategory> {
-  const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament, as: "tournament" }],
-  });
+): Promise<CompetitionCategoryContext> {
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new Error("Category not found");
   return category;
 }
 
-async function assertOrganizer(
+function assertOrganizer(
   userId: number,
-  tournamentId: number,
-): Promise<void> {
-  const tournament = await Tournament.findByPk(tournamentId, {
-    attributes: ["id", "createdBy"],
-  });
-  if (!tournament || tournament.createdBy !== userId) {
+  tournament: CompetitionTournamentContext,
+): void {
+  if (tournament.createdBy !== userId) {
     throw new Error("Only the tournament organizer can perform this action");
   }
 }
@@ -370,15 +363,17 @@ async function assertChiefReferee(
   userId: number,
   tournamentId: number,
 ): Promise<void> {
-  const ref = await TournamentReferee.findOne({
-    where: { refereeId: userId, tournamentId, role: "chief" },
-  });
-  if (!ref) {
+  const isChief = await tournamentReadService.isTournamentReferee(
+    tournamentId,
+    userId,
+    ["chief"],
+  );
+  if (!isChief) {
     throw new Error("Only the chief referee can perform this action");
   }
 }
 
-async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+async function assertBracketsGenerated(tournament: CompetitionTournamentContext): Promise<void> {
   if (tournament.status !== "brackets_generated") {
     throw new Error("Tournament must be in brackets_generated status before managing brackets");
   }
@@ -390,6 +385,26 @@ async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
 
   if (new Date() < config.bracketGenerationDate) {
     throw new Error("Bracket generation date must be reached before managing brackets");
+  }
+}
+
+async function attachBracketEntryNames(brackets: KnockoutBracket[]): Promise<void> {
+  const entryIds = Array.from(new Set(
+    brackets.flatMap((bracket) => [bracket.entryAId, bracket.entryBId])
+      .filter((entryId): entryId is number => entryId != null),
+  ));
+  const entries = await registrationReadService.getEntryNamesByIds(entryIds);
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+
+  for (const bracket of brackets) {
+    bracket.setDataValue(
+      "entryA",
+      bracket.entryAId != null ? entryById.get(bracket.entryAId) ?? null : null,
+    );
+    bracket.setDataValue(
+      "entryB",
+      bracket.entryBId != null ? entryById.get(bracket.entryBId) ?? null : null,
+    );
   }
 }
 
@@ -682,8 +697,8 @@ export class KnockoutBracketService {
     categoryId: number,
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(organizerId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(organizerId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
 
     const groupNames = await GroupStanding.findAll({
       where: { categoryId },
@@ -707,8 +722,8 @@ export class KnockoutBracketService {
     categoryId: number,
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(chiefRefereeId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
 
     // Đếm số bảng hiện có để tính số slots = numGroups * QUALIFIERS_PER_GROUP
     const groupNames = await GroupStanding.findAll({
@@ -731,12 +746,12 @@ export class KnockoutBracketService {
 
     const bracketsWithEntries = await KnockoutBracket.findAll({
       where: { categoryId },
-      include: BRACKET_INCLUDE,
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
       ],
     });
+    await attachBracketEntryNames(bracketsWithEntries);
 
     return formatBracketTree(categoryId, bracketsWithEntries);
   }
@@ -753,7 +768,7 @@ export class KnockoutBracketService {
     categoryId: number,
   ): Promise<BracketPreviewResponse> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(organizerId, category.tournamentId);
+    assertOrganizer(organizerId, category.tournament);
 
     const qualifiersResult =
       await groupStandingService.getQualifiers(categoryId);
@@ -787,10 +802,7 @@ export class KnockoutBracketService {
 
     const entryIds = buildQualifierSeedEntryIds(qualifiers);
 
-    const entries = await Entry.findAll({
-      where: { id: { [Op.in]: entryIds } },
-      attributes: ["id", "name"],
-    });
+    const entries = await registrationReadService.getEntryNamesByIds(entryIds);
     const entryNames = new Map(entries.map((e) => [e.id, e.name]));
 
     return {
@@ -805,7 +817,7 @@ export class KnockoutBracketService {
     previewEntryIds: number[],
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
+    assertOrganizer(chiefRefereeId, category.tournament);
 
     const qualifiersResult =
       await groupStandingService.getQualifiers(categoryId);
@@ -886,12 +898,12 @@ export class KnockoutBracketService {
 
     const bracketsWithEntries = await KnockoutBracket.findAll({
       where: { categoryId },
-      include: BRACKET_INCLUDE,
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
       ],
     });
+    await attachBracketEntryNames(bracketsWithEntries);
 
     return formatBracketTree(categoryId, bracketsWithEntries);
   }
@@ -907,8 +919,8 @@ export class KnockoutBracketService {
     categoryId: number,
   ): Promise<BracketPreviewResponse> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(organizerId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(organizerId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
 
     if (category.isGroupStage) {
       throw new Error(
@@ -916,8 +928,11 @@ export class KnockoutBracketService {
       );
     }
 
-    const result = await entryService.getEligibleEntries(categoryId);
-    const eligible = Array.isArray(result) ? result : (result.eligible ?? []);
+    const eligible = await registrationReadService.getEligibleEntriesByCategory({
+      categoryId,
+      categoryType: category.type,
+      requireConfirmed: true,
+    });
 
     if (eligible.length < MIN_ENTRIES) {
       throw new Error(
@@ -940,8 +955,8 @@ export class KnockoutBracketService {
     previewEntryIds: number[],
   ): Promise<BracketTreeDto> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(chiefRefereeId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
 
     if (category.isGroupStage) {
       throw new Error(
@@ -949,8 +964,11 @@ export class KnockoutBracketService {
       );
     }
 
-    const result = await entryService.getEligibleEntries(categoryId);
-    const eligible = Array.isArray(result) ? result : (result.eligible ?? []);
+    const eligible = await registrationReadService.getEligibleEntriesByCategory({
+      categoryId,
+      categoryType: category.type,
+      requireConfirmed: true,
+    });
 
     if (eligible.length < MIN_ENTRIES) {
       throw new Error(
@@ -968,12 +986,12 @@ export class KnockoutBracketService {
 
     const bracketsWithEntries = await KnockoutBracket.findAll({
       where: { categoryId },
-      include: BRACKET_INCLUDE,
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
       ],
     });
+    await attachBracketEntryNames(bracketsWithEntries);
 
     return formatBracketTree(categoryId, bracketsWithEntries);
   }
@@ -1084,12 +1102,10 @@ export class KnockoutBracketService {
 
     if (!targetEntryId && filter.entryName) {
       const trimmed = filter.entryName.trim();
-      const entry = await Entry.findOne({
-        where: {
-          categoryId,
-          name: { [Op.like]: `%${trimmed}%` },
-        },
-      });
+      const entry = await registrationReadService.getEntryByNameInCategory(
+        categoryId,
+        trimmed,
+      );
       if (!entry) throw new Error("Entry not found for the given name");
       targetEntryId = entry.id;
     }
@@ -1117,11 +1133,11 @@ export class KnockoutBracketService {
 
       const { count, rows } = await KnockoutBracket.findAndCountAll({
         where,
-        include: BRACKET_INCLUDE,
         order,
         offset,
         limit,
       });
+      await attachBracketEntryNames(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -1141,9 +1157,9 @@ export class KnockoutBracketService {
 
     const brackets = await KnockoutBracket.findAll({
       where,
-      include: BRACKET_INCLUDE,
       order,
     });
+    await attachBracketEntryNames(brackets);
 
     return brackets.map(formatBracket);
   }
@@ -1156,12 +1172,12 @@ export class KnockoutBracketService {
   async getBracketTree(categoryId: number): Promise<BracketTreeDto> {
     const brackets = await KnockoutBracket.findAll({
       where: { categoryId },
-      include: BRACKET_INCLUDE,
       order: [
         ["roundNumber", "ASC"],
         ["bracketPosition", "ASC"],
       ],
     });
+    await attachBracketEntryNames(brackets);
 
     if (brackets.length === 0)
       throw new Error("No bracket found for this category");
@@ -1183,7 +1199,7 @@ export class KnockoutBracketService {
     categoryId: number,
   ): Promise<{ valid: boolean; errors: string[] }> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
+    assertOrganizer(chiefRefereeId, category.tournament);
 
     const brackets = await KnockoutBracket.findAll({
       where: { categoryId },

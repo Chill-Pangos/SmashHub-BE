@@ -3,6 +3,9 @@ export {
   TournamentReadService,
 } from "./services/tournamentRead.service";
 export type {
+  CompetitionCategoryContext,
+  CompetitionRefereeAssignment,
+  CompetitionTournamentContext,
   TournamentCategoryRegistrationContext,
   TournamentForElo,
   TournamentRegistrationContext,

@@ -6,26 +6,28 @@ import MatchReferee from "../models/matchReferee.model";
 import MatchSet from "../models/matchSet.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
-import { TournamentCategory, Tournament, TournamentReferee } from "../../tournament/public.models";
-
 import KnockoutBracket from "../models/knockoutBracket.model";
-import { Entry, EntryMember } from "../../registration/public.models";
-import { User } from "../../identity/public.models";
 import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
+import competitionViewService from "./competitionView.service";
 import { notificationService } from "../../notification/public.services";
+import { registrationReadService } from "../../registration/public.read";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+  type CompetitionTournamentContext,
+} from "../../tournament/public.read";
 import { Stage, STAGES } from "../models/schedule.model";
 import { MATCH_STATUSES, MatchStatus, RESULT_STATUSES, ResultStatus } from "../models/match.model";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../../utils/errors.helper";
-import { PUBLIC_USER_ATTRIBUTES } from "../../../utils/userProjection.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface MatchWithContext {
   instance: Match;
-  category: TournamentCategory;
-  tournament: Tournament;
+  category: CompetitionCategoryContext;
+  tournament: CompetitionTournamentContext;
 }
 
 interface CategoryMatchesFilters {
@@ -70,37 +72,34 @@ interface PaginatedMatches {
 
 const MATCH_START_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
-const createEntryMemberInclude = () => ({
-  model: EntryMember,
-  as: "members",
-  include: [
-    {
-      model: User,
-      as: "user",
-      attributes: [...PUBLIC_USER_ATTRIBUTES],
-    },
-  ],
-});
-
 const createMatchDetailInclude = () => [
   {
     model: Schedule,
     as: "schedule",
-    include: [{ model: TournamentCategory, as: "tournamentCategory" }],
   },
-  { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
-  { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
   {
     model: MatchReferee,
     as: "matchReferees",
-    include: [
-      {
-        model: User,
-        as: "referee",
-        attributes: [...PUBLIC_USER_ATTRIBUTES],
-      },
-    ],
   },
+];
+
+const createMatchWithSubMatchesInclude = () => [
+  ...createMatchDetailInclude(),
+  {
+    model: SubMatch,
+    as: "subMatches",
+    include: [{ model: MatchSet, as: "matchSets" }],
+  },
+];
+
+const SUB_MATCH_ORDER: any[] = [
+  [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
+  [
+    { model: SubMatch, as: "subMatches" },
+    { model: MatchSet, as: "matchSets" },
+    "setNumber",
+    "ASC",
+  ],
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,13 +113,6 @@ async function getMatchWithContext(
       {
         model: Schedule,
         as: "schedule",
-        include: [
-          {
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            include: [{ model: Tournament, as: "tournament" }],
-          },
-        ],
       },
     ],
   };
@@ -132,12 +124,15 @@ async function getMatchWithContext(
   const instance = await Match.findByPk(matchId, queryOptions);
   if (!instance) throw new NotFoundError("Match not found");
 
-  const category = instance.schedule?.tournamentCategory;
+  const categoryId = instance.schedule?.categoryId;
+  if (!categoryId) throw new NotFoundError("Match schedule or category not found");
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new NotFoundError("Match schedule or category not found");
 
   const tournament = category.tournament;
   if (!tournament) throw new NotFoundError("Tournament not found");
 
+  instance.schedule?.setDataValue("tournamentCategory", category);
   return { instance, category, tournament };
 }
 
@@ -178,13 +173,14 @@ function assertMatchScheduledForToday(match: Match): void {
 async function assertChiefReferee(
   userId: number,
   tournamentId: number,
-  transaction?: Transaction,
+  _transaction?: Transaction,
 ): Promise<void> {
-  const ref = await TournamentReferee.findOne({
-    where: { refereeId: userId, tournamentId, role: "chief" },
-    ...(transaction && { transaction }),
-  });
-  if (!ref) throw new ForbiddenError("Only the chief referee can perform this action");
+  const isChief = await tournamentReadService.isTournamentReferee(
+    tournamentId,
+    userId,
+    ["chief"],
+  );
+  if (!isChief) throw new ForbiddenError("Only the chief referee can perform this action");
 }
 
 async function assertMatchReferee(
@@ -202,17 +198,14 @@ async function assertMatchReferee(
 async function assertTournamentReferee(
   userId: number,
   tournamentId: number,
-  transaction?: Transaction,
+  _transaction?: Transaction,
 ): Promise<void> {
-  const ref = await TournamentReferee.findOne({
-    where: {
-      refereeId: userId,
-      tournamentId,
-      role: { [Op.in]: ["referee", "chief"] },
-    },
-    ...(transaction && { transaction }),
-  });
-  if (!ref) throw new ForbiddenError("Only a tournament referee can perform this action");
+  const isReferee = await tournamentReadService.isTournamentReferee(
+    tournamentId,
+    userId,
+    ["referee", "chief"],
+  );
+  if (!isReferee) throw new ForbiddenError("Only a tournament referee can perform this action");
 }
 
 function countSubMatchWins(subMatches: SubMatch[]): {
@@ -341,6 +334,55 @@ async function loadMatchesByIds(
     .filter((match): match is Match => Boolean(match));
 }
 
+async function hydrateMatches(
+  matches: Match[],
+  options: {
+    entries?: boolean;
+    winner?: boolean;
+    scheduleCategory?: boolean;
+    refereeUsers?: boolean;
+    subMatchOfficials?: boolean;
+  } = {},
+): Promise<void> {
+  if (matches.length === 0) return;
+
+  const includeEntries = options.entries ?? true;
+  const includeWinner = options.winner ?? true;
+  const includeScheduleCategory = options.scheduleCategory ?? true;
+  const includeRefereeUsers = options.refereeUsers ?? true;
+  const includeSubMatchOfficials = options.subMatchOfficials ?? false;
+
+  if (includeScheduleCategory) {
+    await competitionViewService.attachScheduleCategoriesToMatches(matches);
+  }
+  if (includeEntries) {
+    await competitionViewService.attachEntriesToMatches(matches, { winner: includeWinner });
+  }
+  if (includeRefereeUsers) {
+    await competitionViewService.attachRefereeUsersToMatches(matches);
+  }
+  if (includeSubMatchOfficials) {
+    const subMatches = matches.flatMap((match) => (match.subMatches ?? []) as SubMatch[]);
+    await competitionViewService.attachSubMatchOfficials(subMatches);
+  }
+}
+
+async function getCategoryIdsForMatchFilters(filters: {
+  tournamentId?: number;
+  categoryId?: number;
+}): Promise<number[] | undefined> {
+  if (filters.categoryId) {
+    if (!filters.tournamentId) return [filters.categoryId];
+
+    const category = await tournamentReadService.getCategoryCompetitionContext(
+      filters.categoryId,
+    );
+    return category?.tournamentId === filters.tournamentId ? [filters.categoryId] : [];
+  }
+  if (!filters.tournamentId) return undefined;
+  return tournamentReadService.getCategoryIdsByTournamentId(filters.tournamentId);
+}
+
 async function assignUmpiresToSubMatches(
   matchId: number,
   t: Transaction,
@@ -384,22 +426,14 @@ async function assignUmpiresToSubMatches(
 
 export class MatchService {
   async findById(matchId: number): Promise<Match | null> {
-    return Match.findByPk(matchId, {
-      include: [
-        ...createMatchDetailInclude(),
-        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
-        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
-      ],
-      order: [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+    const match = await Match.findByPk(matchId, {
+      include: createMatchWithSubMatchesInclude(),
+      order: SUB_MATCH_ORDER,
     });
+    if (match) {
+      await hydrateMatches([match], { subMatchOfficials: true });
+    }
+    return match;
   }
 
   async findByEntryNames(
@@ -409,38 +443,45 @@ export class MatchService {
     offset = 0,
     limit = 10,
   ): Promise<PaginatedMatches> {
-    const firstNamePattern = `%${entryAName.trim()}%`;
-    const secondNamePattern = `%${entryBName.trim()}%`;
-    const scheduleWhere = filters.categoryId ? { categoryId: filters.categoryId } : undefined;
-    const categoryWhere = filters.tournamentId ? { tournamentId: filters.tournamentId } : undefined;
+    const categoryIds = await getCategoryIdsForMatchFilters(filters);
+    if (categoryIds && categoryIds.length === 0) {
+      return { matches: [], pagination: buildPagination(0, offset, limit) };
+    }
+
+    const [firstEntryIds, secondEntryIds] = await Promise.all([
+      registrationReadService.searchCompetitionEntryIdsByName({
+        name: entryAName,
+        ...(categoryIds ? { categoryIds } : {}),
+      }),
+      registrationReadService.searchCompetitionEntryIdsByName({
+        name: entryBName,
+        ...(categoryIds ? { categoryIds } : {}),
+      }),
+    ]);
+    if (firstEntryIds.length === 0 || secondEntryIds.length === 0) {
+      return { matches: [], pagination: buildPagination(0, offset, limit) };
+    }
+
+    const scheduleWhere = categoryIds ? { categoryId: { [Op.in]: categoryIds } } : undefined;
 
     const filterInclude = [
       {
         model: Schedule,
         as: "schedule",
         ...(scheduleWhere && { where: scheduleWhere, required: true }),
-        include: [
-          {
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            ...(categoryWhere && { where: categoryWhere, required: true }),
-          },
-        ],
       },
-      { model: Entry, as: "entryA", required: true },
-      { model: Entry, as: "entryB", required: true },
     ];
 
     const { ids, count } = await paginateMatchIds({
       where: {
         [Op.or]: [
           {
-            "$entryA.name$": { [Op.like]: firstNamePattern },
-            "$entryB.name$": { [Op.like]: secondNamePattern },
+            entryAId: { [Op.in]: firstEntryIds },
+            entryBId: { [Op.in]: secondEntryIds },
           },
           {
-            "$entryA.name$": { [Op.like]: secondNamePattern },
-            "$entryB.name$": { [Op.like]: firstNamePattern },
+            entryAId: { [Op.in]: secondEntryIds },
+            entryBId: { [Op.in]: firstEntryIds },
           },
         ],
       },
@@ -452,43 +493,10 @@ export class MatchService {
 
     const matches = await loadMatchesByIds(
       ids,
-      [
-        {
-          model: Schedule,
-          as: "schedule",
-          include: [
-            {
-              model: TournamentCategory,
-              as: "tournamentCategory",
-            },
-          ],
-        },
-        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
-        {
-          model: MatchReferee,
-          as: "matchReferees",
-          include: [
-            {
-              model: User,
-              as: "referee",
-              attributes: [...PUBLIC_USER_ATTRIBUTES],
-            },
-          ],
-        },
-        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
-      ],
-      [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      createMatchWithSubMatchesInclude(),
+      SUB_MATCH_ORDER,
     );
+    await hydrateMatches(matches, { subMatchOfficials: true });
 
     return {
       matches,
@@ -673,20 +681,17 @@ export class MatchService {
     limit = 10,
   ): Promise<PaginatedMatches> {
     await assertChiefReferee(chiefRefereeId, tournamentId);
+    const categoryIds = await tournamentReadService.getCategoryIdsByTournamentId(tournamentId);
+    if (categoryIds.length === 0) {
+      return { matches: [], pagination: buildPagination(0, offset, limit) };
+    }
 
     const filterInclude = [
       {
         model: Schedule,
         as: "schedule",
         required: true,
-        include: [
-          {
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            where: { tournamentId },
-            required: true,
-          },
-        ],
+        where: { categoryId: { [Op.in]: categoryIds } },
       },
     ];
 
@@ -704,27 +709,16 @@ export class MatchService {
         {
           model: Schedule,
           as: "schedule",
-          include: [
-            {
-              model: TournamentCategory,
-              as: "tournamentCategory",
-              where: { tournamentId },
-              required: true,
-            },
-          ],
         },
         { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
       ],
-      [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      SUB_MATCH_ORDER,
     );
+    await hydrateMatches(matches, {
+      entries: false,
+      winner: false,
+      refereeUsers: false,
+    });
 
     return {
       matches,
@@ -743,7 +737,7 @@ export class MatchService {
     assertValidMatchStatus(filters.status);
     assertValidResultStatus(filters.resultStatus);
 
-    const category = await TournamentCategory.findByPk(categoryId);
+    const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
     if (!category) throw new NotFoundError("Category not found");
 
     await assertChiefReferee(chiefRefereeId, category.tournamentId);
@@ -777,42 +771,10 @@ export class MatchService {
 
     const matches = await loadMatchesByIds(
       ids,
-      [
-        {
-          model: Schedule,
-          as: "schedule",
-          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-        },
-        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
-        {
-          model: MatchReferee,
-          as: "matchReferees",
-          include: [
-            {
-              model: User,
-              as: "referee",
-              attributes: [...PUBLIC_USER_ATTRIBUTES],
-            },
-          ],
-        },
-        {
-          model: SubMatch,
-          as: "subMatches",
-          include: [{ model: MatchSet, as: "matchSets" }],
-        },
-      ],
-      [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      createMatchWithSubMatchesInclude(),
+      SUB_MATCH_ORDER,
     );
+    await hydrateMatches(matches, { subMatchOfficials: true });
 
     return {
       matches,
@@ -862,42 +824,10 @@ export class MatchService {
 
     const matches = await loadMatchesByIds(
       ids,
-      [
-        {
-          model: Schedule,
-          as: "schedule",
-          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-        },
-        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
-        {
-          model: MatchReferee,
-          as: "matchReferees",
-          include: [
-            {
-              model: User,
-              as: "referee",
-              attributes: [...PUBLIC_USER_ATTRIBUTES],
-            },
-          ],
-        },
-        {
-          model: SubMatch,
-          as: "subMatches",
-          include: [{ model: MatchSet, as: "matchSets" }],
-        },
-      ],
-      [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      createMatchWithSubMatchesInclude(),
+      SUB_MATCH_ORDER,
     );
+    await hydrateMatches(matches, { subMatchOfficials: true });
 
     return {
       matches,
@@ -932,42 +862,11 @@ export class MatchService {
     await assertMatchReferee(refereeId, matchId);
 
     const match = await Match.findByPk(matchId, {
-      include: [
-        {
-          model: Schedule,
-          as: "schedule",
-          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-        },
-        { model: Entry, as: "entryA", include: [createEntryMemberInclude()] },
-        { model: Entry, as: "entryB", include: [createEntryMemberInclude()] },
-        {
-          model: MatchReferee,
-          as: "matchReferees",
-          include: [
-            {
-              model: User,
-              as: "referee",
-              attributes: [...PUBLIC_USER_ATTRIBUTES],
-            },
-          ],
-        },
-        {
-          model: SubMatch,
-          as: "subMatches",
-          include: [{ model: MatchSet, as: "matchSets" }],
-        },
-      ],
-      order: [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      include: createMatchWithSubMatchesInclude(),
+      order: SUB_MATCH_ORDER,
     });
     if (!match) throw new NotFoundError("Match not found");
+    await hydrateMatches([match], { winner: false, subMatchOfficials: true });
 
     const subMatches = match.subMatches ?? [];
     const { entryASubMatchWins, entryBSubMatchWins } =
@@ -1027,6 +926,7 @@ export class MatchService {
     });
 
     const matches = await loadMatchesByIds(ids, createMatchDetailInclude());
+    await hydrateMatches(matches, { winner: false });
 
     return {
       matches,
@@ -1062,21 +962,10 @@ export class MatchService {
 
     const matches = await loadMatchesByIds(
       ids,
-      [
-        ...createMatchDetailInclude(),
-        { model: Entry, as: "winnerEntry", include: [createEntryMemberInclude()] },
-        { model: SubMatch, as: "subMatches", include: [{ model: MatchSet, as: "matchSets" }] },
-      ],
-      [
-        [{ model: SubMatch, as: "subMatches" }, "subMatchNumber", "ASC"],
-        [
-          { model: SubMatch, as: "subMatches" },
-          { model: MatchSet, as: "matchSets" },
-          "setNumber",
-          "ASC",
-        ],
-      ],
+      createMatchWithSubMatchesInclude(),
+      SUB_MATCH_ORDER,
     );
+    await hydrateMatches(matches, { subMatchOfficials: true });
 
     return {
       matches,
@@ -1120,11 +1009,7 @@ export class MatchService {
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
 
   private async getEntryIdsByUser(userId: number): Promise<number[]> {
-    const members = await EntryMember.findAll({
-      where: { userId },
-      attributes: ["entryId"],
-    });
-    return members.map((m) => m.entryId);
+    return registrationReadService.getCompetitionEntryIdsByUserId(userId);
   }
 
   private async getBracketIdByMatch(matchId: number): Promise<number> {

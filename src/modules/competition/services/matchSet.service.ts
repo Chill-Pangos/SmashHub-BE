@@ -3,8 +3,11 @@ import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
-import { TournamentCategory } from "../../tournament/public.models";
 import MatchReferee from "../models/matchReferee.model";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+} from "../../tournament/public.read";
 import matchSetScoreCacheService, {
   LiveMatchSetScoreCache,
   MatchSetScoreCache,
@@ -67,23 +70,22 @@ function toMatchSetRealtimePayload(set: MatchSet | MatchSetScoreCache): Record<s
 async function getSubMatchWithCategory(subMatchId: number): Promise<{
   subMatch: SubMatch;
   match: Match;
-  category: TournamentCategory;
+  category: CompetitionCategoryContext;
 }> {
   const subMatch = await SubMatch.findByPk(subMatchId, {
     include: [{
       model: Match,
       as: "match",
-      include: [{
-        model: Schedule,
-        as: "schedule",
-        include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-      }],
+      include: [{ model: Schedule, as: "schedule" }],
     }],
   });
   if (!subMatch) throw new Error("SubMatch not found");
   if (!subMatch.match) throw new Error("Match not found");
 
-  const category = subMatch.match.schedule?.tournamentCategory;
+  const categoryId = subMatch.match.schedule?.categoryId;
+  const category = categoryId
+    ? await tournamentReadService.getCategoryCompetitionContext(categoryId)
+    : null;
   if (!category) throw new Error("Match category not found");
 
   return { subMatch, match: subMatch.match, category };
@@ -215,7 +217,7 @@ function getNextSetNumber(existingSets: MatchSet[]): number {
 
 function assertSubMatchCanAddSet(
   existingSets: MatchSet[],
-  category: TournamentCategory
+  category: CompetitionCategoryContext
 ): void {
   if (existingSets.length >= category.maxSets) {
     throw new Error(`Cannot create more sets. Maximum is ${category.maxSets}`);
@@ -253,7 +255,7 @@ function countSetsWon(sets: MatchSet[]): {
 
 function getWinningTeamFromSets(
   sets: MatchSet[],
-  category: TournamentCategory,
+  category: CompetitionCategoryContext,
 ): "A" | "B" | null {
   const setsToWin = Math.floor(category.maxSets / 2) + 1;
   const { entryASets, entryBSets } = countSetsWon(sets);
@@ -264,7 +266,7 @@ function getWinningTeamFromSets(
 
 async function buildFinalizationNotice(
   subMatch: SubMatch,
-  category: TournamentCategory,
+  category: CompetitionCategoryContext,
   completedSet: MatchSet,
 ): Promise<FinalizationNotice | null> {
   const sets = await getExistingSets(subMatch.id);

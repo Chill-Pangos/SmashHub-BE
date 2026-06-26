@@ -6,10 +6,12 @@ import MatchSet from "../models/matchSet.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import Schedule from "../models/schedule.model";
-import { TournamentCategory } from "../../tournament/public.models";
-import { EntryMember, Entry } from "../../registration/public.models";
-import { User } from "../../identity/public.models";
 import { notificationService } from "../../notification/public.services";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+} from "../../tournament/public.read";
+import competitionViewService from "./competitionView.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,29 +34,26 @@ async function getSubMatchWithMatch(subMatchId: number): Promise<SubMatch> {
 async function getSubMatchWithCategory(subMatchId: number): Promise<{
   subMatch: SubMatch;
   match: Match;
-  category: TournamentCategory;
+  category: CompetitionCategoryContext;
 }> {
   const subMatch = await SubMatch.findByPk(subMatchId, {
     include: [
       {
         model: Match,
         as: "match",
-        include: [
-          {
-            model: Schedule,
-            as: "schedule",
-            include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-          },
-        ],
+        include: [{ model: Schedule, as: "schedule" }],
       },
     ],
   });
   if (!subMatch) throw new Error("SubMatch not found");
   if (!subMatch.match) throw new Error("Match not found");
 
-  const category = subMatch.match.schedule?.tournamentCategory;
+  const categoryId = subMatch.match.schedule?.categoryId;
+  if (!categoryId) throw new Error("Match category not found");
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new Error("Match category not found");
 
+  subMatch.match.schedule?.setDataValue("tournamentCategory", category);
   return { subMatch, match: subMatch.match, category };
 }
 
@@ -101,7 +100,7 @@ function toSubMatchPlayerRealtimePayload(player: SubMatchPlayer): Record<string,
 
 function getWinningTeamFromSets(
   sets: MatchSet[],
-  category: TournamentCategory,
+  category: CompetitionCategoryContext,
 ): Team | null {
   const setsToWin = Math.floor(category.maxSets / 2) + 1;
   let teamASets = 0;
@@ -313,32 +312,13 @@ export class SubMatchService {
     const match = await Match.findByPk(matchId, { attributes: ["id"] });
     if (!match) throw new Error("Match not found");
 
-    return await SubMatch.findAll({
+    const subMatches = await SubMatch.findAll({
       where: { matchId },
       include: [
-        {
-          model: User,
-          as: "umpire",
-          attributes: ["id", "firstName", "lastName", "email"],
-        },
-        {
-          model: User,
-          as: "assistantUmpire",
-          attributes: ["id", "firstName", "lastName", "email"],
-        },
         { model: MatchSet, as: "matchSets" },
         {
           model: SubMatchPlayer,
           as: "subMatchPlayers",
-          include: [{
-            model: EntryMember,
-            as: "entryMember",
-            include: [{
-              model: User,
-              as: "user",
-              attributes: ["id", "firstName", "lastName"],
-            }],
-          }],
         },
       ],
       order: [
@@ -347,6 +327,12 @@ export class SubMatchService {
         [{ model: SubMatchPlayer, as: "subMatchPlayers" }, "team", "ASC"],
       ],
     });
+    await competitionViewService.attachSubMatchOfficials(subMatches);
+    await competitionViewService.attachEntryMembersToSubMatchPlayers(
+      subMatches.flatMap((subMatch) => (subMatch.subMatchPlayers ?? []) as SubMatchPlayer[]),
+    );
+
+    return subMatches;
   }
 
   async getSubMatchById(subMatchId: number): Promise<SubMatch> {
@@ -356,11 +342,14 @@ export class SubMatchService {
         {
           model: SubMatchPlayer,
           as: "subMatchPlayers",
-          include: [{ model: EntryMember, as: "entryMember" }],
         },
       ],
     });
     if (!subMatch) throw new Error("SubMatch not found");
+    await competitionViewService.attachSubMatchOfficials([subMatch]);
+    await competitionViewService.attachEntryMembersToSubMatchPlayers(
+      (subMatch.subMatchPlayers ?? []) as SubMatchPlayer[],
+    );
     return subMatch;
   }
 }

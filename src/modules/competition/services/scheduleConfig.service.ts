@@ -2,15 +2,19 @@
 import crypto from "crypto";
 import { Op } from "sequelize";
 import ScheduleConfig from "../models/scheduleConfig.model";
-import { Tournament, TournamentCategory } from "../../tournament/public.models";
 import Schedule from "../models/schedule.model";
 import Match from "../models/match.model";
-import { Entry } from "../../registration/public.models";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../../../utils/errors.helper";
 import { toUtcDate } from "../../../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../../../utils/tournamentStatusScheduler.helper";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+  type CompetitionTournamentContext,
+} from "../../tournament/public.read";
+import { registrationReadService } from "../../registration/public.read";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,10 +146,18 @@ const REGISTRATION_FIELDS = new Set<ConfigUpdateField>([
   "registrationEndDate",
 ]);
 
-function assertOrganizer(userId: number, tournament: Tournament): void {
+function assertOrganizer(userId: number, tournament: CompetitionTournamentContext): void {
   if (tournament.createdBy !== userId) {
     throw new BadRequestError("Only the tournament organizer can perform this action");
   }
+}
+
+async function getRequiredTournamentContext(
+  tournamentId: number,
+): Promise<CompetitionTournamentContext> {
+  const tournament = await tournamentReadService.getTournamentCompetitionContext(tournamentId);
+  if (!tournament) throw new NotFoundError("Tournament not found");
+  return tournament;
 }
 
 // ─── Match Count Calculator ───────────────────────────────────────────────────
@@ -164,13 +176,13 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
  *   totalMatches    = groupMatches + knockoutMatches
  */
 export function calculateMatchesForCategory(
-  category: Pick<TournamentCategory, "maxEntries" | "isGroupStage">
+  category: Pick<CompetitionCategoryContext, "maxEntries" | "isGroupStage">
 ): number {
   return calculateMatchBreakdownForCategory(category).totalMatches;
 }
 
 function calculateMatchBreakdownForCategory(
-  category: Pick<TournamentCategory, "maxEntries" | "isGroupStage">
+  category: Pick<CompetitionCategoryContext, "maxEntries" | "isGroupStage">
 ): MatchBreakdown {
   const { maxEntries, isGroupStage } = category;
 
@@ -208,13 +220,13 @@ function calculateMatchBreakdownForCategory(
  * Tổng số trận của toàn bộ tournament = tổng từng category.
  */
 export function calculateTotalMatchesFromCategories(
-  categories: Array<Pick<TournamentCategory, "maxEntries" | "isGroupStage">>
+  categories: Array<Pick<CompetitionCategoryContext, "maxEntries" | "isGroupStage">>
 ): number {
   return calculateMatchBreakdownFromCategories(categories).totalMatches;
 }
 
 function calculateMatchBreakdownFromCategories(
-  categories: Array<Pick<TournamentCategory, "maxEntries" | "isGroupStage">>
+  categories: Array<Pick<CompetitionCategoryContext, "maxEntries" | "isGroupStage">>
 ): MatchBreakdown {
   const initial: MatchBreakdown = {
     groupMatches: 0,
@@ -651,7 +663,7 @@ function isNotesOnlyChange(changedFields: ConfigUpdateField[]): boolean {
 }
 
 function isOngoingTableIncrease(
-  tournament: Tournament,
+  tournament: CompetitionTournamentContext,
   config: ScheduleConfig,
   changedFields: ConfigUpdateField[],
   updateData: Partial<ScheduleConfig>,
@@ -691,7 +703,7 @@ function assertUpdateDateNotMovedToPast(
 }
 
 function assertLifecycleUpdateAllowed(
-  tournament: Tournament,
+  tournament: CompetitionTournamentContext,
   config: ScheduleConfig,
   changedFields: ConfigUpdateField[],
   updateData: Partial<ScheduleConfig>,
@@ -770,7 +782,7 @@ function assertLifecycleUpdateAllowed(
 }
 
 function requiresScheduleRegeneration(
-  tournament: Tournament,
+  tournament: CompetitionTournamentContext,
   config: ScheduleConfig,
   changedFields: ConfigUpdateField[],
   updateData: Partial<ScheduleConfig>,
@@ -818,7 +830,7 @@ function buildRegenerationKey(
 }
 
 async function getScheduleConfigUpdateContext(
-  tournament: Tournament,
+  tournament: CompetitionTournamentContext,
 ): Promise<ScheduleConfigUpdateContext> {
   const categoryIds = (tournament.categories ?? []).map((category) => category.id);
 
@@ -833,7 +845,7 @@ async function getScheduleConfigUpdateContext(
   }
 
   const [entryCount, scheduleCount, bracketCount, activeMatchCount] = await Promise.all([
-    Entry.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
+    registrationReadService.countEntriesByCategoryIds(categoryIds),
     Schedule.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
     KnockoutBracket.count({ where: { categoryId: { [Op.in]: categoryIds } } }),
     Match.count({
@@ -878,10 +890,7 @@ export class ScheduleConfigService {
     totalMatches?: number,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
-    if (!tournament) throw new NotFoundError("Tournament not found");
+    const tournament = await getRequiredTournamentContext(tournamentId);
     if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
@@ -908,10 +917,7 @@ export class ScheduleConfigService {
     totalMatches?: number,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
-    if (!tournament) throw new NotFoundError("Tournament not found");
+    const tournament = await getRequiredTournamentContext(tournamentId);
     if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const existing = await this.getConfig(tournamentId);
@@ -978,9 +984,10 @@ export class ScheduleConfigService {
     organizerId?: number
   ): Promise<ScheduleConfig> {
     if (organizerId != null) {
-      const tournament = await Tournament.findByPk(tournamentId);
-      if (!tournament) throw new NotFoundError("Tournament not found");
+      const tournament = await getRequiredTournamentContext(tournamentId);
       assertOrganizer(organizerId, tournament);
+    } else {
+      await getRequiredTournamentContext(tournamentId);
     }
 
     const existing = await ScheduleConfig.findOne({ where: { tournamentId } });
@@ -1016,16 +1023,8 @@ export class ScheduleConfigService {
     data: Partial<ScheduleConfig> & UpdateControlFields,
     organizerId?: number
   ): Promise<ScheduleConfig> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
-
-    if (organizerId != null) {
-      if (!tournament) throw new NotFoundError("Tournament not found");
-      assertOrganizer(organizerId, tournament);
-    } else if (!tournament) {
-      throw new NotFoundError("Tournament not found");
-    }
+    const tournament = await getRequiredTournamentContext(tournamentId);
+    if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
@@ -1114,10 +1113,7 @@ export class ScheduleConfigService {
     totalMatches?: number,
     organizerId?: number
   ): Promise<ScheduleValidationResponse> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
-    if (!tournament) throw new NotFoundError("Tournament not found");
+    const tournament = await getRequiredTournamentContext(tournamentId);
     if (organizerId != null) assertOrganizer(organizerId, tournament);
 
     const config = await this.getConfig(tournamentId);
@@ -1217,9 +1213,10 @@ export class ScheduleConfigService {
    */
   async deleteConfig(tournamentId: number, organizerId?: number): Promise<number> {
     if (organizerId != null) {
-      const tournament = await Tournament.findByPk(tournamentId);
-      if (!tournament) throw new NotFoundError("Tournament not found");
+      const tournament = await getRequiredTournamentContext(tournamentId);
       assertOrganizer(organizerId, tournament);
+    } else {
+      await getRequiredTournamentContext(tournamentId);
     }
 
     const deleted = await ScheduleConfig.destroy({ where: { tournamentId } });
@@ -1250,7 +1247,7 @@ export class ScheduleConfigService {
    * Tính totalMatches từ categories của tournament.
    * Ném BadRequestError nếu tournament chưa có category.
    */
-  private _resolveMatchBreakdown(tournament: Tournament): MatchBreakdown {
+  private _resolveMatchBreakdown(tournament: CompetitionTournamentContext): MatchBreakdown {
     const categories = tournament.categories ?? [];
 
     if (categories.length === 0) {

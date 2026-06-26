@@ -3,7 +3,7 @@ import groupStandingService, {
   GroupAssignment,
 } from "../services/groupStanding.service";
 import GroupStanding from "../models/groupStanding.model";
-import { Entry } from "../../registration/public.models";
+import { registrationReadService } from "../../registration/public.read";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
 import { UnauthorizedError, BadRequestError } from "../../../utils/errors.helper";
 import { parsePagination } from "../../../utils/request.helper";
@@ -98,9 +98,8 @@ export class GroupStandingController {
       where.groupName = groupName;
     }
 
-    return await GroupStanding.findAll({
+    const standings = await GroupStanding.findAll({
       where,
-      include: [{ model: Entry, as: "entry" }],
       order: [
         ["groupName", "ASC"],
         ["position", "ASC"],
@@ -108,6 +107,15 @@ export class GroupStandingController {
         ["setsDiff", "DESC"],
       ],
     });
+    const entries = await registrationReadService.getCompetitionEntriesByIds(
+      standings.map((standing) => standing.entryId),
+    );
+    const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+    for (const standing of standings) {
+      standing.setDataValue("entry", entryById.get(standing.entryId) ?? null);
+    }
+
+    return standings;
   }
 
   private async getCategoryGroups(categoryId: number): Promise<string[]> {

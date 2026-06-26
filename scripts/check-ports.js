@@ -4,13 +4,6 @@ const path = require("path");
 const repoRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(repoRoot, "src");
 const modulesRoot = path.join(srcRoot, "modules");
-const publicModelFreeLeaves = new Set([
-  "notification",
-  "ranking",
-  "registration",
-  "identity",
-  "tournament",
-]);
 
 function walk(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -69,14 +62,11 @@ for (const filePath of walk(modulesRoot)) {
     const targetModule = moduleNameFor(resolved);
     if (!targetModule || targetModule === currentModule) continue;
 
-    if (
-      publicModelFreeLeaves.has(currentModule) &&
-      path.basename(resolved) === "public.models.ts"
-    ) {
+    if (path.basename(resolved) === "public.models.ts") {
       violations.push({
         filePath,
         specifier,
-        reason: `${currentModule} imports cross-module public models`,
+        reason: `${currentModule} imports ${targetModule} public models`,
       });
     }
 
@@ -148,8 +138,20 @@ for (const [name, value] of [
   ["competitionWriteService.generateKnockoutBracketForCategory", competitionWriteService.generateKnockoutBracketForCategory],
   ["registrationReadService.getEntryCategoryIdsByUserId", registrationReadService.getEntryCategoryIdsByUserId],
   ["registrationReadService.getEntriesByCategoryIds", registrationReadService.getEntriesByCategoryIds],
+  ["registrationReadService.getCompetitionEntriesByIds", registrationReadService.getCompetitionEntriesByIds],
+  ["registrationReadService.getCompetitionEntriesByCategoryId", registrationReadService.getCompetitionEntriesByCategoryId],
+  ["registrationReadService.getCompetitionEntryIdsByUserId", registrationReadService.getCompetitionEntryIdsByUserId],
+  ["registrationReadService.searchCompetitionEntryIdsByName", registrationReadService.searchCompetitionEntryIdsByName],
+  ["registrationReadService.getEligibleEntriesByCategory", registrationReadService.getEligibleEntriesByCategory],
+  ["registrationReadService.getEntryByNameInCategory", registrationReadService.getEntryByNameInCategory],
+  ["registrationReadService.entryExistsInCategory", registrationReadService.entryExistsInCategory],
+  ["registrationReadService.countEntriesByCategoryIds", registrationReadService.countEntriesByCategoryIds],
+  ["registrationReadService.getEntryNamesByIds", registrationReadService.getEntryNamesByIds],
   ["registrationReadService.getEntriesWithMembersByIds", registrationReadService.getEntriesWithMembersByIds],
   ["registrationReadService.getEntryMembersByEntryIds", registrationReadService.getEntryMembersByEntryIds],
+  ["registrationReadService.getCompetitionEntryMembersByIds", registrationReadService.getCompetitionEntryMembersByIds],
+  ["registrationReadService.getCompetitionEntryMembersByEntryIds", registrationReadService.getCompetitionEntryMembersByEntryIds],
+  ["registrationReadService.getCompetitionEntriesWithMembersByIds", registrationReadService.getCompetitionEntriesWithMembersByIds],
   ["registrationReadService.getCompletedPaymentEntryIds", registrationReadService.getCompletedPaymentEntryIds],
   ["registrationReadService.userCompetesInCategories", registrationReadService.userCompetesInCategories],
   ["registrationReadService.getParticipantUserIdsByCategoryIds", registrationReadService.getParticipantUserIdsByCategoryIds],
@@ -158,6 +160,14 @@ for (const [name, value] of [
   ["tournamentReadService.getCategoriesRegistrationContext", tournamentReadService.getCategoriesRegistrationContext],
   ["tournamentReadService.getCategoryPaymentContext", tournamentReadService.getCategoryPaymentContext],
   ["tournamentReadService.getAssignedChiefRefereeIds", tournamentReadService.getAssignedChiefRefereeIds],
+  ["tournamentReadService.getCategoryCompetitionContext", tournamentReadService.getCategoryCompetitionContext],
+  ["tournamentReadService.getCategoriesCompetitionContext", tournamentReadService.getCategoriesCompetitionContext],
+  ["tournamentReadService.getTournamentCompetitionContext", tournamentReadService.getTournamentCompetitionContext],
+  ["tournamentReadService.getCategoryIdsByTournamentId", tournamentReadService.getCategoryIdsByTournamentId],
+  ["tournamentReadService.getTournamentRefereeIds", tournamentReadService.getTournamentRefereeIds],
+  ["tournamentReadService.getTournamentRefereeAssignments", tournamentReadService.getTournamentRefereeAssignments],
+  ["tournamentReadService.isTournamentReferee", tournamentReadService.isTournamentReferee],
+  ["tournamentReadService.getActiveTournamentIds", tournamentReadService.getActiveTournamentIds],
   ["rankingReadService.getUserElo", rankingReadService.getUserElo],
   ["rankingReadService.getUserElos", rankingReadService.getUserElos],
   ["rankingReadService.getUserEloView", rankingReadService.getUserEloView],

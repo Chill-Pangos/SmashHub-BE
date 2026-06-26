@@ -3,12 +3,18 @@ import { sequelize } from "../../../config/database";
 import { getRedisClient } from "../../../config/redis";
 import SubMatchPlayer from "../models/subMatchPlayer.model";
 import SubMatch from "../models/subMatch.model";
-import { EntryMember, Entry } from "../../registration/public.models";
-import { User } from "../../identity/public.models";
 import { Team } from "../models/subMatch.model";
 import Match from "../models/match.model";
 import Schedule from "../models/schedule.model";
-import { TournamentCategory } from "../../tournament/public.models";
+import {
+  registrationReadService,
+  type CompetitionEntryMemberSummary,
+} from "../../registration/public.read";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+} from "../../tournament/public.read";
+import competitionViewService from "./competitionView.service";
 
 interface TeamLineupRequest {
   subMatchId: number;
@@ -33,7 +39,7 @@ interface TeamLineupInput {
 interface SubMatchContext {
   subMatch: SubMatch;
   match: Match;
-  category: TournamentCategory;
+  category: CompetitionCategoryContext;
 }
 
 function lineupRequestKey(subMatchId: number, team: Team): string {
@@ -67,13 +73,7 @@ async function getSubMatchContext(
         model: Match,
         as: "match",
         include: [
-          {
-            model: Schedule,
-            as: "schedule",
-            include: [{ model: TournamentCategory, as: "tournamentCategory" }],
-          },
-          { model: Entry, as: "entryA" },
-          { model: Entry, as: "entryB" },
+          { model: Schedule, as: "schedule" },
         ],
       },
     ],
@@ -82,13 +82,16 @@ async function getSubMatchContext(
   if (!subMatch) throw new Error("SubMatch not found");
   const match = subMatch.match;
   if (!match) throw new Error("SubMatch match not found");
-  const category = match.schedule?.tournamentCategory;
+  const categoryId = match.schedule?.categoryId;
+  if (!categoryId) throw new Error("SubMatch category not found");
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new Error("SubMatch category not found");
 
+  match.schedule?.setDataValue("tournamentCategory", category);
   return { subMatch, match, category };
 }
 
-function assertTeamCategory(category: TournamentCategory): void {
+function assertTeamCategory(category: CompetitionCategoryContext): void {
   if (category.type !== "team") {
     throw new Error("Lineup approval flow is only for team categories");
   }
@@ -98,7 +101,7 @@ async function assertEntryCaptain(
   userId: number,
   entryId: number,
 ): Promise<void> {
-  const entry = await Entry.findByPk(entryId, { attributes: ["id", "captainId"] });
+  const [entry] = await registrationReadService.getCompetitionEntriesByIds([entryId]);
   if (!entry || entry.captainId !== userId) {
     throw new Error("Only the entry captain can submit lineup");
   }
@@ -107,22 +110,22 @@ async function assertEntryCaptain(
 async function assertEntryMembers(
   entryId: number,
   entryMemberIds: number[],
-): Promise<EntryMember[]> {
+): Promise<CompetitionEntryMemberSummary[]> {
   const uniqueIds = [...new Set(entryMemberIds)];
   if (uniqueIds.length !== entryMemberIds.length) {
     throw new Error("entryMemberIds must not contain duplicates");
   }
 
-  const members = await EntryMember.findAll({
-    where: { id: uniqueIds, entryId },
-    order: [["id", "ASC"]],
-  });
+  const members = await registrationReadService.getCompetitionEntryMembersByIds(uniqueIds);
+  const validMembers = members.filter((member) => member.entryId === entryId);
 
-  if (members.length !== uniqueIds.length) {
+  if (validMembers.length !== uniqueIds.length) {
     throw new Error("Some entry members do not belong to this team");
   }
 
-  return members;
+  return uniqueIds
+    .map((id) => validMembers.find((member) => member.id === id))
+    .filter((member): member is CompetitionEntryMemberSummary => Boolean(member));
 }
 
 function assertUmpireCanReview(subMatch: SubMatch, userId: number): void {
@@ -141,10 +144,10 @@ async function getCaptainTeamAndEntry(
     throw new Error("Both entries must be assigned before submitting lineup");
   }
 
-  const entries = await Entry.findAll({
-    where: { id: [entryAId, entryBId] },
-    attributes: ["id", "captainId"],
-  });
+  const entries = await registrationReadService.getCompetitionEntriesByIds([
+    entryAId,
+    entryBId,
+  ]);
 
   const captainEntry = entries.find((entry) => entry.captainId === captainId);
   if (!captainEntry) {
@@ -172,15 +175,17 @@ export class SubMatchPlayerService {
         {
           model: Schedule,
           as: "schedule",
-          include: [{ model: TournamentCategory, as: "tournamentCategory" }],
         },
         { model: SubMatch, as: "subMatches" },
       ],
     });
     if (!match) throw new Error("Match not found");
 
-    const category = match.schedule?.tournamentCategory;
+    const categoryId = match.schedule?.categoryId;
+    if (!categoryId) throw new Error("Match category not found");
+    const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
     if (!category) throw new Error("Match category not found");
+    match.schedule?.setDataValue("tournamentCategory", category);
     assertTeamCategory(category);
 
     const subMatches = match.subMatches ?? [];
@@ -482,18 +487,10 @@ export class SubMatchPlayerService {
     if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await SubMatchPlayer.findAndCountAll({
         where: { subMatchId },
-        include: [{
-          model: EntryMember,
-          as: "entryMember",
-          include: [{
-            model: User,
-            as: "user",
-            attributes: ["id", "firstName", "lastName", "avatarUrl"],
-          }],
-        }],
         offset,
         limit: limit,
       });
+      await competitionViewService.attachEntryMembersToSubMatchPlayers(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -511,18 +508,11 @@ export class SubMatchPlayerService {
       };
     }
 
-    return await SubMatchPlayer.findAll({
+    const players = await SubMatchPlayer.findAll({
       where: { subMatchId },
-      include: [{
-        model: EntryMember,
-        as: "entryMember",
-        include: [{
-          model: User,
-          as: "user",
-          attributes: ["id", "firstName", "lastName", "avatarUrl"],
-        }],
-      }],
     });
+    await competitionViewService.attachEntryMembersToSubMatchPlayers(players);
+    return players;
   }
 
   async getPlayersByTeam(
@@ -537,18 +527,10 @@ export class SubMatchPlayerService {
     if (options && (options.offset !== undefined || options.limit !== undefined)) {
       const { count, rows } = await SubMatchPlayer.findAndCountAll({
         where: { subMatchId, team },
-        include: [{
-          model: EntryMember,
-          as: "entryMember",
-          include: [{
-            model: User,
-            as: "user",
-            attributes: ["id", "firstName", "lastName", "avatarUrl"],
-          }],
-        }],
         offset,
         limit: limit,
       });
+      await competitionViewService.attachEntryMembersToSubMatchPlayers(rows);
 
       const totalPages = Math.ceil(count / limit);
       const page = Math.floor(offset / limit) + 1;
@@ -566,18 +548,11 @@ export class SubMatchPlayerService {
       };
     }
 
-    return await SubMatchPlayer.findAll({
+    const players = await SubMatchPlayer.findAll({
       where: { subMatchId, team },
-      include: [{
-        model: EntryMember,
-        as: "entryMember",
-        include: [{
-          model: User,
-          as: "user",
-          attributes: ["id", "firstName", "lastName", "avatarUrl"],
-        }],
-      }],
     });
+    await competitionViewService.attachEntryMembersToSubMatchPlayers(players);
+    return players;
   }
 
   async getMatchesByEntryMember(

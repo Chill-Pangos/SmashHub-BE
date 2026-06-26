@@ -5,9 +5,13 @@ export interface RegistrationEntrySummary {
   categoryId: number;
   captainId: number | null;
   name: string;
+  isAcceptingMembers: boolean;
   requiredMemberCount: number | null;
   currentMemberCount: number;
   isConfirmed: boolean;
+  confirmedAt: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface RegistrationEntryMemberSummary {
@@ -15,6 +19,8 @@ export interface RegistrationEntryMemberSummary {
   entryId: number;
   userId: number;
   eloAtEntry: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface RegistrationEntryWithMembers extends RegistrationEntrySummary {
@@ -26,4 +32,14 @@ export interface RegistrationPaymentSummary {
   entryId: number;
   status: PaymentStatus;
   amount: number | string;
+}
+
+export interface CompetitionEntrySummary extends RegistrationEntrySummary {}
+
+export interface CompetitionEntryMemberSummary extends RegistrationEntryMemberSummary {
+  entry?: CompetitionEntrySummary;
+}
+
+export interface CompetitionEntryWithMembers extends CompetitionEntrySummary {
+  members: CompetitionEntryMemberSummary[];
 }

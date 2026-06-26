@@ -15,8 +15,8 @@ import SubMatch from "../models/subMatch.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
-import { TournamentCategory } from "../../tournament/public.models";
-import { Entry, EntryMember } from "../../registration/public.models";
+import { tournamentReadService } from "../../tournament/public.read";
+import { registrationReadService } from "../../registration/public.read";
 
 export class CompetitionReadService {
   async matchExists(matchId: number): Promise<boolean> {
@@ -164,6 +164,9 @@ export class CompetitionReadService {
   async getApprovedTournamentMatchesForElo(
     tournamentId: number,
   ): Promise<ApprovedTournamentMatch[]> {
+    const categoryIds = await tournamentReadService.getCategoryIdsByTournamentId(tournamentId);
+    if (categoryIds.length === 0) return [];
+
     const matches = await Match.findAll({
       where: { status: "completed", resultStatus: "approved" },
       include: [
@@ -171,30 +174,26 @@ export class CompetitionReadService {
           model: Schedule,
           as: "schedule",
           required: true,
-          include: [{
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            where: { tournamentId },
-            required: true,
-          }],
+          where: { categoryId: { [Op.in]: categoryIds } },
         },
         {
           model: SubMatch,
           as: "subMatches",
           attributes: ["winnerTeam"],
         },
-        {
-          model: Entry,
-          as: "entryA",
-          include: [{ model: EntryMember, as: "members", attributes: ["userId"] }],
-        },
-        {
-          model: Entry,
-          as: "entryB",
-          include: [{ model: EntryMember, as: "members", attributes: ["userId"] }],
-        },
       ],
     });
+    const entryIds = Array.from(new Set(
+      matches.flatMap((match) => [match.entryAId, match.entryBId])
+        .filter((entryId): entryId is number => entryId != null),
+    ));
+    const members = await registrationReadService.getCompetitionEntryMembersByEntryIds(entryIds);
+    const membersByEntryId = new Map<number, Array<{ userId: number }>>();
+    for (const member of members) {
+      const group = membersByEntryId.get(member.entryId) ?? [];
+      group.push({ userId: member.userId });
+      membersByEntryId.set(member.entryId, group);
+    }
 
     return matches.map((match) => {
       const dto: ApprovedTournamentMatch = {
@@ -206,21 +205,15 @@ export class CompetitionReadService {
         })),
       };
 
-      const entryA = match.entryA as { members?: Array<{ userId: number }> } | undefined;
-      if (entryA) {
+      if (match.entryAId != null) {
         dto.entryA = {
-          members: (entryA.members ?? []).map((member) => ({
-            userId: member.userId,
-          })),
+          members: membersByEntryId.get(match.entryAId) ?? [],
         };
       }
 
-      const entryB = match.entryB as { members?: Array<{ userId: number }> } | undefined;
-      if (entryB) {
+      if (match.entryBId != null) {
         dto.entryB = {
-          members: (entryB.members ?? []).map((member) => ({
-            userId: member.userId,
-          })),
+          members: membersByEntryId.get(match.entryBId) ?? [],
         };
       }
 

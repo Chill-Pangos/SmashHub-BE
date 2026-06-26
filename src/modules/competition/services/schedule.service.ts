@@ -6,14 +6,20 @@ import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import SubMatch, { SubMatchStatus } from "../models/subMatch.model";
 import SubMatchPlayer from "../models/subMatchPlayer.model";
-import { Entry, EntryMember } from "../../registration/public.models";
-import { TournamentReferee, TournamentCategory, Tournament } from "../../tournament/public.models";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import { toUtcDate } from "../../../utils/date.helper";
 import { removeUndefinedFields } from "../../../utils/object.helper";
 import { BadRequestError, ConflictError, NotFoundError } from "../../../utils/errors.helper";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+  type CompetitionRefereeAssignment,
+  type CompetitionTournamentContext,
+} from "../../tournament/public.read";
+import { registrationReadService } from "../../registration/public.read";
+import competitionViewService from "./competitionView.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,10 +50,6 @@ interface GroupMatchPair {
 const MATCH_INCLUDE = {
   model: Match,
   as: "scheduledMatches",
-  include: [
-    { model: Entry, as: "entryA" },
-    { model: Entry, as: "entryB" },
-  ],
 };
 
 // ─── Tournament Type Detection ────────────────────────────────────────────────
@@ -369,6 +371,8 @@ async function getBusyTablesAtStartTime(
   t: Transaction,
   excludeMatchId?: number,
 ): Promise<Set<number>> {
+  const categoryIds = await tournamentReadService.getCategoryIdsByTournamentId(tournamentId);
+  if (categoryIds.length === 0) return new Set();
   const slotDurationMs =
     getSlotDurationMs(config);
   const now = new Date();
@@ -384,19 +388,11 @@ async function getBusyTablesAtStartTime(
         model: Schedule,
         as: "schedule",
         where: {
+          categoryId: { [Op.in]: categoryIds },
           tableNumber: { [Op.not]: null },
         },
         required: true,
         attributes: ["tableNumber"],
-        include: [
-          {
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            where: { tournamentId },
-            required: true,
-            attributes: [],
-          },
-        ],
       },
     ],
     where: { ...matchFilter, status: "in_progress" },
@@ -410,20 +406,12 @@ async function getBusyTablesAtStartTime(
         model: Schedule,
         as: "schedule",
         where: {
+          categoryId: { [Op.in]: categoryIds },
           scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
           tableNumber: { [Op.not]: null },
         },
         required: true,
         attributes: ["tableNumber"],
-        include: [
-          {
-            model: TournamentCategory,
-            as: "tournamentCategory",
-            where: { tournamentId },
-            required: true,
-            attributes: [],
-          },
-        ],
       },
     ],
     where: { ...matchFilter, status: "scheduled" },
@@ -446,6 +434,8 @@ async function assertScheduleTableAvailableForSlot(options: {
   config: ScheduleConfig;
   t?: Transaction;
 }): Promise<void> {
+  const categoryIds = await tournamentReadService.getCategoryIdsByTournamentId(options.tournamentId);
+  if (categoryIds.length === 0) return;
   const slotDurationMs = getSlotDurationMs(options.config);
   const windowStart = new Date(options.scheduledAt.getTime() - slotDurationMs);
   const windowEnd = new Date(options.scheduledAt.getTime() + slotDurationMs);
@@ -453,17 +443,11 @@ async function assertScheduleTableAvailableForSlot(options: {
   const conflictQuery: any = {
     where: {
       id: { [Op.ne]: options.scheduleId },
+      categoryId: { [Op.in]: categoryIds },
       tableNumber: options.tableNumber,
       scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
     },
     include: [
-      {
-        model: TournamentCategory,
-        as: "tournamentCategory",
-        where: { tournamentId: options.tournamentId },
-        required: true,
-        attributes: [],
-      },
       {
         model: Match,
         as: "scheduledMatches",
@@ -533,7 +517,7 @@ async function bulkCreateMatchReferees(
   );
 }
 
-function getSubMatchCount(category: TournamentCategory): number {
+function getSubMatchCount(category: CompetitionCategoryContext): number {
   if (category.type !== "team") return 1;
   if (!category.teamFormat) {
     throw new Error("Team category must have teamFormat to create sub-matches");
@@ -543,7 +527,7 @@ function getSubMatchCount(category: TournamentCategory): number {
 
 async function createSubMatchesForMatch(
   match: Match,
-  category: TournamentCategory,
+  category: CompetitionCategoryContext,
   t: Transaction,
 ): Promise<void> {
   const count = getSubMatchCount(category);
@@ -566,11 +550,7 @@ async function createSubMatchesForMatch(
   );
   if (entryIds.length === 0) return;
 
-  const entryMembers = await EntryMember.findAll({
-    where: { entryId: { [Op.in]: entryIds } },
-    order: [["id", "ASC"]],
-    transaction: t,
-  });
+  const entryMembers = await registrationReadService.getCompetitionEntryMembersByEntryIds(entryIds);
 
   const rows = entryMembers.map((member) => ({
     subMatchId: firstSubMatch.id,
@@ -587,21 +567,19 @@ async function createSubMatchesForMatch(
 
 async function getCategoryWithTournament(
   categoryId: number,
-): Promise<TournamentCategory> {
-  const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament, as: "tournament" }],
-  });
+): Promise<CompetitionCategoryContext> {
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new Error("Category not found");
   return category;
 }
 
-function assertOrganizer(userId: number, tournament: Tournament): void {
+function assertOrganizer(userId: number, tournament: CompetitionTournamentContext): void {
   if (tournament.createdBy !== userId) {
     throw new Error("Only the tournament organizer can perform this action");
   }
 }
 
-async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+async function assertBracketsGenerated(tournament: CompetitionTournamentContext): Promise<void> {
   if (tournament.status !== "brackets_generated") {
     throw new Error("Tournament must be in brackets_generated status before generating schedules");
   }
@@ -618,10 +596,8 @@ async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
 
 async function getTournamentReferees(
   tournamentId: number,
-): Promise<TournamentReferee[]> {
-  return await TournamentReferee.findAll({
-    where: { tournamentId, role: "referee" },
-  });
+): Promise<CompetitionRefereeAssignment[]> {
+  return tournamentReadService.getTournamentRefereeAssignments(tournamentId, "referee");
 }
 
 async function getRequiredScheduleConfig(
@@ -806,7 +782,7 @@ export class ScheduleService {
     categoryId: number,
   ): Promise<ScheduleResult> {
     const category = await getCategoryWithTournament(categoryId);
-    const tournament = category.tournament!;
+    const tournament = category.tournament;
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
 
@@ -883,7 +859,7 @@ export class ScheduleService {
     roundName?: KnockoutRound,
   ): Promise<ScheduleResult> {
     const category = await getCategoryWithTournament(categoryId);
-    const tournament = category.tournament!;
+    const tournament = category.tournament;
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
 
@@ -970,9 +946,7 @@ export class ScheduleService {
     organizerId: number,
     tournamentId: number,
   ): Promise<{ categoryId: number; result: ScheduleResult }[]> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
+    const tournament = await tournamentReadService.getTournamentCompetitionContext(tournamentId);
     if (!tournament) throw new Error("Tournament not found");
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
@@ -984,14 +958,14 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const groupJobs: {
-      category: TournamentCategory;
+      category: CompetitionCategoryContext;
       groupName: string;
       groupSequenceKey: string;
       roundNumber: number;
       pair: GroupMatchPair;
     }[] = [];
     const knockoutJobs: {
-      category: TournamentCategory;
+      category: CompetitionCategoryContext;
       roundNumber: number;
       pair: {
         bracketId: number;
@@ -1281,6 +1255,7 @@ export class ScheduleService {
   async getScheduleById(id: number): Promise<Schedule> {
     const schedule = await Schedule.findByPk(id, { include: [MATCH_INCLUDE] });
     if (!schedule) throw new Error("Schedule not found");
+    await competitionViewService.attachEntriesToSchedules([schedule]);
     return schedule;
   }
 
@@ -1301,7 +1276,7 @@ export class ScheduleService {
     if (groupName) where.groupName = groupName;
     if (knockoutRound) where.knockoutRound = knockoutRound;
 
-    return await Schedule.findAndCountAll({
+    const result = await Schedule.findAndCountAll({
       where,
       include: [MATCH_INCLUDE],
       order: [["scheduledAt", "ASC"]],
@@ -1309,6 +1284,8 @@ export class ScheduleService {
       limit,
       distinct: true,
     });
+    await competitionViewService.attachEntriesToSchedules(result.rows);
+    return result;
   }
 
   async updateSchedule(
@@ -1325,7 +1302,7 @@ export class ScheduleService {
       if (!schedule) throw new NotFoundError("Schedule not found");
 
       const category = await getCategoryWithTournament(schedule.categoryId);
-      const tournament = category.tournament!;
+      const tournament = category.tournament;
       assertOrganizer(organizerId, tournament);
 
       const config = await getRequiredScheduleConfig(tournament.id, t, true);
@@ -1353,7 +1330,9 @@ export class ScheduleService {
         ...(data.scheduledAt != null && { scheduledAt }),
       });
 
-      return await schedule.update(updateData, { transaction: t });
+      const updated = await schedule.update(updateData, { transaction: t });
+      await competitionViewService.attachEntriesToSchedules([updated]);
+      return updated;
     });
   }
 
@@ -1363,7 +1342,7 @@ export class ScheduleService {
   ): Promise<void> {
     const schedule = await this.getScheduleById(scheduleId);
     const category = await getCategoryWithTournament(schedule.categoryId);
-    assertOrganizer(organizerId, category.tournament!);
+    assertOrganizer(organizerId, category.tournament);
     await schedule.destroy();
   }
 

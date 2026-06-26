@@ -33,16 +33,15 @@ Cross-module service calls should exchange plain DTOs through public ports. A mo
 
 Leaf port rules:
 
-- `notification` and `ranking` must not import cross-module `public.models.ts`.
-- `registration` and `identity` must not import cross-module `public.models.ts`.
-- `tournament` must not import cross-module `public.models.ts`.
+- Modules must not import another module's `public.models.ts`.
 - `notification` publishes through command/realtime DTOs from `notification/public.contracts.ts`.
 - `ranking` reads tournament/match/member data through read ports and owns only ranking models.
 - `registration` reads user, ELO, category/tournament, and registration-window data through read ports.
 - `identity` creates initial ELO through ranking write port and reads ELO/referee assignment through read ports.
 - `tournament` reads registration participants/payments, identity user/role data, and competition schedule/standing data through read/write ports.
+- `competition` reads tournament category/referee context, registration entries/members, and identity user views through read ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
-- `public.models.ts` remains for compatibility, but new leaf-module work should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
+- `public.models.ts` remains for compatibility outside module-to-module application code, but modules should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
 
 ## Runtime Wiring
 
@@ -68,7 +67,7 @@ Association rules:
 - `yarn build`: TypeScript compile gate.
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
-- `yarn check:ports`: leaf application-port boundary gate.
+- `yarn check:ports`: application-port boundary gate.
 - `yarn madge:app`: app-level circular dependency gate.
 - `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
 - `yarn verify`: build + smoke + architecture + port + app-cycle + ORM-cycle gates.
@@ -94,4 +93,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: make `competition` public-model-free for cross-module imports, then expand the `public.models.ts` ban repo-wide once the remaining core module has stable read/write ports.
+Next hardening step: shrink the old flat compatibility facades and split read/write ports where service graphs still load more than needed.

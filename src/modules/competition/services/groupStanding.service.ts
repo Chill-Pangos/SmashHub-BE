@@ -2,8 +2,12 @@
 import { Op, Transaction } from "sequelize";
 import { sequelize } from "../../../config/database";
 import GroupStanding from "../models/groupStanding.model";
-import { TournamentCategory, Tournament } from "../../tournament/public.models";
-import { Entry } from "../../registration/public.models";
+import {
+  tournamentReadService,
+  type CompetitionCategoryContext,
+  type CompetitionTournamentContext,
+} from "../../tournament/public.read";
+import { registrationReadService, type CompetitionEntrySummary } from "../../registration/public.read";
 import Match from "../models/match.model";
 import MatchSet from "../models/matchSet.model";
 import SubMatch from "../models/subMatch.model";
@@ -74,27 +78,22 @@ function countSetsFromMatch(match: Match): SetCount {
 
 async function getCategoryWithTournament(
   categoryId: number
-): Promise<TournamentCategory> {
-  const category = await TournamentCategory.findByPk(categoryId, {
-    include: [{ model: Tournament, as: "tournament" }],
-  });
+): Promise<CompetitionCategoryContext> {
+  const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
   if (!category) throw new Error("Category not found");
   return category;
 }
 
-async function assertOrganizer(
+function assertOrganizer(
   userId: number,
-  tournamentId: number
-): Promise<void> {
-  const tournament = await Tournament.findByPk(tournamentId, {
-    attributes: ["id", "createdBy"],
-  });
-  if (!tournament || tournament.createdBy !== userId) {
+  tournament: CompetitionTournamentContext,
+): void {
+  if (tournament.createdBy !== userId) {
     throw new Error("Only the tournament organizer can perform this action");
   }
 }
 
-async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
+async function assertBracketsGenerated(tournament: CompetitionTournamentContext): Promise<void> {
   if (tournament.status !== "brackets_generated") {
     throw new Error("Tournament must be in brackets_generated status before managing groups");
   }
@@ -182,8 +181,8 @@ export class GroupStandingService {
     categoryId: number
   ): Promise<GroupPreview[]> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(chiefRefereeId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
 
     const entries = await this.getEligibleEntries(category);
 
@@ -224,8 +223,8 @@ export class GroupStandingService {
     assignments: GroupAssignment[]
   ): Promise<GroupStanding[]> {
     const category = await getCategoryWithTournament(categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
-    await assertBracketsGenerated(category.tournament!);
+    assertOrganizer(chiefRefereeId, category.tournament);
+    await assertBracketsGenerated(category.tournament);
     await this.validateAssignments(categoryId, assignments);
 
     return await sequelize.transaction(async (t: Transaction) => {
@@ -395,15 +394,12 @@ export class GroupStandingService {
 
   // ── Helpers nội bộ ────────────────────────────────────────────────────────
 
-  private async getEligibleEntries(category: TournamentCategory): Promise<Entry[]> {
-    return await Entry.findAll({
-      where: {
-        categoryId: category.id,
-        ...(category.type !== "single"
-          ? { currentMemberCount: { [Op.gte]: sequelize.col("requiredMemberCount") } }
-          : {}),
-      },
-      attributes: ["id"],
+  private async getEligibleEntries(
+    category: CompetitionCategoryContext,
+  ): Promise<CompetitionEntrySummary[]> {
+    return registrationReadService.getEligibleEntriesByCategory({
+      categoryId: category.id,
+      categoryType: category.type,
     });
   }
 
@@ -424,9 +420,8 @@ export class GroupStandingService {
     }
 
     // Entry không thuộc category này
-    const validCount = await Entry.count({
-      where: { categoryId, id: { [Op.in]: allEntryIds } },
-    });
+    const validEntries = await registrationReadService.getCompetitionEntriesByIds(allEntryIds);
+    const validCount = validEntries.filter((entry) => entry.categoryId === categoryId).length;
     if (validCount !== allEntryIds.length) {
       throw new Error("Some entries do not belong to this category");
     }
@@ -540,7 +535,7 @@ export class GroupStandingService {
     if (!match) throw new Error("Match not found");
 
     const category = await getCategoryWithTournament(match.schedule!.categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
+    assertOrganizer(chiefRefereeId, category.tournament);
   }
 }
 
