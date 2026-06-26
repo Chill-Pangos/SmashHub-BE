@@ -146,7 +146,8 @@ class AdminSystemService {
       notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
         type: "overview",
         data: overview,
-        generatedAt: new Date().toISOString(),
+        alerts: overview.alerts,
+        generatedAt: overview.generatedAt,
       });
 
       const signature = JSON.stringify({
@@ -226,14 +227,11 @@ class AdminSystemService {
         errorPercent: apiErrorPercent,
         p95LatencyMs: input.metrics.latency.p95Ms,
       },
-      realtime: {
-        connectedUsers: input.socket.totalConnectedUsers,
-        roomCount: input.socket.roomCount,
-      },
       alerts: {
         total: input.alerts.length,
         critical: criticalAlerts,
         warning: warningAlerts,
+        items: input.alerts,
       },
       generatedAt: new Date().toISOString(),
     };
