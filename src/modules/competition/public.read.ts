@@ -8,6 +8,7 @@ export type {
   KnockoutStanding,
   MatchSummary,
   RegistrationWindow,
+  ScheduleConfigDateField,
   ScheduleConfigFilter,
   ScheduleDateCondition,
   TournamentScheduleConfig,

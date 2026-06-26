@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import swaggerUi from "swagger-ui-express";
-import routes from "./routes";
+import { createApiRouter } from "./modules";
 import swaggerSpec from "./config/swagger";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.middleware";
 import config from "./config/config";
@@ -41,7 +41,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 // API Routes
-app.use("/api", routes);
+app.use("/api", createApiRouter());
 
 // 404 handler
 app.use(notFoundHandler);

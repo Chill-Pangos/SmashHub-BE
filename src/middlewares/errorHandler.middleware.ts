@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError, formatErrorResponse, getErrorStatusCode } from "../utils/errors.helper";
-import systemRuntimeService from "../services/systemRuntime.service";
+import { systemRuntimeService } from "../modules/admin/public.services";
 
 function getDefaultErrorCode(statusCode: number): string {
   switch (statusCode) {

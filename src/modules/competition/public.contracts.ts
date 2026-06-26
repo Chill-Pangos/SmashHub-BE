@@ -81,6 +81,12 @@ export interface TournamentScheduleConfigListItem {
   numberOfTables?: number;
 }
 
+export type ScheduleConfigDateField =
+  | "registrationStartDate"
+  | "registrationEndDate"
+  | "bracketGenerationDate"
+  | "startDate";
+
 export interface GroupAwardStanding {
   categoryId: number;
   groupName: string;

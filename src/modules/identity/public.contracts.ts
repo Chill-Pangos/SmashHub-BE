@@ -16,6 +16,16 @@ export interface TournamentUserSummary extends PublicUserSummary {
   gender?: "male" | "female";
 }
 
+export interface AuthenticatedUserSummary extends TournamentUserSummary {
+  isEmailVerified: boolean;
+}
+
+export interface UserAccessSummary {
+  exists: boolean;
+  roles: string[];
+  permissions: string[];
+}
+
 export interface TournamentUserSearchInput {
   includeIds: number[];
   excludeIds?: number[];

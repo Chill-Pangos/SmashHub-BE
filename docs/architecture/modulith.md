@@ -17,6 +17,7 @@ The backend is organized as a modular monolith under `src/modules`.
 The old flat folders (`src/controllers`, `src/services`, `src/models`, `src/routes`, `src/dto`) now act as compatibility facades. They re-export module-owned files so existing imports keep working while the rest of the code is migrated to module public APIs.
 
 New code should import from module public facades, not from another module's private folders.
+Runtime code outside `src/modules` (middlewares, crons, utils, shared helpers) should also import module public APIs instead of the flat compatibility folders.
 
 - Runtime model exports live in `src/modules/<module>/public.models.ts`.
 - Runtime service exports live in `src/modules/<module>/public.services.ts`.
@@ -42,6 +43,7 @@ Leaf port rules:
 - `competition` reads tournament category/referee context, registration entries/members, and identity user views through read ports.
 - Cross-module imports of private `contracts/*` or `ports/*` folders are forbidden; expose shared types through `public.contracts.ts`.
 - `public.models.ts` remains for compatibility outside module-to-module application code, but modules should prefer `public.contracts.ts`, `public.read.ts`, `public.write.ts`, or `public.services.ts`.
+- `src/controllers`, `src/services`, `src/models`, `src/routes`, and `src/dto` are compatibility facades only. Runtime code should not depend on them.
 
 ## Runtime Wiring
 
@@ -67,6 +69,7 @@ Association rules:
 - `yarn build`: TypeScript compile gate.
 - `yarn smoke:routes`: route import smoke gate.
 - `yarn check:arch`: module boundary gate.
+- `yarn check:arch`: also blocks runtime imports from flat compatibility folders.
 - `yarn check:ports`: application-port boundary gate.
 - `yarn madge:app`: app-level circular dependency gate.
 - `yarn madge:orm`: full source circular dependency gate. Current accepted cap: 0.
@@ -93,4 +96,4 @@ Admin event handlers are registered by `src/modules/admin/admin.events.ts`. `Cro
 
 ORM circular import debt is removed and bounded by `yarn madge:orm` at zero.
 
-Next hardening step: shrink the old flat compatibility facades and split read/write ports where service graphs still load more than needed.
+Next hardening step: add write ports for remaining runtime writes, then remove unused flat facade files once no external imports remain.

@@ -127,6 +127,27 @@ for (const filePath of walk(modulesRoot)) {
   }
 }
 
+for (const filePath of walk(srcRoot)) {
+  if (isInside(filePath, modulesRoot)) continue;
+  if ([...flatCompatibilityDirs].some((flatDir) => isInside(filePath, flatDir))) continue;
+
+  const source = fs.readFileSync(filePath, "utf8");
+  for (const specifier of extractImports(source)) {
+    const resolved = resolveImport(filePath, specifier);
+    if (!resolved) continue;
+
+    for (const flatDir of flatCompatibilityDirs) {
+      if (isInside(resolved, flatDir)) {
+        violations.push({
+          filePath,
+          specifier,
+          reason: "runtime imports flat compatibility layer",
+        });
+      }
+    }
+  }
+}
+
 if (violations.length > 0) {
   console.error("Architecture boundary violations:");
   for (const violation of violations) {

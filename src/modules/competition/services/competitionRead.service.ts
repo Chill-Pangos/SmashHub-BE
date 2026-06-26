@@ -4,6 +4,7 @@ import type {
   KnockoutStanding,
   MatchSummary,
   RegistrationWindow,
+  ScheduleConfigDateField,
   ScheduleConfigFilter,
   ScheduleDateCondition,
   TournamentScheduleConfig,
@@ -64,6 +65,21 @@ export class CompetitionReadService {
     const where = this.toScheduleConfigWhere(filter);
     const configs = await ScheduleConfig.findAll({ where });
     return configs.map((config) => this.toTournamentScheduleConfig(config));
+  }
+
+  async getNextScheduleConfigDate(field: ScheduleConfigDateField): Promise<Date | null> {
+    const now = new Date();
+    const configs = await ScheduleConfig.findAll({
+      attributes: [field],
+      where: {
+        [field]: { [Op.gt]: now },
+      },
+      order: [[field, "ASC"]],
+      limit: 1,
+    });
+
+    const next = configs[0]?.[field];
+    return next ? new Date(next) : null;
   }
 
   async getOverlappingTournamentIds(tournamentId: number): Promise<number[]> {

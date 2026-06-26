@@ -1,7 +1,5 @@
 import cron from "node-cron";
-import { Op } from "sequelize";
-import Otp from "../models/otp.model";
-import Token from "../models/token.model";
+import { identityCleanupService } from "../modules/identity/public.services";
 import { formatDateGMT7 } from "../utils/date.helper";
 
 /**
@@ -10,20 +8,7 @@ import { formatDateGMT7 } from "../utils/date.helper";
  */
 export const cleanupExpiredOtps = cron.schedule("*/5 * * * *", async () => {
   try {
-    const deleted = await Otp.destroy({
-      where: {
-        [Op.or]: [
-          {
-            expiresAt: {
-              [Op.lt]: new Date(),
-            },
-          },
-          {
-            isUsed: true,
-          }
-        ],
-      },
-    });
+    const deleted = await identityCleanupService.cleanupExpiredOtps();
 
     if (deleted > 0) {
       console.log(
@@ -43,21 +28,7 @@ export const cleanupExpiredAccessTokens = cron.schedule(
   "*/30 * * * *",
   async () => {
     try {
-      const deleted = await Token.destroy({
-        where: {
-          type: "access",
-          [Op.or]: [
-            {
-              expiresAt: {
-                [Op.lt]: new Date(),
-              },
-            },
-            {
-              isBlacklisted: true,
-            },
-          ],
-        },
-      });
+      const deleted = await identityCleanupService.cleanupExpiredAccessTokens();
 
       if (deleted > 0) {
         console.log(
@@ -78,21 +49,7 @@ export const cleanupExpiredRefreshTokens = cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      const deleted = await Token.destroy({
-        where: {
-          type: "refresh",
-          [Op.or]: [
-            {
-              expiresAt: {
-                [Op.lt]: new Date(),
-              },
-            },
-            {
-              isBlacklisted: true,
-            },
-          ],
-        },
-      });
+      const deleted = await identityCleanupService.cleanupExpiredRefreshTokens();
 
       if (deleted > 0) {
         console.log(

@@ -1,5 +1,5 @@
-import TournamentCategory from "../models/tournamentCategory.model";
-import { Transaction } from "sequelize";
+import type { Transaction } from "sequelize";
+import { tournamentReadService } from "../modules/tournament/public.read";
 
 /**
  * General validation utilities (migrated here to follow *.helper.ts convention)
@@ -80,11 +80,9 @@ export class ValidationHelper {
   static async verifyCategoryCapacity(
     categoryId: number,
     currentCount: number,
-    transaction?: Transaction | null
+    _transaction?: Transaction | null
   ): Promise<void> {
-    const category = await TournamentCategory.findByPk(categoryId, {
-      ...(transaction && { transaction }),
-    });
+    const category = await tournamentReadService.getCategoryCompetitionContext(categoryId);
 
     if (!category) {
       throw new Error('Category not found');

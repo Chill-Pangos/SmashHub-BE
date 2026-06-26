@@ -4,8 +4,8 @@ import app from "./app";
 import config from "./config/config";
 import sequelize from "./config/database";
 import { connectRedis, disconnectRedis } from "./config/redis";
-import NotificationService from "./services/notification.service";
-import adminSystemService from "./services/adminSystem.service";
+import { notificationService } from "./modules/notification/public.services";
+import { adminSystemService } from "./modules/admin/public.services";
 
 const checkConnection = async () => {
   try {
@@ -27,7 +27,7 @@ checkConnection().then(() => {
   const httpServer = createServer(app);
 
   // Initialize Socket.IO
-  NotificationService.initialize(httpServer);
+  notificationService.initialize(httpServer);
   adminSystemService.startRealtimePublisher();
 
   httpServer.listen(config.port, () => {

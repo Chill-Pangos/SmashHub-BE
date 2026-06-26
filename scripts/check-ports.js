@@ -93,11 +93,13 @@ if (violations.length > 0) {
 require("ts-node/register/transpile-only");
 
 const { notificationService } = require("../src/modules/notification/public.services");
+const { identityCleanupService } = require("../src/modules/identity/public.services");
 const { identityReadService } = require("../src/modules/identity/public.read");
 const { competitionReadService } = require("../src/modules/competition/public.read");
 const { competitionWriteService } = require("../src/modules/competition/public.write");
 const { registrationReadService } = require("../src/modules/registration/public.read");
 const { tournamentReadService } = require("../src/modules/tournament/public.read");
+const { tournamentStatusNotificationService } = require("../src/modules/tournament/public.services");
 const { rankingReadService } = require("../src/modules/ranking/public.read");
 const { rankingWriteService } = require("../src/modules/ranking/public.write");
 require("../src/modules/notification/public.contracts");
@@ -114,6 +116,8 @@ for (const [name, value] of [
   ["notificationService.emitRoomEvent", notificationService.emitRoomEvent],
   ["notificationService.getRealtimeMetrics", notificationService.getRealtimeMetrics],
   ["identityReadService.verifyToken", identityReadService.verifyToken],
+  ["identityReadService.isTokenBlacklisted", identityReadService.isTokenBlacklisted],
+  ["identityReadService.getAuthenticatedUserByToken", identityReadService.getAuthenticatedUserByToken],
   ["identityReadService.getAdminUserIds", identityReadService.getAdminUserIds],
   ["identityReadService.getRegistrationUser", identityReadService.getRegistrationUser],
   ["identityReadService.getRegistrationUsersByIds", identityReadService.getRegistrationUsersByIds],
@@ -123,14 +127,22 @@ for (const [name, value] of [
   ["identityReadService.getTournamentUsersByIds", identityReadService.getTournamentUsersByIds],
   ["identityReadService.userHasRole", identityReadService.userHasRole],
   ["identityReadService.userHasAnyRole", identityReadService.userHasAnyRole],
+  ["identityReadService.getUserAccess", identityReadService.getUserAccess],
+  ["identityReadService.userHasPermission", identityReadService.userHasPermission],
+  ["identityReadService.userHasAnyPermission", identityReadService.userHasAnyPermission],
+  ["identityReadService.userHasAllPermissions", identityReadService.userHasAllPermissions],
   ["identityReadService.getUserIdsByRoles", identityReadService.getUserIdsByRoles],
   ["identityReadService.findTournamentUsersByIds", identityReadService.findTournamentUsersByIds],
+  ["identityCleanupService.cleanupExpiredOtps", identityCleanupService.cleanupExpiredOtps],
+  ["identityCleanupService.cleanupExpiredAccessTokens", identityCleanupService.cleanupExpiredAccessTokens],
+  ["identityCleanupService.cleanupExpiredRefreshTokens", identityCleanupService.cleanupExpiredRefreshTokens],
   ["competitionReadService.matchExists", competitionReadService.matchExists],
   ["competitionReadService.getApprovedTournamentMatchesForElo", competitionReadService.getApprovedTournamentMatchesForElo],
   ["competitionReadService.getRegistrationWindow", competitionReadService.getRegistrationWindow],
   ["competitionReadService.getTournamentScheduleConfig", competitionReadService.getTournamentScheduleConfig],
   ["competitionReadService.getScheduleConfigsByTournamentIds", competitionReadService.getScheduleConfigsByTournamentIds],
   ["competitionReadService.findScheduleConfigs", competitionReadService.findScheduleConfigs],
+  ["competitionReadService.getNextScheduleConfigDate", competitionReadService.getNextScheduleConfigDate],
   ["competitionReadService.getOverlappingTournamentIds", competitionReadService.getOverlappingTournamentIds],
   ["competitionReadService.hasKnockoutBrackets", competitionReadService.hasKnockoutBrackets],
   ["competitionReadService.getKnockoutStandings", competitionReadService.getKnockoutStandings],
@@ -168,6 +180,7 @@ for (const [name, value] of [
   ["tournamentReadService.getTournamentRefereeAssignments", tournamentReadService.getTournamentRefereeAssignments],
   ["tournamentReadService.isTournamentReferee", tournamentReadService.isTournamentReferee],
   ["tournamentReadService.getActiveTournamentIds", tournamentReadService.getActiveTournamentIds],
+  ["tournamentStatusNotificationService.notifyTransitions", tournamentStatusNotificationService.notifyTransitions],
   ["rankingReadService.getUserElo", rankingReadService.getUserElo],
   ["rankingReadService.getUserElos", rankingReadService.getUserElos],
   ["rankingReadService.getUserEloView", rankingReadService.getUserEloView],

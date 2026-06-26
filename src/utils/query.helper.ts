@@ -1,5 +1,5 @@
-import TournamentCategory from "../models/tournamentCategory.model";
-import EntryMember from "../models/entryMember.model";
+import { TournamentCategory } from "../modules/tournament/public.models";
+import { EntryMember } from "../modules/registration/public.models";
 
 /**
  * Common include options for queries

@@ -1,9 +1,30 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.middleware";
-import Role from "../models/role.model";
-import Permission from "../models/permission.model";
-import User from "../models/user.model";
+import { identityReadService, type UserAccessSummary } from "../modules/identity/public.read";
 
+async function getRequiredUserAccess(
+  req: AuthRequest,
+  res: Response,
+): Promise<UserAccessSummary | null> {
+  if (!req.userId) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+    return null;
+  }
+
+  const access = await identityReadService.getUserAccess(req.userId);
+  if (!access.exists) {
+    res.status(401).json({
+      success: false,
+      message: "User not found",
+    });
+    return null;
+  }
+
+  return access;
+}
 
 export const checkPermission = (requiredPermission: string) => {
   return async (
@@ -12,40 +33,10 @@ export const checkPermission = (requiredPermission: string) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const access = await getRequiredUserAccess(req, res);
+      if (!access) return;
 
-      const userInstance = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-            include: [
-              {
-                model: Permission,
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!userInstance) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      const user = userInstance.get({ plain: true });
-
-
-      if (!user.roles || user.roles.length === 0) {
+      if (access.roles.length === 0) {
         res.status(403).json({
           success: false,
           message: "No roles assigned",
@@ -53,17 +44,7 @@ export const checkPermission = (requiredPermission: string) => {
         return;
       }
 
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
-
-      const hasPermission = userPermissions.has(requiredPermission);
+      const hasPermission = access.permissions.includes(requiredPermission);
 
       if (!hasPermission) {
         res.status(403).json({
@@ -87,39 +68,10 @@ export const checkAnyPermission = (requiredPermissions: string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const access = await getRequiredUserAccess(req, res);
+      if (!access) return;
 
-      const userInstance = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-            include: [
-              {
-                model: Permission,
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!userInstance) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      const user = userInstance.get({ plain: true });
-
-      if (!user.roles || user.roles.length === 0) {
+      if (access.roles.length === 0) {
         res.status(403).json({
           success: false,
           message: "No roles assigned",
@@ -127,18 +79,8 @@ export const checkAnyPermission = (requiredPermissions: string[]) => {
         return;
       }
 
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
-
       const hasAnyPermission = requiredPermissions.some(permission =>
-        userPermissions.has(permission)
+        access.permissions.includes(permission)
       );
 
       if (!hasAnyPermission) {
@@ -163,38 +105,10 @@ export const checkAllPermissions = (requiredPermissions: string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const access = await getRequiredUserAccess(req, res);
+      if (!access) return;
 
-      const user = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            as: "roles",
-            include: [
-              {
-                model: Permission,
-                as: "permissions",
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      if (!user.roles || user.roles.length === 0) {
+      if (access.roles.length === 0) {
         res.status(403).json({
           success: false,
           message: "No roles assigned",
@@ -202,23 +116,13 @@ export const checkAllPermissions = (requiredPermissions: string[]) => {
         return;
       }
 
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
-
       const hasAllPermissions = requiredPermissions.every(permission =>
-        userPermissions.has(permission)
+        access.permissions.includes(permission)
       );
 
       if (!hasAllPermissions) {
         const missingPermissions = requiredPermissions.filter(
-          permission => !userPermissions.has(permission)
+          permission => !access.permissions.includes(permission)
         );
         res.status(403).json({
           success: false,
@@ -241,36 +145,10 @@ export const checkRole = (requiredRole: string | string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const access = await getRequiredUserAccess(req, res);
+      if (!access) return;
 
-      const user = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-          },
-        ],
-      });
-
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      // Access roles from serialized object
-      const userJson = user.toJSON ? user.toJSON() : JSON.parse(JSON.stringify(user));
-      const userRolesData = userJson.roles || [];
-
-      if (!userRolesData || userRolesData.length === 0) {
+      if (access.roles.length === 0) {
         res.status(403).json({
           success: false,
           message: "No roles assigned",
@@ -278,10 +156,9 @@ export const checkRole = (requiredRole: string | string[]) => {
         return;
       }
 
-      const userRoles = userRolesData.map((role: any) => role.name);
       const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
       
-      const hasRole = requiredRoles.some(role => userRoles.includes(role));
+      const hasRole = requiredRoles.some(role => access.roles.includes(role));
 
       if (!hasRole) {
         res.status(403).json({

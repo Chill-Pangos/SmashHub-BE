@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AuditLog } from "../modules/admin/public.models";
-import { Role, User } from "../modules/identity/public.models";
+import { identityReadService } from "../modules/identity/public.read";
 import { domainEvents } from "../shared/events/domainEvents";
 import type { AuthRequest } from "./auth.middleware";
 
@@ -22,24 +22,6 @@ function resourceFromPath(path: string): { resourceType: string | null; resource
   return { resourceType, resourceId };
 }
 
-async function isAdmin(userId: number): Promise<boolean> {
-  const user = await User.findByPk(userId, {
-    attributes: ["id"],
-    include: [
-      {
-        model: Role,
-        as: "roles",
-        attributes: ["name"],
-        through: { attributes: [] },
-        required: true,
-        where: { name: "admin" },
-      },
-    ],
-  });
-
-  return !!user;
-}
-
 export const auditMiddleware = (
   req: AuthRequest,
   res: Response,
@@ -58,7 +40,7 @@ export const auditMiddleware = (
 
     void (async () => {
       try {
-        if (!(await isAdmin(actorUserId))) return;
+        if (!(await identityReadService.isAdmin(actorUserId))) return;
 
         const durationMs = Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000);
         const { resourceType, resourceId } = resourceFromPath(req.originalUrl);

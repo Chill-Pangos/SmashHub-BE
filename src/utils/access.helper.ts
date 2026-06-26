@@ -1,23 +1,9 @@
-import Role from "../models/role.model";
-import Tournament from "../models/tournament.model";
-import TournamentCategory from "../models/tournamentCategory.model";
-import User from "../models/user.model";
+import { Tournament, TournamentCategory } from "../modules/tournament/public.models";
+import { identityReadService } from "../modules/identity/public.read";
 import { ForbiddenError, NotFoundError } from "./errors.helper";
 
 export async function isAdmin(userId: number): Promise<boolean> {
-  const count = await User.count({
-    where: { id: userId },
-    include: [
-      {
-        model: Role,
-        as: "roles",
-        where: { name: "admin" },
-        required: true,
-        through: { attributes: [] },
-      },
-    ],
-  });
-  return count > 0;
+  return identityReadService.isAdmin(userId);
 }
 
 export async function assertAdmin(userId: number): Promise<void> {

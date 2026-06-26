@@ -1,4 +1,5 @@
 export { default as tournamentService, TournamentService } from "./services/tournament.service";
+export { default as tournamentStatusNotificationService } from "./services/tournamentStatusNotification.service";
 export {
   default as tournamentReadService,
   TournamentReadService,

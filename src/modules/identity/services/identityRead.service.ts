@@ -1,19 +1,36 @@
 import User from "../models/user.model";
 import Role from "../models/role.model";
 import UserRole from "../models/userRole.model";
+import Permission from "../models/permission.model";
 import authService from "./auth.service";
 import { Op } from "sequelize";
 import type {
+  AuthenticatedUserSummary,
   PublicUserSummary,
   RegistrationUserSummary,
   TournamentUserSearchInput,
   TournamentUserSearchResult,
   TournamentUserSummary,
+  UserAccessSummary,
 } from "../public.contracts";
 
 export class IdentityReadService {
   verifyToken(token: string): Promise<{ userId: number }> {
     return authService.verifyToken(token);
+  }
+
+  isTokenBlacklisted(token: string): Promise<boolean> {
+    return authService.isTokenBlacklisted(token);
+  }
+
+  async getAuthenticatedUserByToken(token: string): Promise<AuthenticatedUserSummary | null> {
+    const user = await authService.getUserByToken(token);
+    if (!user) return null;
+
+    return {
+      ...this.toTournamentUser(user),
+      isEmailVerified: user.isEmailVerified,
+    };
   }
 
   async getAdminUserIds(): Promise<number[]> {
@@ -162,6 +179,67 @@ export class IdentityReadService {
     });
 
     return Array.from(new Set(roleRows.map((row) => row.userId)));
+  }
+
+  async getUserAccess(userId: number): Promise<UserAccessSummary> {
+    const user = await User.findByPk(userId, {
+      attributes: ["id"],
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          attributes: ["name"],
+          through: { attributes: [] },
+          include: [
+            {
+              model: Permission,
+              as: "permissions",
+              attributes: ["name"],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
+    });
+    if (!user) return { exists: false, roles: [], permissions: [] };
+
+    const plain = user.get({ plain: true }) as {
+      roles?: Array<{ name?: string; permissions?: Array<{ name?: string }> }>;
+    };
+    const roles = new Set<string>();
+    const permissions = new Set<string>();
+
+    for (const role of plain.roles ?? []) {
+      if (role.name) roles.add(role.name);
+      for (const permission of role.permissions ?? []) {
+        if (permission.name) permissions.add(permission.name);
+      }
+    }
+
+    return {
+      exists: true,
+      roles: [...roles],
+      permissions: [...permissions],
+    };
+  }
+
+  async userHasPermission(userId: number, permissionName: string): Promise<boolean> {
+    const access = await this.getUserAccess(userId);
+    return access.permissions.includes(permissionName);
+  }
+
+  async userHasAnyPermission(userId: number, permissionNames: string[]): Promise<boolean> {
+    const required = Array.from(new Set(permissionNames));
+    if (required.length === 0) return false;
+    const access = await this.getUserAccess(userId);
+    return required.some((permission) => access.permissions.includes(permission));
+  }
+
+  async userHasAllPermissions(userId: number, permissionNames: string[]): Promise<boolean> {
+    const required = Array.from(new Set(permissionNames));
+    if (required.length === 0) return true;
+    const access = await this.getUserAccess(userId);
+    return required.every((permission) => access.permissions.includes(permission));
   }
 
   async findTournamentUsersByIds(

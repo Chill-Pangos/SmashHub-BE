@@ -1,16 +1,19 @@
 import cron from "node-cron";
-import tournamentService, {
-  TournamentStatusTransition,
-  TournamentStatusUpdateResult,
-} from "../services/tournament.service";
-import ScheduleConfig from "../models/scheduleConfig.model";
+import {
+  tournamentService,
+  tournamentStatusNotificationService,
+  type TournamentStatusTransition,
+  type TournamentStatusUpdateResult,
+} from "../modules/tournament/public.services";
+import {
+  competitionReadService,
+  type ScheduleConfigDateField,
+} from "../modules/competition/public.read";
 import redisClient, { connectRedis } from "../config/redis";
 import { formatDateGMT7 } from "../utils/date.helper";
 import { TOURNAMENT_STATUS_REFRESH_CHANNEL } from "../utils/tournamentStatusScheduler.helper";
 import { withDbLock } from "../utils/dbLock.helper";
-import cronLogService from "../services/cronLog.service";
-import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
-import { Op } from "sequelize";
+import { cronLogService } from "../modules/admin/public.services";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const PERIODIC_REFRESH_CRON = "*/5 * * * *";
@@ -21,7 +24,7 @@ type StatusJobName = "open" | "close" | "bracket" | "start";
 type StatusJobConfig = {
   jobName: StatusJobName;
   label: string;
-  dateField: "registrationStartDate" | "registrationEndDate" | "bracketGenerationDate" | "startDate";
+  dateField: ScheduleConfigDateField;
   lockName: string;
   handler: () => Promise<TournamentStatusTransition[]>;
 };
@@ -249,18 +252,7 @@ function clearAllStatusTimers(): void {
 }
 
 async function loadNextUpdateTime(job: StatusJobConfig): Promise<Date | null> {
-  const now = new Date();
-  const configs = await ScheduleConfig.findAll({
-    attributes: [job.dateField],
-    where: {
-      [job.dateField]: { [Op.gt]: now },
-    },
-    order: [[job.dateField, "ASC"]],
-    limit: 1,
-  });
-
-  const next = configs[0]?.[job.dateField];
-  return next ? new Date(next) : null;
+  return competitionReadService.getNextScheduleConfigDate(job.dateField);
 }
 
 async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
@@ -358,7 +350,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
           for (const t of openingSoon) {
             let dateVal = t.scheduleConfig?.registrationStartDate;
             if (!dateVal) {
-              const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["registrationStartDate"] });
+              const cfg = await competitionReadService.getTournamentScheduleConfig(t.id);
               dateVal = cfg?.registrationStartDate;
             }
             const dateStr = formatDateGMT7(dateVal);
@@ -371,7 +363,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
           for (const t of closingSoon) {
             let dateVal = t.scheduleConfig?.registrationEndDate;
             if (!dateVal) {
-              const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["registrationEndDate"] });
+              const cfg = await competitionReadService.getTournamentScheduleConfig(t.id);
               dateVal = cfg?.registrationEndDate;
             }
             const dateStr = formatDateGMT7(dateVal);
@@ -384,7 +376,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
           for (const t of bracketsSoon) {
             let dateVal = t.scheduleConfig?.bracketGenerationDate;
             if (!dateVal) {
-              const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["bracketGenerationDate"] });
+              const cfg = await competitionReadService.getTournamentScheduleConfig(t.id);
               dateVal = cfg?.bracketGenerationDate;
             }
             const dateStr = formatDateGMT7(dateVal);

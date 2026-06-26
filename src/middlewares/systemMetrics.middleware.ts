@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import systemRuntimeService from "../services/systemRuntime.service";
+import { systemRuntimeService } from "../modules/admin/public.services";
 
 export const systemMetricsMiddleware = (
   req: Request,
