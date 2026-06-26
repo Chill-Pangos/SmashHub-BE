@@ -13,6 +13,17 @@ import { auditMiddleware } from "./middlewares/audit.middleware";
 
 const app: Application = express();
 
+// Swagger Documentation
+// Keep docs before Helmet so Swagger UI inline bootstrap is not blocked by CSP.
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "SmashHub API Documentation",
+  })
+);
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -23,16 +34,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(config.upload.avatarUrlPath, express.static(config.upload.avatarDir));
 app.use(config.upload.paymentUrlPath, express.static(config.upload.paymentDir));
-
-// Swagger Documentation
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    customCss: ".swagger-ui .topbar { display: none }",
-    customSiteTitle: "SmashHub API Documentation",
-  })
-);
 
 app.get("/", (req: Request, res: Response) => {
   res.send(

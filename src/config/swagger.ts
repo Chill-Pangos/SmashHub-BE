@@ -1,4 +1,5 @@
 import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
 
 const swaggerDefinition = {
   openapi: "3.0.0",
@@ -1260,10 +1261,10 @@ const swaggerDefinition = {
 const options = {
   swaggerDefinition,
   apis: [
-    "./src/routes/*.ts",
-    "./src/controllers/*.ts",
-    "./src/dto/*.ts",
-    "./src/docs/*.ts",
+    path.resolve(__dirname, "../routes/*.{ts,js}"),
+    path.resolve(__dirname, "../controllers/*.{ts,js}"),
+    path.resolve(__dirname, "../dto/*.{ts,js}"),
+    path.resolve(__dirname, "../docs/*.{ts,js}"),
   ],
 };
 
