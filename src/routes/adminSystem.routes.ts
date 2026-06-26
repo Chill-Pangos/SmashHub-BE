@@ -295,7 +295,7 @@ router.get(
  *         name: type
  *         schema:
  *           type: string
- *           enum: [error, alert, cron]
+ *           enum: [error, alert, cron, api]
  *         description: Event type filter
  *       - in: query
  *         name: limit

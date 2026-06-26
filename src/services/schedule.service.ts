@@ -1317,7 +1317,7 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number }>,
+    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number | null }>,
   ): Promise<Schedule> {
     return await sequelize.transaction(async (t) => {
       const schedule = await Schedule.findByPk(scheduleId, {

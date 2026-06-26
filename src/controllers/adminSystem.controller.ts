@@ -5,7 +5,7 @@ import type { MetricsWindow } from "../services/systemRuntime.service";
 import { parsePagination } from "../utils/request.helper";
 
 const VALID_WINDOWS = new Set(["1m", "5m", "15m"]);
-const VALID_EVENT_TYPES = new Set(["error", "alert", "cron"]);
+const VALID_EVENT_TYPES = new Set(["error", "alert", "cron", "api"]);
 
 class AdminSystemController {
   async summary(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -44,7 +44,7 @@ class AdminSystemController {
     try {
       const type = req.query.type ? String(req.query.type) : undefined;
       if (type && !VALID_EVENT_TYPES.has(type)) {
-        throw new BadRequestError("type must be error, alert, or cron");
+        throw new BadRequestError("type must be error, alert, cron, or api");
       }
 
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 50;

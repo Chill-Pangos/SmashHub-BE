@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.middle
 import config from "./config/config";
 import { systemMetricsMiddleware } from "./middlewares/systemMetrics.middleware";
 import { auditMiddleware } from "./middlewares/audit.middleware";
+import { apiRequestLogMiddleware } from "./middlewares/apiRequestLog.middleware";
 
 const app: Application = express();
 
@@ -30,6 +31,7 @@ app.use(cors());
 app.use(morgan("dev"));
 app.use(systemMetricsMiddleware);
 app.use(auditMiddleware);
+app.use(apiRequestLogMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(config.upload.avatarUrlPath, express.static(config.upload.avatarDir));

@@ -6,13 +6,14 @@ import { Op } from "sequelize";
 import sequelize from "../config/database";
 import config from "../config/config";
 import redisClient, { connectRedis } from "../config/redis";
+import ApiRequestLog from "../models/apiRequestLog.model";
 import AuditLog from "../models/auditLog.model";
 import CronLog from "../models/cronLog.model";
 import notificationService from "./notification.service";
 import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntime.service";
 
 type HealthStatus = "up" | "down" | "degraded";
-type EventType = "error" | "alert" | "cron";
+type EventType = "error" | "alert" | "cron" | "api";
 type ResourceStatus = "ok" | "warning" | "critical";
 
 const STARTED_AT = new Date();
@@ -74,11 +75,13 @@ class AdminSystemService {
     if (type === "error") return { errors: systemRuntimeService.getErrors(normalizedLimit) };
     if (type === "alert") return { alerts: systemRuntimeService.getAlerts(normalizedLimit) };
     if (type === "cron") return { cronLogs: await this.getLatestCronLogs(normalizedLimit) };
+    if (type === "api") return { apiRequestLogs: await this.getLatestApiRequestLogs(normalizedLimit) };
 
     return {
       errors: systemRuntimeService.getErrors(normalizedLimit),
       alerts: systemRuntimeService.getAlerts(normalizedLimit),
       cronLogs: await this.getLatestCronLogs(normalizedLimit),
+      apiRequestLogs: await this.getLatestApiRequestLogs(normalizedLimit),
     };
   }
 
@@ -326,6 +329,14 @@ class AdminSystemService {
 
   private async getLatestCronLogs(limit: number) {
     const logs = await CronLog.findAll({
+      limit,
+      order: [["createdAt", "DESC"]],
+    });
+    return logs.map((log) => log.get({ plain: true }));
+  }
+
+  private async getLatestApiRequestLogs(limit: number) {
+    const logs = await ApiRequestLog.findAll({
       limit,
       order: [["createdAt", "DESC"]],
     });

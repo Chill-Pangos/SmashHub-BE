@@ -10,6 +10,7 @@ import Match from "../models/match.model";
 import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
+import config from "../config/config";
 
 interface TeamLineupRequest {
   subMatchId: number;
@@ -53,6 +54,14 @@ function rejectedLineupKey(subMatchId: number, team: Team): string {
   return `sub-match:${subMatchId}:team:${team}:lineup-rejection`;
 }
 
+function safeParseJson<T>(payload: string): T | null {
+  try {
+    return JSON.parse(payload) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function getRequiredRedisClient() {
   const client = await getRedisClient();
   if (!client) throw new Error("Redis is required for pending lineup approval");
@@ -87,6 +96,20 @@ async function getSubMatchContext(
   if (!category) throw new Error("SubMatch category not found");
 
   return { subMatch, match, category };
+}
+
+async function cleanupPendingLineupKey(
+  client: Awaited<ReturnType<typeof getRequiredRedisClient>>,
+  subMatch: SubMatch,
+  key: string,
+): Promise<void> {
+  await client.del(key);
+  if (subMatch.umpireId) {
+    await client.sRem(pendingLineupSetKey(subMatch.umpireId), key);
+  }
+  if (subMatch.assistantUmpireId) {
+    await client.sRem(pendingLineupSetKey(subMatch.assistantUmpireId), key);
+  }
 }
 
 function assertTeamCategory(category: TournamentCategory): void {
@@ -238,10 +261,17 @@ export class SubMatchPlayerService {
 
       const client = await getRequiredRedisClient();
       const key = lineupRequestKey(lineup.subMatchId, team);
-      await client.set(key, JSON.stringify(request));
+      await client.set(key, JSON.stringify(request), {
+        EX: config.redis.lineupRequestTtlSeconds,
+      });
       await client.sAdd(pendingLineupSetKey(subMatch.umpireId), key);
+      await client.expire(pendingLineupSetKey(subMatch.umpireId), config.redis.lineupRequestTtlSeconds);
       if (subMatch.assistantUmpireId) {
         await client.sAdd(pendingLineupSetKey(subMatch.assistantUmpireId), key);
+        await client.expire(
+          pendingLineupSetKey(subMatch.assistantUmpireId),
+          config.redis.lineupRequestTtlSeconds,
+        );
       }
 
       requests.push(request);
@@ -290,10 +320,17 @@ export class SubMatchPlayerService {
 
     const client = await getRequiredRedisClient();
     const key = lineupRequestKey(subMatchId, team);
-    await client.set(key, JSON.stringify(request));
+    await client.set(key, JSON.stringify(request), {
+      EX: config.redis.lineupRequestTtlSeconds,
+    });
     await client.sAdd(pendingLineupSetKey(subMatch.umpireId), key);
+    await client.expire(pendingLineupSetKey(subMatch.umpireId), config.redis.lineupRequestTtlSeconds);
     if (subMatch.assistantUmpireId) {
       await client.sAdd(pendingLineupSetKey(subMatch.assistantUmpireId), key);
+      await client.expire(
+        pendingLineupSetKey(subMatch.assistantUmpireId),
+        config.redis.lineupRequestTtlSeconds,
+      );
     }
 
     return request;
@@ -301,13 +338,28 @@ export class SubMatchPlayerService {
 
   async getPendingLineupsForUmpire(umpireId: number): Promise<TeamLineupRequest[]> {
     const client = await getRequiredRedisClient();
-    const keys = await client.sMembers(pendingLineupSetKey(umpireId));
+    const setKey = pendingLineupSetKey(umpireId);
+    const keys = await client.sMembers(setKey);
     if (keys.length === 0) return [];
 
     const values = await Promise.all(keys.map((key) => client.get(key)));
-    return values
-      .filter((value): value is string => value !== null)
-      .map((value) => JSON.parse(value) as TeamLineupRequest);
+    const requests: TeamLineupRequest[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]!;
+      const value = values[i];
+      if (!value) {
+        await client.sRem(setKey, key);
+        continue;
+      }
+      const request = safeParseJson<TeamLineupRequest>(value);
+      if (!request) {
+        await client.del(key);
+        await client.sRem(setKey, key);
+        continue;
+      }
+      requests.push(request);
+    }
+    return requests;
   }
 
   async approveTeamLineup(
@@ -326,7 +378,11 @@ export class SubMatchPlayerService {
     const payload = await client.get(key);
     if (!payload) throw new Error("No pending lineup found");
 
-    const request = JSON.parse(payload) as TeamLineupRequest;
+    const request = safeParseJson<TeamLineupRequest>(payload);
+    if (!request) {
+      await cleanupPendingLineupKey(client, subMatch, key);
+      throw new Error("No pending lineup found");
+    }
     const entryId = request.entryId;
     const members = await assertEntryMembers(entryId, request.entryMemberIds);
 
@@ -342,11 +398,7 @@ export class SubMatchPlayerService {
       );
     });
 
-    await client.del(key);
-    await client.sRem(pendingLineupSetKey(subMatch.umpireId!), key);
-    if (subMatch.assistantUmpireId) {
-      await client.sRem(pendingLineupSetKey(subMatch.assistantUmpireId), key);
-    }
+    await cleanupPendingLineupKey(client, subMatch, key);
 
     return players;
   }
@@ -368,7 +420,11 @@ export class SubMatchPlayerService {
     const payload = await client.get(key);
     if (!payload) throw new Error("No pending lineup found");
 
-    const request = JSON.parse(payload) as TeamLineupRequest;
+    const request = safeParseJson<TeamLineupRequest>(payload);
+    if (!request) {
+      await cleanupPendingLineupKey(client, subMatch, key);
+      throw new Error("No pending lineup found");
+    }
     const rejection: TeamLineupRejection = {
       ...request,
       rejectedById: umpireId,
@@ -376,11 +432,7 @@ export class SubMatchPlayerService {
       ...(reviewNotes?.trim() && { reviewNotes: reviewNotes.trim() }),
     };
 
-    await client.del(key);
-    await client.sRem(pendingLineupSetKey(subMatch.umpireId!), key);
-    if (subMatch.assistantUmpireId) {
-      await client.sRem(pendingLineupSetKey(subMatch.assistantUmpireId), key);
-    }
+    await cleanupPendingLineupKey(client, subMatch, key);
 
     const rejectedKey = rejectedLineupKey(subMatchId, team);
     await client.set(rejectedKey, JSON.stringify(rejection), { EX: 24 * 60 * 60 });
@@ -425,13 +477,28 @@ export class SubMatchPlayerService {
     captainId: number,
   ): Promise<TeamLineupRejection[]> {
     const client = await getRequiredRedisClient();
-    const keys = await client.sMembers(rejectedLineupSetKey(captainId));
+    const setKey = rejectedLineupSetKey(captainId);
+    const keys = await client.sMembers(setKey);
     if (keys.length === 0) return [];
 
     const values = await Promise.all(keys.map((key) => client.get(key)));
-    return values
-      .filter((value): value is string => value !== null)
-      .map((value) => JSON.parse(value) as TeamLineupRejection);
+    const rejected: TeamLineupRejection[] = [];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]!;
+      const value = values[i];
+      if (!value) {
+        await client.sRem(setKey, key);
+        continue;
+      }
+      const rejection = safeParseJson<TeamLineupRejection>(value);
+      if (!rejection) {
+        await client.del(key);
+        await client.sRem(setKey, key);
+        continue;
+      }
+      rejected.push(rejection);
+    }
+    return rejected;
   }
 
   async approvePendingLineupsBySubMatch(
