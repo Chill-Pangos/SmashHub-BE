@@ -13,27 +13,26 @@ const router = Router({ mergeParams: true });
  *     summary: Create a new schedule configuration
  *     description: |
  *       Create a schedule configuration for a tournament. The configuration defines:
- *       - Tournament execution dates and time windows
+ *       - Tournament execution datetime window
  *       - Registration and bracket generation schedules
  *       - Match and break durations
- *       - Daily operational hours with optional lunch breaks
+ *       - Optional lunch break datetimes
  *
  *       **Time Slot Calculations:**
- *       - Available time = (Tournament end - start) × daily operating hours
- *       - Lunch break time is subtracted from available time
+ *       - Available time = daily window from startDate/endDate time across tournament days
  *       - Total slots needed = ceil(total matches / number of tables)
  *       - Time needed = total slots × (match duration + break duration)
  *
  *       **Validation Rules:**
  *       - Match duration: 30-90 minutes (default 60)
  *       - Break duration: 5-30 minutes (default 10)
- *       - Daily hours: 0-23 (must have dailyEndHour > dailyStartHour)
- *       - Daily minutes: 0-59
+ *       - endDate must be after startDate
+ *       - endDate time must be after startDate time
  *       - Number of tables: minimum 1
  *       - Registration must close before tournament starts
  *       - Bracket generation must be at least 2 days before tournament start
- *       - Lunch break (if specified) must be within daily operating hours
- *       - Lunch break cannot overlap daily hours boundary
+ *       - startLunchBreak/endLunchBreak must be provided together
+ *       - Lunch break must be within tournament datetime window
  *
  *       **Schedule Fit Analysis:**
  *       After creation, verify the schedule can accommodate all matches using the
@@ -93,64 +92,18 @@ const router = Router({ mergeParams: true });
  *                 default: 10
  *                 example: 10
  *                 description: Break duration between matches in minutes (5-30, for table/player setup and rest)
- *               dailyStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 default: 8
- *                 example: 8
- *                 description: Tournament daily start hour in 24-hour format (0=midnight, 8=8:00 AM)
- *               dailyStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 default: 0
- *                 example: 0
- *                 description: Tournament daily start minute (0-59)
- *               dailyEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 default: 22
- *                 example: 22
- *                 description: Tournament daily end hour in 24-hour format (must be after start hour, 22=10:00 PM)
- *               dailyEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 default: 0
- *                 example: 0
- *                 description: Tournament daily end minute (0-59)
- *               lunchBreakStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
+ *               startLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *                 example: 12
- *                 description: Lunch break start hour (optional, must be within daily operating hours). Set to null to disable lunch break
- *               lunchBreakStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
+ *                 example: "2026-06-15T12:00:00Z"
+ *                 description: Lunch break start datetime. Provide with endLunchBreak, or null to disable lunch break
+ *               endLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *                 default: 0
- *                 example: 0
- *                 description: Lunch break start minute (optional, 0-59)
- *               lunchBreakEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 nullable: true
- *                 example: 13
- *                 description: Lunch break end hour (optional, must be after start hour if specified)
- *               lunchBreakEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 nullable: true
- *                 default: 0
- *                 example: 0
- *                 description: Lunch break end minute (optional, 0-59)
+ *                 example: "2026-06-15T13:00:00Z"
+ *                 description: Lunch break end datetime. Must be after startLunchBreak and inside tournament window
  *               notes:
  *                 type: string
  *                 nullable: true
@@ -168,14 +121,8 @@ const router = Router({ mergeParams: true });
  *                 numberOfTables: 4
  *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
- *                 dailyStartHour: 8
- *                 dailyStartMinute: 0
- *                 dailyEndHour: 22
- *                 dailyEndMinute: 0
- *                 lunchBreakStartHour: 12
- *                 lunchBreakStartMinute: 0
- *                 lunchBreakEndHour: 13
- *                 lunchBreakEndMinute: 0
+ *                 startLunchBreak: "2026-06-15T12:00:00Z"
+ *                 endLunchBreak: "2026-06-15T13:00:00Z"
  *                 notes: "Main venue tournament at Convention Center"
  *             single_day:
  *               summary: Single-day tournament with aggressive timing
@@ -188,10 +135,6 @@ const router = Router({ mergeParams: true });
  *                 numberOfTables: 6
  *                 matchDurationMinutes: 45
  *                 breakDurationMinutes: 5
- *                 dailyStartHour: 9
- *                 dailyStartMinute: 0
- *                 dailyEndHour: 17
- *                 dailyEndMinute: 0
  *                 notes: "Fast-paced single day event"
  *     responses:
  *       201:
@@ -211,14 +154,8 @@ const router = Router({ mergeParams: true });
  *               numberOfTables: 4
  *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
- *               dailyStartHour: 8
- *               dailyStartMinute: 0
- *               dailyEndHour: 22
- *               dailyEndMinute: 0
- *               lunchBreakStartHour: 12
- *               lunchBreakStartMinute: 0
- *               lunchBreakEndHour: 13
- *               lunchBreakEndMinute: 0
+ *               startLunchBreak: "2026-06-15T12:00:00Z"
+ *               endLunchBreak: "2026-06-15T13:00:00Z"
  *               notes: "Main venue tournament"
  *               createdAt: "2026-05-28T10:00:00Z"
  *               updatedAt: "2026-05-28T10:00:00Z"
@@ -230,13 +167,13 @@ const router = Router({ mergeParams: true });
  *               $ref: '#/components/schemas/Error'
  *             examples:
  *               invalid_time_range:
- *                 summary: End hour before start hour
+ *                 summary: End time before start time
  *                 value:
- *                   message: "dailyEndHour must be after dailyStartHour"
+ *                   message: "End time must be after start time"
  *               lunch_overlap:
- *                 summary: Lunch break overlaps with daily hours
+ *                 summary: Lunch break outside tournament window
  *                 value:
- *                   message: "Lunch break must be within daily operating hours (08:00-22:00)"
+ *                   message: "Lunch break times must be within the tournament schedule range"
  *               invalid_dates:
  *                 summary: Registration after tournament start
  *                 value:
@@ -270,8 +207,6 @@ router.post(
  *       **Default Values (Standard Tournament):**
  *       - Match duration: 60 minutes (typical competitive match)
  *       - Break duration: 10 minutes (for table/player setup and rest)
- *       - Daily start: 08:00 (8 AM)
- *       - Daily end: 22:00 (10 PM)
  *       - Number of tables: 1 (single-table tournament)
  *
  *       **Use Case:**
@@ -285,7 +220,7 @@ router.post(
  *           application/json:
  *             schema:
  *               type: object
- *               required: [matchDurationMinutes, breakDurationMinutes, dailyStartHour, dailyStartMinute, dailyEndHour, dailyEndMinute, numberOfTables]
+ *               required: [matchDurationMinutes, breakDurationMinutes, numberOfTables]
  *               properties:
  *                 matchDurationMinutes:
  *                   type: integer
@@ -295,30 +230,6 @@ router.post(
  *                   type: integer
  *                   example: 10
  *                   description: Default break duration in minutes (5-30 allowed)
- *                 dailyStartHour:
- *                   type: integer
- *                   minimum: 0
- *                   maximum: 23
- *                   example: 8
- *                   description: Default daily start hour (24-hour format)
- *                 dailyStartMinute:
- *                   type: integer
- *                   minimum: 0
- *                   maximum: 59
- *                   example: 0
- *                   description: Default daily start minute
- *                 dailyEndHour:
- *                   type: integer
- *                   minimum: 0
- *                   maximum: 23
- *                   example: 22
- *                   description: Default daily end hour (24-hour format)
- *                 dailyEndMinute:
- *                   type: integer
- *                   minimum: 0
- *                   maximum: 59
- *                   example: 0
- *                   description: Default daily end minute
  *                 numberOfTables:
  *                   type: integer
  *                   minimum: 1
@@ -327,10 +238,6 @@ router.post(
  *             example:
  *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
- *               dailyStartHour: 8
- *               dailyStartMinute: 0
- *               dailyEndHour: 22
- *               dailyEndMinute: 0
  *               numberOfTables: 1
  *       500:
  *         $ref: '#/components/responses/InternalError500'
@@ -449,50 +356,16 @@ router.get(
  *                 maximum: 30
  *                 example: 10
  *                 description: Break duration between matches in minutes
- *               dailyStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 description: Daily start hour
- *               dailyStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 description: Daily start minute
- *               dailyEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 description: Daily end hour
- *               dailyEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 description: Daily end minute
- *               lunchBreakStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
+ *               startLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *                 description: Lunch break start hour (null to remove)
- *               lunchBreakStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
+ *                 description: Lunch break start datetime (null with endLunchBreak to remove)
+ *               endLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *                 description: Lunch break start minute
- *               lunchBreakEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 nullable: true
- *                 description: Lunch break end hour
- *               lunchBreakEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 nullable: true
- *                 description: Lunch break end minute
+ *                 description: Lunch break end datetime (null with startLunchBreak to remove)
  *               notes:
  *                 type: string
  *                 nullable: true
@@ -517,10 +390,8 @@ router.get(
  *                 numberOfTables: 6
  *                 matchDurationMinutes: 50
  *                 breakDurationMinutes: 15
- *                 dailyStartHour: 9
- *                 dailyEndHour: 21
- *                 lunchBreakStartHour: 12
- *                 lunchBreakEndHour: 13
+ *                 startLunchBreak: "2026-06-16T12:00:00Z"
+ *                 endLunchBreak: "2026-06-16T13:00:00Z"
  *             regenerate_existing_schedule:
  *               summary: Update and regenerate existing schedules
  *               value:
@@ -562,11 +433,11 @@ router.patch(
  *     summary: Validate schedule configuration
  *     description: |
  *       Validate an unsaved schedule configuration against a category input.
- *       This endpoint checks if the configured schedule (tables, durations, daily hours) can
+ *       This endpoint checks if the configured schedule (tables, durations, tournament time window) can
  *       accommodate all matches calculated from category.maxEntries and category.isGroupStage.
  *
  *       **Validation Checks:**
- *       - Available time = (end date - start date) × daily operating hours
+ *       - Available time = daily window from startDate/endDate time across tournament days
  *       - Total matches calculated from category information
  *       - Total slots needed = ceil(calculatedMatches / numberOfTables)
  *       - Time needed = totalSlots × (matchDuration + breakDuration)
@@ -633,57 +504,16 @@ router.patch(
  *                     minimum: 5
  *                     maximum: 30
  *                     default: 10
- *                   dailyStartHour:
- *                     type: integer
- *                     minimum: 0
- *                     maximum: 23
- *                     default: 8
- *                   dailyStartMinute:
- *                     type: integer
- *                     minimum: 0
- *                     maximum: 59
- *                     default: 0
- *                   dailyEndHour:
- *                     type: integer
- *                     minimum: 0
- *                     maximum: 23
- *                     default: 22
- *                   dailyEndMinute:
- *                     type: integer
- *                     minimum: 0
- *                     maximum: 59
- *                     default: 0
- *                   lunchBreakStartHour:
- *                     type: integer
+ *                   startLunchBreak:
+ *                     type: string
+ *                     format: date-time
  *                     nullable: true
- *                     minimum: 0
- *                     maximum: 23
- *                     example: 12
- *                   lunchBreakStartMinute:
- *                     type: integer
+ *                     example: "2026-06-15T12:00:00Z"
+ *                   endLunchBreak:
+ *                     type: string
+ *                     format: date-time
  *                     nullable: true
- *                     minimum: 0
- *                     maximum: 59
- *                     default: 0
- *                     example: 0
- *                   lunchBreakEndHour:
- *                     type: integer
- *                     nullable: true
- *                     minimum: 0
- *                     maximum: 23
- *                     example: 13
- *                   lunchBreakEndMinute:
- *                     type: integer
- *                     nullable: true
- *                     minimum: 0
- *                     maximum: 59
- *                     default: 0
- *                     example: 0
- *                   lunchBreakDurationMinutes:
- *                     type: integer
- *                     nullable: true
- *                     minimum: 0
- *                     example: 60
+ *                     example: "2026-06-15T13:00:00Z"
  *                   notes:
  *                     type: string
  *                     nullable: true
@@ -704,15 +534,8 @@ router.patch(
  *                   numberOfTables: 4
  *                   matchDurationMinutes: 30
  *                   breakDurationMinutes: 10
- *                   dailyStartHour: 8
- *                   dailyStartMinute: 0
- *                   dailyEndHour: 22
- *                   dailyEndMinute: 0
- *                   lunchBreakStartHour: 12
- *                   lunchBreakStartMinute: 0
- *                   lunchBreakEndHour: 13
- *                   lunchBreakEndMinute: 0
- *                   lunchBreakDurationMinutes: 60
+ *                   startLunchBreak: "2026-06-15T12:00:00Z"
+ *                   endLunchBreak: "2026-06-15T13:00:00Z"
  *                   notes: "Main hall schedule"
  *     responses:
  *       200:
@@ -816,45 +639,13 @@ router.post(
  *                 minimum: 5
  *                 maximum: 30
  *                 default: 10
- *               dailyStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 default: 8
- *               dailyStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 default: 0
- *               dailyEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 default: 22
- *               dailyEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 default: 0
- *               lunchBreakStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
+ *               startLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *               lunchBreakStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 nullable: true
- *               lunchBreakEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 nullable: true
- *               lunchBreakEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
+ *               endLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
  *           examples:
  *             valid_schedule:
@@ -869,10 +660,8 @@ router.post(
  *                 numberOfTables: 4
  *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
- *                 dailyStartHour: 8
- *                 dailyEndHour: 22
- *                 lunchBreakStartHour: 12
- *                 lunchBreakEndHour: 13
+ *                 startLunchBreak: "2026-06-15T12:00:00Z"
+ *                 endLunchBreak: "2026-06-15T13:00:00Z"
  *     responses:
  *       200:
  *         description: Schedule preview with fit analysis
@@ -973,41 +762,13 @@ router.post(
  *                 minimum: 5
  *                 maximum: 30
  *                 description: Updated break duration (optional)
- *               dailyStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *               dailyStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *               dailyEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *               dailyEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *               lunchBreakStartHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
+ *               startLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
- *               lunchBreakStartMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
- *                 nullable: true
- *               lunchBreakEndHour:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 23
- *                 nullable: true
- *               lunchBreakEndMinute:
- *                 type: integer
- *                 minimum: 0
- *                 maximum: 59
+ *               endLunchBreak:
+ *                 type: string
+ *                 format: date-time
  *                 nullable: true
  *           examples:
  *             add_tables:
@@ -1016,15 +777,15 @@ router.post(
  *                 totalMatches: 127
  *                 numberOfTables: 6
  *             adjust_times:
- *               summary: Preview adjusting operational hours and breaks
+ *               summary: Preview adjusting tournament datetime window and breaks
  *               value:
  *                 totalMatches: 127
- *                 dailyStartHour: 9
- *                 dailyEndHour: 21
+ *                 startDate: "2026-06-15T09:00:00Z"
+ *                 endDate: "2026-06-20T21:00:00Z"
  *                 matchDurationMinutes: 50
  *                 breakDurationMinutes: 15
- *                 lunchBreakStartHour: 12
- *                 lunchBreakEndHour: 13
+ *                 startLunchBreak: "2026-06-15T12:00:00Z"
+ *                 endLunchBreak: "2026-06-15T13:00:00Z"
  *     responses:
  *       200:
  *         description: Updated schedule preview with fit analysis

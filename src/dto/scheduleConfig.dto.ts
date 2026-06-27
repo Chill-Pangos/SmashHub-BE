@@ -10,17 +10,9 @@ export interface CreateScheduleConfigDto {
   // Match configuration
   matchDurationMinutes?: number;
   breakDurationMinutes?: number;
-  // Daily schedule
-  dailyStartHour?: number;
-  dailyStartMinute?: number;
-  dailyEndHour?: number;
-  dailyEndMinute?: number;
   // Lunch break
-  lunchBreakStartHour?: number | null;
-  lunchBreakStartMinute?: number | null;
-  lunchBreakEndHour?: number | null;
-  lunchBreakEndMinute?: number | null;
-  lunchBreakDurationMinutes?: number | null;
+  startLunchBreak?: Date | null;
+  endLunchBreak?: Date | null;
   notes?: string | null;
 }
 
@@ -35,17 +27,9 @@ export interface UpdateScheduleConfigDto {
   // Match configuration
   matchDurationMinutes?: number;
   breakDurationMinutes?: number;
-  // Daily schedule
-  dailyStartHour?: number;
-  dailyStartMinute?: number;
-  dailyEndHour?: number;
-  dailyEndMinute?: number;
   // Lunch break
-  lunchBreakStartHour?: number | null;
-  lunchBreakStartMinute?: number | null;
-  lunchBreakEndHour?: number | null;
-  lunchBreakEndMinute?: number | null;
-  lunchBreakDurationMinutes?: number | null;
+  startLunchBreak?: Date | null;
+  endLunchBreak?: Date | null;
   notes?: string | null;
   regenerateSchedule?: boolean;
   regenerationKey?: string;
@@ -64,17 +48,9 @@ export interface ScheduleConfigResponseDto {
   // Match configuration
   matchDurationMinutes: number;
   breakDurationMinutes: number;
-  // Daily schedule
-  dailyStartHour: number;
-  dailyStartMinute: number;
-  dailyEndHour: number;
-  dailyEndMinute: number;
   // Lunch break
-  lunchBreakStartHour?: number | null;
-  lunchBreakStartMinute?: number | null;
-  lunchBreakEndHour?: number | null;
-  lunchBreakEndMinute?: number | null;
-  lunchBreakDurationMinutes?: number | null;
+  startLunchBreak?: Date | null;
+  endLunchBreak?: Date | null;
   notes?: string | null;
   createdAt: Date;
   updatedAt: Date;

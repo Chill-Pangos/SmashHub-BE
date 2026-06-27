@@ -98,7 +98,7 @@ export class UserService {
       ],
       offset,
       limit,
-      order: [["createdAt", "DESC"]],
+      order: [["id", "DESC"]],
       distinct: true,
     });
 
