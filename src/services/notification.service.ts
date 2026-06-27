@@ -49,7 +49,6 @@ const PING_TIMEOUT = 60_000;
 const PING_INTERVAL = 25_000;
 const REALTIME_NOTIFICATION_CHANNEL = "realtime:notifications";
 const REALTIME_CRON_LOG_CHANNEL = "realtime:cron-logs";
-const REALTIME_ROOM_EVENT_CHANNEL = "realtime:room-events";
 
 function userRoom(userId: string): string {
   return `user:${userId}`;
@@ -420,22 +419,6 @@ class NotificationService {
     this.io.to(roomId).emit(event, data);
   }
 
-  async publishRoomEvent(roomId: string, event: string, data: unknown): Promise<void> {
-    await connectRedis();
-
-    if (redisClient.isReady) {
-      await redisClient.publish(
-        REALTIME_ROOM_EVENT_CHANNEL,
-        JSON.stringify({ roomId, event, data }),
-      );
-      return;
-    }
-
-    if (this.io) {
-      this.io.to(roomId).emit(event, data);
-    }
-  }
-
   publishMatchResultUpdate(
     matchId: number,
     type: MatchRealtimeEventType,
@@ -470,11 +453,6 @@ class NotificationService {
     }
   }
 
-  private sendLocalRoomEvent(roomId: string, event: string, data: unknown): void {
-    if (!this.io) return;
-    this.io.local.to(roomId).emit(event, data);
-  }
-
   private async startRealtimeSubscriber(): Promise<void> {
     if (!this.io || this.realtimeSubscriber?.isOpen) return;
 
@@ -500,19 +478,6 @@ class NotificationService {
         this.sendLocalCronLog(payload.userIds, payload.log);
       } catch (error) {
         console.error("Invalid realtime cron log payload:", error);
-      }
-    });
-
-    await this.realtimeSubscriber.subscribe(REALTIME_ROOM_EVENT_CHANNEL, (message) => {
-      try {
-        const payload = JSON.parse(message) as {
-          roomId: string;
-          event: string;
-          data: unknown;
-        };
-        this.sendLocalRoomEvent(payload.roomId, payload.event, payload.data);
-      } catch (error) {
-        console.error("Invalid realtime room event payload:", error);
       }
     });
   }

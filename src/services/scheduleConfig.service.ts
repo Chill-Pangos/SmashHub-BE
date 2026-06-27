@@ -108,8 +108,15 @@ const CONFIG_UPDATE_FIELDS = [
   "bracketGenerationDate",
   "matchDurationMinutes",
   "breakDurationMinutes",
-  "startLunchBreak",
-  "endLunchBreak",
+  "dailyStartHour",
+  "dailyStartMinute",
+  "dailyEndHour",
+  "dailyEndMinute",
+  "lunchBreakStartHour",
+  "lunchBreakStartMinute",
+  "lunchBreakEndHour",
+  "lunchBreakEndMinute",
+  "lunchBreakDurationMinutes",
   "notes",
 ] as const;
 type ConfigUpdateField = (typeof CONFIG_UPDATE_FIELDS)[number];
@@ -121,8 +128,15 @@ const SCHEDULE_AFFECTING_FIELDS = new Set<ConfigUpdateField>([
   "numberOfTables",
   "matchDurationMinutes",
   "breakDurationMinutes",
-  "startLunchBreak",
-  "endLunchBreak",
+  "dailyStartHour",
+  "dailyStartMinute",
+  "dailyEndHour",
+  "dailyEndMinute",
+  "lunchBreakStartHour",
+  "lunchBreakStartMinute",
+  "lunchBreakEndHour",
+  "lunchBreakEndMinute",
+  "lunchBreakDurationMinutes",
 ]);
 const REGISTRATION_FIELDS = new Set<ConfigUpdateField>([
   "registrationStartDate",
@@ -248,30 +262,26 @@ function calendarDayCount(startDate: Date, endDate: Date): number {
   return Math.floor((dateOnlyTime(endDate) - dateOnlyTime(startDate)) / dayMs) + 1;
 }
 
-function minutesOfDay(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes();
-}
-
 function isSingleDay(startDate: Date, endDate: Date): boolean {
   return dateOnlyTime(startDate) === dateOnlyTime(endDate);
 }
 
-function withTimeFrom(date: Date, timeSource: Date): Date {
+function withTime(date: Date, hour: number, minute: number): Date {
   const result = new Date(date);
-  result.setHours(timeSource.getHours(), timeSource.getMinutes(), 0, 0);
+  result.setHours(hour, minute, 0, 0);
   return result;
 }
 
 function calculateAvailableMinutes(
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  dailyEndHour: number,
+  dailyEndMinute: number
 ): number {
   const dailyMinutes =
-    minutesOfDay(endDate) - minutesOfDay(startDate);
-
-  if (dailyMinutes <= 0) {
-    throw new BadRequestError("End time must be after start time");
-  }
+    dailyEndHour * 60 + dailyEndMinute - (dailyStartHour * 60 + dailyStartMinute);
 
   return dailyMinutes * Math.max(0, calendarDayCount(startDate, endDate));
 }
@@ -310,25 +320,30 @@ function calculateKnockoutSlotCount(
   return slots;
 }
 
-function nextDayStart(date: Date, startDate: Date): Date {
-  return withTimeFrom(
+function nextDayStart(date: Date, dailyStartHour: number, dailyStartMinute: number): Date {
+  return withTime(
     new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
-    startDate
+    dailyStartHour,
+    dailyStartMinute
   );
 }
 
 function calculateEndTimeFromSlots(
   startDate: Date,
-  endDate: Date,
   totalSlots: number,
-  slotDuration: number
+  slotDuration: number,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  endDate: Date,
+  dailyEndHour: number,
+  dailyEndMinute: number
 ): Date {
   let remainingSlots = totalSlots;
   let current = new Date(startDate);
   const finalDay = dateOnlyTime(endDate);
 
   while (remainingSlots > 0) {
-    const dayEnd = withTimeFrom(current, endDate);
+    const dayEnd = withTime(current, dailyEndHour, dailyEndMinute);
     const availableMinutes = Math.max(
       0,
       Math.floor((dayEnd.getTime() - current.getTime()) / 60000)
@@ -340,7 +355,7 @@ function calculateEndTimeFromSlots(
     }
 
     remainingSlots -= slotsToday;
-    current = nextDayStart(current, startDate);
+    current = nextDayStart(current, dailyStartHour, dailyStartMinute);
 
     if (slotsToday === 0 && dateOnlyTime(current) > finalDay) {
       return current;
@@ -356,10 +371,14 @@ function calculateScheduleEstimate(
   breakdown: MatchBreakdown,
   matchDurationMinutes: number,
   breakDurationMinutes: number,
-  numberOfTables: number
+  numberOfTables: number,
+  dailyStartHour: number,
+  dailyStartMinute: number,
+  dailyEndHour: number,
+  dailyEndMinute: number
 ): ScheduleEstimate {
   const slotDuration = matchDurationMinutes + breakDurationMinutes;
-  const tournamentStart = new Date(startDate);
+  const tournamentStart = withTime(startDate, dailyStartHour, dailyStartMinute);
 
   if (breakdown.plainMatchCount != null) {
     const totalSlots = Math.ceil(breakdown.plainMatchCount / numberOfTables);
@@ -367,9 +386,13 @@ function calculateScheduleEstimate(
       totalSlots,
       estimatedEndTime: calculateEndTimeFromSlots(
         tournamentStart,
-        endDate,
         totalSlots,
-        slotDuration
+        slotDuration,
+        dailyStartHour,
+        dailyStartMinute,
+        endDate,
+        dailyEndHour,
+        dailyEndMinute
       ),
       neededMinutes: totalSlots * slotDuration,
     };
@@ -386,20 +409,28 @@ function calculateScheduleEstimate(
 
   const groupEndTime = calculateEndTimeFromSlots(
     tournamentStart,
-    endDate,
     groupSlots,
-    slotDuration
+    slotDuration,
+    dailyStartHour,
+    dailyStartMinute,
+    endDate,
+    dailyEndHour,
+    dailyEndMinute
   );
   const knockoutStartDate = groupSlots === 0
     ? tournamentStart
     : isSingleDay(startDate, endDate)
       ? groupEndTime
-      : nextDayStart(groupEndTime, startDate);
+      : nextDayStart(groupEndTime, dailyStartHour, dailyStartMinute);
   const estimatedEndTime = calculateEndTimeFromSlots(
     knockoutStartDate,
-    endDate,
     knockoutSlots,
-    slotDuration
+    slotDuration,
+    dailyStartHour,
+    dailyStartMinute,
+    endDate,
+    dailyEndHour,
+    dailyEndMinute
   );
   const totalSlots = groupSlots + knockoutSlots;
 
@@ -412,9 +443,11 @@ function calculateScheduleEstimate(
 
 function getEffectiveTournamentEndTime(
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  dailyEndHour: number,
+  dailyEndMinute: number
 ): Date {
-  return new Date(endDate);
+  return withTime(endDate, dailyEndHour, dailyEndMinute);
 }
 
 // ─── Model Validator ─────────────────────────────────────────────────────────
@@ -478,8 +511,6 @@ function normalizeScheduleConfigDates(
     "registrationStartDate",
     "registrationEndDate",
     "bracketGenerationDate",
-    "startLunchBreak",
-    "endLunchBreak",
   ];
 
   for (const field of dateFields) {
@@ -575,8 +606,15 @@ function buildMergedConfig(
     bracketGenerationDate:  config.bracketGenerationDate,
     matchDurationMinutes:   config.matchDurationMinutes,
     breakDurationMinutes:   config.breakDurationMinutes,
-    startLunchBreak:        config.startLunchBreak,
-    endLunchBreak:          config.endLunchBreak,
+    dailyStartHour:         config.dailyStartHour,
+    dailyStartMinute:       config.dailyStartMinute,
+    dailyEndHour:           config.dailyEndHour,
+    dailyEndMinute:         config.dailyEndMinute,
+    lunchBreakStartHour:    config.lunchBreakStartHour,
+    lunchBreakStartMinute:  config.lunchBreakStartMinute,
+    lunchBreakEndHour:      config.lunchBreakEndHour,
+    lunchBreakEndMinute:    config.lunchBreakEndMinute,
+    lunchBreakDurationMinutes: config.lunchBreakDurationMinutes,
     notes:                  config.notes,
     ...updateData,
   } as Partial<ScheduleConfig>;
@@ -1093,13 +1131,19 @@ export class ScheduleConfigService {
     const {
       matchDurationMinutes,
       breakDurationMinutes,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute,
       numberOfTables,
       startDate,
       endDate,
     } = config;
 
     const availableMinutes = calculateAvailableMinutes(
-      startDate, endDate
+      startDate, endDate,
+      dailyStartHour, dailyStartMinute,
+      dailyEndHour, dailyEndMinute
     );
     const estimate = calculateScheduleEstimate(
       startDate,
@@ -1107,12 +1151,18 @@ export class ScheduleConfigService {
       breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
-      numberOfTables
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute
     );
     const { totalSlots, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
-      endDate
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const overflowMinutes = Math.max(
@@ -1187,6 +1237,10 @@ export class ScheduleConfigService {
     return {
       matchDurationMinutes: 30,
       breakDurationMinutes: 10,
+      dailyStartHour: 8,
+      dailyStartMinute: 0,
+      dailyEndHour: 22,
+      dailyEndMinute: 0,
       numberOfTables: 1,
     };
   }
@@ -1217,6 +1271,10 @@ export class ScheduleConfigService {
     const {
       matchDurationMinutes = 30,
       breakDurationMinutes = 10,
+      dailyStartHour = 8,
+      dailyStartMinute = 0,
+      dailyEndHour = 22,
+      dailyEndMinute = 0,
       numberOfTables = 1,
       startDate,
       endDate,
@@ -1227,7 +1285,9 @@ export class ScheduleConfigService {
     }
 
     const availableMinutes = calculateAvailableMinutes(
-      startDate, endDate
+      startDate, endDate,
+      dailyStartHour, dailyStartMinute,
+      dailyEndHour, dailyEndMinute
     );
     const estimate = calculateScheduleEstimate(
       startDate,
@@ -1235,12 +1295,18 @@ export class ScheduleConfigService {
       breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
-      numberOfTables
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute
     );
     const { totalSlots, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
-      endDate
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const overflowMinutes = Math.max(
@@ -1288,6 +1354,10 @@ export class ScheduleConfigService {
       bracketGenerationDate,
       matchDurationMinutes = 30,
       breakDurationMinutes = 10,
+      dailyStartHour = 8,
+      dailyStartMinute = 0,
+      dailyEndHour = 22,
+      dailyEndMinute = 0,
     } = data;
 
     if (!startDate || !endDate) {
@@ -1308,7 +1378,9 @@ export class ScheduleConfigService {
     }
 
     const availableMinutes = calculateAvailableMinutes(
-      startDate, endDate
+      startDate, endDate,
+      dailyStartHour, dailyStartMinute,
+      dailyEndHour, dailyEndMinute
     );
     const estimate = calculateScheduleEstimate(
       startDate,
@@ -1316,12 +1388,18 @@ export class ScheduleConfigService {
       breakdown,
       matchDurationMinutes,
       breakDurationMinutes,
-      numberOfTables
+      numberOfTables,
+      dailyStartHour,
+      dailyStartMinute,
+      dailyEndHour,
+      dailyEndMinute
     );
     const { totalSlots, neededMinutes, estimatedEndTime } = estimate;
     const tournamentEndTime = getEffectiveTournamentEndTime(
       startDate,
-      endDate
+      endDate,
+      dailyEndHour,
+      dailyEndMinute
     );
 
     const overflowMinutes = Math.max(

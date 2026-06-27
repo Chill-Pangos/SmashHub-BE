@@ -122,7 +122,7 @@ class AdminSystemService {
 
   async publishCronEvent(log: CronLog): Promise<void> {
     const plainLog = log.get ? log.get({ plain: true }) : log;
-    this.sendRealtimeEvent("admin_system_metrics_updated", {
+    notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
       type: "cron",
       data: plainLog,
       generatedAt: new Date().toISOString(),
@@ -137,7 +137,7 @@ class AdminSystemService {
         data: plainLog,
       };
       if (systemRuntimeService.recordAlert(alert)) {
-        this.sendRealtimeEvent("admin_system_alert_created", alert);
+        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
       }
     }
   }
@@ -146,7 +146,7 @@ class AdminSystemService {
     try {
       const overview = await this.getOverview();
 
-      this.sendRealtimeEvent("admin_system_metrics_updated", {
+      notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
         type: "overview",
         data: overview,
         alerts: overview.alerts,
@@ -165,7 +165,7 @@ class AdminSystemService {
       });
       if (signature !== this.lastHealthSignature) {
         this.lastHealthSignature = signature;
-        this.sendRealtimeEvent("admin_system_health_changed", {
+        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_health_changed", {
           status: overview.status,
           services: overview.services,
           resources: overview.resources,
@@ -386,16 +386,10 @@ class AdminSystemService {
     systemRuntimeService.resolveAlerts(activeKeys);
     for (const alert of activeAlerts) {
       if (systemRuntimeService.recordAlert(alert)) {
-        this.sendRealtimeEvent("admin_system_alert_created", alert);
+        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
       }
     }
     return activeAlerts;
-  }
-
-  private sendRealtimeEvent(event: string, data: unknown): void {
-    notificationService.publishRoomEvent(REALTIME_ROOM, event, data).catch((error) => {
-      console.error("Failed to send admin system realtime event:", error);
-    });
   }
 
   private async pingDatabase() {

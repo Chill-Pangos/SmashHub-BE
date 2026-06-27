@@ -59,33 +59,21 @@ function dateOnlyTime(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-function minutesOfDay(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes();
-}
-
-function assertValidScheduleWindow(config: ScheduleConfig): void {
-  if (config.endDate <= config.startDate) {
-    throw new BadRequestError("Schedule config endDate must be after startDate");
-  }
-  if (minutesOfDay(config.endDate) <= minutesOfDay(config.startDate)) {
-    throw new BadRequestError("Schedule config end time must be after start time");
-  }
-}
-
 function isSingleDayTournament(config: ScheduleConfig): boolean {
   return dateOnlyTime(config.startDate) === dateOnlyTime(config.endDate);
 }
 
-function withTimeFrom(date: Date, timeSource: Date): Date {
+function withTime(date: Date, hour: number, minute: number): Date {
   const result = new Date(date);
-  result.setHours(timeSource.getHours(), timeSource.getMinutes(), 0, 0);
+  result.setHours(hour, minute, 0, 0);
   return result;
 }
 
 function nextDayStart(date: Date, config: ScheduleConfig): Date {
-  return withTimeFrom(
+  return withTime(
     new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
-    config.startDate,
+    config.dailyStartHour,
+    config.dailyStartMinute,
   );
 }
 
@@ -102,9 +90,8 @@ class SingleDayAllocator {
   private readonly endDate: Date;
 
   constructor(config: ScheduleConfig) {
-    assertValidScheduleWindow(config);
-    this.startDate = new Date(config.startDate);
-    this.endDate = new Date(config.endDate);
+    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
+    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
     this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
   }
 
@@ -145,12 +132,19 @@ class SingleDayAllocator {
 class MultiDayAllocator {
   private readonly startDate: Date;
   private readonly endDate: Date;
+  private readonly dailyStartHour: number;
+  private readonly dailyStartMinute: number;
+  private readonly dailyEndHour: number;
+  private readonly dailyEndMinute: number;
   private readonly slotDuration: number;
 
   constructor(config: ScheduleConfig) {
-    assertValidScheduleWindow(config);
-    this.startDate = new Date(config.startDate);
-    this.endDate = new Date(config.endDate);
+    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
+    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
+    this.dailyStartHour = config.dailyStartHour;
+    this.dailyStartMinute = config.dailyStartMinute;
+    this.dailyEndHour = config.dailyEndHour;
+    this.dailyEndMinute = config.dailyEndMinute;
     this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
   }
 
@@ -166,11 +160,12 @@ class MultiDayAllocator {
       current = new Date(current.getTime() + this.slotDuration * 60_000);
 
       const nextSlotStart = new Date(current.getTime() + this.slotDuration * 60_000);
-      const lastStartOfDay = withTimeFrom(current, this.endDate);
+      const lastStartOfDay = new Date(current);
+      lastStartOfDay.setHours(this.dailyEndHour, this.dailyEndMinute, 0, 0);
 
       if (nextSlotStart > lastStartOfDay) {
         current.setDate(current.getDate() + 1);
-        current.setHours(this.startDate.getHours(), this.startDate.getMinutes(), 0, 0);
+        current.setHours(this.dailyStartHour, this.dailyStartMinute, 0, 0);
       }
     }
 
@@ -226,9 +221,10 @@ function getPhaseSlot(
     current = new Date(current.getTime() + slotDuration * 60_000);
 
     const nextSlotStart = new Date(current.getTime() + slotDuration * 60_000);
-    const lastStartOfDay = withTimeFrom(
+    const lastStartOfDay = withTime(
       current,
-      config.endDate,
+      config.dailyEndHour,
+      config.dailyEndMinute,
     );
 
     if (nextSlotStart > lastStartOfDay) {
@@ -349,7 +345,7 @@ function getSequentialGroupRoundEndTime<T extends { groupName: string; roundNumb
 }
 
 function getTournamentEndTime(config: ScheduleConfig): Date {
-  return new Date(config.endDate);
+  return withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
 }
 
 // ─── Table Assignment ─────────────────────────────────────────────────────────
@@ -646,7 +642,6 @@ async function getRequiredScheduleConfig(
       "Schedule config not found. Please create a schedule configuration first.",
     );
   }
-  assertValidScheduleWindow(config);
   return config;
 }
 
@@ -820,7 +815,11 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildGroupMatchPairs(categoryId);
-    const groupStart = new Date(config.startDate);
+    const groupStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
     const groupEnd = getSequentialGroupRoundEndTime(config, groupStart, pairs);
     const tournamentEnd = getTournamentEndTime(config);
     const warning = groupEnd > tournamentEnd
@@ -893,7 +892,11 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildKnockoutPairs(categoryId, roundName);
-    const knockoutStart = new Date(config.startDate);
+    const knockoutStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
     const knockoutEnd = getSequentialRoundEndTime(config, knockoutStart, pairs);
     const tournamentEnd = getTournamentEndTime(config);
     const warning = knockoutEnd > tournamentEnd
@@ -1021,7 +1024,11 @@ export class ScheduleService {
       })));
     }
 
-    const tournamentStart = new Date(config.startDate);
+    const tournamentStart = withTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
     const groupEnd = getSequentialGroupRoundEndTime(config, tournamentStart, groupJobs);
     const knockoutStart = groupJobs.length === 0
       ? tournamentStart
