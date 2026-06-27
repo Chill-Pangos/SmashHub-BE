@@ -17,6 +17,7 @@ import KnockoutBracket from "../models/knockoutBracket.model";
 import { toUtcDate } from "../utils/date.helper";
 import { removeUndefinedFields } from "../utils/object.helper";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
+import { localizeScheduleConfigInstance } from "../utils/scheduleConfigTime.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -642,7 +643,7 @@ async function getRequiredScheduleConfig(
       "Schedule config not found. Please create a schedule configuration first.",
     );
   }
-  return config;
+  return localizeScheduleConfigInstance(config);
 }
 
 async function clearExistingSchedules(
