@@ -19,13 +19,14 @@ const router = Router({ mergeParams: true });
  *       - Daily operational hours with optional lunch breaks
  *
  *       **Time Slot Calculations:**
- *       - Available time = (Tournament end - start) × daily operating hours
- *       - Lunch break time is subtracted from available time
+ *       - Available time = calendar days × daily operating hours, minus lunch break overlap
+ *       - Slots skip lunch break and roll to next day when a match cannot finish before dailyEnd
+ *       - Single-day tournaments do not roll to the next day; if a match cannot finish before dailyEnd, validation fails
  *       - Total slots needed = ceil(total matches / number of tables)
  *       - Time needed = total slots × (match duration + break duration)
  *
  *       **Validation Rules:**
- *       - Match duration: 30-90 minutes (default 60)
+ *       - Match duration: 30-90 minutes (default 30)
  *       - Break duration: 5-30 minutes (default 10)
  *       - Daily hours: 0-23 (must have dailyEndHour > dailyStartHour)
  *       - Daily minutes: 0-59
@@ -34,6 +35,7 @@ const router = Router({ mergeParams: true });
  *       - Bracket generation must be at least 2 days before tournament start
  *       - Lunch break (if specified) must be within daily operating hours
  *       - Lunch break cannot overlap daily hours boundary
+ *       - lunchBreakDurationMinutes must match lunchBreakStart/lunchBreakEnd when provided
  *
  *       **Schedule Fit Analysis:**
  *       After creation, verify the schedule can accommodate all matches using the
@@ -566,11 +568,12 @@ router.patch(
  *       accommodate all matches calculated from category.maxEntries and category.isGroupStage.
  *
  *       **Validation Checks:**
- *       - Available time = (end date - start date) × daily operating hours
+ *       - Available time = calendar days × daily operating hours, minus lunch break overlap
  *       - Total matches calculated from category information
- *       - Total slots needed = ceil(calculatedMatches / numberOfTables)
- *       - Time needed = totalSlots × (matchDuration + breakDuration)
- *       - Valid if: timeNeeded <= availableTime
+ *       - Total slots needed uses stage-aware round/group math and numberOfTables
+ *       - Estimated completion skips lunch break and rolls to next day when needed
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
+ *       - Valid if estimatedEndTime <= tournamentEndTime
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -682,8 +685,9 @@ router.patch(
  *                   lunchBreakDurationMinutes:
  *                     type: integer
  *                     nullable: true
- *                     minimum: 0
+ *                     minimum: 1
  *                     example: 60
+ *                     description: Optional; when provided, must equal lunchBreakEnd - lunchBreakStart in minutes
  *                   notes:
  *                     type: string
  *                     nullable: true
@@ -753,9 +757,10 @@ router.post(
  *       to help determine if it can accommodate all matches.
  *
  *       **Preview Calculations:**
- *       - Available time windows within tournament dates
+ *       - Available time windows within tournament dates, minus lunch break overlap
  *       - Total match slots needed
- *       - Estimated completion time
+ *       - Estimated completion time using same lunch/day rollover logic as schedule generation
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
  *       - Time buffer or overflow if applicable
  *
  *       **Use Case:** Client-side validation before user confirms schedule creation.
@@ -912,7 +917,8 @@ router.post(
  *
  *       **Behavior:**
  *       - Merges provided fields with current configuration
- *       - Calculates impact on match scheduling
+ *       - Calculates impact on match scheduling using same lunch/day rollover logic as schedule generation
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
  *       - Returns updated metrics without persisting to database
  *       - Returns regenerationKey when existing schedules must be regenerated
  *

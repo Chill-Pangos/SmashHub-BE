@@ -27,10 +27,6 @@ interface ScheduleResult {
   warning?: string;
 }
 
-interface TimeSlot {
-  scheduledAt: Date;
-}
-
 interface RefereeWorkload {
   refereeId: number;
   assignedCount: number;
@@ -78,162 +74,104 @@ function nextDayStart(date: Date, config: ScheduleConfig): Date {
   );
 }
 
-// ─── Slot Allocators ──────────────────────────────────────────────────────────
+// ─── Slot Allocation ─────────────────────────────────────────────────────────
 
-/**
- * Giải 1 ngày.
- * Slot chỉ tính scheduledAt dựa trên slot index.
- * numberOfTables dùng để tính số slot song song.
- */
-class SingleDayAllocator {
-  private readonly slotDuration: number;
-  private readonly startDate: Date;
-  private readonly endDate: Date;
-
-  constructor(config: ScheduleConfig) {
-    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
-    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
-    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
-  }
-
-  getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
-    const slotIndex = Math.floor(matchIndex / numberOfTables);
-    return {
-      scheduledAt: new Date(
-        this.startDate.getTime() + slotIndex * this.slotDuration * 60_000,
-      ),
-    };
-  }
-
-  validate(
-    totalMatches: number,
-    numberOfTables: number,
-  ): { fits: boolean; warning?: string } {
-    const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
-    const lastMatchStart = new Date(
-      this.startDate.getTime() + lastSlotIndex * this.slotDuration * 60_000,
-    );
-
-    if (lastMatchStart > this.endDate) {
-      return {
-        fits: false,
-        warning:
-          `Schedule overflows. Last match starts at ${lastMatchStart.toISOString()}, ` +
-          `but tournament's last allowed start time is ${this.endDate.toISOString()}`,
-      };
-    }
-    return { fits: true };
-  }
+function getSlotDurationMs(config: ScheduleConfig): number {
+  return (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
 }
 
-/**
- * Giải nhiều ngày.
- * Tự động sang ngày mới khi hết giờ trong ngày.
- */
-class MultiDayAllocator {
-  private readonly startDate: Date;
-  private readonly endDate: Date;
-  private readonly dailyStartHour: number;
-  private readonly dailyStartMinute: number;
-  private readonly dailyEndHour: number;
-  private readonly dailyEndMinute: number;
-  private readonly slotDuration: number;
+function getMatchDurationMs(config: ScheduleConfig): number {
+  return config.matchDurationMinutes * 60_000;
+}
 
-  constructor(config: ScheduleConfig) {
-    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
-    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
-    this.dailyStartHour = config.dailyStartHour;
-    this.dailyStartMinute = config.dailyStartMinute;
-    this.dailyEndHour = config.dailyEndHour;
-    this.dailyEndMinute = config.dailyEndMinute;
-    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
+function getDailyStart(date: Date, config: ScheduleConfig): Date {
+  return withTime(date, config.dailyStartHour, config.dailyStartMinute);
+}
+
+function getDailyEnd(date: Date, config: ScheduleConfig): Date {
+  return withTime(date, config.dailyEndHour, config.dailyEndMinute);
+}
+
+function getLunchBreakRange(
+  date: Date,
+  config: ScheduleConfig,
+): { start: Date; end: Date } | null {
+  if (config.lunchBreakStartHour == null || config.lunchBreakEndHour == null) {
+    return null;
   }
 
-  getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
-    const slotIndex = Math.floor(matchIndex / numberOfTables);
-    return { scheduledAt: this._computeSlotTime(slotIndex) };
-  }
+  return {
+    start: withTime(
+      date,
+      config.lunchBreakStartHour,
+      config.lunchBreakStartMinute ?? 0,
+    ),
+    end: withTime(
+      date,
+      config.lunchBreakEndHour,
+      config.lunchBreakEndMinute ?? 0,
+    ),
+  };
+}
 
-  private _computeSlotTime(slotIndex: number): Date {
-    let current = new Date(this.startDate);
+function overlapsLunchBreak(
+  start: Date,
+  config: ScheduleConfig,
+): { start: Date; end: Date } | null {
+  const lunch = getLunchBreakRange(start, config);
+  if (!lunch) return null;
 
-    for (let i = 0; i < slotIndex; i++) {
-      current = new Date(current.getTime() + this.slotDuration * 60_000);
+  const matchEnd = new Date(start.getTime() + getMatchDurationMs(config));
+  return start < lunch.end && matchEnd > lunch.start ? lunch : null;
+}
 
-      const nextSlotStart = new Date(current.getTime() + this.slotDuration * 60_000);
-      const lastStartOfDay = new Date(current);
-      lastStartOfDay.setHours(this.dailyEndHour, this.dailyEndMinute, 0, 0);
+function getNextValidMatchStart(config: ScheduleConfig, candidate: Date): Date {
+  let current = new Date(candidate);
 
-      if (nextSlotStart > lastStartOfDay) {
-        current.setDate(current.getDate() + 1);
-        current.setHours(this.dailyStartHour, this.dailyStartMinute, 0, 0);
+  for (let attempts = 0; attempts < 10_000; attempts++) {
+    const dailyStart = getDailyStart(current, config);
+    if (current < dailyStart) {
+      current = dailyStart;
+    }
+
+    const lunch = overlapsLunchBreak(current, config);
+    if (lunch) {
+      current = new Date(lunch.end);
+      continue;
+    }
+
+    const dailyEnd = getDailyEnd(current, config);
+    const matchEnd = new Date(current.getTime() + getMatchDurationMs(config));
+    if (matchEnd > dailyEnd) {
+      if (isSingleDayTournament(config)) {
+        throw new BadRequestError(
+          "Match cannot finish before dailyEnd in a single-day tournament. Adjust dailyEnd, matchDurationMinutes, numberOfTables, or tournament dates.",
+        );
       }
+      current = nextDayStart(current, config);
+      continue;
     }
 
     return current;
   }
 
-  validate(
-    totalMatches: number,
-    numberOfTables: number,
-  ): { fits: boolean; warning?: string } {
-    const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
-    const lastMatchAt = this._computeSlotTime(lastSlotIndex);
-    const lastMatchEnd = new Date(
-      lastMatchAt.getTime() + this.slotDuration * 60_000,
-    );
-
-    if (lastMatchEnd > this.endDate) {
-      return {
-        fits: false,
-        warning:
-          `Schedule overflows tournament end time. Last match ends at ${lastMatchEnd.toISOString()}, ` +
-          `tournament ends at ${this.endDate.toISOString()}`,
-      };
-    }
-    return { fits: true };
-  }
-}
-
-function createAllocator(
-  config: ScheduleConfig,
-): SingleDayAllocator | MultiDayAllocator {
-  return isSingleDayTournament(config)
-    ? new SingleDayAllocator(config)
-    : new MultiDayAllocator(config);
+  throw new BadRequestError("Unable to find a valid schedule slot with current schedule configuration");
 }
 
 function getPhaseSlot(
   config: ScheduleConfig,
   phaseStart: Date,
-  matchIndex: number,
-): TimeSlot {
-  const slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
-  const slotIndex = Math.floor(matchIndex / config.numberOfTables);
-
-  if (isSingleDayTournament(config)) {
-    return {
-      scheduledAt: new Date(phaseStart.getTime() + slotIndex * slotDuration * 60_000),
-    };
-  }
-
-  let current = new Date(phaseStart);
+  slotIndex: number,
+): Date {
+  let current = getNextValidMatchStart(config, phaseStart);
   for (let i = 0; i < slotIndex; i++) {
-    current = new Date(current.getTime() + slotDuration * 60_000);
-
-    const nextSlotStart = new Date(current.getTime() + slotDuration * 60_000);
-    const lastStartOfDay = withTime(
-      current,
-      config.dailyEndHour,
-      config.dailyEndMinute,
+    current = getNextValidMatchStart(
+      config,
+      new Date(current.getTime() + getSlotDurationMs(config)),
     );
-
-    if (nextSlotStart > lastStartOfDay) {
-      current = nextDayStart(current, config);
-    }
   }
 
-  return { scheduledAt: current };
+  return current;
 }
 
 function getPhaseEndTime(
@@ -243,10 +181,11 @@ function getPhaseEndTime(
 ): Date {
   if (matchCount <= 0) return phaseStart;
 
-  const lastSlot = getPhaseSlot(config, phaseStart, matchCount - 1).scheduledAt;
+  const lastSlotIndex = Math.ceil(matchCount / config.numberOfTables) - 1;
+  const lastSlot = getPhaseSlot(config, phaseStart, lastSlotIndex);
   return new Date(
     lastSlot.getTime() +
-      (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000,
+      getSlotDurationMs(config),
   );
 }
 
@@ -267,7 +206,8 @@ function getSequentialRoundSlots<T extends { roundNumber: number }>(
   let roundStart = phaseStart;
   for (const [, roundItems] of Array.from(rounds.entries()).sort((a, b) => a[0] - b[0])) {
     for (let i = 0; i < roundItems.length; i++) {
-      slots.set(roundItems[i]!, getPhaseSlot(config, roundStart, i).scheduledAt);
+      const slotIndex = Math.floor(i / config.numberOfTables);
+      slots.set(roundItems[i]!, getPhaseSlot(config, roundStart, slotIndex));
     }
     roundStart = getPhaseEndTime(config, roundStart, roundItems.length);
   }
@@ -347,12 +287,6 @@ function getSequentialGroupRoundEndTime<T extends { groupName: string; roundNumb
 
 function getTournamentEndTime(config: ScheduleConfig): Date {
   return withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
-}
-
-// ─── Table Assignment ─────────────────────────────────────────────────────────
-
-function getSlotDurationMs(config: ScheduleConfig): number {
-  return (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
 }
 
 function assertTableNumberInRange(tableNumber: number, config: ScheduleConfig): void {
@@ -560,15 +494,32 @@ async function createSubMatchesForMatch(
     { transaction: t },
   );
 
+  await syncSubMatchPlayersForMatch(match, category, t, subMatches[0]);
+}
+
+async function syncSubMatchPlayersForMatch(
+  match: Match,
+  category: TournamentCategory,
+  t: Transaction,
+  firstSubMatch?: SubMatch,
+): Promise<void> {
   if (category.type === "team") return;
 
-  const firstSubMatch = subMatches[0];
-  if (!firstSubMatch) return;
+  const targetSubMatch = firstSubMatch ?? await SubMatch.findOne({
+    where: { matchId: match.id },
+    order: [["subMatchNumber", "ASC"]],
+    transaction: t,
+  });
+  if (!targetSubMatch) return;
+
+  if (match.entryAId == null || match.entryBId == null) {
+    await SubMatchPlayer.destroy({ where: { subMatchId: targetSubMatch.id }, transaction: t });
+    return;
+  }
 
   const entryIds = [match.entryAId, match.entryBId].filter(
     (id): id is number => id != null,
   );
-  if (entryIds.length === 0) return;
 
   const entryMembers = await EntryMember.findAll({
     where: { entryId: { [Op.in]: entryIds } },
@@ -577,10 +528,12 @@ async function createSubMatchesForMatch(
   });
 
   const rows = entryMembers.map((member) => ({
-    subMatchId: firstSubMatch.id,
+    subMatchId: targetSubMatch.id,
     entryMemberId: member.id,
     team: member.entryId === match.entryAId ? "A" : "B",
   }));
+
+  await SubMatchPlayer.destroy({ where: { subMatchId: targetSubMatch.id }, transaction: t });
 
   if (rows.length > 0) {
     await SubMatchPlayer.bulkCreate(rows, { transaction: t });
@@ -660,6 +613,13 @@ async function clearExistingSchedules(
   const scheduleIds = existing.map((s) => s.id);
   const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
 
+  if (stage === "knockout" && scheduleIds.length > 0) {
+    await KnockoutBracket.update(
+      { scheduleId: null, matchId: null },
+      { where: { categoryId, scheduleId: { [Op.in]: scheduleIds } }, transaction: t },
+    );
+  }
+
   if (matchIds.length > 0) {
     await MatchReferee.destroy({
       where: { matchId: { [Op.in]: matchIds } },
@@ -672,6 +632,38 @@ async function clearExistingSchedules(
   }
 
   await Schedule.destroy({ where: { categoryId, stage }, transaction: t });
+}
+
+async function getGroupStageEndTime(
+  categoryId: number,
+  config: ScheduleConfig,
+): Promise<Date> {
+  const lastGroupSchedule = await Schedule.findOne({
+    where: { categoryId, stage: "group" },
+    order: [["scheduledAt", "DESC"]],
+  });
+
+  if (!lastGroupSchedule) {
+    throw new BadRequestError("Generate group stage schedule first before knockout schedule");
+  }
+
+  return new Date(lastGroupSchedule.scheduledAt.getTime() + getSlotDurationMs(config));
+}
+
+async function getKnockoutPhaseStart(
+  category: TournamentCategory,
+  config: ScheduleConfig,
+): Promise<Date> {
+  const tournamentStart = withTime(
+    config.startDate,
+    config.dailyStartHour,
+    config.dailyStartMinute,
+  );
+
+  if (!category.isGroupStage) return tournamentStart;
+
+  const groupEnd = await getGroupStageEndTime(category.id, config);
+  return isSingleDayTournament(config) ? groupEnd : nextDayStart(groupEnd, config);
 }
 
 async function getMatchIdsByScheduleIds(
@@ -816,6 +808,9 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildGroupMatchPairs(categoryId);
+    if (pairs.length === 0) {
+      throw new BadRequestError("Not enough group entries to create matches");
+    }
     const groupStart = withTime(
       config.startDate,
       config.dailyStartHour,
@@ -893,11 +888,7 @@ export class ScheduleService {
 
     const config = await getRequiredScheduleConfig(tournament.id);
     const pairs = await buildKnockoutPairs(categoryId, roundName);
-    const knockoutStart = withTime(
-      config.startDate,
-      config.dailyStartHour,
-      config.dailyStartMinute,
-    );
+    const knockoutStart = await getKnockoutPhaseStart(category, config);
     const knockoutEnd = getSequentialRoundEndTime(config, knockoutStart, pairs);
     const tournamentEnd = getTournamentEndTime(config);
     const warning = knockoutEnd > tournamentEnd
@@ -974,14 +965,15 @@ export class ScheduleService {
     organizerId: number,
     tournamentId: number,
   ): Promise<{ categoryId: number; result: ScheduleResult }[]> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
+    const tournament = await Tournament.findByPk(tournamentId);
     if (!tournament) throw new NotFoundError("Tournament not found");
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
 
-    const categories = tournament.categories ?? [];
+    const categories = await TournamentCategory.findAll({
+      where: { tournamentId },
+      order: [["id", "ASC"]],
+    });
     if (categories.length === 0) {
       throw new BadRequestError("Tournament has no categories.");
     }
@@ -1008,6 +1000,9 @@ export class ScheduleService {
     for (const category of categories) {
       if (category.isGroupStage) {
         const pairs = await buildGroupMatchPairs(category.id);
+        if (pairs.length === 0) {
+          throw new BadRequestError(`Not enough group entries to create matches for category ${category.id}`);
+        }
         groupJobs.push(...pairs.map((pair) => ({
           category,
           groupName: pair.groupName,
@@ -1137,18 +1132,23 @@ export class ScheduleService {
    * Gọi từ knockoutBracket.service sau fillQualifiers().
    */
   async syncMatchEntriesFromBrackets(
+    organizerId: number,
     categoryId: number,
     t?: Transaction,
   ): Promise<void> {
-    const brackets = await KnockoutBracket.findAll({
-      where: {
-        categoryId,
-        isByeMatch: false,
-        matchId: { [Op.not]: null },
-      },
-    });
+    const category = await getCategoryWithTournament(categoryId);
+    assertOrganizer(organizerId, category.tournament!);
 
     const run = async (transaction: Transaction) => {
+      const brackets = await KnockoutBracket.findAll({
+        where: {
+          categoryId,
+          isByeMatch: false,
+          matchId: { [Op.not]: null },
+        },
+        transaction,
+      });
+
       for (const bracket of brackets) {
         if (!bracket.matchId) continue;
 
@@ -1163,6 +1163,11 @@ export class ScheduleService {
           },
           { where: { id: bracket.matchId }, transaction },
         );
+
+        const match = await Match.findByPk(bracket.matchId, { transaction });
+        if (match) {
+          await syncSubMatchPlayersForMatch(match, category, transaction);
+        }
       }
     };
 
@@ -1389,6 +1394,13 @@ export class ScheduleService {
 
     const scheduleIds = existing.map((s) => s.id);
     const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
+
+    if (scheduleIds.length > 0) {
+      await KnockoutBracket.update(
+        { scheduleId: null, matchId: null },
+        { where: { categoryId, scheduleId: { [Op.in]: scheduleIds } }, transaction: t },
+      );
+    }
 
     if (matchIds.length > 0) {
       await MatchReferee.destroy({

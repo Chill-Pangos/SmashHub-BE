@@ -14,9 +14,10 @@ const router = Router();
  *     description: |
  *       Authorization: Only the tournament organizer can perform this action.
  *
- *       Tạo lịch toàn bộ tournament theo thứ tự: xong hết category này mới đến category khác.
- *       Trong mỗi category: group stage trước, knockout sau (kể cả TBD placeholders).
- *       Slot time được tính liên tục theo scheduleConfig của tournament.
+ *       Tạo lịch toàn bộ tournament theo thứ tự category id tăng dần.
+ *       Phase toàn giải: tất cả group stage trước, knockout sau (kể cả TBD placeholders).
+ *       Slot time được tính theo scheduleConfig, numberOfTables, daily range và lunch break.
+ *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
  *       tableNumber KHÔNG được gán ở đây — sẽ gán động khi trận bắt đầu.
  *
  *       Yêu cầu:
@@ -94,7 +95,8 @@ router.post(
  *       Authorization: Only the tournament organizer can perform this action.
  *
  *       Tạo lịch vòng bảng (round-robin) cho 1 category dựa trên groupStandings.
- *       Slot time tính từ scheduleConfig của tournament.
+ *       Slot time tính từ scheduleConfig của tournament, có tránh lunch break.
+ *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
  *       tableNumber KHÔNG được gán — sẽ gán động khi trận bắt đầu.
  *
  *       Yêu cầu:
@@ -178,8 +180,14 @@ router.post(
  *
  *       Nếu truyền roundName → chỉ tạo lịch cho vòng đó (không xóa vòng khác).
  *       Nếu không truyền → tạo lịch cho tất cả vòng, xóa lịch knockout cũ.
+ *       Nếu category có group stage, phải generate group stage schedule trước;
+ *       knockout sẽ bắt đầu sau group stage.
+ *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
  *
  *       Yêu cầu:
+ *       - Tournament status must be brackets_generated
+ *       - scheduleConfig.bracketGenerationDate must be reached
+ *       - scheduleConfig đã được tạo
  *       - knockoutBrackets đã được generate (generatePlaceholders hoặc generateFromEntries)
  *     security:
  *       - bearerAuth: []
@@ -197,7 +205,7 @@ router.post(
  *                 example: 1
  *               roundName:
  *                 type: string
- *                 enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final]
+ *                 enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Third-place, Final]
  *                 description: Chỉ generate cho vòng này (optional)
  *                 example: Quarter-final
  *     responses:
@@ -256,7 +264,8 @@ router.post(
  *       Authorization: Only the tournament organizer can perform this action.
  *
  *       Sau khi fillQualifiers() fill entryId thật vào knockoutBrackets,
- *       gọi endpoint này để cập nhật lại entryAId / entryBId trong match tương ứng.
+ *       gọi endpoint này để cập nhật lại entryAId / entryBId trong match tương ứng
+ *       và rebuild sub_match_players cho match không phải team.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -328,7 +337,7 @@ router.post(
  *         name: knockoutRound
  *         schema:
  *           type: string
- *           enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Final]
+ *           enum: [Round of 64, Round of 32, Round of 16, Quarter-final, Semi-final, Third-place, Final]
  *       - in: query
  *         name: page
  *         schema:
