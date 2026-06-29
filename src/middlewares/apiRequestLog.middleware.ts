@@ -102,6 +102,40 @@ function getResponseError(responseBody: unknown, statusCode: number) {
   };
 }
 
+function getLoggedError(res: Response, responseBody: unknown, statusCode: number) {
+  const loggedError = res.locals.apiRequestLogError as
+    | {
+        errorCode?: unknown;
+        errorMessage?: unknown;
+        details?: unknown;
+        stack?: unknown;
+      }
+    | undefined;
+
+  if (!loggedError) {
+    return {
+      ...getResponseError(responseBody, statusCode),
+      errorDetails: null,
+    };
+  }
+
+  const fallback = getResponseError(responseBody, statusCode);
+  return {
+    errorCode:
+      loggedError.errorCode !== undefined
+        ? truncate(String(loggedError.errorCode), 100)
+        : fallback.errorCode,
+    errorMessage:
+      loggedError.errorMessage !== undefined
+        ? truncate(String(loggedError.errorMessage), 500)
+        : fallback.errorMessage,
+    errorDetails: limitJson({
+      details: loggedError.details ?? null,
+      stack: loggedError.stack ?? null,
+    }),
+  };
+}
+
 export const apiRequestLogMiddleware = (
   req: AuthRequest,
   res: Response,
@@ -130,7 +164,11 @@ export const apiRequestLogMiddleware = (
     const finishedAt = new Date();
     const durationMs = Math.round(Number(process.hrtime.bigint() - startedHr) / 1_000_000);
     const statusCode = res.statusCode;
-    const { errorCode, errorMessage } = getResponseError(responseBody, statusCode);
+    const { errorCode, errorMessage, errorDetails } = getLoggedError(
+      res,
+      responseBody,
+      statusCode,
+    );
     const shouldCaptureResponse =
       statusCode < 400
         ? config.logging.apiRequest.captureSuccessResponse
@@ -157,7 +195,11 @@ export const apiRequestLogMiddleware = (
         params: req.params,
         ...(config.logging.apiRequest.captureRequestBody && { body: req.body }),
       }),
-      responseMeta: shouldCaptureResponse ? limitJson(responseBody) : null,
+      responseMeta: shouldCaptureResponse
+        ? errorDetails
+          ? limitJson({ response: responseBody ?? null, internalError: errorDetails })
+          : limitJson(responseBody)
+        : errorDetails,
       startedAt,
       finishedAt,
       durationMs,
