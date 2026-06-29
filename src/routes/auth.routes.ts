@@ -10,7 +10,7 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Register new user account
- *     description: Create a new user account. Email must be unique and in valid format. Password must be at least 8 characters, contain 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*()_+-=[]{}';:"|,.<>/?\\). User is assigned 'spectator' role by default unless specified otherwise. Email verification is required after registration.
+ *     description: Create a new user account. Email must be unique and in valid format. Password must be at least 8 characters, contain 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*()_+-=[]{}';:"|,.<>/?\\). User is assigned the 'user' role by default. Email verification is required after registration.
  *     requestBody:
  *       required: true
  *       content:
@@ -44,10 +44,6 @@ const router = Router();
  *                 example: SecurePass123!
  *                 minLength: 8
  *                 description: Strong password (min 8 chars, 1 uppercase, 1 digit, 1 special char)
- *               role:
- *                 type: string
- *                 example: spectator
- *                 description: User role name (defaults to 'spectator' if not provided)
  *     responses:
  *       201:
  *         description: User registered successfully with tokens and user details

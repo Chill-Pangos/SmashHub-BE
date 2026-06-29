@@ -2,9 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import adminSystemService from "../services/adminSystem.service";
 import { BadRequestError } from "../utils/errors.helper";
 import type { MetricsWindow } from "../services/systemRuntime.service";
+import { parsePagination } from "../utils/request.helper";
 
 const VALID_WINDOWS = new Set(["1m", "5m", "15m"]);
-const VALID_EVENT_TYPES = new Set(["error", "alert", "cron"]);
+const VALID_EVENT_TYPES = new Set(["error", "alert", "cron", "api"]);
 
 class AdminSystemController {
   async summary(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -43,7 +44,7 @@ class AdminSystemController {
     try {
       const type = req.query.type ? String(req.query.type) : undefined;
       if (type && !VALID_EVENT_TYPES.has(type)) {
-        throw new BadRequestError("type must be error, alert, or cron");
+        throw new BadRequestError("type must be error, alert, cron, or api");
       }
 
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : 50;
@@ -60,15 +61,7 @@ class AdminSystemController {
 
   async auditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const offset = req.query.offset !== undefined ? Number(req.query.offset) : 0;
-      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 50;
-
-      if (!Number.isInteger(offset) || offset < 0) {
-        throw new BadRequestError("offset must be a non-negative integer");
-      }
-      if (!Number.isInteger(limit) || limit <= 0) {
-        throw new BadRequestError("limit must be a positive integer");
-      }
+      const { offset, limit } = parsePagination(req.query);
 
       const filters: { action?: string; offset: number; limit: number } = { offset, limit };
       if (req.query.action) filters.action = String(req.query.action);

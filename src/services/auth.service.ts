@@ -135,7 +135,11 @@ export class AuthService {
    * Register new user
    */
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { firstName, lastName, email, password, role } = registerDto;
+    const { firstName, lastName, email, password } = registerDto;
+
+    if (Object.prototype.hasOwnProperty.call(registerDto as unknown as Record<string, unknown>, "role")) {
+      throw AuthErrors.ValidationError("role cannot be set during registration");
+    }
 
     // Validate firstName
     if (!firstName || firstName.trim().length === 0) {
@@ -167,7 +171,7 @@ export class AuthService {
     // Hash password
     const hashedPassword = await this.hashPassword(password);
 
-    const assignedRoleName = role || "spectator"; // Default to 'spectator' role if none provided
+    const assignedRoleName = "user";
 
     const foundRole = await Role.findOne({ where: { name: assignedRoleName } });
     if (!foundRole) {

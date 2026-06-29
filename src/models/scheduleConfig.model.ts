@@ -8,6 +8,10 @@ import {
   BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
+import {
+  scheduleConfigHourFromUtc,
+  scheduleConfigTimesFromUtc,
+} from "../utils/scheduleConfigTime.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -28,9 +32,9 @@ function isSameCalendarDate(a: Date, b: Date): boolean {
   return dateOnlyTime(a) === dateOnlyTime(b);
 }
 
-function timeToMinutes(hour?: number, minute?: number): number | null {
+function utcTimeToLocalMinutes(hour?: number | null, minute?: number | null): number | null {
   if (hour == null || minute == null) return null;
-  return hour * 60 + minute;
+  return scheduleConfigHourFromUtc(hour) * 60 + minute;
 }
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -113,7 +117,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 8,
+    defaultValue: 1,
   })
   declare dailyStartHour: number; // Giờ bắt đầu (0-23)
 
@@ -127,7 +131,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 22,
+    defaultValue: 15,
   })
   declare dailyEndHour: number; // Giờ kết thúc (0-23)
 
@@ -184,6 +188,11 @@ export default class ScheduleConfig extends Model {
 
   @BelongsTo(() => Tournament)
   declare tournament?: Tournament;
+
+  override toJSON(): object {
+    const values = super.toJSON() as Record<string, unknown>;
+    return scheduleConfigTimesFromUtc(values);
+  }
 
   // ─── Validators ──────────────────────────────────────────────────────────
 
@@ -293,10 +302,14 @@ export default class ScheduleConfig extends Model {
       return;
     }
 
-    const startTotalMinutes = dailyStartHour * 60 + dailyStartMinute;
-    const endTotalMinutes = dailyEndHour * 60 + dailyEndMinute;
+    const startTotalMinutes = utcTimeToLocalMinutes(dailyStartHour, dailyStartMinute);
+    const endTotalMinutes = utcTimeToLocalMinutes(dailyEndHour, dailyEndMinute);
 
-    if (endTotalMinutes <= startTotalMinutes) {
+    if (
+      startTotalMinutes != null &&
+      endTotalMinutes != null &&
+      endTotalMinutes <= startTotalMinutes
+    ) {
       throw new Error(
         "Daily end time must be after daily start time"
       );
@@ -327,12 +340,20 @@ export default class ScheduleConfig extends Model {
       );
     }
 
-    const startTotalMinutes =
-      lunchBreakStartHour! * 60 + (lunchBreakStartMinute ?? 0);
-    const endTotalMinutes =
-      lunchBreakEndHour! * 60 + (lunchBreakEndMinute ?? 0);
+    const startTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakStartHour,
+      lunchBreakStartMinute ?? 0,
+    );
+    const endTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakEndHour,
+      lunchBreakEndMinute ?? 0,
+    );
 
-    if (endTotalMinutes <= startTotalMinutes) {
+    if (
+      startTotalMinutes != null &&
+      endTotalMinutes != null &&
+      endTotalMinutes <= startTotalMinutes
+    ) {
       throw new Error(
         "Lunch break end time must be after lunch break start time"
       );
@@ -361,15 +382,29 @@ export default class ScheduleConfig extends Model {
       return;
     }
 
-    const dailyStartTotalMinutes = dailyStartHour * 60 + (dailyStartMinute ?? 0);
-    const dailyEndTotalMinutes = dailyEndHour * 60 + (dailyEndMinute ?? 0);
-    const breakStartTotalMinutes =
-      lunchBreakStartHour * 60 + (lunchBreakStartMinute ?? 0);
-    const breakEndTotalMinutes =
-      lunchBreakEndHour * 60 + (lunchBreakEndMinute ?? 0);
+    const dailyStartTotalMinutes = utcTimeToLocalMinutes(
+      dailyStartHour,
+      dailyStartMinute ?? 0,
+    );
+    const dailyEndTotalMinutes = utcTimeToLocalMinutes(
+      dailyEndHour,
+      dailyEndMinute ?? 0,
+    );
+    const breakStartTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakStartHour,
+      lunchBreakStartMinute ?? 0,
+    );
+    const breakEndTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakEndHour,
+      lunchBreakEndMinute ?? 0,
+    );
 
     // Lunch break phải nằm trong daily schedule
     if (
+      dailyStartTotalMinutes == null ||
+      dailyEndTotalMinutes == null ||
+      breakStartTotalMinutes == null ||
+      breakEndTotalMinutes == null ||
       breakStartTotalMinutes < dailyStartTotalMinutes ||
       breakEndTotalMinutes > dailyEndTotalMinutes
     ) {
@@ -415,8 +450,8 @@ export default class ScheduleConfig extends Model {
       }
 
       if (isSameCalendarDate(startDate, endDate)) {
-        const dailyStart = timeToMinutes(dailyStartHour, dailyStartMinute);
-        const dailyEnd = timeToMinutes(dailyEndHour, dailyEndMinute);
+        const dailyStart = utcTimeToLocalMinutes(dailyStartHour, dailyStartMinute);
+        const dailyEnd = utcTimeToLocalMinutes(dailyEndHour, dailyEndMinute);
 
         if (dailyStart != null && dailyEnd != null && dailyEnd <= dailyStart) {
           throw new Error(

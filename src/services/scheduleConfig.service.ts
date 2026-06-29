@@ -12,6 +12,10 @@ import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { toUtcDate } from "../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
+import {
+  scheduleConfigTimesFromUtc,
+  scheduleConfigTimesToUtc,
+} from "../utils/scheduleConfigTime.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -523,6 +527,12 @@ function normalizeScheduleConfigDates(
   return normalized;
 }
 
+function normalizeScheduleConfigForStorage(
+  data: Partial<ScheduleConfig>
+): Partial<ScheduleConfig> {
+  return normalizeScheduleConfigDates(scheduleConfigTimesToUtc(data));
+}
+
 function removeUndefinedFields(
   data: Partial<ScheduleConfig>
 ): Partial<ScheduleConfig> {
@@ -618,6 +628,14 @@ function buildMergedConfig(
     notes:                  config.notes,
     ...updateData,
   } as Partial<ScheduleConfig>;
+}
+
+function buildLocalMergedConfigForPreview(
+  config: ScheduleConfig,
+  updateData: Partial<ScheduleConfig>,
+): Partial<ScheduleConfig> {
+  const localConfig = scheduleConfigTimesFromUtc(pickConfigFields(config));
+  return buildMergedConfig(localConfig as ScheduleConfig, updateData);
 }
 
 function normalizeComparableValue(value: unknown): unknown {
@@ -918,8 +936,11 @@ export class ScheduleConfigService {
     const existing = await this.getConfig(tournamentId);
     if (!existing) throw new NotFoundError("Schedule config not found");
     const { configData } = splitUpdatePayload(data as Record<string, unknown>);
-    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(configData));
+    const cleanConfigData = removeUndefinedFields(configData);
+    const updateData = normalizeScheduleConfigForStorage(cleanConfigData);
+    const previewUpdateData = normalizeScheduleConfigDates(cleanConfigData);
     const merged = buildMergedConfig(existing, updateData);
+    const mergedForPreview = buildLocalMergedConfigForPreview(existing, previewUpdateData);
     const changedFields = getChangedFields(existing, updateData);
     const context = await getScheduleConfigUpdateContext(tournament);
 
@@ -935,7 +956,7 @@ export class ScheduleConfigService {
     const breakdown = totalMatches != null
       ? createManualMatchBreakdown(totalMatches)
       : this._resolveMatchBreakdown(tournament);
-    const preview = this._buildPreview(merged, breakdown);
+    const preview = this._buildPreview(mergedForPreview, breakdown);
     const needsRegeneration = requiresScheduleRegeneration(
       tournament,
       existing,
@@ -992,7 +1013,7 @@ export class ScheduleConfigService {
     }
 
     // Re-validate toàn bộ model trước khi persist
-    const createData = normalizeScheduleConfigDates(data);
+    const createData = normalizeScheduleConfigForStorage(data);
 
     await runModelValidation(tournamentId, createData);
 
@@ -1031,7 +1052,7 @@ export class ScheduleConfigService {
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
     const { configData, controls } = splitUpdatePayload(data as Record<string, unknown>);
-    const updateData = normalizeScheduleConfigDates(removeUndefinedFields(configData));
+    const updateData = normalizeScheduleConfigForStorage(removeUndefinedFields(configData));
 
     if (Object.keys(updateData).length === 0) {
       return config;
@@ -1070,7 +1091,10 @@ export class ScheduleConfigService {
       }
 
       const breakdown = this._resolveMatchBreakdown(tournament);
-      const preview = this._buildPreview(mergedForValidation, breakdown);
+      const preview = this._buildPreview(
+        scheduleConfigTimesFromUtc(mergedForValidation),
+        breakdown,
+      );
       if (!preview.isValid) {
         throw new BadRequestError("Updated schedule config does not fit in the tournament time window. Run preview-update and adjust the config first.");
       }
@@ -1138,7 +1162,7 @@ export class ScheduleConfigService {
       numberOfTables,
       startDate,
       endDate,
-    } = config;
+    } = scheduleConfigTimesFromUtc(pickConfigFields(config)) as ScheduleConfig;
 
     const availableMinutes = calculateAvailableMinutes(
       startDate, endDate,
@@ -1203,7 +1227,7 @@ export class ScheduleConfigService {
   ): Promise<ScheduleValidationResponse> {
     assertValidCategoryInput(category);
     const normalizedConfig = normalizeScheduleConfigDates(scheduleConfig);
-    await runModelValidation(1, normalizedConfig);
+    await runModelValidation(1, normalizeScheduleConfigForStorage(scheduleConfig));
 
     const breakdown = calculateMatchBreakdownForCategory({
       maxEntries: category.maxEntries,

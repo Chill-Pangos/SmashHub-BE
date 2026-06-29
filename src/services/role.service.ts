@@ -4,6 +4,7 @@ import Role from "../models/role.model";
 import { CreateRoleDto, UpdateRoleDto } from "../dto/role.dto";
 import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors.helper";
 import { removeUndefinedFields } from "../utils/object.helper";
+import permissionCacheService from "./permissionCache.service";
 
 export class RoleService {
   // ─── Private Helpers ────────────────────────────────────────────────────────
@@ -30,7 +31,9 @@ export class RoleService {
 
     await this.assertNameNotTaken(data.name);
 
-    return Role.create(data as any);
+    const role = await Role.create(data as any);
+    permissionCacheService.clearAll();
+    return role;
   }
 
   async findAll(offset: number = 0, limit: number = 10) {
@@ -74,12 +77,14 @@ export class RoleService {
     }
 
     await role.update(updateData);
+    permissionCacheService.clearAll();
     return role;
   }
 
   async delete(id: number): Promise<void> {
     const role = await this.findOrFail(id);
     await role.destroy();
+    permissionCacheService.clearAll();
   }
 }
 

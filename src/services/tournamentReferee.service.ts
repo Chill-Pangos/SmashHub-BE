@@ -15,8 +15,15 @@ import EntryMember from "../models/entryMember.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const REFEREE_PUBLIC_INCLUDE = {
+  model: User,
+  as: "referee",
+  attributes: [...PUBLIC_USER_ATTRIBUTES],
+};
 
 const REFEREE_INCLUDE = {
   model: User,
@@ -306,7 +313,7 @@ private async assertNotCompetingInTournament(
           tournamentId,
           ...(role ? { role } : {}),
         },
-        include: [REFEREE_INCLUDE],
+        include: [REFEREE_PUBLIC_INCLUDE],
         order: [["role", "ASC"]],
         offset,
         limit: limit,
@@ -334,7 +341,7 @@ private async assertNotCompetingInTournament(
         tournamentId,
         ...(role ? { role } : {}),
       },
-      include: [REFEREE_INCLUDE],
+      include: [REFEREE_PUBLIC_INCLUDE],
       order: [["role", "ASC"]],
     });
   }

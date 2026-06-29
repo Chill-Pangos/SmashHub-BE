@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import cronLogService from "../services/cronLog.service";
 import { BadRequestError } from "../utils/errors.helper";
+import { parsePagination } from "../utils/request.helper";
 
 const VALID_STATUSES = new Set(["success", "failed", "skipped"]);
 const VALID_LEVELS = new Set(["info", "warn", "error"]);
@@ -29,8 +30,9 @@ export class CronLogController {
       if (tournamentId !== undefined) filters.tournamentId = tournamentId;
       if (status) filters.status = status as any;
       if (level) filters.level = level as any;
-      if (req.query.offset !== undefined) filters.offset = Number(req.query.offset);
-      if (req.query.limit !== undefined) filters.limit = Number(req.query.limit);
+      const { offset, limit } = parsePagination(req.query);
+      filters.offset = offset;
+      filters.limit = limit;
 
       const result = await cronLogService.findAll(filters);
 

@@ -8,6 +8,7 @@ import redisClient, { connectRedis } from "../config/redis";
 import type CronLog from "../models/cronLog.model";
 import User from "../models/user.model";
 import Role from "../models/role.model";
+import Match from "../models/match.model";
 import authService from "./auth.service";
 import { NotFoundError } from "../utils/errors.helper";
 
@@ -21,6 +22,26 @@ export interface NotificationPayload {
   timestamp?: Date;
 }
 
+export type MatchRealtimeEventType =
+  | "match_started"
+  | "sub_match_players_assigned"
+  | "sub_match_started"
+  | "live_score_updated"
+  | "set_created"
+  | "set_score_updated"
+  | "set_deleted"
+  | "sub_match_finalized"
+  | "match_result_submitted"
+  | "match_result_approved";
+
+export interface MatchRealtimePayload {
+  roomId: string;
+  matchId: number;
+  type: MatchRealtimeEventType;
+  data: unknown;
+  occurredAt: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CORS_ORIGIN = process.env.FRONTEND_URL ?? "*";
@@ -28,20 +49,38 @@ const PING_TIMEOUT = 60_000;
 const PING_INTERVAL = 25_000;
 const REALTIME_NOTIFICATION_CHANNEL = "realtime:notifications";
 const REALTIME_CRON_LOG_CHANNEL = "realtime:cron-logs";
-const SOCKET_DEBUG_LOGS = process.env.SOCKET_DEBUG_LOGS !== "false";
-
-function socketLog(
-  level: "info" | "warn" | "error",
-  message: string,
-  meta?: Record<string, unknown>,
-): void {
-  if (!SOCKET_DEBUG_LOGS) return;
-  const payload = meta ? ` ${JSON.stringify(meta)}` : "";
-  console[level](`[socket] ${message}${payload}`);
-}
+const REALTIME_ROOM_EVENT_CHANNEL = "realtime:room-events";
 
 function userRoom(userId: string): string {
   return `user:${userId}`;
+}
+
+function matchRoom(matchId: number): string {
+  return `match:${matchId}`;
+}
+
+function parsePositiveInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseMatchRoomId(roomId: string): number | null {
+  const match = /^match:(\d+)$/.exec(roomId);
+  return match ? parsePositiveInteger(match[1]) : null;
+}
+
+function parseWatchMatchPayload(payload: unknown): number | null {
+  if (typeof payload === "number" || typeof payload === "string") {
+    return parsePositiveInteger(payload);
+  }
+
+  if (!payload || typeof payload !== "object") return null;
+  return parsePositiveInteger((payload as { matchId?: unknown }).matchId);
 }
 
 function withTimestamp(payload: NotificationPayload): NotificationPayload {
@@ -64,23 +103,6 @@ function getSocketToken(socket: Socket): string | null {
   }
 
   return null;
-}
-
-function maskToken(token: string | null): string | null {
-  if (!token) return null;
-  if (token.length <= 12) return "***";
-  return `${token.slice(0, 6)}...${token.slice(-4)}`;
-}
-
-function getSocketRequestMeta(socket: Socket): Record<string, unknown> {
-  return {
-    socketId: socket.id,
-    origin: socket.handshake.headers.origin ?? null,
-    referer: socket.handshake.headers.referer ?? null,
-    userAgent: socket.handshake.headers["user-agent"] ?? null,
-    transport: socket.conn.transport.name,
-    address: socket.handshake.address,
-  };
 }
 
 // ─── Notification builders ────────────────────────────────────────────────────
@@ -192,58 +214,25 @@ class NotificationService {
       pingInterval: PING_INTERVAL,
     });
 
-    socketLog("info", "initialized", {
-      corsOrigin: CORS_ORIGIN,
-      transports: ["websocket"],
-      pingTimeout: PING_TIMEOUT,
-      pingInterval: PING_INTERVAL,
-      debugLogs: SOCKET_DEBUG_LOGS,
-    });
-
-    this.setupEngineDebugHandlers();
     this.setupRedisAdapter().catch((error) => {
       this.lastSocketError = error instanceof Error ? error.message : String(error);
-      socketLog("error", "redis adapter failed", { error: this.lastSocketError });
       console.error("Socket.IO Redis adapter failed:", error);
     });
     this.setupConnectionHandlers();
     this.startRealtimeSubscriber().catch((error) => {
-      socketLog("error", "realtime subscriber failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
       console.error("Realtime subscriber failed:", error);
-    });
-  }
-
-  private setupEngineDebugHandlers(): void {
-    assertInitialized(this.io);
-
-    this.io.engine.on("connection_error", (error) => {
-      socketLog("warn", "engine connection error", {
-        code: error.code,
-        message: error.message,
-        context: error.context,
-        origin: error.req?.headers.origin ?? null,
-        referer: error.req?.headers.referer ?? null,
-        userAgent: error.req?.headers["user-agent"] ?? null,
-        url: error.req?.url,
-      });
     });
   }
 
   private async setupRedisAdapter(): Promise<void> {
     assertInitialized(this.io);
     await connectRedis();
-    if (!redisClient.isReady) {
-      socketLog("warn", "redis adapter skipped because redis is not ready");
-      return;
-    }
+    if (!redisClient.isReady) return;
 
     const pubClient = redisClient.duplicate();
     const subClient = redisClient.duplicate();
     await Promise.all([pubClient.connect(), subClient.connect()]);
     this.io.adapter(createAdapter(pubClient, subClient));
-    socketLog("info", "redis adapter ready");
   }
 
   private setupConnectionHandlers(): void {
@@ -251,15 +240,7 @@ class NotificationService {
 
     this.io.on("connection", async (socket: Socket) => {
       const token = getSocketToken(socket);
-      socketLog("info", "connection attempt", {
-        ...getSocketRequestMeta(socket),
-        token: maskToken(token),
-        hasAuthToken: typeof socket.handshake.auth?.token === "string",
-        hasAuthorizationHeader: typeof socket.handshake.headers.authorization === "string",
-      });
-
       if (!token) {
-        socketLog("warn", "disconnect missing token", getSocketRequestMeta(socket));
         socket.disconnect(true);
         return;
       }
@@ -268,32 +249,13 @@ class NotificationService {
       try {
         const decoded = await authService.verifyToken(token);
         authenticatedUserId = String(decoded.userId);
-        socketLog("info", "authenticated", {
-          ...getSocketRequestMeta(socket),
-          userId: authenticatedUserId,
-        });
-      } catch (error) {
-        socketLog("warn", "disconnect invalid token", {
-          ...getSocketRequestMeta(socket),
-          error: error instanceof Error ? error.message : String(error),
-        });
+      } catch {
         socket.disconnect(true);
         return;
       }
 
       socket.on("register", (userId: string) => {
-        socketLog("info", "register requested", {
-          socketId: socket.id,
-          requestedUserId: userId || null,
-          authenticatedUserId,
-        });
-
         if (userId && userId !== authenticatedUserId) {
-          socketLog("warn", "register denied different user", {
-            socketId: socket.id,
-            requestedUserId: userId,
-            authenticatedUserId,
-          });
           socket.emit("registration_error", { message: "Cannot register another user" });
           return;
         }
@@ -301,11 +263,6 @@ class NotificationService {
         // Kick previous session nếu user đăng nhập từ thiết bị khác
         const prevSocketId = this.userToSocket.get(authenticatedUserId);
         if (prevSocketId && prevSocketId !== socket.id) {
-          socketLog("info", "replace previous socket", {
-            userId: authenticatedUserId,
-            previousSocketId: prevSocketId,
-            newSocketId: socket.id,
-          });
           this.userToSocket.delete(authenticatedUserId);
           this.socketToUser.delete(prevSocketId);
         }
@@ -315,110 +272,86 @@ class NotificationService {
         socket.join(userRoom(authenticatedUserId));
 
         socket.emit("registered", { userId: authenticatedUserId });
-        socketLog("info", "registered", {
-          socketId: socket.id,
-          userId: authenticatedUserId,
-          room: userRoom(authenticatedUserId),
-          connectedUsers: this.getConnectedUsersCount(),
-        });
       });
 
       socket.on("unregister", (userId: string) => {
         if (userId && userId !== authenticatedUserId) {
-          socketLog("warn", "unregister ignored different user", {
-            socketId: socket.id,
-            requestedUserId: userId,
-            authenticatedUserId,
-          });
           return;
         }
         this.removeUser(authenticatedUserId);
         socket.leave(userRoom(authenticatedUserId));
-        socketLog("info", "unregistered", {
-          socketId: socket.id,
-          userId: authenticatedUserId,
-          connectedUsers: this.getConnectedUsersCount(),
-        });
       });
 
       socket.on("join-room", async (roomId: string) => {
-        if (!roomId) {
-          socketLog("warn", "join-room ignored empty room", {
-            socketId: socket.id,
-            userId: authenticatedUserId,
-          });
+        if (!roomId) return;
+
+        try {
+          const canJoin = await this.canJoinRoom(authenticatedUserId, roomId);
+          if (!canJoin) {
+            socket.emit("room_join_error", { roomId, message: "Room access not allowed" });
+            return;
+          }
+        } catch (error) {
+          console.error("Socket.IO room access check failed:", error);
+          socket.emit("room_join_error", { roomId, message: "Room access not allowed" });
           return;
         }
 
-        socketLog("info", "join-room requested", {
-          socketId: socket.id,
-          userId: authenticatedUserId,
-          roomId,
-        });
-
-        if (roomId === "admin:system") {
-          try {
-            const adminUserIds = await this.getAdminUserIds();
-            if (!adminUserIds.includes(Number(authenticatedUserId))) {
-              socketLog("warn", "join-room denied admin required", {
-                socketId: socket.id,
-                userId: authenticatedUserId,
-                roomId,
-              });
-              socket.emit("room_join_error", { roomId, message: "Admin access required" });
-              return;
-            }
-          } catch (error) {
-            socketLog("error", "join-room admin check failed", {
-              socketId: socket.id,
-              userId: authenticatedUserId,
-              roomId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            socket.emit("room_join_error", { roomId, message: "Admin access check failed" });
-            return;
-          }
-        }
-
         socket.join(roomId);
-        socketLog("info", "joined room", {
-          socketId: socket.id,
-          userId: authenticatedUserId,
-          roomId,
-        });
       });
 
       socket.on("leave-room", (roomId: string) => {
         if (roomId) {
           socket.leave(roomId);
-          socketLog("info", "left room", {
-            socketId: socket.id,
-            userId: authenticatedUserId,
-            roomId,
-          });
         }
       });
 
-      socket.on("disconnect", (reason) => {
+      socket.on("watch-match", async (payload: unknown) => {
+        const matchId = parseWatchMatchPayload(payload);
+        if (!matchId) {
+          socket.emit("match_watch_error", { message: "Invalid matchId" });
+          return;
+        }
+
+        const roomId = matchRoom(matchId);
+        try {
+          const canJoin = await this.canJoinRoom(authenticatedUserId, roomId);
+          if (!canJoin) {
+            socket.emit("match_watch_error", { matchId, message: "Match not found" });
+            return;
+          }
+        } catch (error) {
+          console.error("Socket.IO match watch check failed:", error);
+          socket.emit("match_watch_error", { matchId, message: "Room access not allowed" });
+          return;
+        }
+
+        socket.join(roomId);
+        socket.emit("match_room_joined", { matchId, roomId });
+      });
+
+      socket.on("unwatch-match", (payload: unknown) => {
+        const matchId = parseWatchMatchPayload(payload);
+        if (!matchId) {
+          socket.emit("match_watch_error", { message: "Invalid matchId" });
+          return;
+        }
+
+        const roomId = matchRoom(matchId);
+        socket.leave(roomId);
+        socket.emit("match_room_left", { matchId, roomId });
+      });
+
+      socket.on("disconnect", () => {
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
           this.removeUser(userId);
         }
-        socketLog("info", "disconnected", {
-          socketId: socket.id,
-          userId: userId ?? authenticatedUserId,
-          reason,
-          connectedUsers: this.getConnectedUsersCount(),
-        });
       });
 
       socket.on("error", (error) => {
         this.lastSocketError = error instanceof Error ? error.message : String(error);
-        socketLog("error", "socket error", {
-          socketId: socket.id,
-          userId: authenticatedUserId,
-          error: this.lastSocketError,
-        });
+        console.error("Socket.IO socket error:", error);
       });
     });
   }
@@ -427,6 +360,29 @@ class NotificationService {
     const socketId = this.userToSocket.get(userId);
     if (socketId) this.socketToUser.delete(socketId);
     this.userToSocket.delete(userId);
+  }
+
+  private async canJoinRoom(authenticatedUserId: string, roomId: string): Promise<boolean> {
+    if (roomId === userRoom(authenticatedUserId)) {
+      return true;
+    }
+
+    if (roomId.startsWith("user:")) {
+      return false;
+    }
+
+    if (roomId === "admin:system") {
+      const adminUserIds = await this.getAdminUserIds();
+      return adminUserIds.includes(Number(authenticatedUserId));
+    }
+
+    const matchId = parseMatchRoomId(roomId);
+    if (matchId) {
+      const match = await Match.findByPk(matchId, { attributes: ["id"] });
+      return Boolean(match);
+    }
+
+    return false;
   }
 
   // ── Send helpers ───────────────────────────────────────────────────────────
@@ -464,6 +420,41 @@ class NotificationService {
     this.io.to(roomId).emit(event, data);
   }
 
+  async publishRoomEvent(roomId: string, event: string, data: unknown): Promise<void> {
+    await connectRedis();
+
+    if (redisClient.isReady) {
+      await redisClient.publish(
+        REALTIME_ROOM_EVENT_CHANNEL,
+        JSON.stringify({ roomId, event, data }),
+      );
+      return;
+    }
+
+    if (this.io) {
+      this.io.to(roomId).emit(event, data);
+    }
+  }
+
+  publishMatchResultUpdate(
+    matchId: number,
+    type: MatchRealtimeEventType,
+    data: unknown,
+  ): void {
+    if (!this.io) return;
+
+    const roomId = matchRoom(matchId);
+    const payload: MatchRealtimePayload = {
+      roomId,
+      matchId,
+      type,
+      data,
+      occurredAt: new Date().toISOString(),
+    };
+
+    this.io.to(roomId).emit("match_result_updated", payload);
+  }
+
   private sendLocalToUsers(userIds: string[], payload: NotificationPayload): void {
     if (!this.io) return;
     const stamped = withTimestamp(payload);
@@ -477,6 +468,11 @@ class NotificationService {
     for (const userId of userIds) {
       this.io.local.to(userRoom(userId)).emit("cron_logs_created", { logs: [log] });
     }
+  }
+
+  private sendLocalRoomEvent(roomId: string, event: string, data: unknown): void {
+    if (!this.io) return;
+    this.io.local.to(roomId).emit(event, data);
   }
 
   private async startRealtimeSubscriber(): Promise<void> {
@@ -504,6 +500,19 @@ class NotificationService {
         this.sendLocalCronLog(payload.userIds, payload.log);
       } catch (error) {
         console.error("Invalid realtime cron log payload:", error);
+      }
+    });
+
+    await this.realtimeSubscriber.subscribe(REALTIME_ROOM_EVENT_CHANNEL, (message) => {
+      try {
+        const payload = JSON.parse(message) as {
+          roomId: string;
+          event: string;
+          data: unknown;
+        };
+        this.sendLocalRoomEvent(payload.roomId, payload.event, payload.data);
+      } catch (error) {
+        console.error("Invalid realtime room event payload:", error);
       }
     });
   }
@@ -708,7 +717,19 @@ class NotificationService {
       isRead?: boolean;
       type?: NotificationType;
     } = {}
-  ): Promise<{ rows: Notification[]; count: number; unreadCount: number }> {
+  ): Promise<{
+    rows: Notification[];
+    count: number;
+    unreadCount: number;
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }> {
     const { offset = 0, limit = 20, isRead, type } = options;
 
     const where: Record<string, unknown> = { userId };
@@ -726,7 +747,22 @@ class NotificationService {
       Notification.count({ where: { userId, isRead: false } }),
     ]);
 
-    return { rows, count, unreadCount };
+    const page = Math.floor(offset / limit) + 1;
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      rows,
+      count,
+      unreadCount,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
   }
 
   /**

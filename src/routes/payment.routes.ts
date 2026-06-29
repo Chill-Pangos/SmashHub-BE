@@ -140,6 +140,8 @@ router.post(
  *       - Returns latest payments first (sorted by createdAt DESC)
  *       - Team captain can view their payment status
  *       - Entry must exist
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: entryId
@@ -246,6 +248,7 @@ router.post(
  */
 router.get(
   "/entry/:entryId",
+  authenticate,
   paymentController.getPaymentsByEntry.bind(paymentController)
 );
 
@@ -562,6 +565,8 @@ router.get(
  *     tags: [Payments]
  *     summary: Get payment by ID
  *     description: Retrieve detailed information about a specific payment including entry details, confirmation status, and proof images.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: paymentId
@@ -655,6 +660,7 @@ router.get(
  */
 router.get(
   "/:paymentId",
+  authenticate,
   paymentController.getPaymentById.bind(paymentController)
 );
 

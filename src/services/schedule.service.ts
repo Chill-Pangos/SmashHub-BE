@@ -16,6 +16,8 @@ import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import { toUtcDate } from "../utils/date.helper";
 import { removeUndefinedFields } from "../utils/object.helper";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
+import { localizeScheduleConfigInstance } from "../utils/scheduleConfigTime.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -349,28 +351,43 @@ function getTournamentEndTime(config: ScheduleConfig): Date {
 
 // ─── Table Assignment ─────────────────────────────────────────────────────────
 
-/**
- * Tìm bàn trống tại thời điểm cụ thể.
- * Bàn được coi là "bận" khi có match đang `in_progress` hoặc `scheduled`
- * với scheduledAt nằm trong khoảng [now - slotDuration, now].
- */
-async function findAvailableTable(
+function getSlotDurationMs(config: ScheduleConfig): number {
+  return (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
+}
+
+function assertTableNumberInRange(tableNumber: number, config: ScheduleConfig): void {
+  if (
+    !Number.isInteger(tableNumber) ||
+    tableNumber < 1 ||
+    tableNumber > config.numberOfTables
+  ) {
+    throw new BadRequestError(
+      `tableNumber must be an integer between 1 and ${config.numberOfTables}`,
+    );
+  }
+}
+
+async function getBusyTablesAtStartTime(
   tournamentId: number,
   config: ScheduleConfig,
   t: Transaction,
-): Promise<number | null> {
+  excludeMatchId?: number,
+): Promise<Set<number>> {
   const slotDurationMs =
-    (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
+    getSlotDurationMs(config);
   const now = new Date();
   const windowStart = new Date(now.getTime() - slotDurationMs);
+  const windowEnd = new Date(now.getTime() + slotDurationMs);
 
-  const busySchedules = await Match.findAll({
+  const matchFilter =
+    excludeMatchId === undefined ? {} : { id: { [Op.ne]: excludeMatchId } };
+
+  const inProgressMatches = await Match.findAll({
     include: [
       {
         model: Schedule,
         as: "schedule",
         where: {
-          scheduledAt: { [Op.between]: [windowStart, now] },
           tableNumber: { [Op.not]: null },
         },
         required: true,
@@ -386,13 +403,107 @@ async function findAvailableTable(
         ],
       },
     ],
-    where: { status: { [Op.in]: ["scheduled", "in_progress"] } },
+    where: { ...matchFilter, status: "in_progress" },
     attributes: [],
     transaction: t,
   });
 
-  const busyTables = new Set(
-    busySchedules.map((m) => m.schedule?.tableNumber).filter(Boolean),
+  const overlappingScheduledMatches = await Match.findAll({
+    include: [
+      {
+        model: Schedule,
+        as: "schedule",
+        where: {
+          scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
+          tableNumber: { [Op.not]: null },
+        },
+        required: true,
+        attributes: ["tableNumber"],
+        include: [
+          {
+            model: TournamentCategory,
+            as: "tournamentCategory",
+            where: { tournamentId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      },
+    ],
+    where: { ...matchFilter, status: "scheduled" },
+    attributes: [],
+    transaction: t,
+  });
+
+  return new Set(
+    [...inProgressMatches, ...overlappingScheduledMatches]
+      .map((m) => m.schedule?.tableNumber)
+      .filter((tableNumber): tableNumber is number => tableNumber != null),
+  );
+}
+
+async function assertScheduleTableAvailableForSlot(options: {
+  tournamentId: number;
+  scheduleId: number;
+  scheduledAt: Date;
+  tableNumber: number;
+  config: ScheduleConfig;
+  t?: Transaction;
+}): Promise<void> {
+  const slotDurationMs = getSlotDurationMs(options.config);
+  const windowStart = new Date(options.scheduledAt.getTime() - slotDurationMs);
+  const windowEnd = new Date(options.scheduledAt.getTime() + slotDurationMs);
+
+  const conflictQuery: any = {
+    where: {
+      id: { [Op.ne]: options.scheduleId },
+      tableNumber: options.tableNumber,
+      scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
+    },
+    include: [
+      {
+        model: TournamentCategory,
+        as: "tournamentCategory",
+        where: { tournamentId: options.tournamentId },
+        required: true,
+        attributes: [],
+      },
+      {
+        model: Match,
+        as: "scheduledMatches",
+        where: { status: { [Op.in]: ["scheduled", "in_progress"] } },
+        required: true,
+        attributes: [],
+      },
+    ],
+  };
+  if (options.t) conflictQuery.transaction = options.t;
+
+  const conflict = await Schedule.findOne(conflictQuery);
+
+  if (conflict) {
+    throw new ConflictError(
+      `Table ${options.tableNumber} is already assigned to another active match in this time slot`,
+    );
+  }
+}
+
+/**
+ * Tìm bàn trống tại thời điểm start match.
+ * `in_progress` luôn giữ bàn đến khi match finalize.
+ * `scheduled` giữ bàn nếu slot đã gán overlap với slot đang start.
+ */
+async function findAvailableTable(
+  tournamentId: number,
+  config: ScheduleConfig,
+  t: Transaction,
+  excludeMatchId?: number,
+): Promise<number | null> {
+  const busyTables = await getBusyTablesAtStartTime(
+    tournamentId,
+    config,
+    t,
+    excludeMatchId,
   );
 
   for (let table = 1; table <= config.numberOfTables; table++) {
@@ -519,14 +630,20 @@ async function getTournamentReferees(
 
 async function getRequiredScheduleConfig(
   tournamentId: number,
+  t?: Transaction,
+  lockForUpdate = false,
 ): Promise<ScheduleConfig> {
-  const config = await ScheduleConfig.findOne({ where: { tournamentId } });
+  const config = await ScheduleConfig.findOne({
+    where: { tournamentId },
+    ...(t && { transaction: t }),
+    ...(t && lockForUpdate && { lock: t.LOCK.UPDATE }),
+  });
   if (!config) {
-    throw new Error(
+    throw new NotFoundError(
       "Schedule config not found. Please create a schedule configuration first.",
     );
   }
-  return config;
+  return localizeScheduleConfigInstance(config);
 }
 
 async function clearExistingSchedules(
@@ -1067,18 +1184,45 @@ export class ScheduleService {
     tournamentId: number,
     t: Transaction,
   ): Promise<number> {
-    const config = await getRequiredScheduleConfig(tournamentId);
-    const availableTable = await findAvailableTable(tournamentId, config, t);
+    const config = await getRequiredScheduleConfig(tournamentId, t, true);
+    const match = await Match.findByPk(matchId, {
+      include: [{ model: Schedule, as: "schedule" }],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!match) throw new NotFoundError("Match not found");
+    if (!match.schedule) throw new NotFoundError("Match schedule not found");
+
+    const existingTable = match.schedule.tableNumber;
+    if (existingTable != null) {
+      assertTableNumberInRange(existingTable, config);
+      const busyTables = await getBusyTablesAtStartTime(
+        tournamentId,
+        config,
+        t,
+        matchId,
+      );
+      if (busyTables.has(existingTable)) {
+        throw new ConflictError(
+          `Table ${existingTable} is not available at this time`,
+        );
+      }
+      return existingTable;
+    }
+
+    const availableTable = await findAvailableTable(
+      tournamentId,
+      config,
+      t,
+      matchId,
+    );
 
     if (availableTable === null) {
-      throw new Error(
+      throw new ConflictError(
         `No available tables at this time. All ${config.numberOfTables} table(s) are currently in use. ` +
           `Please wait for a table to become available.`,
       );
     }
-
-    const match = await Match.findByPk(matchId, { transaction: t });
-    if (!match) throw new Error("Match not found");
 
     await Schedule.update(
       { tableNumber: availableTable },
@@ -1174,18 +1318,47 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number }>,
+    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number | null }>,
   ): Promise<Schedule> {
-    const schedule = await this.getScheduleById(scheduleId);
-    const category = await getCategoryWithTournament(schedule.categoryId);
-    assertOrganizer(organizerId, category.tournament!);
-    const updateData = removeUndefinedFields({
-      ...data,
-      ...(data.scheduledAt != null && {
-        scheduledAt: toUtcDate(data.scheduledAt, "scheduledAt"),
-      }),
+    return await sequelize.transaction(async (t) => {
+      const schedule = await Schedule.findByPk(scheduleId, {
+        include: [MATCH_INCLUDE],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!schedule) throw new NotFoundError("Schedule not found");
+
+      const category = await getCategoryWithTournament(schedule.categoryId);
+      const tournament = category.tournament!;
+      assertOrganizer(organizerId, tournament);
+
+      const config = await getRequiredScheduleConfig(tournament.id, t, true);
+      const scheduledAt = data.scheduledAt != null
+        ? toUtcDate(data.scheduledAt, "scheduledAt")
+        : schedule.scheduledAt;
+      const tableNumber = data.tableNumber !== undefined
+        ? data.tableNumber
+        : schedule.tableNumber;
+
+      if (tableNumber != null) {
+        assertTableNumberInRange(tableNumber, config);
+        await assertScheduleTableAvailableForSlot({
+          tournamentId: tournament.id,
+          scheduleId,
+          scheduledAt: new Date(scheduledAt),
+          tableNumber,
+          config,
+          t,
+        });
+      }
+
+      const updateData = removeUndefinedFields({
+        ...data,
+        ...(data.scheduledAt != null && { scheduledAt }),
+      });
+
+      return await schedule.update(updateData, { transaction: t });
     });
-    return await schedule.update(updateData);
   }
 
   async deleteSchedule(

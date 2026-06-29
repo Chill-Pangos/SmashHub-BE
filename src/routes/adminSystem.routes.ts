@@ -121,13 +121,6 @@ const router = Router();
  *                           type: number
  *                         p95LatencyMs:
  *                           type: number
- *                     realtime:
- *                       type: object
- *                       properties:
- *                         connectedUsers:
- *                           type: integer
- *                         roomCount:
- *                           type: integer
  *                     alerts:
  *                       type: object
  *                       properties:
@@ -137,6 +130,26 @@ const router = Router();
  *                           type: integer
  *                         warning:
  *                           type: integer
+ *                         items:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               key:
+ *                                 type: string
+ *                                 example: cron_failed_24h
+ *                               severity:
+ *                                 type: string
+ *                                 enum: [warning, critical]
+ *                               message:
+ *                                 type: string
+ *                                 example: Cron failures in last 24h
+ *                               createdAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               data:
+ *                                 type: object
+ *                                 additionalProperties: true
  *                     uptimeSeconds:
  *                       type: integer
  *                     generatedAt:
@@ -282,7 +295,7 @@ router.get(
  *         name: type
  *         schema:
  *           type: string
- *           enum: [error, alert, cron]
+ *           enum: [error, alert, cron, api]
  *         description: Event type filter
  *       - in: query
  *         name: limit
@@ -335,16 +348,16 @@ router.get(
  *           enum: [create, update, delete]
  *         description: Action filter
  *       - in: query
- *         name: offset
+ *         name: page
  *         schema:
  *           type: integer
- *           default: 0
- *           minimum: 0
+ *           default: 1
+ *           minimum: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 50
+ *           default: 10
  *           minimum: 1
  *           maximum: 100
  *     responses:

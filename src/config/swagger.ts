@@ -1,4 +1,5 @@
 import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
 
 const swaggerDefinition = {
   openapi: "3.0.0",
@@ -115,15 +116,14 @@ const swaggerDefinition = {
       },
       User: {
         type: "object",
-        required: ["firstName", "lastName", "email", "password"],
+        required: ["firstName", "lastName", "email"],
         properties: {
           id: { type: "integer" },
           firstName: { type: "string", maxLength: 50 },
           lastName: { type: "string", maxLength: 50 },
           email: { type: "string", maxLength: 100 },
-          password: { type: "string", maxLength: 255 },
           isEmailVerified: { type: "boolean", default: false },
-          gender: { type: "string", enum: ["male", "female", "other"] },
+          gender: { type: "string", enum: ["male", "female"] },
           avatarUrl: { type: "string", maxLength: 255 },
           dob: { type: "string", format: "date" },
           phoneNumber: { type: "string", maxLength: 20 },
@@ -139,7 +139,7 @@ const swaggerDefinition = {
           lastName: { type: "string", maxLength: 50 },
           email: { type: "string", maxLength: 100 },
           isEmailVerified: { type: "boolean" },
-          gender: { type: "string", enum: ["male", "female", "other"] },
+          gender: { type: "string", enum: ["male", "female"] },
           avatarUrl: { type: "string", maxLength: 255 },
           dob: { type: "string", format: "date" },
           phoneNumber: { type: "string", maxLength: 20 },
@@ -1261,10 +1261,10 @@ const swaggerDefinition = {
 const options = {
   swaggerDefinition,
   apis: [
-    "./src/routes/*.ts",
-    "./src/controllers/*.ts",
-    "./src/dto/*.ts",
-    "./src/docs/*.ts",
+    path.resolve(__dirname, "../routes/*.{ts,js}"),
+    path.resolve(__dirname, "../controllers/*.{ts,js}"),
+    path.resolve(__dirname, "../dto/*.{ts,js}"),
+    path.resolve(__dirname, "../docs/*.{ts,js}"),
   ],
 };
 
