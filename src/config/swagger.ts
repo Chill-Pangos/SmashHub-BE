@@ -496,7 +496,7 @@ const swaggerDefinition = {
           lunchBreakStartMinute: { type: "integer", nullable: true, minimum: 0, maximum: 59, default: 0, description: "Lunch break start minute (optional)" },
           lunchBreakEndHour: { type: "integer", nullable: true, minimum: 0, maximum: 23, description: "Lunch break end hour (optional)" },
           lunchBreakEndMinute: { type: "integer", nullable: true, minimum: 0, maximum: 59, default: 0, description: "Lunch break end minute (optional)" },
-          lunchBreakDurationMinutes: { type: "integer", nullable: true, description: "Lunch break duration in minutes (optional)" },
+          lunchBreakDurationMinutes: { type: "integer", nullable: true, minimum: 1, description: "Optional; must equal lunchBreakEnd - lunchBreakStart in minutes when provided" },
           notes: { type: "string", nullable: true, description: "Additional notes about the configuration" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
