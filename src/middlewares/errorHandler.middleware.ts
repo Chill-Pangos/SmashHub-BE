@@ -52,6 +52,13 @@ export const errorHandler = (
       ? "Internal server error"
       : errorResponse.message;
 
+  res.locals.apiRequestLogError = {
+    errorCode,
+    errorMessage: errorResponse.message,
+    details: errorResponse.details ?? null,
+    stack: err.stack ?? null,
+  };
+
   // Send error response with standardized format
   const response: any = {
     success: false,
