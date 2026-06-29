@@ -6,13 +6,14 @@ import { Op } from "sequelize";
 import sequelize from "../config/database";
 import config from "../config/config";
 import redisClient, { connectRedis } from "../config/redis";
+import ApiRequestLog from "../models/apiRequestLog.model";
 import AuditLog from "../models/auditLog.model";
 import CronLog from "../models/cronLog.model";
 import notificationService from "./notification.service";
 import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntime.service";
 
 type HealthStatus = "up" | "down" | "degraded";
-type EventType = "error" | "alert" | "cron";
+type EventType = "error" | "alert" | "cron" | "api";
 type ResourceStatus = "ok" | "warning" | "critical";
 
 const STARTED_AT = new Date();
@@ -74,11 +75,13 @@ class AdminSystemService {
     if (type === "error") return { errors: systemRuntimeService.getErrors(normalizedLimit) };
     if (type === "alert") return { alerts: systemRuntimeService.getAlerts(normalizedLimit) };
     if (type === "cron") return { cronLogs: await this.getLatestCronLogs(normalizedLimit) };
+    if (type === "api") return { apiRequestLogs: await this.getLatestApiRequestLogs(normalizedLimit) };
 
     return {
       errors: systemRuntimeService.getErrors(normalizedLimit),
       alerts: systemRuntimeService.getAlerts(normalizedLimit),
       cronLogs: await this.getLatestCronLogs(normalizedLimit),
+      apiRequestLogs: await this.getLatestApiRequestLogs(normalizedLimit),
     };
   }
 
@@ -119,7 +122,7 @@ class AdminSystemService {
 
   async publishCronEvent(log: CronLog): Promise<void> {
     const plainLog = log.get ? log.get({ plain: true }) : log;
-    notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
+    this.sendRealtimeEvent("admin_system_metrics_updated", {
       type: "cron",
       data: plainLog,
       generatedAt: new Date().toISOString(),
@@ -134,7 +137,7 @@ class AdminSystemService {
         data: plainLog,
       };
       if (systemRuntimeService.recordAlert(alert)) {
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
+        this.sendRealtimeEvent("admin_system_alert_created", alert);
       }
     }
   }
@@ -143,10 +146,11 @@ class AdminSystemService {
     try {
       const overview = await this.getOverview();
 
-      notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_metrics_updated", {
+      this.sendRealtimeEvent("admin_system_metrics_updated", {
         type: "overview",
         data: overview,
-        generatedAt: new Date().toISOString(),
+        alerts: overview.alerts,
+        generatedAt: overview.generatedAt,
       });
 
       const signature = JSON.stringify({
@@ -161,7 +165,7 @@ class AdminSystemService {
       });
       if (signature !== this.lastHealthSignature) {
         this.lastHealthSignature = signature;
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_health_changed", {
+        this.sendRealtimeEvent("admin_system_health_changed", {
           status: overview.status,
           services: overview.services,
           resources: overview.resources,
@@ -226,14 +230,11 @@ class AdminSystemService {
         errorPercent: apiErrorPercent,
         p95LatencyMs: input.metrics.latency.p95Ms,
       },
-      realtime: {
-        connectedUsers: input.socket.totalConnectedUsers,
-        roomCount: input.socket.roomCount,
-      },
       alerts: {
         total: input.alerts.length,
         critical: criticalAlerts,
         warning: warningAlerts,
+        items: input.alerts,
       },
       generatedAt: new Date().toISOString(),
     };
@@ -334,6 +335,14 @@ class AdminSystemService {
     return logs.map((log) => log.get({ plain: true }));
   }
 
+  private async getLatestApiRequestLogs(limit: number) {
+    const logs = await ApiRequestLog.findAll({
+      limit,
+      order: [["createdAt", "DESC"]],
+    });
+    return logs.map((log) => log.get({ plain: true }));
+  }
+
   private evaluateAlerts(input: {
     infra: Awaited<ReturnType<AdminSystemService["getInfraHealth"]>>;
     cron: Awaited<ReturnType<AdminSystemService["getCronSummary"]>>;
@@ -377,10 +386,16 @@ class AdminSystemService {
     systemRuntimeService.resolveAlerts(activeKeys);
     for (const alert of activeAlerts) {
       if (systemRuntimeService.recordAlert(alert)) {
-        notificationService.sendEventToRoom(REALTIME_ROOM, "admin_system_alert_created", alert);
+        this.sendRealtimeEvent("admin_system_alert_created", alert);
       }
     }
     return activeAlerts;
+  }
+
+  private sendRealtimeEvent(event: string, data: unknown): void {
+    notificationService.publishRoomEvent(REALTIME_ROOM, event, data).catch((error) => {
+      console.error("Failed to send admin system realtime event:", error);
+    });
   }
 
   private async pingDatabase() {

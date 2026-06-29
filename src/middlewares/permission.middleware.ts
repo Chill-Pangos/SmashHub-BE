@@ -1,9 +1,35 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.middleware";
-import Role from "../models/role.model";
-import Permission from "../models/permission.model";
-import User from "../models/user.model";
+import permissionCacheService, { UserAccessSnapshot } from "../services/permissionCache.service";
 
+async function getAccessSnapshot(req: AuthRequest, res: Response): Promise<UserAccessSnapshot | null> {
+  if (!req.userId) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+    return null;
+  }
+
+  const snapshot = await permissionCacheService.getUserAccess(req.userId);
+  if (!snapshot) {
+    res.status(401).json({
+      success: false,
+      message: "User not found",
+    });
+    return null;
+  }
+
+  if (snapshot.roles.size === 0) {
+    res.status(403).json({
+      success: false,
+      message: "No roles assigned",
+    });
+    return null;
+  }
+
+  return snapshot;
+}
 
 export const checkPermission = (requiredPermission: string) => {
   return async (
@@ -12,60 +38,10 @@ export const checkPermission = (requiredPermission: string) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const snapshot = await getAccessSnapshot(req, res);
+      if (!snapshot) return;
 
-      const userInstance = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-            include: [
-              {
-                model: Permission,
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!userInstance) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      const user = userInstance.get({ plain: true });
-
-
-      if (!user.roles || user.roles.length === 0) {
-        res.status(403).json({
-          success: false,
-          message: "No roles assigned",
-        });
-        return;
-      }
-
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
-
-      const hasPermission = userPermissions.has(requiredPermission);
-
-      if (!hasPermission) {
+      if (!snapshot.permissions.has(requiredPermission)) {
         res.status(403).json({
           success: false,
           message: `Permission denied. Required: ${requiredPermission}`,
@@ -87,58 +63,11 @@ export const checkAnyPermission = (requiredPermissions: string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
-
-      const userInstance = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-            include: [
-              {
-                model: Permission,
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!userInstance) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      const user = userInstance.get({ plain: true });
-
-      if (!user.roles || user.roles.length === 0) {
-        res.status(403).json({
-          success: false,
-          message: "No roles assigned",
-        });
-        return;
-      }
-
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
+      const snapshot = await getAccessSnapshot(req, res);
+      if (!snapshot) return;
 
       const hasAnyPermission = requiredPermissions.some(permission =>
-        userPermissions.has(permission)
+        snapshot.permissions.has(permission)
       );
 
       if (!hasAnyPermission) {
@@ -163,62 +92,16 @@ export const checkAllPermissions = (requiredPermissions: string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
-
-      const user = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            as: "roles",
-            include: [
-              {
-                model: Permission,
-                as: "permissions",
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      if (!user.roles || user.roles.length === 0) {
-        res.status(403).json({
-          success: false,
-          message: "No roles assigned",
-        });
-        return;
-      }
-
-      const userPermissions = new Set<string>();
-      
-      for (const role of user.roles) {
-        if (role.permissions) {
-          for (const permission of role.permissions) {
-            userPermissions.add(permission.name);
-          }
-        }
-      }
+      const snapshot = await getAccessSnapshot(req, res);
+      if (!snapshot) return;
 
       const hasAllPermissions = requiredPermissions.every(permission =>
-        userPermissions.has(permission)
+        snapshot.permissions.has(permission)
       );
 
       if (!hasAllPermissions) {
         const missingPermissions = requiredPermissions.filter(
-          permission => !userPermissions.has(permission)
+          permission => !snapshot.permissions.has(permission)
         );
         res.status(403).json({
           success: false,
@@ -241,47 +124,12 @@ export const checkRole = (requiredRole: string | string[]) => {
     next: NextFunction
   ): Promise<void> => {
     try {
-      if (!req.userId) {
-        res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-        return;
-      }
+      const snapshot = await getAccessSnapshot(req, res);
+      if (!snapshot) return;
 
-      const user = await User.findByPk(req.userId, {
-        include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-          },
-        ],
-      });
-
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-        return;
-      }
-
-      // Access roles from serialized object
-      const userJson = user.toJSON ? user.toJSON() : JSON.parse(JSON.stringify(user));
-      const userRolesData = userJson.roles || [];
-
-      if (!userRolesData || userRolesData.length === 0) {
-        res.status(403).json({
-          success: false,
-          message: "No roles assigned",
-        });
-        return;
-      }
-
-      const userRoles = userRolesData.map((role: any) => role.name);
       const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
       
-      const hasRole = requiredRoles.some(role => userRoles.includes(role));
+      const hasRole = requiredRoles.some(role => snapshot.roles.has(role));
 
       if (!hasRole) {
         res.status(403).json({

@@ -17,6 +17,7 @@ import KnockoutBracket from "../models/knockoutBracket.model";
 import { toUtcDate } from "../utils/date.helper";
 import { removeUndefinedFields } from "../utils/object.helper";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
+import { localizeScheduleConfigInstance } from "../utils/scheduleConfigTime.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -539,7 +540,7 @@ async function bulkCreateMatchReferees(
 function getSubMatchCount(category: TournamentCategory): number {
   if (category.type !== "team") return 1;
   if (!category.teamFormat) {
-    throw new Error("Team category must have teamFormat to create sub-matches");
+    throw new BadRequestError("Team category must have teamFormat to create sub-matches");
   }
   return category.teamFormat.split("-").length;
 }
@@ -594,28 +595,28 @@ async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
 function assertOrganizer(userId: number, tournament: Tournament): void {
   if (tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new BadRequestError("Only the tournament organizer can perform this action");
   }
 }
 
 async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
   if (tournament.status !== "brackets_generated") {
-    throw new Error("Tournament must be in brackets_generated status before generating schedules");
+    throw new BadRequestError("Tournament must be in brackets_generated status before generating schedules");
   }
 
   const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
   if (!config?.bracketGenerationDate) {
-    throw new Error("Bracket generation date is not configured for this tournament");
+    throw new BadRequestError("Bracket generation date is not configured for this tournament");
   }
 
   if (new Date() < config.bracketGenerationDate) {
-    throw new Error("Bracket generation date must be reached before generating schedules");
+    throw new BadRequestError("Bracket generation date must be reached before generating schedules");
   }
 }
 
@@ -642,7 +643,7 @@ async function getRequiredScheduleConfig(
       "Schedule config not found. Please create a schedule configuration first.",
     );
   }
-  return config;
+  return localizeScheduleConfigInstance(config);
 }
 
 async function clearExistingSchedules(
@@ -706,7 +707,7 @@ async function buildGroupMatchPairs(
   });
 
   if (standings.length === 0) {
-    throw new Error(
+    throw new BadRequestError(
       `No group standings found for category ${categoryId}. Generate groups first.`,
     );
   }
@@ -779,7 +780,7 @@ async function buildKnockoutPairs(
   });
 
   if (brackets.length === 0) {
-    throw new Error(
+    throw new BadRequestError(
       `No knockout brackets found for category ${categoryId}. Generate placeholders first.`,
     );
   }
@@ -976,13 +977,13 @@ export class ScheduleService {
     const tournament = await Tournament.findByPk(tournamentId, {
       include: [{ model: TournamentCategory, as: "categories" }],
     });
-    if (!tournament) throw new Error("Tournament not found");
+    if (!tournament) throw new NotFoundError("Tournament not found");
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
 
     const categories = tournament.categories ?? [];
     if (categories.length === 0) {
-      throw new Error("Tournament has no categories.");
+      throw new BadRequestError("Tournament has no categories.");
     }
 
     const config = await getRequiredScheduleConfig(tournament.id);
@@ -1283,7 +1284,7 @@ export class ScheduleService {
 
   async getScheduleById(id: number): Promise<Schedule> {
     const schedule = await Schedule.findByPk(id, { include: [MATCH_INCLUDE] });
-    if (!schedule) throw new Error("Schedule not found");
+    if (!schedule) throw new NotFoundError("Schedule not found");
     return schedule;
   }
 
@@ -1317,7 +1318,7 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number }>,
+    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number | null }>,
   ): Promise<Schedule> {
     return await sequelize.transaction(async (t) => {
       const schedule = await Schedule.findByPk(scheduleId, {

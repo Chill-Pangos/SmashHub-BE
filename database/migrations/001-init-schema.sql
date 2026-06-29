@@ -360,9 +360,9 @@ CREATE TABLE IF NOT EXISTS `schedule_configs` (
   `matchDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 60,
   `breakDurationMinutes` INT UNSIGNED NOT NULL DEFAULT 10,
   -- Daily schedule
-  `dailyStartHour` INT UNSIGNED NOT NULL DEFAULT 8,
+  `dailyStartHour` INT UNSIGNED NOT NULL DEFAULT 1,
   `dailyStartMinute` INT UNSIGNED NOT NULL DEFAULT 0,
-  `dailyEndHour` INT UNSIGNED NOT NULL DEFAULT 22,
+  `dailyEndHour` INT UNSIGNED NOT NULL DEFAULT 15,
   `dailyEndMinute` INT UNSIGNED NOT NULL DEFAULT 0,
   -- Lunch break (optional)
   `lunchBreakStartHour` INT UNSIGNED NULL,
@@ -387,8 +387,8 @@ CREATE TABLE IF NOT EXISTS `schedule_configs` (
 CREATE TABLE IF NOT EXISTS `matches` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `scheduleId` INT UNSIGNED NOT NULL,
-  `entryAId` INT UNSIGNED NOT NULL,
-  `entryBId` INT UNSIGNED NOT NULL,
+  `entryAId` INT UNSIGNED NULL,
+  `entryBId` INT UNSIGNED NULL,
   `status` ENUM('scheduled', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'scheduled',
   `winnerEntryId` INT UNSIGNED NULL,
   `resultStatus` ENUM('pending', 'approved', 'rejected') NULL COMMENT 'Status of match result approval by chief referee',

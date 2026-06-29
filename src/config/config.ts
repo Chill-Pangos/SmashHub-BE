@@ -33,6 +33,14 @@ const envSchema = Joi.object({
   PAYMENT_URL_PATH: Joi.string().required(),
   REDIS_URL: Joi.string().uri().required(),
   REDIS_MATCH_SET_SCORE_TTL_SECONDS: Joi.number().integer().min(0).required(),
+  REDIS_LINEUP_REQUEST_TTL_SECONDS: Joi.number().integer().min(60).default(24 * 60 * 60),
+  PERMISSION_CACHE_TTL_SECONDS: Joi.number().integer().min(0).default(120),
+  API_REQUEST_LOG_ENABLED: Joi.boolean().truthy("true").falsy("false").default(true),
+  API_REQUEST_LOG_CAPTURE_REQUEST_BODY: Joi.boolean().truthy("true").falsy("false").default(true),
+  API_REQUEST_LOG_CAPTURE_SUCCESS_RESPONSE: Joi.boolean().truthy("true").falsy("false").default(false),
+  API_REQUEST_LOG_CAPTURE_ERROR_RESPONSE: Joi.boolean().truthy("true").falsy("false").default(true),
+  API_REQUEST_LOG_RETENTION_DAYS: Joi.number().integer().min(1).default(14),
+  CRON_LOG_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
 }).unknown(true);
 
 const { error, value: envVars } = envSchema
@@ -69,6 +77,20 @@ const config = {
   redis: {
     url: envVars.REDIS_URL,
     matchSetScoreTtlSeconds: envVars.REDIS_MATCH_SET_SCORE_TTL_SECONDS,
+    lineupRequestTtlSeconds: envVars.REDIS_LINEUP_REQUEST_TTL_SECONDS,
+  },
+  permissionCache: {
+    ttlSeconds: envVars.PERMISSION_CACHE_TTL_SECONDS,
+  },
+  logging: {
+    apiRequest: {
+      enabled: envVars.API_REQUEST_LOG_ENABLED,
+      captureRequestBody: envVars.API_REQUEST_LOG_CAPTURE_REQUEST_BODY,
+      captureSuccessResponse: envVars.API_REQUEST_LOG_CAPTURE_SUCCESS_RESPONSE,
+      captureErrorResponse: envVars.API_REQUEST_LOG_CAPTURE_ERROR_RESPONSE,
+      retentionDays: envVars.API_REQUEST_LOG_RETENTION_DAYS,
+    },
+    cronLogRetentionDays: envVars.CRON_LOG_RETENTION_DAYS,
   },
   email: {
     smtp: {

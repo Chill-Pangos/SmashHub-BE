@@ -6,6 +6,7 @@ import User from "../models/user.model";
 import Role from "../models/role.model";
 import { CreateUserRoleDto } from "../dto/userRole.dto";
 import { NotFoundError, ConflictError } from "../utils/errors.helper";
+import permissionCacheService from "./permissionCache.service";
 
 const USER_ATTRIBUTES = ["id", "email", "firstName", "lastName"];
 const ROLE_ATTRIBUTES = ["id", "name"];
@@ -43,7 +44,9 @@ export class UserRoleService {
       throw new ConflictError("Role already assigned to user", "USER_ROLE_ALREADY_EXISTS");
     }
 
-    return UserRole.create(data as any);
+    const assignment = await UserRole.create(data as any);
+    permissionCacheService.invalidateUser(userId);
+    return assignment;
   }
 
   async findAll(offset: number = 0, limit: number = 10) {
@@ -153,12 +156,15 @@ export class UserRoleService {
 
     if (!newRoleIds.length) return [];
 
-    return UserRole.bulkCreate(newRoleIds.map(roleId => ({ userId, roleId })) as any[]);
+    const assignments = await UserRole.bulkCreate(newRoleIds.map(roleId => ({ userId, roleId })) as any[]);
+    permissionCacheService.invalidateUser(userId);
+    return assignments;
   }
 
   async deleteByUserIdAndRoleId(userId: number, roleId: number): Promise<void> {
     const assignment = await this.findAssignmentOrFail(userId, roleId);
     await assignment.destroy();
+    permissionCacheService.invalidateUser(userId);
   }
 }
 

@@ -6,6 +6,7 @@ import Role from "../models/role.model";
 import Permission from "../models/permission.model";
 import { CreateRolePermissionDto } from "../dto/rolePermission.dto";
 import { NotFoundError, ConflictError } from "../utils/errors.helper";
+import permissionCacheService from "./permissionCache.service";
 
 const ROLE_ATTRIBUTES = ["id", "name"];
 const PERMISSION_ATTRIBUTES = ["id", "name"];
@@ -55,7 +56,9 @@ export class RolePermissionService {
       );
     }
 
-    return RolePermission.create(data as any);
+    const assignment = await RolePermission.create(data as any);
+    permissionCacheService.clearAll();
+    return assignment;
   }
 
   async findAll(offset: number = 0, limit: number = 10) {
@@ -168,14 +171,17 @@ export class RolePermissionService {
 
     if (!newPermissionIds.length) return [];
 
-    return RolePermission.bulkCreate(
+    const assignments = await RolePermission.bulkCreate(
       newPermissionIds.map(permissionId => ({ roleId, permissionId })) as any[]
     );
+    permissionCacheService.clearAll();
+    return assignments;
   }
 
   async deleteByRoleIdAndPermissionId(roleId: number, permissionId: number): Promise<void> {
     const assignment = await this.findAssignmentOrFail(roleId, permissionId);
     await assignment.destroy();
+    permissionCacheService.clearAll();
   }
 }
 
