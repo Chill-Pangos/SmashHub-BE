@@ -1,5 +1,6 @@
 // tournamentReferee.service.ts
 import { Op } from "sequelize";
+import { addHours } from "date-fns";
 import { sequelize } from "../config/database";
 import TournamentReferee, { RefereeRole } from "../models/tournamentReferee.model";
 import RefereeInvitation, {
@@ -16,6 +17,7 @@ import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -40,20 +42,18 @@ const EXTRA_REFEREE_TABLE_RATIO = 2;
 
 async function getTournament(tournamentId: number): Promise<Tournament> {
   const tournament = await Tournament.findByPk(tournamentId);
-  if (!tournament) throw new Error("Tournament not found");
+  if (!tournament) throw new NotFoundError("Tournament not found");
   return tournament;
 }
 
 function assertOrganizer(userId: number, tournament: Tournament): void {
   if (tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new ForbiddenError("Only the tournament organizer can perform this action");
   }
 }
 
 function buildExpiresAt(): Date {
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + INVITATION_EXPIRY_HOURS);
-  return expiresAt;
+  return addHours(new Date(), INVITATION_EXPIRY_HOURS);
 }
 
 function buildPagination(count: number, offset: number, limit: number) {
@@ -80,7 +80,7 @@ async function getRefereeCapacity(tournamentId: number): Promise<{
 }> {
   const config = await ScheduleConfig.findOne({ where: { tournamentId } });
   if (!config) {
-    throw new Error("Schedule config not found for this tournament");
+    throw new NotFoundError("Schedule config not found for this tournament");
   }
 
   return {
@@ -111,11 +111,11 @@ export class TournamentRefereeService {
   assertOrganizer(organizerId, tournament);
 
   if (organizerId === refereeId) {
-    throw new Error("Organizer cannot invite themselves as referee");
+    throw new BadRequestError("Organizer cannot invite themselves as referee");
   }
 
   const referee = await User.findByPk(refereeId);
-  if (!referee) throw new Error("User not found");
+  if (!referee) throw new NotFoundError("User not found");
 
   // Check system role — áp dụng cho cả chief và referee
   await this.assertHasRefereeRole(refereeId, role);
@@ -129,13 +129,13 @@ export class TournamentRefereeService {
   });
   if (existing) {
     if (existing.status === "rejected") {
-      throw new Error("Cannot re-invite a referee who has rejected the invitation");
+      throw new ConflictError("Cannot re-invite a referee who has rejected the invitation");
     }
     if (existing.status === "accepted") {
-      throw new Error("Referee is already part of this tournament");
+      throw new ConflictError("Referee is already part of this tournament");
     }
     if (existing.status === "pending") {
-      throw new Error("A pending invitation already exists for this referee");
+      throw new ConflictError("A pending invitation already exists for this referee");
     }
     // cancelled → xóa cũ, cho phép mời lại
     await existing.destroy();
@@ -239,11 +239,11 @@ export class TournamentRefereeService {
     const invitation = await RefereeInvitation.findByPk(invitationId, {
       include: [{ model: Tournament }],
     });
-    if (!invitation) throw new Error("Invitation not found");
+    if (!invitation) throw new NotFoundError("Invitation not found");
     assertOrganizer(organizerId, invitation.tournament!);
 
     if (invitation.status !== "pending") {
-      throw new Error("Only pending invitations can be cancelled");
+      throw new BadRequestError("Only pending invitations can be cancelled");
     }
 
     return await invitation.update({
@@ -265,7 +265,7 @@ export class TournamentRefereeService {
     const referee = await TournamentReferee.findOne({
       where: { tournamentId, refereeId },
     });
-    if (!referee) throw new Error("Referee not found in this tournament");
+    if (!referee) throw new NotFoundError("Referee not found in this tournament");
 
     await referee.destroy();
   }
@@ -284,7 +284,7 @@ export class TournamentRefereeService {
   const referee = await TournamentReferee.findOne({
     where: { tournamentId, refereeId },
   });
-  if (!referee) throw new Error("Referee not found in this tournament");
+  if (!referee) throw new NotFoundError("Referee not found in this tournament");
 
   if (newRole === "chief" && referee.role !== "chief") {
     await this.assertNoChiefReferee(tournamentId);
@@ -313,7 +313,7 @@ private async assertNotCompetingInTournament(
     },
   });
   if (asCaptain) {
-    throw new Error(
+    throw new ForbiddenError(
       "This user is already competing in this tournament and cannot be a referee"
     );
   }
@@ -327,7 +327,7 @@ private async assertNotCompetingInTournament(
     }],
   });
   if (asMember) {
-    throw new Error(
+    throw new ForbiddenError(
       "This user is already competing in this tournament and cannot be a referee"
     );
   }
@@ -616,13 +616,13 @@ private async assertNotCompetingInTournament(
     const invitation = await RefereeInvitation.findOne({
       where: { id: invitationId, refereeId },
     });
-    if (!invitation) throw new Error("Invitation not found");
+    if (!invitation) throw new NotFoundError("Invitation not found");
     if (invitation.status !== "pending") {
-      throw new Error("This invitation is no longer pending");
+      throw new BadRequestError("This invitation is no longer pending");
     }
     if (new Date() > invitation.expiresAt) {
       await invitation.update({ status: "expired", respondedAt: new Date() });
-      throw new Error("This invitation has expired");
+      throw new BadRequestError("This invitation has expired");
     }
     return invitation;
   }
@@ -675,7 +675,7 @@ private async assertNotCompetingInTournament(
       where: { tournamentId, role: "chief" },
     });
     if (existingChief) {
-      throw new Error("This tournament already has a chief referee");
+      throw new ConflictError("This tournament already has a chief referee");
     }
 
     // Kiểm tra cả pending invitation cho chief
@@ -693,7 +693,7 @@ private async assertNotCompetingInTournament(
       where: pendingChiefWhere,
     });
     if (pendingChief) {
-      throw new Error(
+      throw new ConflictError(
         "A pending chief referee invitation already exists for this tournament"
       );
     }
@@ -712,7 +712,7 @@ private async assertNotCompetingInTournament(
     const reservedCount = acceptedCount + pendingCount;
 
     if (reservedCount >= capacity.maximum) {
-      throw new Error(
+      throw new ConflictError(
         `Tournament can have at most ${capacity.maximum} referees for ${capacity.minimum} table(s)`,
       );
     }
@@ -722,9 +722,6 @@ private async assertNotCompetingInTournament(
   userId: number,
   role: RefereeRole
 ): Promise<void> {
-  const requiredSystemRole =
-    role === "chief" ? "chief_referee" : "referee";
-
   // chief_referee cũng có thể làm referee thường
   const acceptedSystemRoles =
     role === "chief"
@@ -741,7 +738,7 @@ private async assertNotCompetingInTournament(
   });
 
   if (!userRole) {
-    throw new Error(
+    throw new ForbiddenError(
       role === "chief"
         ? "User does not have the chief_referee role"
         : "User does not have the referee or chief_referee role"
@@ -755,7 +752,7 @@ private async assertNotCompetingInTournament(
   ): Promise<void> {
     const overlappingRefereeIds = await this.getOverlappingTournamentRefereeIds(tournamentId);
     if (overlappingRefereeIds.includes(refereeId)) {
-      throw new Error("Referee is already assigned to another tournament at this time");
+      throw new ConflictError("Referee is already assigned to another tournament at this time");
     }
   }
 
@@ -799,7 +796,7 @@ private async assertNotCompetingInTournament(
   private async getOverlappingTournamentRefereeIds(tournamentId: number): Promise<number[]> {
     const targetConfig = await ScheduleConfig.findOne({ where: { tournamentId } });
     if (!targetConfig) {
-      throw new Error("Schedule config not found for this tournament");
+      throw new NotFoundError("Schedule config not found for this tournament");
     }
 
     const overlappingConfigs = await ScheduleConfig.findAll({

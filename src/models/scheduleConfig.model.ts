@@ -8,10 +8,8 @@ import {
   BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
-import {
-  scheduleConfigHourFromUtc,
-  scheduleConfigTimesFromUtc,
-} from "../utils/scheduleConfigTime.helper";
+import config from "../config/config";
+import { getScheduleDateOnlyTime } from "../utils/scheduleSlot.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,17 +22,13 @@ const HOUR_MAX = 23;
 const MINUTE_MIN = 0;
 const MINUTE_MAX = 59;
 
-function dateOnlyTime(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
-function isSameCalendarDate(a: Date, b: Date): boolean {
-  return dateOnlyTime(a) === dateOnlyTime(b);
-}
-
 function utcTimeToLocalMinutes(hour?: number | null, minute?: number | null): number | null {
   if (hour == null || minute == null) return null;
-  return scheduleConfigHourFromUtc(hour) * 60 + minute;
+  return hour * 60 + minute;
+}
+
+function isSameScheduleCalendarDate(a: Date, b: Date): boolean {
+  return getScheduleDateOnlyTime(a) === getScheduleDateOnlyTime(b);
 }
 
 function assertIntegerRange(
@@ -132,7 +126,7 @@ export default class ScheduleConfig extends Model {
     allowNull: false,
     defaultValue: 1,
   })
-  declare dailyStartHour: number; // Giờ bắt đầu (0-23)
+  declare dailyStartHour: number; // UTC hour start (0-23)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -146,7 +140,7 @@ export default class ScheduleConfig extends Model {
     allowNull: false,
     defaultValue: 15,
   })
-  declare dailyEndHour: number; // Giờ kết thúc (0-23)
+  declare dailyEndHour: number; // UTC hour end (0-23)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -161,7 +155,7 @@ export default class ScheduleConfig extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakStartHour?: number | null; // Giờ bắt đầu break (giữa trưa)
+  declare lunchBreakStartHour?: number | null; // UTC hour lunch break start
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -174,7 +168,7 @@ export default class ScheduleConfig extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakEndHour?: number | null; // Giờ kết thúc break (giữa trưa)
+  declare lunchBreakEndHour?: number | null; // UTC hour lunch break end
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
@@ -204,7 +198,8 @@ export default class ScheduleConfig extends Model {
 
   override toJSON(): object {
     const values = super.toJSON() as Record<string, unknown>;
-    return scheduleConfigTimesFromUtc(values);
+    values.timeZone = config.app.timeZone;
+    return values;
   }
 
   // ─── Validators ──────────────────────────────────────────────────────────
@@ -480,14 +475,14 @@ export default class ScheduleConfig extends Model {
     }
 
     if (startDate && endDate) {
-      const startDay = dateOnlyTime(startDate);
-      const endDay = dateOnlyTime(endDate);
+      const startDay = getScheduleDateOnlyTime(startDate);
+      const endDay = getScheduleDateOnlyTime(endDate);
 
       if (endDay < startDay) {
         throw new Error("End date must be after start date");
       }
 
-      if (isSameCalendarDate(startDate, endDate)) {
+      if (isSameScheduleCalendarDate(startDate, endDate)) {
         const dailyStart = utcTimeToLocalMinutes(dailyStartHour, dailyStartMinute);
         const dailyEnd = utcTimeToLocalMinutes(dailyEndHour, dailyEndMinute);
 

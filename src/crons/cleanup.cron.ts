@@ -4,7 +4,7 @@ import Otp from "../models/otp.model";
 import Token from "../models/token.model";
 import ApiRequestLog from "../models/apiRequestLog.model";
 import CronLog from "../models/cronLog.model";
-import { formatDateGMT7 } from "../utils/date.helper";
+import { formatDateUTC } from "../utils/date.helper";
 import cronLogService from "../services/cronLog.service";
 import config from "../config/config";
 
@@ -38,7 +38,7 @@ async function runCleanupJob(
     });
 
     console.log(
-      `[CRON] ${label} cleanup completed: deleted ${result.deleted} item(s) at ${formatDateGMT7(finishedAt)}`
+      `[CRON] ${label} cleanup completed: deleted ${result.deleted} item(s) at ${formatDateUTC(finishedAt)}`
     );
   } catch (error) {
     const finishedAt = new Date();

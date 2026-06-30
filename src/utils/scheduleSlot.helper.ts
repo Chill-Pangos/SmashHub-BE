@@ -50,7 +50,7 @@ const SINGLE_DAY_DAILY_END_ERROR =
   "Match cannot finish before dailyEnd in a single-day tournament. Adjust dailyEnd, matchDurationMinutes, numberOfTables, or tournament dates.";
 
 export function getScheduleDateOnlyTime(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 export function getScheduleCalendarDayCount(startDate: Date, endDate: Date): number {
@@ -64,20 +64,30 @@ export function isSingleDaySchedule(
 }
 
 export function withScheduleTime(date: Date, hour: number, minute: number): Date {
-  const result = new Date(date);
-  result.setHours(hour, minute, 0, 0);
-  return result;
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    hour,
+    minute,
+    0,
+    0,
+  ));
 }
 
 export function getNextScheduleDayStart(
   date: Date,
   config: Pick<ScheduleSlotConfig, "dailyStartHour" | "dailyStartMinute">,
 ): Date {
-  return withScheduleTime(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() + 1,
     config.dailyStartHour,
     config.dailyStartMinute,
-  );
+    0,
+    0,
+  ));
 }
 
 export function getScheduleSlotDurationMinutes(

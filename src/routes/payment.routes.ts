@@ -98,11 +98,11 @@ const router = Router();
  *                     createdAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:30:00Z"
+ *                       example: "2026-05-27T10:30:00.000Z"
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:30:00Z"
+ *                       example: "2026-05-27T10:30:00.000Z"
  *                 message:
  *                   type: string
  *                   example: "Payment created successfully"
@@ -221,7 +221,7 @@ router.post(
  *                             type: string
  *                             format: date-time
  *                             nullable: true
- *                             example: "2026-05-27T10:35:00Z"
+ *                             example: "2026-05-27T10:35:00.000Z"
  *                           refundedAt:
  *                             type: string
  *                             format: date-time
@@ -230,11 +230,11 @@ router.post(
  *                           createdAt:
  *                             type: string
  *                             format: date-time
- *                             example: "2026-05-27T10:30:00Z"
+ *                             example: "2026-05-27T10:30:00.000Z"
  *                           updatedAt:
  *                             type: string
  *                             format: date-time
- *                             example: "2026-05-27T10:35:00Z"
+ *                             example: "2026-05-27T10:35:00.000Z"
  *                     count:
  *                       type: integer
  *                       description: Total number of payments for this entry
@@ -330,11 +330,11 @@ router.get(
  *                             type: string
  *                             format: date-time
  *                             nullable: true
- *                             example: "2026-05-27T10:35:00Z"
+ *                             example: "2026-05-27T10:35:00.000Z"
  *                           createdAt:
  *                             type: string
  *                             format: date-time
- *                             example: "2026-05-27T10:30:00Z"
+ *                             example: "2026-05-27T10:30:00.000Z"
  *                           entry:
  *                             type: object
  *                             properties:
@@ -517,7 +517,7 @@ router.get(
  *                           createdAt:
  *                             type: string
  *                             format: date-time
- *                             example: "2026-05-27T09:00:00Z"
+ *                             example: "2026-05-27T09:00:00.000Z"
  *                           entry:
  *                             type: object
  *                             properties:
@@ -624,11 +624,11 @@ router.get(
  *                     createdAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:30:00Z"
+ *                       example: "2026-05-27T10:30:00.000Z"
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:30:00Z"
+ *                       example: "2026-05-27T10:30:00.000Z"
  *                     entry:
  *                       type: object
  *                       properties:
@@ -716,11 +716,11 @@ router.get(
  *                     confirmedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:35:00Z"
+ *                       example: "2026-05-27T10:35:00.000Z"
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:35:00Z"
+ *                       example: "2026-05-27T10:35:00.000Z"
  *                 message:
  *                   type: string
  *                   example: "Payment confirmed successfully"
@@ -788,7 +788,7 @@ router.post(
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:40:00Z"
+ *                       example: "2026-05-27T10:40:00.000Z"
  *                 message:
  *                   type: string
  *                   example: "Payment rejected successfully"
@@ -868,7 +868,7 @@ router.post(
  *                     refundedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:45:00Z"
+ *                       example: "2026-05-27T10:45:00.000Z"
  *                     refundProofImageUrl:
  *                       type: string
  *                       maxLength: 500
@@ -876,7 +876,7 @@ router.post(
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:45:00Z"
+ *                       example: "2026-05-27T10:45:00.000Z"
  *                 message:
  *                   type: string
  *                   example: "Payment refunded successfully"
@@ -960,7 +960,7 @@ router.post(
  *                     updatedAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-05-27T10:32:00Z"
+ *                       example: "2026-05-27T10:32:00.000Z"
  *                 message:
  *                   type: string
  *                   example: "Payment proof uploaded successfully"

@@ -41,6 +41,7 @@ const envSchema = Joi.object({
   API_REQUEST_LOG_CAPTURE_ERROR_RESPONSE: Joi.boolean().truthy("true").falsy("false").default(true),
   API_REQUEST_LOG_RETENTION_DAYS: Joi.number().integer().min(1).default(14),
   CRON_LOG_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
+  APP_TIME_ZONE: Joi.string().valid("UTC").default("UTC"),
 }).unknown(true);
 
 const { error, value: envVars } = envSchema
@@ -91,6 +92,9 @@ const config = {
       retentionDays: envVars.API_REQUEST_LOG_RETENTION_DAYS,
     },
     cronLogRetentionDays: envVars.CRON_LOG_RETENTION_DAYS,
+  },
+  app: {
+    timeZone: envVars.APP_TIME_ZONE,
   },
   email: {
     smtp: {

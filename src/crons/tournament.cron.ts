@@ -7,7 +7,7 @@ import ScheduleConfig from "../models/scheduleConfig.model";
 import Tournament from "../models/tournament.model";
 import TournamentReferee from "../models/tournamentReferee.model";
 import redisClient, { connectRedis } from "../config/redis";
-import { formatDateGMT7 } from "../utils/date.helper";
+import { formatDateUTC } from "../utils/date.helper";
 import { TOURNAMENT_STATUS_REFRESH_CHANNEL } from "../utils/tournamentStatusScheduler.helper";
 import { withDbLock } from "../utils/dbLock.helper";
 import cronLogService from "../services/cronLog.service";
@@ -188,7 +188,7 @@ async function runStatusJob(
   await notifyStatusTransitions(jobName, events);
 
   if (summary.totalUpdated > 0) {
-    console.log(`[CRON] ${jobName}: updated ${summary.totalUpdated} tournament(s) at ${formatDateGMT7(finishedAt)}`);
+    console.log(`[CRON] ${jobName}: updated ${summary.totalUpdated} tournament(s) at ${formatDateUTC(finishedAt)}`);
   }
 
   return summary;
@@ -349,7 +349,7 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
       void scheduleNextStatusJob(job);
     }, MAX_TIMEOUT_MS);
     timerByJob.set(job.jobName, timer);
-    console.log(`[CRON] ${job.label}: next refresh before ${formatDateGMT7(nextTime)}`);
+    console.log(`[CRON] ${job.label}: next refresh before ${formatDateUTC(nextTime)}`);
     await writeSchedulerPlanLog(
       job.label,
       "Tournament status scheduler planned long timeout refresh",
@@ -358,7 +358,7 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
         statusJob: job.jobName,
         dateField: job.dateField,
         nextTime: nextTime.toISOString(),
-        nextTimeLocal: formatDateGMT7(nextTime),
+        nextTimeUtc: formatDateUTC(nextTime),
         delayMs: delay,
       },
     );
@@ -371,7 +371,7 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
   }, Math.max(delay, 0));
   timerByJob.set(job.jobName, timer);
 
-  console.log(`[CRON] ${job.label}: next update at ${formatDateGMT7(nextTime)}`);
+  console.log(`[CRON] ${job.label}: next update at ${formatDateUTC(nextTime)}`);
   await writeSchedulerPlanLog(
     job.label,
     "Tournament status scheduler planned next update",
@@ -380,7 +380,7 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
       statusJob: job.jobName,
       dateField: job.dateField,
       nextTime: nextTime.toISOString(),
-      nextTimeLocal: formatDateGMT7(nextTime),
+      nextTimeUtc: formatDateUTC(nextTime),
       delayMs: delay,
     },
   );
@@ -582,7 +582,7 @@ async function scheduleNextRefereeCheckJob(): Promise<void> {
       void scheduleNextRefereeCheckJob();
     }, MAX_TIMEOUT_MS);
     console.log(
-      `[CRON] tournament-referee-capacity-check: next refresh before ${formatDateGMT7(nextTime)} ` +
+      `[CRON] tournament-referee-capacity-check: next refresh before ${formatDateUTC(nextTime)} ` +
         `(${events.length} event(s): ${summarizeRefereeCheckEvents(events)})`,
     );
     await writeSchedulerPlanLog(
@@ -591,7 +591,7 @@ async function scheduleNextRefereeCheckJob(): Promise<void> {
       {
         schedulerEvent: "next_refresh_before",
         nextTime: nextTime.toISOString(),
-        nextTimeLocal: formatDateGMT7(nextTime),
+        nextTimeUtc: formatDateUTC(nextTime),
         delayMs: delay,
         eventCount: events.length,
         events: events.map((event) => ({
@@ -612,7 +612,7 @@ async function scheduleNextRefereeCheckJob(): Promise<void> {
   }, Math.max(delay, 0));
 
   console.log(
-    `[CRON] tournament-referee-capacity-check: next update at ${formatDateGMT7(nextTime)} ` +
+    `[CRON] tournament-referee-capacity-check: next update at ${formatDateUTC(nextTime)} ` +
       `(${events.length} event(s): ${summarizeRefereeCheckEvents(events)})`,
   );
   await writeSchedulerPlanLog(
@@ -621,7 +621,7 @@ async function scheduleNextRefereeCheckJob(): Promise<void> {
     {
       schedulerEvent: "next_update",
       nextTime: nextTime.toISOString(),
-      nextTimeLocal: formatDateGMT7(nextTime),
+      nextTimeUtc: formatDateUTC(nextTime),
       delayMs: delay,
       eventCount: events.length,
       events: events.map((event) => ({
@@ -706,7 +706,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
               const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["registrationStartDate"] });
               dateVal = cfg?.registrationStartDate;
             }
-            const dateStr = formatDateGMT7(dateVal);
+            const dateStr = formatDateUTC(dateVal);
             console.log(`    * ${t.name} (ID: ${t.id}) - opens at ${dateStr}`);
           }
         }
@@ -719,7 +719,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
               const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["registrationEndDate"] });
               dateVal = cfg?.registrationEndDate;
             }
-            const dateStr = formatDateGMT7(dateVal);
+            const dateStr = formatDateUTC(dateVal);
             console.log(`    * ${t.name} (ID: ${t.id}) - closes at ${dateStr}`);
           }
         }
@@ -732,7 +732,7 @@ export const notifyUpcomingStatusChanges = cron.schedule(
               const cfg = await ScheduleConfig.findOne({ where: { tournamentId: t.id }, attributes: ["bracketGenerationDate"] });
               dateVal = cfg?.bracketGenerationDate;
             }
-            const dateStr = formatDateGMT7(dateVal);
+            const dateStr = formatDateUTC(dateVal);
             console.log(`    * ${t.name} (ID: ${t.id}) - generates brackets at ${dateStr}`);
           }
         }

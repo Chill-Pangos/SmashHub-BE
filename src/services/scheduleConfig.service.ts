@@ -12,10 +12,7 @@ import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { toUtcDate } from "../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
-import {
-  scheduleConfigTimesFromUtc,
-  scheduleConfigTimesToUtc,
-} from "../utils/scheduleConfigTime.helper";
+import config from "../config/config";
 import {
   type OptimizableScheduleJob,
   type ScheduleSlotConfig,
@@ -52,6 +49,7 @@ export interface SchedulePreviewResponse {
     numberOfTables: number;
     matchDurationMinutes: number;
     breakDurationMinutes: number;
+    timeZone: string;
   };
 }
 
@@ -78,7 +76,6 @@ interface MatchBreakdown {
   totalMatches: number;
   groupEntryCounts: number[];
   knockoutEntryCounts: number[];
-  plainMatchCount?: number;
 }
 
 interface ScheduleEstimate {
@@ -269,17 +266,6 @@ function calculateMatchBreakdownFromCategories(
   );
 }
 
-function createManualMatchBreakdown(totalMatches: number): MatchBreakdown {
-  return {
-    groupMatches: 0,
-    knockoutMatches: totalMatches,
-    totalMatches,
-    groupEntryCounts: [],
-    knockoutEntryCounts: [totalMatches + 1],
-    plainMatchCount: totalMatches,
-  };
-}
-
 // ─── Schedule Math Helpers ────────────────────────────────────────────────────
 
 function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleSlotConfig {
@@ -320,16 +306,6 @@ function calculateBracketSize(entryCount: number): number {
     if (size >= entryCount) return size;
   }
   throw new BadRequestError(`Too many entries: ${entryCount}. Maximum supported: 256`);
-}
-
-function buildPlainScheduleJobs(totalMatches: number): OptimizableScheduleJob[] {
-  return Array.from({ length: totalMatches }, (_, index) => ({
-    stage: KNOCKOUT_STAGE,
-    roundNumber: 1,
-    entryAId: index * 2 + 1,
-    entryBId: index * 2 + 2,
-    categoryId: 1,
-  }));
 }
 
 function buildRoundRobinScheduleJobs(
@@ -423,19 +399,6 @@ function calculateScheduleEstimate(
 ): ScheduleEstimate {
   const slotDuration = getScheduleSlotDurationMinutes(config);
   const tournamentStart = withScheduleTime(startDate, config.dailyStartHour, config.dailyStartMinute);
-
-  if (breakdown.plainMatchCount != null) {
-    const plan = getOptimizedScheduleSlotPlan(
-      config,
-      tournamentStart,
-      buildPlainScheduleJobs(breakdown.plainMatchCount),
-    );
-    return {
-      totalSlots: plan.totalSlots,
-      estimatedEndTime: plan.endTime,
-      neededMinutes: plan.totalSlots * slotDuration,
-    };
-  }
 
   const groupJobs = buildGroupScheduleJobs(breakdown.groupEntryCounts);
   const knockoutJobs = buildKnockoutScheduleJobsFromBreakdown(
@@ -558,7 +521,7 @@ function normalizeScheduleConfigForStorage(
   data: Partial<ScheduleConfig>
 ): Partial<ScheduleConfig> {
   assertLocalScheduleConfigTimeFields(data);
-  return normalizeScheduleConfigDates(scheduleConfigTimesToUtc(data));
+  return normalizeScheduleConfigDates(data);
 }
 
 function removeUndefinedFields(
@@ -662,7 +625,7 @@ function buildLocalMergedConfigForPreview(
   config: ScheduleConfig,
   updateData: Partial<ScheduleConfig>,
 ): Partial<ScheduleConfig> {
-  const localConfig = scheduleConfigTimesFromUtc(pickConfigFields(config));
+  const localConfig = pickConfigFields(config);
   return buildMergedConfig(localConfig as ScheduleConfig, updateData);
 }
 
@@ -927,16 +890,13 @@ export class ScheduleConfigService {
   /**
    * Preview khi TẠO MỚI schedule config.
    *
-   * totalMatches:
-   *  - Nếu truyền vào → dùng giá trị đó.
-   *  - Nếu không → tự tính từ categories của tournament.
+   * Tự tính số trận từ categories của tournament.
    *
    * KHÔNG lưu vào DB.
    */
   async previewCreate(
     tournamentId: number,
     data: Partial<ScheduleConfig>,
-    totalMatches?: number,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -952,9 +912,7 @@ export class ScheduleConfigService {
       );
     }
 
-    const breakdown = totalMatches != null
-      ? createManualMatchBreakdown(totalMatches)
-      : await this._resolveMatchBreakdown(tournament);
+    const breakdown = await this._resolveMatchBreakdown(tournament);
     const normalizedForStorage = normalizeScheduleConfigForStorage(data);
     await runModelValidation(tournamentId, normalizedForStorage);
 
@@ -969,7 +927,6 @@ export class ScheduleConfigService {
   async previewUpdate(
     tournamentId: number,
     data: Partial<ScheduleConfig>,
-    totalMatches?: number,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -999,9 +956,7 @@ export class ScheduleConfigService {
     );
     await runModelValidation(tournamentId, merged, { isUpdate: true });
 
-    const breakdown = totalMatches != null
-      ? createManualMatchBreakdown(totalMatches)
-      : await this._resolveMatchBreakdown(tournament);
+    const breakdown = await this._resolveMatchBreakdown(tournament);
     const preview = this._buildPreview(mergedForPreview, breakdown);
     const needsRegeneration = requiresScheduleRegeneration(
       tournament,
@@ -1138,7 +1093,7 @@ export class ScheduleConfigService {
 
       const breakdown = await this._resolveMatchBreakdown(tournament);
       const preview = this._buildPreview(
-        scheduleConfigTimesFromUtc(mergedForValidation),
+        mergedForValidation,
         breakdown,
       );
       if (!preview.isValid) {
@@ -1178,11 +1133,10 @@ export class ScheduleConfigService {
 
   /**
    * Validate xem config đã lưu có fit với số trận không.
-   * Tự động tính totalMatches từ categories nếu không truyền.
+   * Tự động tính totalMatches từ categories.
    */
   async validateScheduleConfig(
     tournamentId: number,
-    totalMatches?: number,
     organizerId?: number
   ): Promise<ScheduleValidationResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -1194,16 +1148,14 @@ export class ScheduleConfigService {
     const config = await this.getConfig(tournamentId);
     if (!config) throw new NotFoundError("Schedule config not found");
 
-    const breakdown = totalMatches != null
-      ? createManualMatchBreakdown(totalMatches)
-      : await this._resolveMatchBreakdown(tournament);
+    const breakdown = await this._resolveMatchBreakdown(tournament);
 
     const {
       startDate,
       endDate,
-    } = scheduleConfigTimesFromUtc(pickConfigFields(config)) as ScheduleConfig;
+    } = pickConfigFields(config) as ScheduleConfig;
     const timingConfig = buildTimingConfig(
-      scheduleConfigTimesFromUtc(pickConfigFields(config)) as ScheduleConfig,
+      pickConfigFields(config) as ScheduleConfig,
     );
 
     const estimate = calculateScheduleEstimate(
@@ -1292,6 +1244,7 @@ export class ScheduleConfigService {
       dailyEndHour: 22,
       dailyEndMinute: 0,
       numberOfTables: 1,
+      timeZone: config.app.timeZone,
     };
   }
 
@@ -1307,7 +1260,7 @@ export class ScheduleConfigService {
     if (categories.length === 0) {
       throw new BadRequestError(
         "Tournament has no categories. Cannot calculate totalMatches automatically. " +
-        "Please provide totalMatches manually or add categories to the tournament first."
+        "Add categories to the tournament first."
       );
     }
 
@@ -1437,6 +1390,7 @@ export class ScheduleConfigService {
       numberOfTables,
       matchDurationMinutes,
       breakDurationMinutes,
+      timeZone: config.app.timeZone,
       ...(!isValid && { overflowMinutes }),
     };
 

@@ -74,11 +74,11 @@ const router = Router();
  *               invitedBy: 2
  *               role: referee
  *               status: pending
- *               expiresAt: "2024-06-29T12:00:00Z"
+ *               expiresAt: "2024-06-29T12:00:00.000Z"
  *               respondedAt: null
  *               rejectionReason: null
- *               createdAt: "2024-06-27T12:00:00Z"
- *               updatedAt: "2024-06-27T12:00:00Z"
+ *               createdAt: "2024-06-27T12:00:00.000Z"
+ *               updatedAt: "2024-06-27T12:00:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -146,8 +146,8 @@ router.post(
  *               tournamentId: 1
  *               refereeId: 5
  *               role: referee
- *               createdAt: "2024-06-27T12:00:00Z"
- *               updatedAt: "2024-06-27T12:00:00Z"
+ *               createdAt: "2024-06-27T12:00:00.000Z"
+ *               updatedAt: "2024-06-27T12:00:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -224,11 +224,11 @@ router.post(
  *               invitedBy: 2
  *               role: referee
  *               status: rejected
- *               expiresAt: "2024-06-29T12:00:00Z"
- *               respondedAt: "2024-06-27T12:30:00Z"
+ *               expiresAt: "2024-06-29T12:00:00.000Z"
+ *               respondedAt: "2024-06-27T12:30:00.000Z"
  *               rejectionReason: "Not available at that time"
- *               createdAt: "2024-06-27T12:00:00Z"
- *               updatedAt: "2024-06-27T12:30:00Z"
+ *               createdAt: "2024-06-27T12:00:00.000Z"
+ *               updatedAt: "2024-06-27T12:30:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -292,11 +292,11 @@ router.post(
  *               invitedBy: 2
  *               role: referee
  *               status: cancelled
- *               expiresAt: "2024-06-29T12:00:00Z"
- *               respondedAt: "2024-06-27T13:00:00Z"
+ *               expiresAt: "2024-06-29T12:00:00.000Z"
+ *               respondedAt: "2024-06-27T13:00:00.000Z"
  *               rejectionReason: null
- *               createdAt: "2024-06-27T12:00:00Z"
- *               updatedAt: "2024-06-27T13:00:00Z"
+ *               createdAt: "2024-06-27T12:00:00.000Z"
+ *               updatedAt: "2024-06-27T13:00:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -441,8 +441,8 @@ router.post(
  *               tournamentId: 1
  *               refereeId: 5
  *               role: chief
- *               createdAt: "2024-06-27T12:00:00Z"
- *               updatedAt: "2024-06-27T13:15:00Z"
+ *               createdAt: "2024-06-27T12:00:00.000Z"
+ *               updatedAt: "2024-06-27T13:15:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -506,8 +506,8 @@ router.post(
  *                   tournamentId: 1
  *                   refereeId: 5
  *                   role: chief
- *                   createdAt: "2024-06-27T12:00:00Z"
- *                   updatedAt: "2024-06-27T12:00:00Z"
+ *                   createdAt: "2024-06-27T12:00:00.000Z"
+ *                   updatedAt: "2024-06-27T12:00:00.000Z"
  *                   referee:
  *                     id: 5
  *                     firstName: John
@@ -517,8 +517,8 @@ router.post(
  *                   tournamentId: 1
  *                   refereeId: 6
  *                   role: referee
- *                   createdAt: "2024-06-27T12:05:00Z"
- *                   updatedAt: "2024-06-27T12:05:00Z"
+ *                   createdAt: "2024-06-27T12:05:00.000Z"
+ *                   updatedAt: "2024-06-27T12:05:00.000Z"
  *                   referee:
  *                     id: 6
  *                     firstName: Jane
@@ -591,11 +591,11 @@ router.get(
  *                   invitedBy: 2
  *                   role: chief
  *                   status: pending
- *                   expiresAt: "2024-06-29T12:00:00Z"
+ *                   expiresAt: "2024-06-29T12:00:00.000Z"
  *                   respondedAt: null
  *                   rejectionReason: null
- *                   createdAt: "2024-06-27T12:00:00Z"
- *                   updatedAt: "2024-06-27T12:00:00Z"
+ *                   createdAt: "2024-06-27T12:00:00.000Z"
+ *                   updatedAt: "2024-06-27T12:00:00.000Z"
  *                   referee:
  *                     id: 5
  *                     firstName: John
@@ -758,7 +758,7 @@ router.get(
  *                   invitedBy: 2
  *                   role: referee
  *                   status: pending
- *                   expiresAt: "2024-06-29T12:00:00Z"
+ *                   expiresAt: "2024-06-29T12:00:00.000Z"
  *                   respondedAt: null
  *                   rejectionReason: null
  *                   tournament:
@@ -769,18 +769,18 @@ router.get(
  *                     status: registration_open
  *                     createdBy: 2
  *                     scheduleConfig:
- *                       startDate: "2024-07-10T00:00:00Z"
- *                       endDate: "2024-07-12T00:00:00Z"
- *                       registrationStartDate: "2024-06-01T00:00:00Z"
- *                       registrationEndDate: "2024-06-20T00:00:00Z"
- *                       bracketGenerationDate: "2024-06-21T00:00:00Z"
+ *                       startDate: "2024-07-10T00:00:00.000Z"
+ *                       endDate: "2024-07-12T00:00:00.000Z"
+ *                       registrationStartDate: "2024-06-01T00:00:00.000Z"
+ *                       registrationEndDate: "2024-06-20T00:00:00.000Z"
+ *                       bracketGenerationDate: "2024-06-21T00:00:00.000Z"
  *                   inviter:
  *                     id: 2
  *                     firstName: Admin
  *                     lastName: User
  *                     email: admin@example.com
- *                   createdAt: "2024-06-27T12:00:00Z"
- *                   updatedAt: "2024-06-27T12:00:00Z"
+ *                   createdAt: "2024-06-27T12:00:00.000Z"
+ *                   updatedAt: "2024-06-27T12:00:00.000Z"
  *               pagination:
  *                 total: 1
  *                 page: 1

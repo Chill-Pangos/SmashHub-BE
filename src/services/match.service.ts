@@ -14,6 +14,7 @@ import KnockoutBracket from "../models/knockoutBracket.model";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
 import User from "../models/user.model";
+import config from "../config/config";
 import groupStandingService from "./groupStanding.service";
 import knockoutBracketService from "./knockoutBracket.service";
 import scheduleService from "./schedule.service";
@@ -70,8 +71,6 @@ interface PaginatedMatches {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const MATCH_START_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 const createEntryMemberInclude = () => ({
   model: EntryMember,
@@ -146,7 +145,7 @@ async function getMatchWithContext(
 
 function formatCalendarDateInTimeZone(
   date: Date,
-  timeZone = MATCH_START_TIME_ZONE,
+  timeZone = config.app.timeZone,
 ): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
