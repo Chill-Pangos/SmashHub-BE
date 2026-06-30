@@ -418,7 +418,7 @@ private async assertNotCompetingInTournament(
     organizerId: number,
     tournamentId: number,
     filters?: {
-      role?: "referee" | "chief_referee";
+      role?: "referee" | "chief";
       search?: string;
       offset?: number;
       limit?: number;
@@ -433,7 +433,7 @@ private async assertNotCompetingInTournament(
     const offset = filters?.offset ?? 0;
     const limit = filters?.limit ?? 10;
     const acceptedSystemRoles =
-      filters?.role === "chief_referee"
+      filters?.role === "chief"
         ? ["chief_referee"]
         : filters?.role === "referee"
           ? ["referee", "chief_referee"]
