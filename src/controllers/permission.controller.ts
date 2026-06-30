@@ -3,6 +3,7 @@
 import { Request, Response, NextFunction } from "express";
 import permissionService from "../services/permission.service";
 import { CreatePermissionDto, UpdatePermissionDto } from "../dto/permission.dto";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class PermissionController {
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -16,9 +17,7 @@ export class PermissionController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const data = await permissionService.findAll(offset, limit);
       res.status(200).json(data);
     } catch (error) {
@@ -28,7 +27,7 @@ export class PermissionController {
 
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data = await permissionService.findById(Number(req.params.id));
+      const data = await permissionService.findById(parsePositiveInt(req.params.id, "id"));
       res.status(200).json(data);
     } catch (error) {
       next(error);
@@ -46,7 +45,10 @@ export class PermissionController {
 
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const data = await permissionService.update(Number(req.params.id), req.body as UpdatePermissionDto);
+      const data = await permissionService.update(
+        parsePositiveInt(req.params.id, "id"),
+        req.body as UpdatePermissionDto,
+      );
       res.status(200).json(data);
     } catch (error) {
       next(error);
@@ -55,7 +57,7 @@ export class PermissionController {
 
   async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await permissionService.delete(Number(req.params.id));
+      await permissionService.delete(parsePositiveInt(req.params.id, "id"));
       res.status(204).send();
     } catch (error) {
       next(error);

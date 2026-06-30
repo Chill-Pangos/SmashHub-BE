@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import scheduleService from "../services/schedule.service";
 import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { KnockoutRound } from "../models/schedule.model";
+import { KNOCKOUT_ROUNDS, KnockoutRound } from "../models/schedule.model";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class ScheduleController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -34,7 +35,7 @@ export class ScheduleController {
 
       const result = await scheduleService.generateGroupStageSchedule(
         organizerId,
-        Number(categoryId),
+        parsePositiveInt(categoryId, "categoryId"),
       );
 
       res.status(201).json({
@@ -72,11 +73,14 @@ export class ScheduleController {
 
       const { categoryId, roundName } = req.body;
       if (!categoryId) throw new BadRequestError("categoryId is required");
+      if (roundName !== undefined && !KNOCKOUT_ROUNDS.includes(roundName)) {
+        throw new BadRequestError("Invalid roundName");
+      }
 
       const result = await scheduleService.generateKnockoutSchedule(
         organizerId,
-        Number(categoryId),
-        roundName,
+        parsePositiveInt(categoryId, "categoryId"),
+        roundName as KnockoutRound | undefined,
       );
 
       res.status(201).json({
@@ -116,7 +120,7 @@ export class ScheduleController {
 
       const results = await scheduleService.generateTournamentSchedule(
         organizerId,
-        Number(tournamentId),
+        parsePositiveInt(tournamentId, "tournamentId"),
       );
 
       const warnings = results
@@ -157,7 +161,10 @@ export class ScheduleController {
       const { categoryId } = req.body;
       if (!categoryId) throw new BadRequestError("categoryId is required");
 
-      await scheduleService.syncMatchEntriesFromBrackets(Number(categoryId));
+      await scheduleService.syncMatchEntriesFromBrackets(
+        organizerId,
+        parsePositiveInt(categoryId, "categoryId"),
+      );
 
       res.status(200).json({
         success: true,
@@ -175,8 +182,7 @@ export class ScheduleController {
    */
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) throw new BadRequestError("Invalid schedule ID");
+      const id = parsePositiveInt(req.params.id, "schedule ID");
 
       const schedule = await scheduleService.getScheduleById(id);
       res.status(200).json({ success: true, data: schedule });
@@ -197,12 +203,9 @@ export class ScheduleController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const categoryId = Number(req.params.categoryId);
-      if (isNaN(categoryId)) throw new BadRequestError("Invalid category ID");
+      const categoryId = parsePositiveInt(req.params.categoryId, "category ID");
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 20;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { page, offset, limit } = parsePagination(req.query);
 
       const stage = req.query.stage as "group" | "knockout" | undefined;
       if (stage && !["group", "knockout"].includes(stage)) {
@@ -213,12 +216,12 @@ export class ScheduleController {
       const knockoutRound = req.query.knockoutRound as string | undefined;
 
       const result = await scheduleService.getSchedulesByCategory(categoryId, {
-  offset,
-  limit,
-  ...(stage && { stage }),
-  ...(groupName && { groupName }),
-  ...(knockoutRound && { knockoutRound: knockoutRound as KnockoutRound }),
-});
+        offset,
+        limit,
+        ...(stage && { stage }),
+        ...(groupName && { groupName }),
+        ...(knockoutRound && { knockoutRound: knockoutRound as KnockoutRound }),
+      });
 
       const totalPages = Math.ceil(result.count / limit);
 
@@ -256,14 +259,15 @@ export class ScheduleController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const id = Number(req.params.id);
-      if (isNaN(id)) throw new BadRequestError("Invalid schedule ID");
+      const id = parsePositiveInt(req.params.id, "schedule ID");
 
       const { scheduledAt, tableNumber } = req.body;
 
       const updated = await scheduleService.updateSchedule(organizerId, id, {
-        ...(scheduledAt && { scheduledAt: new Date(scheduledAt) }),
-        ...(tableNumber !== undefined && { tableNumber: Number(tableNumber) }),
+        ...(scheduledAt && { scheduledAt }),
+        ...(tableNumber !== undefined && {
+          tableNumber: tableNumber === null ? null : parsePositiveInt(tableNumber, "tableNumber"),
+        }),
       });
 
       res.status(200).json({ success: true, data: updated });
@@ -286,8 +290,7 @@ export class ScheduleController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const id = Number(req.params.id);
-      if (isNaN(id)) throw new BadRequestError("Invalid schedule ID");
+      const id = parsePositiveInt(req.params.id, "schedule ID");
 
       await scheduleService.deleteSchedule(organizerId, id);
       res.status(204).send();

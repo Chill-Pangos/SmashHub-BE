@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import knockoutBracketService from "../services/knockoutBracket.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
+import { parsePagination } from "../utils/request.helper";
 
 type CategoryBody = {
   categoryId?: unknown;
@@ -302,9 +303,7 @@ export class KnockoutBracketController {
     try {
       const categoryId = Number(req.params.categoryId);
       const { entryId, entryName } = req.query;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const filter: { entryId?: number; entryName?: string } = {};
       if (entryId) filter.entryId = Number(entryId);

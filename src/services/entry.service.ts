@@ -10,6 +10,9 @@ import User from "../models/user.model";
 import JoinRequest from "../models/joinRequest.model";
 import Payment from "../models/payment.model";
 import notificationService, { NotificationTemplates } from "./notification.service";
+import { removeUndefinedFields } from "../utils/object.helper";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,7 +22,7 @@ export async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
@@ -38,11 +41,11 @@ export async function assertRegistrationOpen(tournament: Tournament): Promise<vo
   }
 
   if (!regStart || !regEnd) {
-    throw new Error("Registration window is not configured for this tournament");
+    throw new BadRequestError("Registration window is not configured for this tournament");
   }
 
   if (now < regStart || now > regEnd) {
-    throw new Error("Registration is not open at this time");
+    throw new BadRequestError("Registration is not open at this time");
   }
 }
 
@@ -56,11 +59,11 @@ export async function assertRegistrationClosed(tournament: Tournament): Promise<
   }
 
   if (!regEnd) {
-    throw new Error("Registration end date is not configured for this tournament");
+    throw new BadRequestError("Registration end date is not configured for this tournament");
   }
 
   if (new Date() <= regEnd) {
-    throw new Error("Registration must be closed before disqualifying entries");
+    throw new BadRequestError("Registration must be closed before disqualifying entries");
   }
 }
 
@@ -110,7 +113,7 @@ export async function assertUserEligible(
   }
 
   if (errors.length > 0) {
-    throw new Error(`User is not eligible: ${errors.join("; ")}`);
+    throw new BadRequestError(`User is not eligible: ${errors.join("; ")}`);
   }
 }
 
@@ -123,7 +126,7 @@ export async function assertNotAlreadyRegistered(
     where: { categoryId, captainId: userId },
   });
   if (existingEntry) {
-    throw new Error("User is already registered in this category as captain");
+    throw new ConflictError("User is already registered in this category as captain");
   }
 
   // Check nếu user đã là member của 1 entry trong category này
@@ -138,7 +141,38 @@ export async function assertNotAlreadyRegistered(
     where: { userId },
   });
   if (existingMember) {
-    throw new Error("User is already a member of an entry in this category");
+    throw new ConflictError("User is already a member of an entry in this category");
+  }
+}
+
+async function assertCategoryHasCapacity(category: TournamentCategory, t?: Transaction): Promise<void> {
+  const count = await Entry.count({
+    where: { categoryId: category.id },
+    ...(t && { transaction: t }),
+  });
+
+  if (count >= category.maxEntries) {
+    throw new ConflictError("This category has reached the maximum number of entries");
+  }
+}
+
+async function assertNoPendingJoinRequestInCategory(
+  userId: number,
+  categoryId: number,
+): Promise<void> {
+  const pending = await JoinRequest.findOne({
+    where: { userId, status: "pending" },
+    include: [
+      {
+        model: Entry,
+        where: { categoryId },
+        required: true,
+      },
+    ],
+  });
+
+  if (pending) {
+    throw new ConflictError("You already have a pending join request in this category");
   }
 }
 
@@ -207,7 +241,7 @@ export class EntryService {
     await assertRegistrationOpen(tournament);
 
     const user = await User.findByPk(userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw new NotFoundError("User not found");
     const defaultEntryName = `${user.firstName} ${user.lastName}`.trim() || `Entry ${user.id}`;
     const name = entryName?.trim() || defaultEntryName;
 
@@ -216,7 +250,13 @@ export class EntryService {
 
     // ── Single: tạo entry và thêm member luôn ─────────────────────────────
     if (category.type === "single") {
+      if (action !== "create_team") {
+        throw new BadRequestError("Single categories only support create_team");
+      }
+
       const entry = await sequelize.transaction(async (t) => {
+        await assertCategoryHasCapacity(category, t);
+
         const newEntry = await Entry.create(
           {
             categoryId,
@@ -225,6 +265,8 @@ export class EntryService {
             isAcceptingMembers: false,
             requiredMemberCount: 1,
             currentMemberCount: 1,
+            isConfirmed: true,
+            confirmedAt: new Date(),
           },
           { transaction: t },
         );
@@ -250,12 +292,14 @@ export class EntryService {
       const requiredMemberCount = category.type === "double" ? 2 : undefined; // team: captain tự set sau
 
       const entry = await sequelize.transaction(async (t) => {
+        await assertCategoryHasCapacity(category, t);
+
         const newEntry = await Entry.create(
           {
             categoryId,
             captainId: userId,
             name,
-            isAcceptingMembers: true,
+            isAcceptingMembers: requiredMemberCount != null,
             requiredMemberCount,
             currentMemberCount: 1,
           },
@@ -281,34 +325,59 @@ export class EntryService {
     // ── Double / Team: xin vào đội có sẵn ────────────────────────────────
     if (action === "join_team") {
       if (!targetEntryId) {
-        throw new Error("targetEntryId is required when joining a team");
+        throw new BadRequestError("targetEntryId is required when joining a team");
       }
 
       const targetEntry = await Entry.findByPk(targetEntryId);
       if (!targetEntry || targetEntry.categoryId !== categoryId) {
-        throw new Error("Entry not found in this category");
+        throw new NotFoundError("Entry not found in this category");
       }
       if (!targetEntry.isAcceptingMembers) {
-        throw new Error("This team is not accepting new members");
+        throw new BadRequestError("This team is not accepting new members");
       }
       if (
         targetEntry.requiredMemberCount != null &&
         targetEntry.currentMemberCount >= targetEntry.requiredMemberCount
       ) {
-        throw new Error("This team is already full");
+        throw new ConflictError("This team is already full");
       }
+      if (
+        category.maxMembersPerEntry != null &&
+        targetEntry.currentMemberCount >= category.maxMembersPerEntry
+      ) {
+        throw new ConflictError(`Team cannot exceed ${category.maxMembersPerEntry} members`);
+      }
+
+      await assertNoPendingJoinRequestInCategory(userId, categoryId);
 
       // Kiểm tra đã có pending request chưa
       const existingRequest = await JoinRequest.findOne({
-        where: { entryId: targetEntryId, userId, status: "pending" },
+        where: { entryId: targetEntryId, userId },
       });
       if (existingRequest) {
-        throw new Error(
-          "You already have a pending join request for this team",
-        );
+        if (existingRequest.status === "pending") {
+          throw new ConflictError("You already have a pending join request for this team");
+        }
+        if (existingRequest.status === "rejected") {
+          await existingRequest.update({
+            status: "pending",
+            rejectionReason: null,
+            respondedAt: null,
+          });
+
+          return {
+            entry: targetEntry,
+            message: "Join request sent to team captain. Waiting for approval.",
+          };
+        }
+        throw new ConflictError("You already have a join request for this team");
       }
 
-      const joinRequest = await JoinRequest.create({ entryId: targetEntryId, userId });
+      const joinRequest = await JoinRequest.create({
+        entryId: targetEntryId,
+        userId,
+        type: "requested",
+      });
 
       const requesterName = `${user.firstName} ${user.lastName}`.trim();
 
@@ -326,7 +395,7 @@ export class EntryService {
       };
     }
 
-    throw new Error("Invalid action");
+    throw new BadRequestError("Invalid action");
   }
 
   /**
@@ -377,12 +446,12 @@ export class EntryService {
               { lastName: { [Op.like]: `%${captainName.trim()}%` } },
             ],
           },
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: [...PUBLIC_USER_ATTRIBUTES],
         }
       : {
           model: User,
           as: "captain",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: [...PUBLIC_USER_ATTRIBUTES],
         };
 
     return await Entry.findAndCountAll({
@@ -415,6 +484,10 @@ export class EntryService {
     action: "approve" | "reject",
     rejectionReason?: string,
   ): Promise<JoinRequest> {
+    if (!["approve", "reject"].includes(action)) {
+      throw new BadRequestError("action must be approve or reject");
+    }
+
     const joinRequest = await JoinRequest.findByPk(joinRequestId, {
       include: [
         {
@@ -423,14 +496,14 @@ export class EntryService {
         },
       ],
     });
-    if (!joinRequest) throw new Error("Join request not found");
+    if (!joinRequest) throw new NotFoundError("Join request not found");
     if (joinRequest.status !== "pending") {
-      throw new Error("This join request has already been responded to");
+      throw new ConflictError("This join request has already been responded to");
     }
 
     const entry = joinRequest.entry!;
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can respond to join requests");
+      throw new ForbiddenError("Only the team captain can respond to join requests");
     }
 
     const tournament = entry.category?.tournament!;
@@ -456,26 +529,26 @@ export class EntryService {
 
     // ── Approve ───────────────────────────────────────────────────────────────
     if (!entry.isAcceptingMembers) {
-      throw new Error("This team is no longer accepting members");
+      throw new BadRequestError("This team is no longer accepting members");
     }
     if (
       entry.requiredMemberCount != null &&
       entry.currentMemberCount >= entry.requiredMemberCount
     ) {
-      throw new Error("Team is already full");
+      throw new ConflictError("Team is already full");
     }
     if (
       entry.category?.maxMembersPerEntry != null &&
       entry.currentMemberCount >= entry.category.maxMembersPerEntry
     ) {
-      throw new Error(
+      throw new ConflictError(
         `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
       );
     }
 
     // Re-validate điều kiện user tại thời điểm approve
     const user = await User.findByPk(joinRequest.userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw new NotFoundError("User not found");
     await assertUserEligible(user, entry.category!);
     await assertNotAlreadyRegistered(joinRequest.userId, entry.categoryId);
 
@@ -529,9 +602,9 @@ export class EntryService {
     options?: { offset?: number; limit?: number }
   ): Promise<{ requests?: JoinRequest[], joinRequests?: JoinRequest[], pagination?: any } | JoinRequest[]> {
     const entry = await Entry.findByPk(entryId);
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can view join requests");
+      throw new ForbiddenError("Only the team captain can view join requests");
     }
 
     const offset = options?.offset || 0;
@@ -611,7 +684,7 @@ export class EntryService {
         },
       ],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     return entry;
   }
 
@@ -630,9 +703,9 @@ export class EntryService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can update the entry");
+      throw new ForbiddenError("Only the team captain can update the entry");
     }
 
     const tournament = entry.category?.tournament!;
@@ -641,12 +714,12 @@ export class EntryService {
     // Kiểm tra requiredMemberCount nếu thay đổi
     if (data.requiredMemberCount != null) {
       if (entry.category?.type === "single") {
-        throw new Error(
+        throw new BadRequestError(
           "Cannot change required member count for single entries",
         );
       }
       if (data.requiredMemberCount < entry.currentMemberCount) {
-        throw new Error(
+        throw new BadRequestError(
           "Required member count cannot be less than current member count",
         );
       }
@@ -657,13 +730,23 @@ export class EntryService {
         entry.category?.maxMembersPerEntry != null &&
         data.requiredMemberCount > entry.category.maxMembersPerEntry
       ) {
-        throw new Error(
+        throw new BadRequestError(
           `Required member count cannot exceed ${entry.category.maxMembersPerEntry}`,
         );
       }
     }
 
-    return await entry.update(data);
+    if (data.isAcceptingMembers === true) {
+      const requiredMemberCount = data.requiredMemberCount ?? entry.requiredMemberCount;
+      if (requiredMemberCount == null) {
+        throw new BadRequestError("requiredMemberCount must be set before accepting members");
+      }
+      if (entry.currentMemberCount >= requiredMemberCount) {
+        throw new ConflictError("Team is already full");
+      }
+    }
+
+    return await entry.update(removeUndefinedFields(data as Record<string, unknown>));
   }
 
   /**
@@ -673,9 +756,9 @@ export class EntryService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can delete the entry");
+      throw new ForbiddenError("Only the team captain can delete the entry");
     }
 
     const tournament = entry.category?.tournament!;
@@ -704,9 +787,9 @@ export class EntryService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== currentCaptainId) {
-      throw new Error("Only the current captain can transfer captaincy");
+      throw new ForbiddenError("Only the current captain can transfer captaincy");
     }
 
     const tournament = entry.category?.tournament!;
@@ -717,11 +800,11 @@ export class EntryService {
       where: { entryId, userId: newCaptainId },
     });
     if (!newCaptainMember) {
-      throw new Error("New captain must be a member of the entry");
+      throw new BadRequestError("New captain must be a member of the entry");
     }
 
     const newCaptain = await User.findByPk(newCaptainId);
-    if (!newCaptain) throw new Error("User not found");
+    if (!newCaptain) throw new NotFoundError("User not found");
 
     return await entry.update({ captainId: newCaptainId });
   }
@@ -737,13 +820,13 @@ export class EntryService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can set required member count");
+      throw new ForbiddenError("Only the team captain can set required member count");
     }
 
     if (entry.category?.type !== "team") {
-      throw new Error("Required member count can only be set for team entries");
+      throw new BadRequestError("Required member count can only be set for team entries");
     }
 
     const tournament = entry.category?.tournament!;
@@ -751,7 +834,7 @@ export class EntryService {
 
     // Kiểm tra count >= currentMemberCount
     if (count < entry.currentMemberCount) {
-      throw new Error(
+      throw new BadRequestError(
         "Required member count cannot be less than current member count",
       );
     }
@@ -761,12 +844,15 @@ export class EntryService {
       entry.category?.maxMembersPerEntry != null &&
       count > entry.category.maxMembersPerEntry
     ) {
-      throw new Error(
+      throw new BadRequestError(
         `Required member count cannot exceed ${entry.category.maxMembersPerEntry}`,
       );
     }
 
-    return await entry.update({ requiredMemberCount: count });
+    return await entry.update({
+      requiredMemberCount: count,
+      isAcceptingMembers: entry.currentMemberCount < count,
+    });
   }
 
   /**
@@ -779,16 +865,16 @@ export class EntryService {
         { model: TournamentCategory, include: [{ model: Tournament }] },
       ],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId) {
-      throw new Error("Only the team captain can confirm the lineup");
+      throw new ForbiddenError("Only the team captain can confirm the lineup");
     }
     if (entry.isConfirmed) {
-      throw new Error("Lineup has already been confirmed");
+      throw new ConflictError("Lineup has already been confirmed");
     }
 
     const tournament = entry.category?.tournament;
-    if (!tournament) throw new Error("Tournament not found");
+    if (!tournament) throw new NotFoundError("Tournament not found");
     await assertRegistrationOpen(tournament);
 
     // Kiểm tra đủ thành viên
@@ -796,7 +882,7 @@ export class EntryService {
       entry.requiredMemberCount != null &&
       entry.currentMemberCount < entry.requiredMemberCount
     ) {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot confirm lineup: need ${entry.requiredMemberCount} members, currently have ${entry.currentMemberCount}`,
       );
     }
@@ -822,7 +908,7 @@ export class EntryService {
     ineligible: { entry: Entry; reasons: string[] }[];
   }> {
     const category = await TournamentCategory.findByPk(categoryId);
-    if (!category) throw new Error("Category not found");
+    if (!category) throw new NotFoundError("Category not found");
 
     const entries = await Entry.findAll({
       where: { categoryId },
@@ -920,7 +1006,7 @@ export class EntryService {
     const tournament = category.tournament!;
 
     if (tournament.createdBy !== organizerId) {
-      throw new Error("Only the tournament organizer can disqualify entries");
+      throw new ForbiddenError("Only the tournament organizer can disqualify entries");
     }
 
     await assertRegistrationClosed(tournament);

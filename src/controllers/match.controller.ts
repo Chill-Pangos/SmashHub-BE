@@ -2,19 +2,19 @@ import { Request, Response, NextFunction } from "express";
 import matchService from "../services/match.service";
 import {
   ApprovePendingMatchResultDto,
-  RejectPendingMatchResultDto,
 } from "../dto/pendingMatchResult.dto";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { MatchStatus } from "../models/match.model";
+import { parseEnumQuery, parsePagination, parsePositiveInt } from "../utils/request.helper";
+
+const MATCH_FILTER_STATUSES: readonly MatchStatus[] = ["scheduled", "in_progress", "completed", "cancelled"];
+const MATCH_RESULT_STATUSES = ["pending", "approved"] as const;
 
 export class MatchController {
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
-      if (!Number.isInteger(id) || id <= 0) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const id = parsePositiveInt(req.params.id, "match ID");
 
       const match = await matchService.findById(id);
       if (!match) throw new NotFoundError("Match not found");
@@ -34,18 +34,15 @@ export class MatchController {
         throw new BadRequestError("entryAName and entryBName are required");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const tournamentId = req.query.tournamentId !== undefined ? Number(req.query.tournamentId) : undefined;
-      const categoryId = req.query.categoryId !== undefined ? Number(req.query.categoryId) : undefined;
-
-      if (tournamentId !== undefined && (!Number.isInteger(tournamentId) || tournamentId <= 0)) {
-        throw new BadRequestError("Invalid tournament ID");
-      }
-      if (categoryId !== undefined && (!Number.isInteger(categoryId) || categoryId <= 0)) {
-        throw new BadRequestError("Invalid category ID");
-      }
+      const { offset, limit } = parsePagination(req.query);
+      const tournamentId =
+        req.query.tournamentId !== undefined
+          ? parsePositiveInt(req.query.tournamentId, "tournament ID")
+          : undefined;
+      const categoryId =
+        req.query.categoryId !== undefined
+          ? parsePositiveInt(req.query.categoryId, "category ID")
+          : undefined;
 
       const filters: { tournamentId?: number; categoryId?: number } = {};
       if (tournamentId !== undefined) filters.tournamentId = tournamentId;
@@ -66,10 +63,7 @@ export class MatchController {
 
   async startMatch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const id = parsePositiveInt(req.params.id, "match ID");
       if (!req.userId) {
         throw new BadRequestError("User not authenticated");
       }
@@ -113,10 +107,7 @@ export class MatchController {
 
   async finalizeMatch(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const id = parsePositiveInt(req.params.id, "match ID");
       if (!req.userId) {
         throw new BadRequestError("User not authenticated");
       }
@@ -132,10 +123,7 @@ export class MatchController {
 
   async getFinalizeSummary(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const matchId = Number(req.params.id);
-      if (isNaN(matchId)) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const matchId = parsePositiveInt(req.params.id, "match ID");
       if (!req.userId) {
         throw new BadRequestError("User not authenticated");
       }
@@ -149,10 +137,7 @@ export class MatchController {
 
   async approveMatchResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const matchId = Number(req.params.id);
-      if (isNaN(matchId)) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const matchId = parsePositiveInt(req.params.id, "match ID");
       if (!req.userId) {
         throw new BadRequestError("User not authenticated");
       }
@@ -168,44 +153,14 @@ export class MatchController {
     }
   }
 
-  async rejectMatchResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const matchId = Number(req.params.id);
-      if (isNaN(matchId)) {
-        throw new BadRequestError("Invalid match ID");
-      }
-      if (!req.userId) {
-        throw new BadRequestError("User not authenticated");
-      }
-      const { reviewNotes } = req.body as RejectPendingMatchResultDto;
-
-      if (!reviewNotes) {
-        throw new BadRequestError("Review notes are required when rejecting");
-      }
-
-      const match = await matchService.rejectMatchResult(matchId, req.userId, reviewNotes);
-      res.status(200).json({
-        message: "Match result rejected. Referee needs to resubmit the result.",
-        match,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
   async findPendingMatches(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const chiefRefereeId = (req as AuthRequest).userId;
       if (!chiefRefereeId) {
         throw new BadRequestError("User not authenticated");
       }
-      const tournamentId = Number(req.query.tournamentId);
-      if (isNaN(tournamentId)) {
-        throw new BadRequestError("Invalid tournament ID");
-      }
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const tournamentId = parsePositiveInt(req.query.tournamentId, "tournament ID");
+      const { offset, limit } = parsePagination(req.query);
       const result = await matchService.findPendingMatches(chiefRefereeId, tournamentId, offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -224,32 +179,32 @@ export class MatchController {
         throw new BadRequestError("User not authenticated");
       }
 
-      const categoryId = Number(req.params.categoryId);
-      if (isNaN(categoryId)) {
-        throw new BadRequestError("Invalid category ID");
-      }
+      const categoryId = parsePositiveInt(req.params.categoryId, "category ID");
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
+      const stage = parseEnumQuery(req.query.stage, "stage", ["group", "knockout"]);
+      const status = parseEnumQuery(req.query.status, "status", MATCH_FILTER_STATUSES);
+      const resultStatus = parseEnumQuery(req.query.resultStatus, "resultStatus", MATCH_RESULT_STATUSES);
+      const filters: {
+        stage?: "group" | "knockout";
+        status?: MatchStatus;
+        resultStatus?: (typeof MATCH_RESULT_STATUSES)[number];
+        offset: number;
+        limit: number;
+      } = { offset, limit };
+      if (stage) filters.stage = stage;
+      if (status) filters.status = status;
+      if (resultStatus) filters.resultStatus = resultStatus;
 
       const result = await matchService.findCategorySchedulesAndMatchesForChiefReferee(
         chiefRefereeId,
         categoryId,
-        {
-          stage: req.query.stage as any,
-          status: req.query.status as any,
-          resultStatus: req.query.resultStatus as any,
-          offset,
-          limit,
-        },
+        filters,
       );
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -267,16 +222,11 @@ export class MatchController {
         throw new BadRequestError("User not authenticated");
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       if (!req.query.categoryId) {
         throw new BadRequestError("categoryId is required");
       }
-      const categoryId = Number(req.query.categoryId);
-      if (!Number.isInteger(categoryId) || categoryId <= 0) {
-        throw new BadRequestError("Invalid category ID");
-      }
+      const categoryId = parsePositiveInt(req.query.categoryId, "category ID");
 
       const rawStatus = req.query.status;
       const statuses = Array.isArray(rawStatus)
@@ -301,9 +251,7 @@ export class MatchController {
         categoryId,
         statuses: statusFilters ?? null,
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -312,14 +260,9 @@ export class MatchController {
 
   async getUpcomingMatchesByAthlete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = Number(req.params.userId);
-      if (isNaN(userId)) {
-        throw new BadRequestError("Invalid user ID");
-      }
+      const userId = parsePositiveInt(req.params.userId, "user ID");
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await matchService.findUpcomingMatchesByAthlete(
         userId,
@@ -329,9 +272,7 @@ export class MatchController {
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);
@@ -340,14 +281,9 @@ export class MatchController {
 
   async getMatchHistoryByAthlete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = Number(req.params.userId);
-      if (isNaN(userId)) {
-        throw new BadRequestError("Invalid user ID");
-      }
+      const userId = parsePositiveInt(req.params.userId, "user ID");
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await matchService.findMatchHistoryByAthlete(
         userId,
@@ -357,9 +293,7 @@ export class MatchController {
 
       res.status(200).json({
         matches: result.matches,
-        count: result.count,
-        offset,
-        limit,
+        pagination: result.pagination,
       });
     } catch (error) {
       next(error);

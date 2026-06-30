@@ -3,6 +3,8 @@
 import Permission from "../models/permission.model";
 import { CreatePermissionDto, UpdatePermissionDto } from "../dto/permission.dto";
 import { BadRequestError, NotFoundError, ConflictError } from "../utils/errors.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
+import permissionCacheService from "./permissionCache.service";
 
 const PERMISSION_NAME_REGEX = /^[a-z0-9_]+:[a-z0-9_]+$/;
 
@@ -41,7 +43,9 @@ export class PermissionService {
     this.validateNameFormat(data.name);
     await this.assertNameNotTaken(data.name);
 
-    return Permission.create(data as any);
+    const permission = await Permission.create(data as any);
+    permissionCacheService.clearAll();
+    return permission;
   }
 
   async findAll(offset: number = 0, limit: number = 10) {
@@ -78,19 +82,22 @@ export class PermissionService {
 
   async update(id: number, data: UpdatePermissionDto): Promise<Permission> {
     const permission = await this.findOrFail(id);
+    const updateData = removeUndefinedFields(data as Record<string, unknown>) as UpdatePermissionDto;
 
-    if (data.name && data.name !== permission.name) {
-      this.validateNameFormat(data.name);
-      await this.assertNameNotTaken(data.name, id);
+    if (updateData.name && updateData.name !== permission.name) {
+      this.validateNameFormat(updateData.name);
+      await this.assertNameNotTaken(updateData.name, id);
     }
 
-    await permission.update(data);
+    await permission.update(updateData);
+    permissionCacheService.clearAll();
     return permission;
   }
 
   async delete(id: number): Promise<void> {
     const permission = await this.findOrFail(id);
     await permission.destroy();
+    permissionCacheService.clearAll();
   }
 }
 

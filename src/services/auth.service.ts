@@ -20,6 +20,8 @@ import {
 } from "../dto/auth.dto";
 import UserRole from "../models/userRole.model";
 import Role from "../models/role.model";
+import EloScore from "../models/eloScore.model";
+import { sequelize } from "../config/database";
 
 export class AuthService {
   private readonly JWT_SECRET = config.jwt.secret;
@@ -133,7 +135,11 @@ export class AuthService {
    * Register new user
    */
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { firstName, lastName, email, password, role } = registerDto;
+    const { firstName, lastName, email, password } = registerDto;
+
+    if (Object.prototype.hasOwnProperty.call(registerDto as unknown as Record<string, unknown>, "role")) {
+      throw AuthErrors.ValidationError("role cannot be set during registration");
+    }
 
     // Validate firstName
     if (!firstName || firstName.trim().length === 0) {
@@ -165,26 +171,44 @@ export class AuthService {
     // Hash password
     const hashedPassword = await this.hashPassword(password);
 
-    // Create user
-    const user = await User.create({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      isEmailVerified: false,
-    } as any);
-
-    const assignedRoleName = role || "spectator"; // Default to 'spectator' role if none provided
+    const assignedRoleName = "user";
 
     const foundRole = await Role.findOne({ where: { name: assignedRoleName } });
     if (!foundRole) {
       throw AuthErrors.RoleNotFound();
     }
 
-    await UserRole.create({
-      userId: user.id,
-      roleId: foundRole.id,
-    } as any);
+    const user = await sequelize.transaction(async (transaction) => {
+      const createdUser = await User.create(
+        {
+          firstName,
+          lastName,
+          email,
+          password: hashedPassword,
+          isEmailVerified: false,
+        } as any,
+        { transaction },
+      );
+
+      await Promise.all([
+        UserRole.create(
+          {
+            userId: createdUser.id,
+            roleId: foundRole.id,
+          } as any,
+          { transaction },
+        ),
+        EloScore.create(
+          {
+            userId: createdUser.id,
+            score: 1000,
+          } as any,
+          { transaction },
+        ),
+      ]);
+
+      return createdUser;
+    });
 
     // Generate tokens
     const accessToken = this.generateAccessToken(user.id);

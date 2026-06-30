@@ -1,7 +1,8 @@
 // schedule.service.ts
 import { Op, Transaction } from "sequelize";
 import { sequelize } from "../config/database";
-import Schedule, { Stage, KnockoutRound } from "../models/schedule.model";
+import Schedule from "../models/schedule.model";
+import type { Stage, KnockoutRound } from "../models/schedule.model";
 import Match from "../models/match.model";
 import MatchReferee from "../models/matchReferee.model";
 import SubMatch, { SubMatchStatus } from "../models/subMatch.model";
@@ -14,6 +15,19 @@ import Tournament from "../models/tournament.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
 import GroupStanding from "../models/groupStanding.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
+import { toUtcDate } from "../utils/date.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
+import { localizeScheduleConfigInstance } from "../utils/scheduleConfigTime.helper";
+import {
+  type ScheduleSlotPlan,
+  getNextScheduleDayStart,
+  getOptimizedScheduleSlotPlan,
+  getScheduleSlotDurationMs,
+  getScheduleTournamentEndTime,
+  isSingleDaySchedule,
+  withScheduleTime,
+} from "../utils/scheduleSlot.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,14 +37,28 @@ interface ScheduleResult {
   warning?: string;
 }
 
-interface TimeSlot {
-  scheduledAt: Date;
-}
-
 interface RefereeWorkload {
   refereeId: number;
   assignedCount: number;
 }
+
+interface GroupMatchPair {
+  stage: Stage;
+  entryAId: number;
+  entryBId: number;
+  groupName: string;
+  roundNumber: number;
+}
+
+type OptimizableMatchJob = {
+  stage: Stage;
+  roundNumber: number;
+  entryAId?: number | null;
+  entryBId?: number | null;
+  groupName?: string;
+  groupSequenceKey?: string;
+  categoryId?: number;
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,230 +70,147 @@ const MATCH_INCLUDE = {
     { model: Entry, as: "entryB" },
   ],
 };
+const GROUP_STAGE: Stage = "group";
+const KNOCKOUT_STAGE: Stage = "knockout";
 
 // ─── Tournament Type Detection ────────────────────────────────────────────────
 
-function dateOnlyTime(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-
 function isSingleDayTournament(config: ScheduleConfig): boolean {
-  return dateOnlyTime(config.startDate) === dateOnlyTime(config.endDate);
-}
-
-function withTime(date: Date, hour: number, minute: number): Date {
-  const result = new Date(date);
-  result.setHours(hour, minute, 0, 0);
-  return result;
+  return isSingleDaySchedule(config);
 }
 
 function nextDayStart(date: Date, config: ScheduleConfig): Date {
-  return withTime(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
-    config.dailyStartHour,
-    config.dailyStartMinute,
-  );
+  return getNextScheduleDayStart(date, config);
 }
 
-// ─── Slot Allocators ──────────────────────────────────────────────────────────
+// ─── Slot Allocation ─────────────────────────────────────────────────────────
 
-/**
- * Giải 1 ngày.
- * Slot chỉ tính scheduledAt dựa trên slot index.
- * numberOfTables dùng để tính số slot song song.
- */
-class SingleDayAllocator {
-  private readonly slotDuration: number;
-  private readonly startDate: Date;
-  private readonly endDate: Date;
-
-  constructor(config: ScheduleConfig) {
-    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
-    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
-    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
-  }
-
-  getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
-    const slotIndex = Math.floor(matchIndex / numberOfTables);
-    return {
-      scheduledAt: new Date(
-        this.startDate.getTime() + slotIndex * this.slotDuration * 60_000,
-      ),
-    };
-  }
-
-  validate(
-    totalMatches: number,
-    numberOfTables: number,
-  ): { fits: boolean; warning?: string } {
-    const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
-    const lastMatchStart = new Date(
-      this.startDate.getTime() + lastSlotIndex * this.slotDuration * 60_000,
-    );
-
-    if (lastMatchStart > this.endDate) {
-      return {
-        fits: false,
-        warning:
-          `Schedule overflows. Last match starts at ${lastMatchStart.toISOString()}, ` +
-          `but tournament's last allowed start time is ${this.endDate.toISOString()}`,
-      };
-    }
-    return { fits: true };
-  }
+function getSlotDurationMs(config: ScheduleConfig): number {
+  return getScheduleSlotDurationMs(config);
 }
 
-/**
- * Giải nhiều ngày.
- * Tự động sang ngày mới khi hết giờ trong ngày.
- */
-class MultiDayAllocator {
-  private readonly startDate: Date;
-  private readonly endDate: Date;
-  private readonly dailyStartHour: number;
-  private readonly dailyStartMinute: number;
-  private readonly dailyEndHour: number;
-  private readonly dailyEndMinute: number;
-  private readonly slotDuration: number;
-
-  constructor(config: ScheduleConfig) {
-    this.startDate = withTime(config.startDate, config.dailyStartHour, config.dailyStartMinute);
-    this.endDate = withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
-    this.dailyStartHour = config.dailyStartHour;
-    this.dailyStartMinute = config.dailyStartMinute;
-    this.dailyEndHour = config.dailyEndHour;
-    this.dailyEndMinute = config.dailyEndMinute;
-    this.slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
-  }
-
-  getSlot(matchIndex: number, numberOfTables: number): TimeSlot {
-    const slotIndex = Math.floor(matchIndex / numberOfTables);
-    return { scheduledAt: this._computeSlotTime(slotIndex) };
-  }
-
-  private _computeSlotTime(slotIndex: number): Date {
-    let current = new Date(this.startDate);
-
-    for (let i = 0; i < slotIndex; i++) {
-      current = new Date(current.getTime() + this.slotDuration * 60_000);
-
-      const nextSlotStart = new Date(current.getTime() + this.slotDuration * 60_000);
-      const lastStartOfDay = new Date(current);
-      lastStartOfDay.setHours(this.dailyEndHour, this.dailyEndMinute, 0, 0);
-
-      if (nextSlotStart > lastStartOfDay) {
-        current.setDate(current.getDate() + 1);
-        current.setHours(this.dailyStartHour, this.dailyStartMinute, 0, 0);
-      }
-    }
-
-    return current;
-  }
-
-  validate(
-    totalMatches: number,
-    numberOfTables: number,
-  ): { fits: boolean; warning?: string } {
-    const lastSlotIndex = Math.ceil(totalMatches / numberOfTables) - 1;
-    const lastMatchAt = this._computeSlotTime(lastSlotIndex);
-    const lastMatchEnd = new Date(
-      lastMatchAt.getTime() + this.slotDuration * 60_000,
-    );
-
-    if (lastMatchEnd > this.endDate) {
-      return {
-        fits: false,
-        warning:
-          `Schedule overflows tournament end time. Last match ends at ${lastMatchEnd.toISOString()}, ` +
-          `tournament ends at ${this.endDate.toISOString()}`,
-      };
-    }
-    return { fits: true };
-  }
-}
-
-function createAllocator(
-  config: ScheduleConfig,
-): SingleDayAllocator | MultiDayAllocator {
-  return isSingleDayTournament(config)
-    ? new SingleDayAllocator(config)
-    : new MultiDayAllocator(config);
-}
-
-function getPhaseSlot(
+function getOptimizedSlotPlan<T extends OptimizableMatchJob>(
   config: ScheduleConfig,
   phaseStart: Date,
-  matchIndex: number,
-): TimeSlot {
-  const slotDuration = config.matchDurationMinutes + config.breakDurationMinutes;
-  const slotIndex = Math.floor(matchIndex / config.numberOfTables);
-
-  if (isSingleDayTournament(config)) {
-    return {
-      scheduledAt: new Date(phaseStart.getTime() + slotIndex * slotDuration * 60_000),
-    };
-  }
-
-  let current = new Date(phaseStart);
-  for (let i = 0; i < slotIndex; i++) {
-    current = new Date(current.getTime() + slotDuration * 60_000);
-
-    const nextSlotStart = new Date(current.getTime() + slotDuration * 60_000);
-    const lastStartOfDay = withTime(
-      current,
-      config.dailyEndHour,
-      config.dailyEndMinute,
-    );
-
-    if (nextSlotStart > lastStartOfDay) {
-      current = nextDayStart(current, config);
-    }
-  }
-
-  return { scheduledAt: current };
-}
-
-function getPhaseEndTime(
-  config: ScheduleConfig,
-  phaseStart: Date,
-  matchCount: number,
-): Date {
-  if (matchCount <= 0) return phaseStart;
-
-  const lastSlot = getPhaseSlot(config, phaseStart, matchCount - 1).scheduledAt;
-  return new Date(
-    lastSlot.getTime() +
-      (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000,
-  );
+  items: T[],
+): ScheduleSlotPlan<T> {
+  return getOptimizedScheduleSlotPlan(config, phaseStart, items);
 }
 
 function getTournamentEndTime(config: ScheduleConfig): Date {
-  return withTime(config.endDate, config.dailyEndHour, config.dailyEndMinute);
+  return getScheduleTournamentEndTime(config);
 }
 
-// ─── Table Assignment ─────────────────────────────────────────────────────────
+function assertTableNumberInRange(tableNumber: number, config: ScheduleConfig): void {
+  if (
+    !Number.isInteger(tableNumber) ||
+    tableNumber < 1 ||
+    tableNumber > config.numberOfTables
+  ) {
+    throw new BadRequestError(
+      `tableNumber must be an integer between 1 and ${config.numberOfTables}`,
+    );
+  }
+}
 
-/**
- * Tìm bàn trống tại thời điểm cụ thể.
- * Bàn được coi là "bận" khi có match đang `in_progress` hoặc `scheduled`
- * với scheduledAt nằm trong khoảng [now - slotDuration, now].
- */
-async function findAvailableTable(
+async function getBusyTablesAtStartTime(
   tournamentId: number,
   config: ScheduleConfig,
   t: Transaction,
-): Promise<number | null> {
+  excludeMatchId?: number,
+): Promise<Set<number>> {
   const slotDurationMs =
-    (config.matchDurationMinutes + config.breakDurationMinutes) * 60_000;
+    getSlotDurationMs(config);
   const now = new Date();
   const windowStart = new Date(now.getTime() - slotDurationMs);
+  const windowEnd = new Date(now.getTime() + slotDurationMs);
 
-  const busySchedules = await Schedule.findAll({
+  const matchFilter =
+    excludeMatchId === undefined ? {} : { id: { [Op.ne]: excludeMatchId } };
+
+  const inProgressMatches = await Match.findAll({
+    include: [
+      {
+        model: Schedule,
+        as: "schedule",
+        where: {
+          tableNumber: { [Op.not]: null },
+        },
+        required: true,
+        attributes: ["tableNumber"],
+        include: [
+          {
+            model: TournamentCategory,
+            as: "tournamentCategory",
+            where: { tournamentId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      },
+    ],
+    where: { ...matchFilter, status: "in_progress" },
+    attributes: [],
+    transaction: t,
+  });
+
+  const overlappingScheduledMatches = await Match.findAll({
+    include: [
+      {
+        model: Schedule,
+        as: "schedule",
+        where: {
+          scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
+          tableNumber: { [Op.not]: null },
+        },
+        required: true,
+        attributes: ["tableNumber"],
+        include: [
+          {
+            model: TournamentCategory,
+            as: "tournamentCategory",
+            where: { tournamentId },
+            required: true,
+            attributes: [],
+          },
+        ],
+      },
+    ],
+    where: { ...matchFilter, status: "scheduled" },
+    attributes: [],
+    transaction: t,
+  });
+
+  return new Set(
+    [...inProgressMatches, ...overlappingScheduledMatches]
+      .map((m) => m.schedule?.tableNumber)
+      .filter((tableNumber): tableNumber is number => tableNumber != null),
+  );
+}
+
+async function assertScheduleTableAvailableForSlot(options: {
+  tournamentId: number;
+  scheduleId: number;
+  scheduledAt: Date;
+  tableNumber: number;
+  config: ScheduleConfig;
+  t?: Transaction;
+}): Promise<void> {
+  const slotDurationMs = getSlotDurationMs(options.config);
+  const windowStart = new Date(options.scheduledAt.getTime() - slotDurationMs);
+  const windowEnd = new Date(options.scheduledAt.getTime() + slotDurationMs);
+
+  const conflictQuery: any = {
+    where: {
+      id: { [Op.ne]: options.scheduleId },
+      tableNumber: options.tableNumber,
+      scheduledAt: { [Op.gt]: windowStart, [Op.lt]: windowEnd },
+    },
     include: [
       {
         model: TournamentCategory,
-        as: "category",
-        where: { tournamentId },
+        as: "tournamentCategory",
+        where: { tournamentId: options.tournamentId },
         required: true,
         attributes: [],
       },
@@ -277,16 +222,34 @@ async function findAvailableTable(
         attributes: [],
       },
     ],
-    attributes: ["tableNumber"],
-    where: {
-      scheduledAt: { [Op.between]: [windowStart, now] },
-      tableNumber: { [Op.not]: null },
-    } as any,
-    transaction: t,
-  });
+  };
+  if (options.t) conflictQuery.transaction = options.t;
 
-  const busyTables = new Set(
-    busySchedules.map((s) => s.tableNumber).filter(Boolean),
+  const conflict = await Schedule.findOne(conflictQuery);
+
+  if (conflict) {
+    throw new ConflictError(
+      `Table ${options.tableNumber} is already assigned to another active match in this time slot`,
+    );
+  }
+}
+
+/**
+ * Tìm bàn trống tại thời điểm start match.
+ * `in_progress` luôn giữ bàn đến khi match finalize.
+ * `scheduled` giữ bàn nếu slot đã gán overlap với slot đang start.
+ */
+async function findAvailableTable(
+  tournamentId: number,
+  config: ScheduleConfig,
+  t: Transaction,
+  excludeMatchId?: number,
+): Promise<number | null> {
+  const busyTables = await getBusyTablesAtStartTime(
+    tournamentId,
+    config,
+    t,
+    excludeMatchId,
   );
 
   for (let table = 1; table <= config.numberOfTables; table++) {
@@ -323,7 +286,7 @@ async function bulkCreateMatchReferees(
 function getSubMatchCount(category: TournamentCategory): number {
   if (category.type !== "team") return 1;
   if (!category.teamFormat) {
-    throw new Error("Team category must have teamFormat to create sub-matches");
+    throw new BadRequestError("Team category must have teamFormat to create sub-matches");
   }
   return category.teamFormat.split("-").length;
 }
@@ -343,15 +306,32 @@ async function createSubMatchesForMatch(
     { transaction: t },
   );
 
+  await syncSubMatchPlayersForMatch(match, category, t, subMatches[0]);
+}
+
+async function syncSubMatchPlayersForMatch(
+  match: Match,
+  category: TournamentCategory,
+  t: Transaction,
+  firstSubMatch?: SubMatch,
+): Promise<void> {
   if (category.type === "team") return;
 
-  const firstSubMatch = subMatches[0];
-  if (!firstSubMatch) return;
+  const targetSubMatch = firstSubMatch ?? await SubMatch.findOne({
+    where: { matchId: match.id },
+    order: [["subMatchNumber", "ASC"]],
+    transaction: t,
+  });
+  if (!targetSubMatch) return;
+
+  if (match.entryAId == null || match.entryBId == null) {
+    await SubMatchPlayer.destroy({ where: { subMatchId: targetSubMatch.id }, transaction: t });
+    return;
+  }
 
   const entryIds = [match.entryAId, match.entryBId].filter(
     (id): id is number => id != null,
   );
-  if (entryIds.length === 0) return;
 
   const entryMembers = await EntryMember.findAll({
     where: { entryId: { [Op.in]: entryIds } },
@@ -360,10 +340,12 @@ async function createSubMatchesForMatch(
   });
 
   const rows = entryMembers.map((member) => ({
-    subMatchId: firstSubMatch.id,
+    subMatchId: targetSubMatch.id,
     entryMemberId: member.id,
     team: member.entryId === match.entryAId ? "A" : "B",
   }));
+
+  await SubMatchPlayer.destroy({ where: { subMatchId: targetSubMatch.id }, transaction: t });
 
   if (rows.length > 0) {
     await SubMatchPlayer.bulkCreate(rows, { transaction: t });
@@ -378,28 +360,28 @@ async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
 function assertOrganizer(userId: number, tournament: Tournament): void {
   if (tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new BadRequestError("Only the tournament organizer can perform this action");
   }
 }
 
 async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
   if (tournament.status !== "brackets_generated") {
-    throw new Error("Tournament must be in brackets_generated status before generating schedules");
+    throw new BadRequestError("Tournament must be in brackets_generated status before generating schedules");
   }
 
   const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
   if (!config?.bracketGenerationDate) {
-    throw new Error("Bracket generation date is not configured for this tournament");
+    throw new BadRequestError("Bracket generation date is not configured for this tournament");
   }
 
   if (new Date() < config.bracketGenerationDate) {
-    throw new Error("Bracket generation date must be reached before generating schedules");
+    throw new BadRequestError("Bracket generation date must be reached before generating schedules");
   }
 }
 
@@ -411,16 +393,37 @@ async function getTournamentReferees(
   });
 }
 
+async function assertMinimumTournamentReferees(
+  tournamentId: number,
+  config: ScheduleConfig,
+): Promise<void> {
+  const refereeCount = await TournamentReferee.count({
+    where: { tournamentId, role: "referee" },
+  });
+
+  if (refereeCount < config.numberOfTables) {
+    throw new BadRequestError(
+      `Tournament needs at least ${config.numberOfTables} accepted referee(s) for ${config.numberOfTables} table(s). Current accepted referees: ${refereeCount}`,
+    );
+  }
+}
+
 async function getRequiredScheduleConfig(
   tournamentId: number,
+  t?: Transaction,
+  lockForUpdate = false,
 ): Promise<ScheduleConfig> {
-  const config = await ScheduleConfig.findOne({ where: { tournamentId } });
+  const config = await ScheduleConfig.findOne({
+    where: { tournamentId },
+    ...(t && { transaction: t }),
+    ...(t && lockForUpdate && { lock: t.LOCK.UPDATE }),
+  });
   if (!config) {
-    throw new Error(
+    throw new NotFoundError(
       "Schedule config not found. Please create a schedule configuration first.",
     );
   }
-  return config;
+  return localizeScheduleConfigInstance(config);
 }
 
 async function clearExistingSchedules(
@@ -430,13 +433,19 @@ async function clearExistingSchedules(
 ): Promise<void> {
   const existing = await Schedule.findAll({
     where: { categoryId, stage },
-    include: [{ model: Match, as: "scheduledMatches", attributes: ["id"] }],
+    attributes: ["id"],
     transaction: t,
   });
 
-  const matchIds = existing
-    .flatMap((s) => s.scheduledMatches ?? [])
-    .map((m) => m.id);
+  const scheduleIds = existing.map((s) => s.id);
+  const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
+
+  if (stage === "knockout" && scheduleIds.length > 0) {
+    await KnockoutBracket.update(
+      { scheduleId: null, matchId: null },
+      { where: { categoryId, scheduleId: { [Op.in]: scheduleIds } }, transaction: t },
+    );
+  }
 
   if (matchIds.length > 0) {
     await MatchReferee.destroy({
@@ -452,6 +461,53 @@ async function clearExistingSchedules(
   await Schedule.destroy({ where: { categoryId, stage }, transaction: t });
 }
 
+async function getGroupStageEndTime(
+  categoryId: number,
+  config: ScheduleConfig,
+): Promise<Date> {
+  const lastGroupSchedule = await Schedule.findOne({
+    where: { categoryId, stage: GROUP_STAGE },
+    order: [["scheduledAt", "DESC"]],
+  });
+
+  if (!lastGroupSchedule) {
+    throw new BadRequestError("Generate group stage schedule first before knockout schedule");
+  }
+
+  return new Date(lastGroupSchedule.scheduledAt.getTime() + getSlotDurationMs(config));
+}
+
+async function getKnockoutPhaseStart(
+  category: TournamentCategory,
+  config: ScheduleConfig,
+): Promise<Date> {
+  const tournamentStart = withScheduleTime(
+    config.startDate,
+    config.dailyStartHour,
+    config.dailyStartMinute,
+  );
+
+  if (!category.isGroupStage) return tournamentStart;
+
+  const groupEnd = await getGroupStageEndTime(category.id, config);
+  return isSingleDayTournament(config) ? groupEnd : nextDayStart(groupEnd, config);
+}
+
+async function getMatchIdsByScheduleIds(
+  scheduleIds: number[],
+  t: Transaction,
+): Promise<number[]> {
+  if (scheduleIds.length === 0) return [];
+
+  const matches = await Match.findAll({
+    where: { scheduleId: { [Op.in]: scheduleIds } },
+    attributes: ["id"],
+    transaction: t,
+  });
+
+  return matches.map((m) => m.id);
+}
+
 // ─── Match Pair Builders ──────────────────────────────────────────────────────
 
 /**
@@ -459,14 +515,18 @@ async function clearExistingSchedules(
  */
 async function buildGroupMatchPairs(
   categoryId: number,
-): Promise<{ entryAId: number; entryBId: number; groupName: string }[]> {
+): Promise<GroupMatchPair[]> {
   const standings = await GroupStanding.findAll({
     where: { categoryId },
-    order: [["groupName", "ASC"]],
+    order: [
+      ["groupName", "ASC"],
+      ["position", "ASC"],
+      ["id", "ASC"],
+    ],
   });
 
   if (standings.length === 0) {
-    throw new Error(
+    throw new BadRequestError(
       `No group standings found for category ${categoryId}. Generate groups first.`,
     );
   }
@@ -478,16 +538,29 @@ async function buildGroupMatchPairs(
     groupMap.set(s.groupName, group);
   }
 
-  const pairs: { entryAId: number; entryBId: number; groupName: string }[] = [];
+  const pairs: GroupMatchPair[] = [];
   for (const [groupName, entryIds] of groupMap) {
-    for (let i = 0; i < entryIds.length; i++) {
-      for (let j = i + 1; j < entryIds.length; j++) {
+    const players: (number | null)[] = [...entryIds];
+    if (players.length % 2 === 1) players.push(null);
+
+    for (let round = 1; round < players.length; round++) {
+      for (let i = 0; i < players.length / 2; i++) {
+        const entryAId = players[i];
+        const entryBId = players[players.length - 1 - i];
+        if (entryAId == null || entryBId == null) continue;
+
         pairs.push({
-          entryAId: entryIds[i]!,
-          entryBId: entryIds[j]!,
+          stage: GROUP_STAGE,
+          entryAId,
+          entryBId,
           groupName,
+          roundNumber: round,
         });
       }
+
+      const fixed = players[0]!;
+      const rotating = players.slice(1);
+      players.splice(0, players.length, fixed, rotating[rotating.length - 1]!, ...rotating.slice(0, -1));
     }
   }
 
@@ -504,6 +577,7 @@ async function buildKnockoutPairs(
   roundName?: KnockoutRound,
 ): Promise<
   {
+    stage: Stage;
     bracketId: number;
     entryAId: number | null;
     entryBId: number | null;
@@ -527,12 +601,13 @@ async function buildKnockoutPairs(
   });
 
   if (brackets.length === 0) {
-    throw new Error(
+    throw new BadRequestError(
       `No knockout brackets found for category ${categoryId}. Generate placeholders first.`,
     );
   }
 
   return brackets.map((b) => ({
+    stage: KNOCKOUT_STAGE,
     bracketId: b.id,
     entryAId: b.entryAId ?? null,
     entryBId: b.entryBId ?? null,
@@ -562,9 +637,24 @@ export class ScheduleService {
     await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const pairs = await buildGroupMatchPairs(categoryId);
-    const allocator = createAllocator(config);
-    const { warning } = allocator.validate(pairs.length, config.numberOfTables);
+    if (pairs.length === 0) {
+      throw new BadRequestError("Not enough group entries to create matches");
+    }
+    const groupStart = withScheduleTime(
+      config.startDate,
+      config.dailyStartHour,
+      config.dailyStartMinute,
+    );
+    const groupPlan = getOptimizedSlotPlan(config, groupStart, pairs);
+    const groupEnd = groupPlan.endTime;
+    const tournamentEnd = getTournamentEndTime(config);
+    const warning = groupEnd > tournamentEnd
+      ? `Schedule overflows tournament end time. Last match ends at ${groupEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
+      : undefined;
+    const groupSlots = groupPlan.slots;
 
     const result = await sequelize.transaction(async (t) => {
       await clearExistingSchedules(categoryId, "group", t);
@@ -574,14 +664,14 @@ export class ScheduleService {
 
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
-        const slot = allocator.getSlot(i, config.numberOfTables);
+        const scheduledAt = groupSlots.get(pair)!;
 
         const schedule = await Schedule.create(
           {
             categoryId,
-            stage: "group" satisfies Stage,
+            stage: GROUP_STAGE,
             groupName: pair.groupName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -630,9 +720,17 @@ export class ScheduleService {
     await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const pairs = await buildKnockoutPairs(categoryId, roundName);
-    const allocator = createAllocator(config);
-    const { warning } = allocator.validate(pairs.length, config.numberOfTables);
+    const knockoutStart = await getKnockoutPhaseStart(category, config);
+    const knockoutPlan = getOptimizedSlotPlan(config, knockoutStart, pairs);
+    const knockoutEnd = knockoutPlan.endTime;
+    const tournamentEnd = getTournamentEndTime(config);
+    const warning = knockoutEnd > tournamentEnd
+      ? `Schedule overflows tournament end time. Last match ends at ${knockoutEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
+      : undefined;
+    const knockoutSlots = knockoutPlan.slots;
 
     const result = await sequelize.transaction(async (t) => {
       // Nếu generate toàn bộ → xóa knockout schedule cũ
@@ -648,14 +746,14 @@ export class ScheduleService {
 
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
-        const slot = allocator.getSlot(i, config.numberOfTables);
+        const scheduledAt = knockoutSlots.get(pair)!;
 
         const schedule = await Schedule.create(
           {
             categoryId,
-            stage: "knockout" satisfies Stage,
+            stage: KNOCKOUT_STAGE,
             knockoutRound: pair.roundName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -703,25 +801,40 @@ export class ScheduleService {
     organizerId: number,
     tournamentId: number,
   ): Promise<{ categoryId: number; result: ScheduleResult }[]> {
-    const tournament = await Tournament.findByPk(tournamentId, {
-      include: [{ model: TournamentCategory, as: "categories" }],
-    });
-    if (!tournament) throw new Error("Tournament not found");
+    const tournament = await Tournament.findByPk(tournamentId);
+    if (!tournament) throw new NotFoundError("Tournament not found");
     assertOrganizer(organizerId, tournament);
     await assertBracketsGenerated(tournament);
 
-    const categories = tournament.categories ?? [];
+    const categories = await TournamentCategory.findAll({
+      where: { tournamentId },
+      order: [["id", "ASC"]],
+    });
     if (categories.length === 0) {
-      throw new Error("Tournament has no categories.");
+      throw new BadRequestError("Tournament has no categories.");
     }
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const groupJobs: {
       category: TournamentCategory;
-      pair: { entryAId: number; entryBId: number; groupName: string };
+      stage: Stage;
+      categoryId: number;
+      entryAId: number;
+      entryBId: number;
+      groupName: string;
+      groupSequenceKey: string;
+      roundNumber: number;
+      pair: GroupMatchPair;
     }[] = [];
     const knockoutJobs: {
       category: TournamentCategory;
+      stage: Stage;
+      categoryId: number;
+      entryAId: number | null;
+      entryBId: number | null;
+      roundNumber: number;
       pair: {
         bracketId: number;
         entryAId: number | null;
@@ -733,29 +846,54 @@ export class ScheduleService {
     for (const category of categories) {
       if (category.isGroupStage) {
         const pairs = await buildGroupMatchPairs(category.id);
-        groupJobs.push(...pairs.map((pair) => ({ category, pair })));
+        if (pairs.length === 0) {
+          throw new BadRequestError(`Not enough group entries to create matches for category ${category.id}`);
+        }
+        groupJobs.push(...pairs.map((pair) => ({
+          category,
+          stage: GROUP_STAGE,
+          categoryId: category.id,
+          entryAId: pair.entryAId,
+          entryBId: pair.entryBId,
+          groupName: pair.groupName,
+          groupSequenceKey: `${category.id}:${pair.groupName}`,
+          roundNumber: pair.roundNumber,
+          pair,
+        })));
       }
 
       const pairs = await buildKnockoutPairs(category.id);
-      knockoutJobs.push(...pairs.map((pair) => ({ category, pair })));
+      knockoutJobs.push(...pairs.map((pair) => ({
+        category,
+        stage: KNOCKOUT_STAGE,
+        categoryId: category.id,
+        entryAId: pair.entryAId,
+        entryBId: pair.entryBId,
+        roundNumber: pair.roundNumber,
+        pair,
+      })));
     }
 
-    const tournamentStart = withTime(
+    const tournamentStart = withScheduleTime(
       config.startDate,
       config.dailyStartHour,
       config.dailyStartMinute,
     );
-    const groupEnd = getPhaseEndTime(config, tournamentStart, groupJobs.length);
+    const groupPlan = getOptimizedSlotPlan(config, tournamentStart, groupJobs);
+    const groupEnd = groupPlan.endTime;
     const knockoutStart = groupJobs.length === 0
       ? tournamentStart
       : isSingleDayTournament(config)
         ? groupEnd
         : nextDayStart(groupEnd, config);
-    const finalEnd = getPhaseEndTime(config, knockoutStart, knockoutJobs.length);
+    const knockoutPlan = getOptimizedSlotPlan(config, knockoutStart, knockoutJobs);
+    const finalEnd = knockoutPlan.endTime;
     const tournamentEnd = getTournamentEndTime(config);
     const warning = finalEnd > tournamentEnd
       ? `Schedule overflows tournament end time. Last match ends at ${finalEnd.toISOString()}, tournament ends at ${tournamentEnd.toISOString()}`
       : undefined;
+    const groupSlots = groupPlan.slots;
+    const knockoutSlots = knockoutPlan.slots;
 
     const resultsByCategory = new Map<number, ScheduleResult>();
     for (const category of categories) {
@@ -770,13 +908,13 @@ export class ScheduleService {
 
       for (let i = 0; i < groupJobs.length; i++) {
         const job = groupJobs[i]!;
-        const slot = getPhaseSlot(config, tournamentStart, i);
+        const scheduledAt = groupSlots.get(job)!;
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
-            stage: "group" satisfies Stage,
+            stage: GROUP_STAGE,
             groupName: job.pair.groupName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -801,13 +939,13 @@ export class ScheduleService {
 
       for (let i = 0; i < knockoutJobs.length; i++) {
         const job = knockoutJobs[i]!;
-        const slot = getPhaseSlot(config, knockoutStart, i);
+        const scheduledAt = knockoutSlots.get(job)!;
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
-            stage: "knockout" satisfies Stage,
+            stage: KNOCKOUT_STAGE,
             knockoutRound: job.pair.roundName,
-            scheduledAt: slot.scheduledAt,
+            scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
             tableNumber: null,
           },
           { transaction: t },
@@ -850,18 +988,23 @@ export class ScheduleService {
    * Gọi từ knockoutBracket.service sau fillQualifiers().
    */
   async syncMatchEntriesFromBrackets(
+    organizerId: number,
     categoryId: number,
     t?: Transaction,
   ): Promise<void> {
-    const brackets = await KnockoutBracket.findAll({
-      where: {
-        categoryId,
-        isByeMatch: false,
-        matchId: { [Op.not]: null },
-      },
-    });
+    const category = await getCategoryWithTournament(categoryId);
+    assertOrganizer(organizerId, category.tournament!);
 
     const run = async (transaction: Transaction) => {
+      const brackets = await KnockoutBracket.findAll({
+        where: {
+          categoryId,
+          isByeMatch: false,
+          matchId: { [Op.not]: null },
+        },
+        transaction,
+      });
+
       for (const bracket of brackets) {
         if (!bracket.matchId) continue;
 
@@ -876,6 +1019,11 @@ export class ScheduleService {
           },
           { where: { id: bracket.matchId }, transaction },
         );
+
+        const match = await Match.findByPk(bracket.matchId, { transaction });
+        if (match) {
+          await syncSubMatchPlayersForMatch(match, category, transaction);
+        }
       }
     };
 
@@ -897,22 +1045,49 @@ export class ScheduleService {
     tournamentId: number,
     t: Transaction,
   ): Promise<number> {
-    const config = await getRequiredScheduleConfig(tournamentId);
-    const availableTable = await findAvailableTable(tournamentId, config, t);
+    const config = await getRequiredScheduleConfig(tournamentId, t, true);
+    const match = await Match.findByPk(matchId, {
+      include: [{ model: Schedule, as: "schedule" }],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!match) throw new NotFoundError("Match not found");
+    if (!match.schedule) throw new NotFoundError("Match schedule not found");
+
+    const existingTable = match.schedule.tableNumber;
+    if (existingTable != null) {
+      assertTableNumberInRange(existingTable, config);
+      const busyTables = await getBusyTablesAtStartTime(
+        tournamentId,
+        config,
+        t,
+        matchId,
+      );
+      if (busyTables.has(existingTable)) {
+        throw new ConflictError(
+          `Table ${existingTable} is not available at this time`,
+        );
+      }
+      return existingTable;
+    }
+
+    const availableTable = await findAvailableTable(
+      tournamentId,
+      config,
+      t,
+      matchId,
+    );
 
     if (availableTable === null) {
-      throw new Error(
+      throw new ConflictError(
         `No available tables at this time. All ${config.numberOfTables} table(s) are currently in use. ` +
           `Please wait for a table to become available.`,
       );
     }
 
-    const match = await Match.findByPk(matchId, { transaction: t });
-    if (!match) throw new Error("Match not found");
-
     await Schedule.update(
       { tableNumber: availableTable },
-      { where: { id: match.scheduleId }, transaction: t },
+      { where: { id: match.scheduleId }, transaction: t, validate: false },
     );
 
     return availableTable;
@@ -970,7 +1145,7 @@ export class ScheduleService {
 
   async getScheduleById(id: number): Promise<Schedule> {
     const schedule = await Schedule.findByPk(id, { include: [MATCH_INCLUDE] });
-    if (!schedule) throw new Error("Schedule not found");
+    if (!schedule) throw new NotFoundError("Schedule not found");
     return schedule;
   }
 
@@ -1004,12 +1179,47 @@ export class ScheduleService {
   async updateSchedule(
     organizerId: number,
     scheduleId: number,
-    data: Partial<Pick<Schedule, "scheduledAt" | "tableNumber">>,
+    data: Partial<{ scheduledAt: Date | string | number; tableNumber: number | null }>,
   ): Promise<Schedule> {
-    const schedule = await this.getScheduleById(scheduleId);
-    const category = await getCategoryWithTournament(schedule.categoryId);
-    assertOrganizer(organizerId, category.tournament!);
-    return await schedule.update(data);
+    return await sequelize.transaction(async (t) => {
+      const schedule = await Schedule.findByPk(scheduleId, {
+        include: [MATCH_INCLUDE],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!schedule) throw new NotFoundError("Schedule not found");
+
+      const category = await getCategoryWithTournament(schedule.categoryId);
+      const tournament = category.tournament!;
+      assertOrganizer(organizerId, tournament);
+
+      const config = await getRequiredScheduleConfig(tournament.id, t, true);
+      const scheduledAt = data.scheduledAt != null
+        ? toUtcDate(data.scheduledAt, "scheduledAt")
+        : schedule.scheduledAt;
+      const tableNumber = data.tableNumber !== undefined
+        ? data.tableNumber
+        : schedule.tableNumber;
+
+      if (tableNumber != null) {
+        assertTableNumberInRange(tableNumber, config);
+        await assertScheduleTableAvailableForSlot({
+          tournamentId: tournament.id,
+          scheduleId,
+          scheduledAt: new Date(scheduledAt),
+          tableNumber,
+          config,
+          t,
+        });
+      }
+
+      const updateData = removeUndefinedFields({
+        ...data,
+        ...(data.scheduledAt != null && { scheduledAt }),
+      });
+
+      return await schedule.update(updateData, { transaction: t });
+    });
   }
 
   async deleteSchedule(
@@ -1033,14 +1243,20 @@ export class ScheduleService {
     t: Transaction,
   ): Promise<void> {
     const existing = await Schedule.findAll({
-      where: { categoryId, stage: "knockout", knockoutRound: roundName },
-      include: [{ model: Match, as: "scheduledMatches", attributes: ["id"] }],
+      where: { categoryId, stage: KNOCKOUT_STAGE, knockoutRound: roundName },
+      attributes: ["id"],
       transaction: t,
     });
 
-    const matchIds = existing
-      .flatMap((s) => s.scheduledMatches ?? [])
-      .map((m) => m.id);
+    const scheduleIds = existing.map((s) => s.id);
+    const matchIds = await getMatchIdsByScheduleIds(scheduleIds, t);
+
+    if (scheduleIds.length > 0) {
+      await KnockoutBracket.update(
+        { scheduleId: null, matchId: null },
+        { where: { categoryId, scheduleId: { [Op.in]: scheduleIds } }, transaction: t },
+      );
+    }
 
     if (matchIds.length > 0) {
       await MatchReferee.destroy({
@@ -1054,7 +1270,7 @@ export class ScheduleService {
     }
 
     await Schedule.destroy({
-      where: { categoryId, stage: "knockout", knockoutRound: roundName },
+      where: { categoryId, stage: KNOCKOUT_STAGE, knockoutRound: roundName },
       transaction: t,
     });
   }

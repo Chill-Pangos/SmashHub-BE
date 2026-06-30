@@ -15,8 +15,15 @@ import EntryMember from "../models/entryMember.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const REFEREE_PUBLIC_INCLUDE = {
+  model: User,
+  as: "referee",
+  attributes: [...PUBLIC_USER_ATTRIBUTES],
+};
 
 const REFEREE_INCLUDE = {
   model: User,
@@ -26,6 +33,8 @@ const REFEREE_INCLUDE = {
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "email", "avatarUrl"];
 const REINVITABLE_INVITATION_STATUSES = ["cancelled", "expired"];
+const MAX_REFEREES_PER_TABLE = 2;
+const EXTRA_REFEREE_TABLE_RATIO = 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +67,27 @@ function buildPagination(count: number, offset: number, limit: number) {
     totalPages,
     hasNextPage: page < totalPages,
     hasPrevPage: page > 1,
+  };
+}
+
+function getUserDisplayName(user: Pick<User, "id" | "firstName" | "lastName">): string {
+  return `${user.firstName} ${user.lastName}`.trim() || `User ${user.id}`;
+}
+
+async function getRefereeCapacity(tournamentId: number): Promise<{
+  minimum: number;
+  maximum: number;
+}> {
+  const config = await ScheduleConfig.findOne({ where: { tournamentId } });
+  if (!config) {
+    throw new Error("Schedule config not found for this tournament");
+  }
+
+  return {
+    minimum: config.numberOfTables,
+    maximum:
+      (config.numberOfTables * MAX_REFEREES_PER_TABLE) +
+      Math.floor(config.numberOfTables / EXTRA_REFEREE_TABLE_RATIO),
   };
 }
 
@@ -113,6 +143,8 @@ export class TournamentRefereeService {
 
   if (role === "chief") {
     await this.assertNoChiefReferee(tournamentId);
+  } else {
+    await this.assertRefereeCapacityAvailable(tournamentId);
   }
 
   const invitation = await RefereeInvitation.create({
@@ -150,7 +182,7 @@ export class TournamentRefereeService {
     }
     await this.assertNoOverlappingTournament(refereeId, invitation.tournamentId);
 
-    return await sequelize.transaction(async (t) => {
+    const referee = await sequelize.transaction(async (t) => {
       await invitation.update(
         { status: "accepted", respondedAt: new Date() },
         { transaction: t }
@@ -167,6 +199,10 @@ export class TournamentRefereeService {
 
       return referee;
     });
+
+    await this.notifyOrganizerOfInvitationResponse(invitation, "accepted");
+
+    return referee;
   }
 
   async rejectInvitation(
@@ -179,11 +215,19 @@ export class TournamentRefereeService {
       refereeId
     );
 
-    return await invitation.update({
+    const updatedInvitation = await invitation.update({
       status: "rejected",
       respondedAt: new Date(),
       ...(rejectionReason ? { rejectionReason } : {}),
     });
+
+    await this.notifyOrganizerOfInvitationResponse(
+      updatedInvitation,
+      "rejected",
+      rejectionReason,
+    );
+
+    return updatedInvitation;
   }
 
   // ── 3. Organizer hủy invitation ───────────────────────────────────────────
@@ -306,7 +350,7 @@ private async assertNotCompetingInTournament(
           tournamentId,
           ...(role ? { role } : {}),
         },
-        include: [REFEREE_INCLUDE],
+        include: [REFEREE_PUBLIC_INCLUDE],
         order: [["role", "ASC"]],
         offset,
         limit: limit,
@@ -334,7 +378,7 @@ private async assertNotCompetingInTournament(
         tournamentId,
         ...(role ? { role } : {}),
       },
-      include: [REFEREE_INCLUDE],
+      include: [REFEREE_PUBLIC_INCLUDE],
       order: [["role", "ASC"]],
     });
   }
@@ -395,7 +439,7 @@ private async assertNotCompetingInTournament(
     organizerId: number,
     tournamentId: number,
     filters?: {
-      role?: "referee" | "chief_referee";
+      role?: "referee" | "chief";
       search?: string;
       offset?: number;
       limit?: number;
@@ -410,10 +454,10 @@ private async assertNotCompetingInTournament(
     const offset = filters?.offset ?? 0;
     const limit = filters?.limit ?? 10;
     const acceptedSystemRoles =
-      filters?.role === "chief_referee"
+      filters?.role === "chief"
         ? ["chief_referee"]
         : filters?.role === "referee"
-          ? ["referee", "chief_referee"]
+          ? ["referee"]
           : ["referee", "chief_referee"];
 
     const eligibleRoleRows = await UserRole.findAll({
@@ -520,6 +564,19 @@ private async assertNotCompetingInTournament(
           model: Tournament,
           as: "tournament",
           attributes: ["id", "name", "location", "tier", "status", "createdBy"],
+          include: [
+            {
+              model: ScheduleConfig,
+              as: "scheduleConfig",
+              attributes: [
+                "startDate",
+                "endDate",
+                "registrationStartDate",
+                "registrationEndDate",
+                "bracketGenerationDate",
+              ],
+            },
+          ],
         },
         {
           model: User,
@@ -570,6 +627,46 @@ private async assertNotCompetingInTournament(
     return invitation;
   }
 
+  private async notifyOrganizerOfInvitationResponse(
+    invitation: RefereeInvitation,
+    status: "accepted" | "rejected",
+    rejectionReason?: string,
+  ): Promise<void> {
+    const [tournament, referee] = await Promise.all([
+      Tournament.findByPk(invitation.tournamentId),
+      User.findByPk(invitation.refereeId, {
+        attributes: ["id", "firstName", "lastName"],
+      }),
+    ]);
+
+    if (!tournament || !referee) return;
+
+    const refereeName = getUserDisplayName(referee);
+    const template = status === "accepted"
+      ? NotificationTemplates.refereeInvitationAccepted(tournament.name, refereeName)
+      : NotificationTemplates.refereeInvitationRejected(tournament.name, refereeName);
+
+    const data: Record<string, unknown> = {
+      invitationId: invitation.id,
+      tournamentId: invitation.tournamentId,
+      refereeId: invitation.refereeId,
+      role: invitation.role,
+      status,
+    };
+    if (rejectionReason) data.rejectionReason = rejectionReason;
+
+    try {
+      await notificationService.create(invitation.invitedBy, {
+        ...template,
+        referenceId: invitation.id,
+        referenceType: "referee_invitation_response",
+        data,
+      });
+    } catch (error) {
+      console.error("Failed to notify organizer about referee invitation response:", error);
+    }
+  }
+
   private async assertNoChiefReferee(
     tournamentId: number,
     excludedRefereeId?: number
@@ -598,6 +695,25 @@ private async assertNotCompetingInTournament(
     if (pendingChief) {
       throw new Error(
         "A pending chief referee invitation already exists for this tournament"
+      );
+    }
+  }
+
+  private async assertRefereeCapacityAvailable(tournamentId: number): Promise<void> {
+    const capacity = await getRefereeCapacity(tournamentId);
+    const [acceptedCount, pendingCount] = await Promise.all([
+      TournamentReferee.count({
+        where: { tournamentId, role: "referee" },
+      }),
+      RefereeInvitation.count({
+        where: { tournamentId, role: "referee", status: "pending" },
+      }),
+    ]);
+    const reservedCount = acceptedCount + pendingCount;
+
+    if (reservedCount >= capacity.maximum) {
+      throw new Error(
+        `Tournament can have at most ${capacity.maximum} referees for ${capacity.minimum} table(s)`,
       );
     }
   }

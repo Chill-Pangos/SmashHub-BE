@@ -2,11 +2,11 @@
 export interface CreateTournamentRefereeDto {
   tournamentId: number;
   refereeId: number;
-  role: "main" | "assistant";
+  role: "chief" | "referee";
 }
 
 export interface UpdateTournamentRefereeDto {
-  role?: "main" | "assistant";
+  role?: "chief" | "referee";
   isAvailable?: boolean;
 }
 
@@ -14,7 +14,7 @@ export interface TournamentRefereeResponseDto {
   id: number;
   tournamentId: number;
   refereeId: number;
-  role: "main" | "assistant";
+  role: "chief" | "referee";
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;

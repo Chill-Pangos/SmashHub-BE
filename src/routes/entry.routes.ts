@@ -12,13 +12,18 @@ const router = Router();
  *     tags: [Entries]
  *     summary: Register for tournament (create team or join existing)
  *     description: |
- *       Register a user for a tournament category. For single entries, a team is automatically created.
+ *       Register a user for a tournament category. For single entries, use create_team;
+ *       entry is auto-confirmed with one member.
  *       For double/team entries, user can either create a new team or request to join an existing team.
+ *       Team-category create_team creates a roster shell first; captain must set requiredMemberCount
+ *       before the team accepts join requests.
  *
  *       Validation rules:
  *       - User must pass category eligibility checks (gender, age, ELO)
  *       - User cannot already be registered in this category (as captain or member)
+ *       - User cannot have another pending join request in this category
  *       - Registration window must be open for the tournament
+ *       - Category must not exceed maxEntries when creating a new entry/team
  *       - When joining, target team must be accepting members and not full
  *     security:
  *       - bearerAuth: []
@@ -68,6 +73,8 @@ const router = Router();
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
+ *       409:
+ *         $ref: '#/components/responses/Conflict409'
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */

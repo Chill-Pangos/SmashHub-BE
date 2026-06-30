@@ -45,6 +45,8 @@ const router = Router();
  *   get:
  *     tags: [Users]
  *     summary: Get all users with pagination
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/pageParam'
  *       - $ref: '#/components/parameters/limitParam'
@@ -64,7 +66,7 @@ const router = Router();
  *                   $ref: '#/components/schemas/Pagination'
  */
 router.post("/", authenticate, checkPermission("users:create"), userController.create.bind(userController));
-router.get("/", userController.findAll.bind(userController));
+router.get("/", authenticate, checkPermission("users:view"), userController.findAll.bind(userController));
 
 /**
  * @swagger
@@ -92,6 +94,8 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *   get:
  *     tags: [Users]
  *     summary: Search users by name
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: name
@@ -104,7 +108,7 @@ router.get("/me", authenticate, userController.me.bind(userController));
  *       200:
  *         description: List of matching users with pagination
  */
-router.get("/search", userController.searchByName.bind(userController));
+router.get("/search", authenticate, userController.searchByName.bind(userController));
 
 /**
  * @swagger
@@ -112,6 +116,8 @@ router.get("/search", userController.searchByName.bind(userController));
  *   get:
  *     tags: [Users]
  *     summary: Get user by ID
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/idParam'
  *     responses:
@@ -143,8 +149,6 @@ router.get("/search", userController.searchByName.bind(userController));
  *                 type: string
  *               email:
  *                 type: string
- *               password:
- *                 type: string
  *               dob:
  *                 type: string
  *                 format: date
@@ -171,7 +175,7 @@ router.get("/search", userController.searchByName.bind(userController));
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:id", userController.findById.bind(userController));
+router.get("/:id", authenticate, userController.findById.bind(userController));
 router.put("/:id", authenticate, checkPermission("users:update"), userController.update.bind(userController));
 router.delete("/:id", authenticate, checkPermission("users:delete"), userController.delete.bind(userController));
 

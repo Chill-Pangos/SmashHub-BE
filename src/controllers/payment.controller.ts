@@ -1,7 +1,11 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
+import { parseEnumQuery, parsePagination, parsePositiveInt } from "../utils/request.helper";
+import { paymentProofUpload } from "../config/multer";
+
+const PAYMENT_STATUSES = ["pending", "completed", "failed", "refunded"] as const;
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -22,7 +26,11 @@ export class PaymentController {
 
       const { entryId, amount } = req.body;
 
-      const payment = await paymentService.createPayment(entryId, amount);
+      const payment = await paymentService.createPayment(
+        parsePositiveInt(entryId, "entryId"),
+        amount,
+        userId,
+      );
       res.status(201).json({
         success: true,
         data: payment,
@@ -41,7 +49,7 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
       const payment = await paymentService.confirmPayment(
         paymentId,
@@ -65,7 +73,7 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
 
       const payment = await paymentService.rejectPayment(paymentId, organizerId);
       res.status(200).json({
@@ -81,36 +89,43 @@ export class PaymentController {
   /**
    * 4. Refund payment (organizer)
    */
-  async refundPayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const organizerId = this.getAuthenticatedUserId(req, next);
-      if (organizerId == null) return;
+  refundPayment = [
+    paymentProofUpload.single("refundProof"),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const organizerId = this.getAuthenticatedUserId(req, next);
+        if (organizerId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
-      if (!req.file) {
-        res.status(400).json({ success: false, message: "No file uploaded" });
-        return;
+        const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
+        if (!req.file) {
+          res.status(400).json({ success: false, message: "No file uploaded" });
+          return;
+        }
+
+        const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
+        res.status(200).json({
+          success: true,
+          refundProofImageUrl: payment.refundProofImageUrl,
+          data: payment,
+          message: "Payment refunded successfully",
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
-      res.status(200).json({
-        success: true,
-        data: payment,
-        message: "Payment refunded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    },
+  ];
 
   /**
    * 5. Get payment by ID
    */
-  async getPaymentById(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const paymentId = Number(req.params.paymentId);
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
 
-      const payment = await paymentService.getPaymentById(paymentId);
+      const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
+
+      const payment = await paymentService.getPaymentById(paymentId, userId);
       res.status(200).json({
         success: true,
         data: payment,
@@ -123,18 +138,14 @@ export class PaymentController {
   /**
    * 6. Get payments by entry
    */
-  async getPaymentsByEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async getPaymentsByEntry(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryId = Number(req.params.entryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const status = req.query.status as
-        | "pending"
-        | "completed"
-        | "failed"
-        | "refunded"
-        | undefined;
+      const userId = this.getAuthenticatedUserId(req, next);
+      if (userId == null) return;
+
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const { offset, limit } = parsePagination(req.query);
+      const status = parseEnumQuery(req.query.status, "status", PAYMENT_STATUSES);
 
       const options: {
         offset: number;
@@ -149,7 +160,7 @@ export class PaymentController {
         options.status = status;
       }
 
-      const result = await paymentService.getPaymentsByEntry(entryId, options);
+      const result = await paymentService.getPaymentsByEntry(entryId, userId, options);
       res.status(200).json({
         success: true,
         data: result,
@@ -167,16 +178,9 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const status = req.query.status as
-        | "pending"
-        | "completed"
-        | "failed"
-        | "refunded"
-        | undefined;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
+      const status = parseEnumQuery(req.query.status, "status", PAYMENT_STATUSES);
 
       const options: {
         offset: number;
@@ -213,7 +217,7 @@ export class PaymentController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
 
       const stats = await paymentService.getPaymentStats(categoryId, userId);
       res.status(200).json({
@@ -233,10 +237,8 @@ export class PaymentController {
       const organizerId = this.getAuthenticatedUserId(req, next);
       if (organizerId == null) return;
 
-      const categoryId = Number(req.params.categoryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const categoryId = parsePositiveInt(req.params.categoryId, "categoryId");
+      const { offset, limit } = parsePagination(req.query);
 
       const options: {
         offset: number;
@@ -263,31 +265,35 @@ export class PaymentController {
   /**
    * 10. Upload payment proof image
    */
-  async uploadPaymentProof(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const userId = this.getAuthenticatedUserId(req, next);
-      if (userId == null) return;
+  uploadPaymentProof = [
+    paymentProofUpload.single("proof"),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const userId = this.getAuthenticatedUserId(req, next);
+        if (userId == null) return;
 
-      const paymentId = Number(req.params.paymentId);
-      if (!req.file) {
-        res.status(400).json({ success: false, message: "No file uploaded" });
-        return;
+        const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
+        if (!req.file) {
+          res.status(400).json({ success: false, message: "No file uploaded" });
+          return;
+        }
+
+        const payment = await paymentService.uploadPaymentProof(
+          paymentId,
+          userId,
+          req.file
+        );
+        res.status(200).json({
+          success: true,
+          proofImageUrl: payment.proofImageUrl,
+          data: payment,
+          message: "Payment proof uploaded successfully",
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const payment = await paymentService.uploadPaymentProof(
-        paymentId,
-        userId,
-        req.file
-      );
-      res.status(200).json({
-        success: true,
-        data: payment,
-        message: "Payment proof uploaded successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    },
+  ];
 }
 
 export default new PaymentController();

@@ -2,20 +2,18 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import subMatchPlayerService from "../services/subMatchPlayer.service";
 import { BadRequestError } from "../utils/errors.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class SubMatchPlayerController {
   async submitTeamLineup(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.userId) throw new BadRequestError("User not authenticated");
 
-      const matchId = Number(req.params.matchId);
+      const matchId = parsePositiveInt(req.params.matchId, "match ID");
       const { lineups } = req.body as {
         lineups?: { subMatchId: number; entryMemberIds: number[] }[];
       };
 
-      if (!Number.isInteger(matchId) || matchId <= 0) {
-        throw new BadRequestError("Invalid match ID");
-      }
       if (!Array.isArray(lineups)) {
         throw new BadRequestError("lineups array is required");
       }
@@ -24,9 +22,9 @@ export class SubMatchPlayerController {
         req.userId,
         matchId,
         lineups.map((lineup) => ({
-          subMatchId: Number(lineup.subMatchId),
+          subMatchId: parsePositiveInt(lineup.subMatchId, "subMatchId"),
           entryMemberIds: Array.isArray(lineup.entryMemberIds)
-            ? lineup.entryMemberIds.map(Number)
+            ? lineup.entryMemberIds.map((id) => parsePositiveInt(id, "entryMemberId"))
             : [],
         })),
       );
@@ -60,11 +58,7 @@ export class SubMatchPlayerController {
     try {
       if (!req.userId) throw new BadRequestError("User not authenticated");
 
-      const matchId = Number(req.params.matchId);
-
-      if (!Number.isInteger(matchId) || matchId <= 0) {
-        throw new BadRequestError("Invalid match ID");
-      }
+      const matchId = parsePositiveInt(req.params.matchId, "match ID");
 
       const players = await subMatchPlayerService.approvePendingLineupsByMatch(
         req.userId,
@@ -83,12 +77,8 @@ export class SubMatchPlayerController {
     try {
       if (!req.userId) throw new BadRequestError("User not authenticated");
 
-      const matchId = Number(req.params.matchId);
+      const matchId = parsePositiveInt(req.params.matchId, "match ID");
       const { reviewNotes } = req.body as { reviewNotes?: string };
-
-      if (!Number.isInteger(matchId) || matchId <= 0) {
-        throw new BadRequestError("Invalid match ID");
-      }
 
       const rejected = await subMatchPlayerService.rejectPendingLineupsByMatch(
         req.userId,
@@ -127,10 +117,8 @@ export class SubMatchPlayerController {
    */
   async getBySubMatchId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const subMatchId = Number(req.params.subMatchId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const subMatchId = parsePositiveInt(req.params.subMatchId, "subMatchId");
+      const { offset, limit } = parsePagination(req.query);
       const result = await subMatchPlayerService.getPlayersBySubMatch(subMatchId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -144,11 +132,9 @@ export class SubMatchPlayerController {
    */
   async getByTeam(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const subMatchId = Number(req.params.subMatchId);
+      const subMatchId = parsePositiveInt(req.params.subMatchId, "subMatchId");
       const team = req.params.team as "A" | "B";
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
 
       if (team !== "A" && team !== "B") {
         throw new BadRequestError("Team must be 'A' or 'B'");
@@ -167,10 +153,8 @@ export class SubMatchPlayerController {
    */
   async getByEntryMemberId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryMemberId = Number(req.params.entryMemberId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const entryMemberId = parsePositiveInt(req.params.entryMemberId, "entryMemberId");
+      const { offset, limit } = parsePagination(req.query);
 
       const matches = await subMatchPlayerService.getMatchesByEntryMember(
         entryMemberId,

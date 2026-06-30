@@ -31,6 +31,7 @@ export const NOTIFICATION_TYPES = [
   // Tournament
   "tournament_announcement",
   "referee_invitation",
+  "tournament_status_changed",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -94,6 +95,12 @@ export default class Notification extends Model {
     comment: "Loại entity: entry, match, payment, tournament...",
   })
   declare referenceType?: string;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare data?: unknown;
 
   @Column({
     type: DataType.BOOLEAN,

@@ -1,16 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 import tournamentService from "../services/tournament.service";
-import eloCalculationService from "../services/eloCalculation.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
+import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
+import { parsePagination } from "../utils/request.helper";
+import { AuthRequest } from "../middlewares/auth.middleware";
+import { assertAdmin } from "../utils/access.helper";
 
 export class TournamentController {
+  private getAuthenticatedUserId(req: Request): number {
+    const userId = (req as AuthRequest).userId ?? (req as any).user?.id;
+    if (!userId) {
+      throw new BadRequestError("Unauthorized - User not authenticated");
+    }
+    return userId;
+  }
+
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // Get user ID from authenticated request
-      const userId = (req as any).user?.id;
-      if (!userId) {
-        throw new BadRequestError("Unauthorized - User not authenticated");
-      }
+      const userId = this.getAuthenticatedUserId(req);
 
       const tournamentData = {
         ...req.body,
@@ -26,9 +34,7 @@ export class TournamentController {
 
   async findAllWithCategoriesFiltered(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const name = typeof req.query.name === "string" ? req.query.name : undefined;
       const userId = req.query.userId ? Number(req.query.userId) : undefined;
       const createdBy = req.query.createdBy ? Number(req.query.createdBy) : undefined;
@@ -103,7 +109,11 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const tournament = await tournamentService.update(id, req.body);
+      const tournament = await tournamentService.update(
+        id,
+        req.body,
+        this.getAuthenticatedUserId(req),
+      );
       if (!tournament) {
         throw new NotFoundError("Tournament not found");
       }
@@ -121,7 +131,11 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const tournament = await tournamentService.update(id, req.body);
+      const tournament = await tournamentService.update(
+        id,
+        req.body,
+        this.getAuthenticatedUserId(req),
+      );
       if (!tournament) {
         throw new NotFoundError("Tournament not found");
       }
@@ -139,7 +153,7 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const deleted = await tournamentService.delete(id);
+      const deleted = await tournamentService.delete(id, this.getAuthenticatedUserId(req));
       if (!deleted) {
         throw new NotFoundError("Tournament not found");
       }
@@ -155,7 +169,13 @@ export class TournamentController {
    */
   async updateStatuses(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      await assertAdmin(this.getAuthenticatedUserId(req));
       const result = await tournamentService.updateTournamentStatuses();
+      try {
+        await tournamentStatusNotificationService.notifyTransitions(result.events);
+      } catch (notifyError) {
+        console.error("Failed to notify tournament status changes:", notifyError);
+      }
       res.status(200).json({
         success: true,
         message: "Tournament statuses updated successfully",
@@ -195,7 +215,10 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const result = await eloCalculationService.updateEloForTournament(id);
+      const result = await tournamentService.calculateTournamentElo(
+        id,
+        this.getAuthenticatedUserId(req),
+      );
       res.status(200).json({
         success: true,
         message: "Tournament Elo calculated successfully",
@@ -214,7 +237,10 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const result = await tournamentService.completeTournament(id);
+      const result = await tournamentService.completeTournament(
+        id,
+        this.getAuthenticatedUserId(req),
+      );
       if (!result) {
         throw new NotFoundError("Tournament not found");
       }
@@ -237,10 +263,7 @@ export class TournamentController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const organizerId = (req as any).user?.id;
-      if (!organizerId) {
-        throw new BadRequestError("Unauthorized - User not authenticated");
-      }
+      const organizerId = this.getAuthenticatedUserId(req);
 
       const tournament = await tournamentService.cancelTournament(id, organizerId);
       if (!tournament) {
@@ -259,14 +282,9 @@ export class TournamentController {
 
   async getMyOrganizedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const organizerId = (req as any).user?.id;
-      if (!organizerId) {
-        throw new BadRequestError("Unauthorized - User not authenticated");
-      }
+      const organizerId = this.getAuthenticatedUserId(req);
 
-      const page = Number(req.query.page) || 1;
-      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const sortBy = (req.query.sortBy as string) || "createdAt";
       const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
 
@@ -285,14 +303,9 @@ export class TournamentController {
 
   async getMyRefereedTournaments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refereeId = (req as any).user?.id;
-      if (!refereeId) {
-        throw new BadRequestError("Unauthorized - User not authenticated");
-      }
+      const refereeId = this.getAuthenticatedUserId(req);
 
-      const page = Number(req.query.page) || 1;
-      const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const sortBy = (req.query.sortBy as string) || "createdAt";
       const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
 

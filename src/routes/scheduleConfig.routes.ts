@@ -19,13 +19,14 @@ const router = Router({ mergeParams: true });
  *       - Daily operational hours with optional lunch breaks
  *
  *       **Time Slot Calculations:**
- *       - Available time = (Tournament end - start) × daily operating hours
- *       - Lunch break time is subtracted from available time
+ *       - Available time = calendar days × daily operating hours, minus lunch break overlap
+ *       - Slots skip lunch break and roll to next day when a match cannot finish before dailyEnd
+ *       - Single-day tournaments do not roll to the next day; if a match cannot finish before dailyEnd, validation fails
  *       - Total slots needed = ceil(total matches / number of tables)
  *       - Time needed = total slots × (match duration + break duration)
  *
  *       **Validation Rules:**
- *       - Match duration: 30-90 minutes (default 60)
+ *       - Match duration: 30-90 minutes (default 30)
  *       - Break duration: 5-30 minutes (default 10)
  *       - Daily hours: 0-23 (must have dailyEndHour > dailyStartHour)
  *       - Daily minutes: 0-59
@@ -34,6 +35,7 @@ const router = Router({ mergeParams: true });
  *       - Bracket generation must be at least 2 days before tournament start
  *       - Lunch break (if specified) must be within daily operating hours
  *       - Lunch break cannot overlap daily hours boundary
+ *       - lunchBreakDurationMinutes must match lunchBreakStart/lunchBreakEnd when provided
  *
  *       **Schedule Fit Analysis:**
  *       After creation, verify the schedule can accommodate all matches using the
@@ -83,9 +85,9 @@ const router = Router({ mergeParams: true });
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 default: 60
- *                 example: 60
- *                 description: Duration of each match in minutes (30-90, typically 45-60 for competitive play)
+ *                 default: 30
+ *                 example: 30
+ *                 description: Duration of each match in minutes (30-90, default 30)
  *               breakDurationMinutes:
  *                 type: integer
  *                 minimum: 5
@@ -153,7 +155,6 @@ const router = Router({ mergeParams: true });
  *                 description: Lunch break end minute (optional, 0-59)
  *               notes:
  *                 type: string
- *                 maxLength: 500
  *                 nullable: true
  *                 example: "Main tournament at Convention Center. Use gymnasium for additional tables if needed."
  *                 description: Additional notes or special instructions for schedule management
@@ -167,7 +168,7 @@ const router = Router({ mergeParams: true });
  *                 registrationEndDate: "2026-06-14T23:59:59Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                 numberOfTables: 4
- *                 matchDurationMinutes: 60
+ *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
  *                 dailyStartHour: 8
  *                 dailyStartMinute: 0
@@ -210,7 +211,7 @@ const router = Router({ mergeParams: true });
  *               registrationEndDate: "2026-06-14T23:59:59Z"
  *               bracketGenerationDate: "2026-06-13T00:00:00Z"
  *               numberOfTables: 4
- *               matchDurationMinutes: 60
+ *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
  *               dailyStartHour: 8
  *               dailyStartMinute: 0
@@ -290,7 +291,7 @@ router.post(
  *               properties:
  *                 matchDurationMinutes:
  *                   type: integer
- *                   example: 60
+ *                   example: 30
  *                   description: Default match duration in minutes (30-90 allowed)
  *                 breakDurationMinutes:
  *                   type: integer
@@ -326,7 +327,7 @@ router.post(
  *                   example: 1
  *                   description: Default number of tournament tables
  *             example:
- *               matchDurationMinutes: 60
+ *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
  *               dailyStartHour: 8
  *               dailyStartMinute: 0
@@ -391,6 +392,8 @@ router.get(
  *       - All datetime updates are validated against existing tournament dates
  *       - Lunch break can be added, modified, or removed
  *       - All time and date constraints are enforced (see POST /schedule-configs for rules)
+ *       - If schedules already exist and schedule-affecting fields are changed,
+ *         call preview-update first, then send regenerateSchedule=true with the returned regenerationKey
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -440,7 +443,7 @@ router.get(
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 example: 60
+ *                 example: 30
  *                 description: Match duration in minutes
  *               breakDurationMinutes:
  *                 type: integer
@@ -496,6 +499,12 @@ router.get(
  *                 type: string
  *                 nullable: true
  *                 description: Additional notes
+ *               regenerateSchedule:
+ *                 type: boolean
+ *                 description: Required when schedule-affecting changes must regenerate existing schedules
+ *               regenerationKey:
+ *                 type: string
+ *                 description: Key returned by preview-update for confirmed regeneration
  *           examples:
  *             partial_update:
  *               summary: Update only time window
@@ -514,6 +523,12 @@ router.get(
  *                 dailyEndHour: 21
  *                 lunchBreakStartHour: 12
  *                 lunchBreakEndHour: 13
+ *             regenerate_existing_schedule:
+ *               summary: Update and regenerate existing schedules
+ *               value:
+ *                 matchDurationMinutes: 45
+ *                 regenerateSchedule: true
+ *                 regenerationKey: "sha256-key-from-preview-update"
  *     responses:
  *       200:
  *         description: Schedule configuration updated successfully
@@ -553,11 +568,12 @@ router.patch(
  *       accommodate all matches calculated from category.maxEntries and category.isGroupStage.
  *
  *       **Validation Checks:**
- *       - Available time = (end date - start date) × daily operating hours
+ *       - Available time = calendar days × daily operating hours, minus lunch break overlap
  *       - Total matches calculated from category information
- *       - Total slots needed = ceil(calculatedMatches / numberOfTables)
- *       - Time needed = totalSlots × (matchDuration + breakDuration)
- *       - Valid if: timeNeeded <= availableTime
+ *       - Total slots needed uses stage-aware round/group math and numberOfTables
+ *       - Estimated completion skips lunch break and rolls to next day when needed
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
+ *       - Valid if estimatedEndTime <= tournamentEndTime
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -614,7 +630,7 @@ router.patch(
  *                     type: integer
  *                     minimum: 30
  *                     maximum: 90
- *                     default: 60
+ *                     default: 30
  *                   breakDurationMinutes:
  *                     type: integer
  *                     minimum: 5
@@ -669,8 +685,9 @@ router.patch(
  *                   lunchBreakDurationMinutes:
  *                     type: integer
  *                     nullable: true
- *                     minimum: 0
+ *                     minimum: 1
  *                     example: 60
+ *                     description: Optional; when provided, must equal lunchBreakEnd - lunchBreakStart in minutes
  *                   notes:
  *                     type: string
  *                     nullable: true
@@ -689,7 +706,7 @@ router.patch(
  *                   registrationEndDate: "2026-06-12T23:59:59Z"
  *                   bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                   numberOfTables: 4
- *                   matchDurationMinutes: 60
+ *                   matchDurationMinutes: 30
  *                   breakDurationMinutes: 10
  *                   dailyStartHour: 8
  *                   dailyStartMinute: 0
@@ -740,9 +757,10 @@ router.post(
  *       to help determine if it can accommodate all matches.
  *
  *       **Preview Calculations:**
- *       - Available time windows within tournament dates
+ *       - Available time windows within tournament dates, minus lunch break overlap
  *       - Total match slots needed
- *       - Estimated completion time
+ *       - Estimated completion time using same lunch/day rollover logic as schedule generation
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
  *       - Time buffer or overflow if applicable
  *
  *       **Use Case:** Client-side validation before user confirms schedule creation.
@@ -797,7 +815,7 @@ router.post(
  *                 type: integer
  *                 minimum: 30
  *                 maximum: 90
- *                 default: 60
+ *                 default: 30
  *               breakDurationMinutes:
  *                 type: integer
  *                 minimum: 5
@@ -854,7 +872,7 @@ router.post(
  *                 registrationEndDate: "2026-06-14T23:59:59Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
  *                 numberOfTables: 4
- *                 matchDurationMinutes: 60
+ *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
  *                 dailyStartHour: 8
  *                 dailyEndHour: 22
@@ -899,11 +917,14 @@ router.post(
  *
  *       **Behavior:**
  *       - Merges provided fields with current configuration
- *       - Calculates impact on match scheduling
+ *       - Calculates impact on match scheduling using same lunch/day rollover logic as schedule generation
+ *       - Single-day tournaments return a validation error instead of rolling to the next day
  *       - Returns updated metrics without persisting to database
+ *       - Returns regenerationKey when existing schedules must be regenerated
  *
  *       **Use Case:** Allow users to experiment with configuration changes and see impact
- *       before confirming the update.
+ *       before confirming the update. If requiresRegeneration=true, pass the regenerationKey
+ *       to PATCH with regenerateSchedule=true.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -921,13 +942,12 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [totalMatches]
  *             properties:
  *               totalMatches:
  *                 type: integer
  *                 minimum: 1
  *                 example: 127
- *                 description: Total number of matches (required for preview calculation)
+ *                 description: Optional override; if omitted, total matches are calculated from tournament categories
  *               startDate:
  *                 type: string
  *                 format: date-time

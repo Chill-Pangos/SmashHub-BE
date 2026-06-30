@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import entryMemberService from "../services/entryMember.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import { UnauthorizedError } from "../utils/errors.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class EntryMemberController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -16,9 +17,7 @@ export class EntryMemberController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryMemberService.findAll(offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -28,7 +27,7 @@ export class EntryMemberController {
 
   async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
+      const id = parsePositiveInt(req.params.id, "id");
       const member = await entryMemberService.findById(id);
       if (!member) {
         res.status(404).json({ message: "Entry member not found" });
@@ -42,10 +41,8 @@ export class EntryMemberController {
 
   async findByEntryId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryId = Number(req.params.entryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryMemberService.findByEntryId(entryId, offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -55,10 +52,8 @@ export class EntryMemberController {
 
   async findByUserId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = Number(req.params.userId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const userId = parsePositiveInt(req.params.userId, "userId");
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryMemberService.findByUserId(userId, offset, limit);
       res.status(200).json(result);
     } catch (error) {
@@ -68,7 +63,7 @@ export class EntryMemberController {
 
   async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
+      const id = parsePositiveInt(req.params.id, "id");
       const result = await entryMemberService.update(id, req.body);
       res.status(200).json(result);
     } catch (error) {
@@ -78,7 +73,7 @@ export class EntryMemberController {
 
   async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const id = Number(req.params.id);
+      const id = parsePositiveInt(req.params.id, "id");
       await entryMemberService.delete(id);
       res.status(204).send();
     } catch (error) {
@@ -96,9 +91,13 @@ export class EntryMemberController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       const { inviteeId } = req.body;
-      const invitation = await entryMemberService.inviteMember(captainId, entryId, inviteeId);
+      const invitation = await entryMemberService.inviteMember(
+        captainId,
+        entryId,
+        parsePositiveInt(inviteeId, "inviteeId"),
+      );
       res.status(201).json(invitation);
     } catch (error) {
       next(error);
@@ -113,7 +112,7 @@ export class EntryMemberController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const invitationId = Number(req.params.invitationId);
+      const invitationId = parsePositiveInt(req.params.invitationId, "invitationId");
       const member = await entryMemberService.acceptInvitation(userId, invitationId);
       res.status(201).json(member);
     } catch (error) {
@@ -129,7 +128,7 @@ export class EntryMemberController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const invitationId = Number(req.params.invitationId);
+      const invitationId = parsePositiveInt(req.params.invitationId, "invitationId");
       await entryMemberService.rejectInvitation(userId, invitationId);
       res.status(204).send();
     } catch (error) {
@@ -145,8 +144,8 @@ export class EntryMemberController {
     try {
       const captainId = this.getAuthenticatedUserId(req, next);
       if (captainId == null) return;
-      const entryId = Number(req.params.entryId);
-      const memberId = Number(req.params.memberId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const memberId = parsePositiveInt(req.params.memberId, "memberId");
       await entryMemberService.removeMember(captainId, entryId, memberId);
       res.status(204).send();
     } catch (error) {
@@ -160,10 +159,8 @@ export class EntryMemberController {
    */
   async getAllMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const entryId = Number(req.params.entryId);
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
+      const { offset, limit } = parsePagination(req.query);
       const result = await entryMemberService.getAllMembers(entryId, { offset, limit });
       res.status(200).json(result);
     } catch (error) {
@@ -179,7 +176,7 @@ export class EntryMemberController {
     try {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
-      const entryId = Number(req.params.entryId);
+      const entryId = parsePositiveInt(req.params.entryId, "entryId");
       await entryMemberService.leaveEntry(userId, entryId);
       res.status(204).send();
     } catch (error) {

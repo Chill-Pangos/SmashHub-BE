@@ -14,6 +14,51 @@ const router = Router();
 
 /**
  * @swagger
+ * /notifications:
+ *   get:
+ *     tags: [Notifications]
+ *     summary: Get current user's notification inbox
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get(
+  "/",
+  authenticate,
+  notificationController.getMyNotifications.bind(notificationController)
+);
+
+/**
+ * @swagger
+ * /notifications/read-all:
+ *   patch:
+ *     tags: [Notifications]
+ *     summary: Mark all current user's notifications as read
+ *     security:
+ *       - bearerAuth: []
+ */
+router.patch(
+  "/read-all",
+  authenticate,
+  notificationController.markAllAsRead.bind(notificationController)
+);
+
+/**
+ * @swagger
+ * /notifications/{notificationId}/read:
+ *   patch:
+ *     tags: [Notifications]
+ *     summary: Mark one current user's notification as read
+ *     security:
+ *       - bearerAuth: []
+ */
+router.patch(
+  "/:notificationId/read",
+  authenticate,
+  notificationController.markAsRead.bind(notificationController)
+);
+
+/**
+ * @swagger
  * /notifications/send:
  *   post:
  *     tags: [Notifications]

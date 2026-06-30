@@ -1,11 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import TournamentCategoryService from "../services/tournamentCategory.service";
-import { NotFoundError } from "../utils/errors.helper";
+import { NotFoundError, UnauthorizedError } from "../utils/errors.helper";
+import { parsePagination, parsePositiveInt } from "../utils/request.helper";
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 export class TournamentCategoryController {
-  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
+  private getAuthenticatedUserId(req: AuthRequest): number {
+    if (req.userId == null) throw new UnauthorizedError("Unauthorized");
+    return req.userId;
+  }
+
+  async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const category = await TournamentCategoryService.create(req.body);
+      const tournamentId = parsePositiveInt(req.body.tournamentId, "tournamentId");
+      const category = await TournamentCategoryService.create(
+        { ...req.body, tournamentId },
+        this.getAuthenticatedUserId(req),
+      );
       res.status(201).json(category);
     } catch (error) {
       next(error);
@@ -14,9 +25,7 @@ export class TournamentCategoryController {
 
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const categories = await TournamentCategoryService.findAll(offset, limit);
       res.status(200).json(categories);
     } catch (error) {
@@ -40,9 +49,7 @@ export class TournamentCategoryController {
 
   async findByTournamentId(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const { offset, limit } = parsePagination(req.query);
       const categories = await TournamentCategoryService.findByTournamentId(
         Number(req.params.tournamentId),
         offset,
@@ -54,11 +61,12 @@ export class TournamentCategoryController {
     }
   }
 
-  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async update(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const category = await TournamentCategoryService.update(
-        Number(req.params.id),
-        req.body
+        parsePositiveInt(req.params.id, "id"),
+        req.body,
+        this.getAuthenticatedUserId(req),
       );
       if (!category) {
         throw new NotFoundError("Tournament category not found");
@@ -69,10 +77,11 @@ export class TournamentCategoryController {
     }
   }
 
-  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async delete(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const deleted = await TournamentCategoryService.delete(
-        Number(req.params.id)
+        parsePositiveInt(req.params.id, "id"),
+        this.getAuthenticatedUserId(req),
       );
       if (!deleted) {
         throw new NotFoundError("Tournament category not found");

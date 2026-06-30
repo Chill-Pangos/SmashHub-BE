@@ -22,6 +22,8 @@ import groupStandingRoutes from "./groupStanding.routes";
 import knockoutBracketRoutes from "./knockoutBracket.routes";
 import notificationRoutes from "./notification.routes";
 import paymentRoutes from "./payment.routes";
+import cronLogRoutes from "./cronLog.routes";
+import adminSystemRoutes from "./adminSystem.routes";
 
 const router = Router();
 
@@ -48,5 +50,7 @@ router.use("/group-standings", groupStandingRoutes);
 router.use("/knockout-brackets", knockoutBracketRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/payments", paymentRoutes);
+router.use("/cron-logs", cronLogRoutes);
+router.use("/admin/system", adminSystemRoutes);
 
 export default router;

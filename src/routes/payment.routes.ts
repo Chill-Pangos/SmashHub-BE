@@ -2,7 +2,6 @@ import { Router } from "express";
 import paymentController from "../controllers/payment.controller";
 import { authenticate } from "../middlewares/auth.middleware";
 import { checkPermission } from "../middlewares/permission.middleware";
-import { paymentProofUpload } from "../config/multer";
 
 const router = Router();
 
@@ -141,6 +140,8 @@ router.post(
  *       - Returns latest payments first (sorted by createdAt DESC)
  *       - Team captain can view their payment status
  *       - Entry must exist
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: entryId
@@ -247,6 +248,7 @@ router.post(
  */
 router.get(
   "/entry/:entryId",
+  authenticate,
   paymentController.getPaymentsByEntry.bind(paymentController)
 );
 
@@ -563,6 +565,8 @@ router.get(
  *     tags: [Payments]
  *     summary: Get payment by ID
  *     description: Retrieve detailed information about a specific payment including entry details, confirmation status, and proof images.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: paymentId
@@ -656,6 +660,7 @@ router.get(
  */
 router.get(
   "/:paymentId",
+  authenticate,
   paymentController.getPaymentById.bind(paymentController)
 );
 
@@ -890,14 +895,13 @@ router.post(
   "/:paymentId/refund",
   authenticate,
   checkPermission('payments:update'),
-  paymentProofUpload.single("refundProof"),
-  paymentController.refundPayment.bind(paymentController)
+  ...paymentController.refundPayment
 );
 
 /**
  * @swagger
  * /payments/{paymentId}/proof:
- *   put:
+ *   post:
  *     tags: [Payments]
  *     summary: Upload payment proof image
  *     description: Upload or update proof image for payments. Only the team captain or tournament organizer can upload proof. Proof can only be updated for pending payments.
@@ -971,11 +975,10 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalError500'
  */
-router.put(
+router.post(
   "/:paymentId/proof",
   authenticate,
-  paymentProofUpload.single("proof"),
-  paymentController.uploadPaymentProof.bind(paymentController)
+  ...paymentController.uploadPaymentProof
 );
 
 export default router;

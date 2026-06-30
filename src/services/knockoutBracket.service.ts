@@ -6,12 +6,14 @@ import KnockoutBracket, {
 } from "../models/knockoutBracket.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Tournament from "../models/tournament.model";
+import TournamentReferee from "../models/tournamentReferee.model";
 import Entry from "../models/entry.model";
 import GroupStanding from "../models/groupStanding.model";
 import groupStandingService from "./groupStanding.service";
 import entryService from "./entry.service";
 import { KnockoutRound } from "../models/schedule.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import { NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -364,6 +366,18 @@ async function assertOrganizer(
   });
   if (!tournament || tournament.createdBy !== userId) {
     throw new Error("Only the tournament organizer can perform this action");
+  }
+}
+
+async function assertChiefReferee(
+  userId: number,
+  tournamentId: number,
+): Promise<void> {
+  const ref = await TournamentReferee.findOne({
+    where: { refereeId: userId, tournamentId, role: "chief" },
+  });
+  if (!ref) {
+    throw new Error("Only the chief referee can perform this action");
   }
 }
 
@@ -1004,7 +1018,7 @@ export class KnockoutBracketService {
     if (!bracket) throw new Error("Bracket not found");
 
     const category = await getCategoryWithTournament(bracket.categoryId);
-    await assertOrganizer(chiefRefereeId, category.tournamentId);
+    await assertChiefReferee(chiefRefereeId, category.tournamentId);
 
     if (bracket.status === "completed") {
       throw new Error("This bracket has already been completed");
@@ -1152,8 +1166,9 @@ export class KnockoutBracketService {
       ],
     });
 
-    if (brackets.length === 0)
-      throw new Error("No bracket found for this category");
+    if (brackets.length === 0) {
+      throw new NotFoundError("No bracket found for this category");
+    }
 
     return formatBracketTree(categoryId, brackets);
   }

@@ -2,6 +2,13 @@ import { Request, Response, NextFunction } from "express";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import tournamentRefereeService from "../services/tournamentReferee.service";
 import { BadRequestError } from "../utils/errors.helper";
+import { parseEnumQuery, parsePagination, parseSortQuery } from "../utils/request.helper";
+
+const TOURNAMENT_REFEREE_ROLES = ["chief", "referee"] as const;
+const AVAILABLE_REFEREE_ROLES = ["referee", "chief"] as const;
+const INVITATION_STATUSES = ["pending", "accepted", "rejected", "cancelled", "expired"] as const;
+const INVITATION_SORT_FIELDS = ["createdAt", "status", "role", "expiresAt"] as const;
+const SORT_ORDERS = ["ASC", "DESC"] as const;
 
 export class TournamentRefereeController {
   // ── 1. Organizer sends invitation ───────────────────────────────────────
@@ -141,14 +148,12 @@ export class TournamentRefereeController {
   async getRefereesByTournament(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { tournamentId } = req.params;
-      const role = req.query.role as string | undefined;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const role = parseEnumQuery(req.query.role, "role", TOURNAMENT_REFEREE_ROLES);
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await tournamentRefereeService.getRefereesByTournament(
         Number(tournamentId),
-        role as any,
+        role,
         { offset, limit }
       );
       res.status(200).json(result);
@@ -163,15 +168,13 @@ export class TournamentRefereeController {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId } = req.params;
-      const status = req.query.status as string | undefined;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
+      const status = parseEnumQuery(req.query.status, "status", INVITATION_STATUSES);
+      const { offset, limit } = parsePagination(req.query);
 
       const result = await tournamentRefereeService.getInvitationsByTournament(
         organizerId,
         Number(tournamentId),
-        status as any,
+        status,
         { offset, limit }
       );
       res.status(200).json(result);
@@ -186,13 +189,11 @@ export class TournamentRefereeController {
     try {
       const organizerId = (req as AuthRequest).userId!;
       const { tournamentId } = req.params;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const role = req.query.role as "referee" | "chief_referee" | undefined;
+      const { offset, limit } = parsePagination(req.query);
+      const role = parseEnumQuery(req.query.role, "role", AVAILABLE_REFEREE_ROLES);
       const search = req.query.search as string | undefined;
       const filters: {
-        role?: "referee" | "chief_referee";
+        role?: "referee" | "chief";
         search?: string;
         offset: number;
         limit: number;
@@ -216,20 +217,26 @@ export class TournamentRefereeController {
   async getMyInvitations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const refereeId = (req as AuthRequest).userId!;
-      const status = req.query.status as string | undefined;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const offset = Math.max(page - 1, 0) * limit;
-      const sortBy = (req.query.sortBy as string) || "createdAt";
-      const sortOrder = (req.query.sortOrder as "ASC" | "DESC") || "DESC";
+      const status = parseEnumQuery(req.query.status, "status", INVITATION_STATUSES);
+      const { offset, limit } = parsePagination(req.query);
+      const sortBy = parseSortQuery(req.query.sortBy, "sortBy", INVITATION_SORT_FIELDS, "createdAt");
+      const sortOrder = parseSortQuery(req.query.sortOrder, "sortOrder", SORT_ORDERS, "DESC");
 
-      const result = await tournamentRefereeService.getMyInvitations(refereeId, {
-        status: status as any,
+      const filters: {
+        status?: (typeof INVITATION_STATUSES)[number];
+        offset: number;
+        limit: number;
+        sortBy: (typeof INVITATION_SORT_FIELDS)[number];
+        sortOrder: (typeof SORT_ORDERS)[number];
+      } = {
         offset,
         limit,
         sortBy,
         sortOrder,
-      });
+      };
+      if (status) filters.status = status;
+
+      const result = await tournamentRefereeService.getMyInvitations(refereeId, filters);
       res.status(200).json(result);
     } catch (error) {
       next(error);

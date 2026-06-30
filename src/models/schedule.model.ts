@@ -102,13 +102,15 @@ export default class Schedule extends Model {
   @BelongsTo(() => TournamentCategory, { foreignKey: "categoryId" })
   declare tournamentCategory?: TournamentCategory;
 
-  @HasMany(() => Match, { foreignKey: "scheduledId" })
+  @HasMany(() => Match, { foreignKey: "scheduleId" })
   declare scheduledMatches?: Match[];
 
   // ─── Validators ───────────────────────────────────────────────────────────
 
   @BeforeValidate
   static validateScheduledAt(instance: Schedule): void {
+    if (!instance.isNewRecord && !instance.changed("scheduledAt")) return;
+
     const { scheduledAt } = instance;
 
     if (scheduledAt === undefined) return;
@@ -125,6 +127,15 @@ export default class Schedule extends Model {
 
   @BeforeValidate
   static validateStageConsistency(instance: Schedule): void {
+    if (
+      !instance.isNewRecord &&
+      !instance.changed("stage") &&
+      !instance.changed("groupName") &&
+      !instance.changed("knockoutRound")
+    ) {
+      return;
+    }
+
     const { stage, groupName, knockoutRound } = instance;
 
     if (stage === undefined && groupName === undefined && knockoutRound === undefined) return;

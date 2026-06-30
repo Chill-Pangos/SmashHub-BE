@@ -25,17 +25,13 @@
  *           type: string
  *           maxLength: 100
  *           description: User email address
- *         password:
- *           type: string
- *           maxLength: 255
- *           description: Hashed password
  *         isEmailVerified:
  *           type: boolean
  *           default: false
  *           description: Whether the email is verified
  *         gender:
  *           type: string
- *           enum: [male, female, other]
+ *           enum: [male, female]
  *           description: User gender
  *         avatarUrl:
  *           type: string
@@ -352,7 +348,7 @@
  *           type: integer
  *         role:
  *           type: string
- *           enum: [main, assistant]
+ *           enum: [chief, referee]
  *         isAvailable:
  *           type: boolean
  *           default: true
@@ -433,7 +429,7 @@
  *           enum: [scheduled, in_progress, completed, cancelled]
  *         resultStatus:
  *           type: string
- *           enum: [pending, approved, rejected]
+ *           enum: [pending, approved]
  *         winnerEntryId:
  *           type: integer
  *         reviewNotes:
@@ -530,7 +526,7 @@
  *           description: ID of the assistant umpire
  *         resultStatus:
  *           type: string
- *           enum: [pending, approved, rejected]
+ *           enum: [pending, approved]
  *           description: Match result approval status
  *         reviewNotes:
  *           type: string
@@ -628,4 +624,3 @@
  *   - name: ELO Scores
  *     description: ELO scoring system
  */
-

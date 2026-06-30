@@ -2,16 +2,83 @@ import User from "../models/user.model";
 import Role from "../models/role.model";
 import EloScore from "../models/eloScore.model";
 import TournamentReferee from "../models/tournamentReferee.model";
+import UserRole from "../models/userRole.model";
 import { CreateUserDto, UpdateUserDto } from "../dto/user.dto";
 import { col, fn, Op, where } from "sequelize";
+import bcrypt from "bcryptjs";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import config from "../config/config";
+import { removeUndefinedFields } from "../utils/object.helper";
+import { sequelize } from "../config/database";
+import { validateEmail, validatePassword } from "../utils/validation.helper";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
+import { PUBLIC_USER_ATTRIBUTES } from "../utils/userProjection.helper";
 
 export class UserService {
   async create(userData: CreateUserDto): Promise<User> {
-    return await User.create(userData as any);
+    const rawData = userData as CreateUserDto & { role?: unknown; roleIds?: unknown };
+    if (
+      Object.prototype.hasOwnProperty.call(rawData, "role") ||
+      Object.prototype.hasOwnProperty.call(rawData, "roleIds")
+    ) {
+      throw new BadRequestError("role cannot be set during user creation");
+    }
+
+    try {
+      validateEmail(userData.email);
+      validatePassword(userData.password);
+    } catch (error) {
+      throw new BadRequestError(error instanceof Error ? error.message : "Invalid user data");
+    }
+
+    const existingUser = await User.findOne({ where: { email: userData.email } });
+    if (existingUser) throw new ConflictError("Email already exists");
+
+    const userRole = await Role.findOne({ where: { name: "user" } });
+    if (!userRole) throw new NotFoundError("Role not found");
+
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+    const userId = await sequelize.transaction(async (transaction) => {
+      const user = await User.create(
+        {
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          email: userData.email,
+          password: hashedPassword,
+          avatarUrl: userData.avatarUrl,
+          dob: userData.dob,
+          phoneNumber: userData.phoneNumber,
+          gender: userData.gender,
+          isEmailVerified: false,
+        } as any,
+        { transaction },
+      );
+
+      await UserRole.create(
+        {
+          userId: user.id,
+          roleId: userRole.id,
+        } as any,
+        { transaction },
+      );
+
+      await EloScore.create(
+        {
+          userId: user.id,
+          score: 1000,
+        } as any,
+        { transaction },
+      );
+
+      return user.id;
+    });
+
+    const createdUser = await this.findMe(userId);
+    if (!createdUser) throw new NotFoundError("User not found");
+    return createdUser;
   }
 
   async findAll(
@@ -19,6 +86,7 @@ export class UserService {
     limit: number = 10,
   ): Promise<{ users: User[]; pagination: any }> {
     const { count, rows } = await User.findAndCountAll({
+      attributes: [...PUBLIC_USER_ATTRIBUTES],
       include: [
         {
           model: Role,
@@ -68,9 +136,7 @@ export class UserService {
           }),
         ],
       },
-      attributes: {
-        exclude: ["password", "email", "phoneNumber", "isEmailVerified"],
-      },
+      attributes: [...PUBLIC_USER_ATTRIBUTES],
       include: [
         {
           model: EloScore,
@@ -106,9 +172,7 @@ export class UserService {
 
   async findById(id: number): Promise<User | null> {
     return await User.findByPk(id, {
-      attributes: {
-        exclude: ["password", "email", "phoneNumber", "isEmailVerified"],
-      },
+      attributes: [...PUBLIC_USER_ATTRIBUTES],
       include: [
         {
           model: EloScore,
@@ -147,7 +211,18 @@ export class UserService {
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
-    return await user.update(userData);
+    const allowedData = removeUndefinedFields({
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      avatarUrl: userData.avatarUrl,
+      dob: userData.dob,
+      phoneNumber: userData.phoneNumber,
+      gender: userData.gender,
+      isEmailVerified: userData.isEmailVerified,
+    });
+    await user.update(allowedData);
+    return await this.findMe(id);
   }
 
   async updateProfile(
@@ -161,7 +236,14 @@ export class UserService {
   ): Promise<User | null> {
     const user = await User.findByPk(id);
     if (!user) return null;
-    return await user.update(profileData);
+    const allowedData = removeUndefinedFields({
+      avatarUrl: profileData.avatarUrl,
+      dob: profileData.dob,
+      phoneNumber: profileData.phoneNumber,
+      gender: profileData.gender,
+    });
+    await user.update(allowedData);
+    return await this.findMe(id);
   }
 
   async delete(id: number): Promise<boolean> {
@@ -176,7 +258,7 @@ export class UserService {
     const assignedRefereeIds = await TournamentReferee.findAll({
       attributes: ["refereeId"],
       where: {
-        role: "main",
+        role: "chief",
       },
       raw: true,
     });
@@ -186,6 +268,7 @@ export class UserService {
     // If pagination is requested
     if (offset !== undefined || limit !== undefined) {
       const { count, rows } = await User.findAndCountAll({
+        attributes: { exclude: ["password"] },
         include: [
           {
             model: Role,
@@ -226,6 +309,7 @@ export class UserService {
     }
 
     const rows = await User.findAll({
+      attributes: { exclude: ["password"] },
       include: [
         {
           model: Role,

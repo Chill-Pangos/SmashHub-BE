@@ -8,6 +8,10 @@ import {
   BeforeValidate,
 } from "sequelize-typescript";
 import Tournament from "./tournament.model";
+import {
+  scheduleConfigHourFromUtc,
+  scheduleConfigTimesFromUtc,
+} from "../utils/scheduleConfigTime.helper";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -28,9 +32,22 @@ function isSameCalendarDate(a: Date, b: Date): boolean {
   return dateOnlyTime(a) === dateOnlyTime(b);
 }
 
-function timeToMinutes(hour?: number, minute?: number): number | null {
+function utcTimeToLocalMinutes(hour?: number | null, minute?: number | null): number | null {
   if (hour == null || minute == null) return null;
-  return hour * 60 + minute;
+  return scheduleConfigHourFromUtc(hour) * 60 + minute;
+}
+
+function assertIntegerRange(
+  value: number | null | undefined,
+  label: string,
+  min: number,
+  max: number,
+): void {
+  if (value == null) return;
+
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label} must be an integer between ${min} and ${max}`);
+  }
 }
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -40,6 +57,7 @@ function timeToMinutes(hour?: number, minute?: number): number | null {
   timestamps: true,
   indexes: [
     { fields: ["tournamentId"] },
+    { fields: ["startDate"] },
     { fields: ["registrationStartDate"] },
     { fields: ["registrationEndDate"] },
     { fields: ["bracketGenerationDate"] },
@@ -94,7 +112,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 20,
+    defaultValue: 30,
   })
   declare matchDurationMinutes: number; // Thời lượng mỗi trận (phút)
 
@@ -112,7 +130,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 8,
+    defaultValue: 1,
   })
   declare dailyStartHour: number; // Giờ bắt đầu (0-23)
 
@@ -126,7 +144,7 @@ export default class ScheduleConfig extends Model {
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: false,
-    defaultValue: 22,
+    defaultValue: 15,
   })
   declare dailyEndHour: number; // Giờ kết thúc (0-23)
 
@@ -143,46 +161,51 @@ export default class ScheduleConfig extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakStartHour?: number; // Giờ bắt đầu break (giữa trưa)
+  declare lunchBreakStartHour?: number | null; // Giờ bắt đầu break (giữa trưa)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
     defaultValue: 0,
   })
-  declare lunchBreakStartMinute?: number;
+  declare lunchBreakStartMinute?: number | null;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakEndHour?: number; // Giờ kết thúc break (giữa trưa)
+  declare lunchBreakEndHour?: number | null; // Giờ kết thúc break (giữa trưa)
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
     defaultValue: 0,
   })
-  declare lunchBreakEndMinute?: number;
+  declare lunchBreakEndMinute?: number | null;
 
   @Column({
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare lunchBreakDurationMinutes?: number; // Duration của break
+  declare lunchBreakDurationMinutes?: number | null; // Duration của break
 
   // ─── Description ─────────────────────────────────────────────────────────
 
   @Column({
-    type: DataType.TEXT,
+    type: DataType.TEXT("long"),
     allowNull: true,
   })
-  declare notes?: string; // Ghi chú/mô tả config
+  declare notes?: string | null; // Ghi chú/mô tả config
 
   // ─── Associations ────────────────────────────────────────────────────────
 
   @BelongsTo(() => Tournament)
   declare tournament?: Tournament;
+
+  override toJSON(): object {
+    const values = super.toJSON() as Record<string, unknown>;
+    return scheduleConfigTimesFromUtc(values);
+  }
 
   // ─── Validators ──────────────────────────────────────────────────────────
 
@@ -292,10 +315,14 @@ export default class ScheduleConfig extends Model {
       return;
     }
 
-    const startTotalMinutes = dailyStartHour * 60 + dailyStartMinute;
-    const endTotalMinutes = dailyEndHour * 60 + dailyEndMinute;
+    const startTotalMinutes = utcTimeToLocalMinutes(dailyStartHour, dailyStartMinute);
+    const endTotalMinutes = utcTimeToLocalMinutes(dailyEndHour, dailyEndMinute);
 
-    if (endTotalMinutes <= startTotalMinutes) {
+    if (
+      startTotalMinutes != null &&
+      endTotalMinutes != null &&
+      endTotalMinutes <= startTotalMinutes
+    ) {
       throw new Error(
         "Daily end time must be after daily start time"
       );
@@ -309,32 +336,65 @@ export default class ScheduleConfig extends Model {
       lunchBreakStartMinute,
       lunchBreakEndHour,
       lunchBreakEndMinute,
+      lunchBreakDurationMinutes,
     } = instance;
 
-    // Nếu không có lunch break, skip validation
+    assertIntegerRange(lunchBreakStartHour, "Lunch break start hour", HOUR_MIN, HOUR_MAX);
+    assertIntegerRange(lunchBreakStartMinute, "Lunch break start minute", MINUTE_MIN, MINUTE_MAX);
+    assertIntegerRange(lunchBreakEndHour, "Lunch break end hour", HOUR_MIN, HOUR_MAX);
+    assertIntegerRange(lunchBreakEndMinute, "Lunch break end minute", MINUTE_MIN, MINUTE_MAX);
+
     if (lunchBreakStartHour == null && lunchBreakEndHour == null) {
+      if (lunchBreakDurationMinutes != null) {
+        throw new Error(
+          "Lunch break duration requires lunch break start and end times"
+        );
+      }
       return;
     }
 
-    // Nếu có 1 trong 2, phải có cả 2
     if (
-      (lunchBreakStartHour != null && lunchBreakEndHour == null) ||
-      (lunchBreakStartHour == null && lunchBreakEndHour != null)
+      lunchBreakStartHour == null ||
+      lunchBreakEndHour == null
     ) {
       throw new Error(
         "Both lunch break start and end times must be provided if lunch break is configured"
       );
     }
 
-    const startTotalMinutes =
-      lunchBreakStartHour! * 60 + (lunchBreakStartMinute ?? 0);
-    const endTotalMinutes =
-      lunchBreakEndHour! * 60 + (lunchBreakEndMinute ?? 0);
+    const startTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakStartHour,
+      lunchBreakStartMinute ?? 0,
+    );
+    const endTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakEndHour,
+      lunchBreakEndMinute ?? 0,
+    );
 
-    if (endTotalMinutes <= startTotalMinutes) {
+    if (
+      startTotalMinutes != null &&
+      endTotalMinutes != null &&
+      endTotalMinutes <= startTotalMinutes
+    ) {
       throw new Error(
         "Lunch break end time must be after lunch break start time"
       );
+    }
+
+    if (lunchBreakDurationMinutes != null) {
+      if (!Number.isInteger(lunchBreakDurationMinutes) || lunchBreakDurationMinutes <= 0) {
+        throw new Error("Lunch break duration must be a positive integer");
+      }
+
+      if (
+        startTotalMinutes != null &&
+        endTotalMinutes != null &&
+        lunchBreakDurationMinutes !== endTotalMinutes - startTotalMinutes
+      ) {
+        throw new Error(
+          "Lunch break duration must match lunch break start and end times"
+        );
+      }
     }
   }
 
@@ -360,15 +420,29 @@ export default class ScheduleConfig extends Model {
       return;
     }
 
-    const dailyStartTotalMinutes = dailyStartHour * 60 + (dailyStartMinute ?? 0);
-    const dailyEndTotalMinutes = dailyEndHour * 60 + (dailyEndMinute ?? 0);
-    const breakStartTotalMinutes =
-      lunchBreakStartHour * 60 + (lunchBreakStartMinute ?? 0);
-    const breakEndTotalMinutes =
-      lunchBreakEndHour * 60 + (lunchBreakEndMinute ?? 0);
+    const dailyStartTotalMinutes = utcTimeToLocalMinutes(
+      dailyStartHour,
+      dailyStartMinute ?? 0,
+    );
+    const dailyEndTotalMinutes = utcTimeToLocalMinutes(
+      dailyEndHour,
+      dailyEndMinute ?? 0,
+    );
+    const breakStartTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakStartHour,
+      lunchBreakStartMinute ?? 0,
+    );
+    const breakEndTotalMinutes = utcTimeToLocalMinutes(
+      lunchBreakEndHour,
+      lunchBreakEndMinute ?? 0,
+    );
 
     // Lunch break phải nằm trong daily schedule
     if (
+      dailyStartTotalMinutes == null ||
+      dailyEndTotalMinutes == null ||
+      breakStartTotalMinutes == null ||
+      breakEndTotalMinutes == null ||
       breakStartTotalMinutes < dailyStartTotalMinutes ||
       breakEndTotalMinutes > dailyEndTotalMinutes
     ) {
@@ -414,8 +488,8 @@ export default class ScheduleConfig extends Model {
       }
 
       if (isSameCalendarDate(startDate, endDate)) {
-        const dailyStart = timeToMinutes(dailyStartHour, dailyStartMinute);
-        const dailyEnd = timeToMinutes(dailyEndHour, dailyEndMinute);
+        const dailyStart = utcTimeToLocalMinutes(dailyStartHour, dailyStartMinute);
+        const dailyEnd = utcTimeToLocalMinutes(dailyEndHour, dailyEndMinute);
 
         if (dailyStart != null && dailyEnd != null && dailyEnd <= dailyStart) {
           throw new Error(

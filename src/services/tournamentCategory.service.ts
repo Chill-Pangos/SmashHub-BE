@@ -4,6 +4,8 @@ import {
   UpdateTournamentCategoryDto,
 } from "../dto/tournamentCategory.dto";
 import { NotFoundError } from "../utils/errors.helper";
+import { removeUndefinedFields } from "../utils/object.helper";
+import { assertCategoryOwnerOrAdmin, assertTournamentOwnerOrAdmin } from "../utils/access.helper";
 
 export class TournamentCategoryService {
   /**
@@ -15,7 +17,11 @@ export class TournamentCategoryService {
     }
   }
 
-  async create(data: CreateTournamentCategoryDto): Promise<TournamentCategory> {
+  async create(
+    data: CreateTournamentCategoryDto,
+    userId: number,
+  ): Promise<TournamentCategory> {
+    await assertTournamentOwnerOrAdmin(userId, data.tournamentId);
     // Validate gender before creating
     if (data.gender) {
       this.validateGender(data.type, data.gender);
@@ -48,8 +54,12 @@ export class TournamentCategoryService {
 
   async update(
     id: number,
-    data: UpdateTournamentCategoryDto
+    data: UpdateTournamentCategoryDto,
+    userId: number,
   ): Promise<[number, TournamentCategory[]]> {
+    const updateData = removeUndefinedFields(data as Record<string, unknown>) as UpdateTournamentCategoryDto;
+    await assertCategoryOwnerOrAdmin(userId, id);
+
     // Always check if category exists
     const currentCategory = await TournamentCategory.findByPk(id);
     if (!currentCategory) {
@@ -57,22 +67,23 @@ export class TournamentCategoryService {
     }
 
     // If updating gender or type, validate the combination
-    if (data.gender !== undefined || data.type !== undefined) {
-      const finalType = data.type || currentCategory.type;
-      const finalGender = data.gender !== undefined ? data.gender : currentCategory.gender;
+    if (updateData.gender !== undefined || updateData.type !== undefined) {
+      const finalType = updateData.type || currentCategory.type;
+      const finalGender = updateData.gender !== undefined ? updateData.gender : currentCategory.gender;
 
       if (finalGender) {
         this.validateGender(finalType, finalGender);
       }
     }
 
-    return await TournamentCategory.update(data, {
+    return await TournamentCategory.update(updateData, {
       where: { id },
       returning: true,
     });
   }
 
-  async delete(id: number): Promise<number> {
+  async delete(id: number, userId: number): Promise<number> {
+    await assertCategoryOwnerOrAdmin(userId, id);
     return await TournamentCategory.destroy({ where: { id } });
   }
 }

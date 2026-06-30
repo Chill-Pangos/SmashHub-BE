@@ -27,7 +27,7 @@ export const MATCH_STATUSES = [
 ] as const;
 export type MatchStatus = (typeof MATCH_STATUSES)[number];
 
-export const RESULT_STATUSES = ["pending", "approved", "rejected"] as const;
+export const RESULT_STATUSES = ["pending", "approved"] as const;
 export type ResultStatus = (typeof RESULT_STATUSES)[number];
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -62,16 +62,16 @@ export default class Match extends Model {
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
   })
-  declare entryAId: number;
+  declare entryAId?: number | null;
 
   @ForeignKey(() => Entry)
   @Column({
     type: DataType.INTEGER.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
   })
-  declare entryBId: number;
+  declare entryBId?: number | null;
 
   @Column({
     type: DataType.ENUM(...MATCH_STATUSES),
@@ -85,14 +85,14 @@ export default class Match extends Model {
     type: DataType.INTEGER.UNSIGNED,
     allowNull: true,
   })
-  declare winnerEntryId?: number;
+  declare winnerEntryId?: number | null;
 
   @Column({
     type: DataType.ENUM(...RESULT_STATUSES),
     allowNull: true,
     comment: "Status of match result approval by chief referee",
   })
-  declare resultStatus?: ResultStatus;
+  declare resultStatus?: ResultStatus | null;
 
   @Column({
     type: DataType.TEXT,
@@ -130,7 +130,11 @@ export default class Match extends Model {
   static validateEntries(instance: Match): void {
     if (instance.entryAId === undefined && instance.entryBId === undefined) return;
 
-    if (instance.entryAId === instance.entryBId) {
+    if (
+      instance.entryAId != null &&
+      instance.entryBId != null &&
+      instance.entryAId === instance.entryBId
+    ) {
       throw new Error("Entry A and Entry B must be different");
     }
   }

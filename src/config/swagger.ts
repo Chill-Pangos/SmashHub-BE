@@ -1,4 +1,5 @@
 import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
 
 const swaggerDefinition = {
   openapi: "3.0.0",
@@ -49,6 +50,7 @@ const swaggerDefinition = {
     { name: "ELO Histories", description: "ELO history tracking endpoints" },
     { name: "Payments", description: "Payment and entry fee management endpoints" },
     { name: "Notifications", description: "Real-time notifications endpoints" },
+    { name: "Admin System", description: "Admin system health and realtime operations endpoints" },
   ],
   components: {
     securitySchemes: {
@@ -114,15 +116,14 @@ const swaggerDefinition = {
       },
       User: {
         type: "object",
-        required: ["firstName", "lastName", "email", "password"],
+        required: ["firstName", "lastName", "email"],
         properties: {
           id: { type: "integer" },
           firstName: { type: "string", maxLength: 50 },
           lastName: { type: "string", maxLength: 50 },
           email: { type: "string", maxLength: 100 },
-          password: { type: "string", maxLength: 255 },
           isEmailVerified: { type: "boolean", default: false },
-          gender: { type: "string", enum: ["male", "female", "other"] },
+          gender: { type: "string", enum: ["male", "female"] },
           avatarUrl: { type: "string", maxLength: 255 },
           dob: { type: "string", format: "date" },
           phoneNumber: { type: "string", maxLength: 20 },
@@ -138,7 +139,7 @@ const swaggerDefinition = {
           lastName: { type: "string", maxLength: 50 },
           email: { type: "string", maxLength: 100 },
           isEmailVerified: { type: "boolean" },
-          gender: { type: "string", enum: ["male", "female", "other"] },
+          gender: { type: "string", enum: ["male", "female"] },
           avatarUrl: { type: "string", maxLength: 255 },
           dob: { type: "string", format: "date" },
           phoneNumber: { type: "string", maxLength: 20 },
@@ -485,18 +486,18 @@ const swaggerDefinition = {
           registrationEndDate: { type: "string", format: "date-time", description: "Registration end date and time" },
           bracketGenerationDate: { type: "string", format: "date-time", description: "Bracket generation date and time" },
           numberOfTables: { type: "integer", minimum: 1, default: 1, description: "Number of tables available for parallel matches" },
-          matchDurationMinutes: { type: "integer", minimum: 15, maximum: 120, default: 60, description: "Duration of each match in minutes" },
-          breakDurationMinutes: { type: "integer", minimum: 0, maximum: 60, default: 10, description: "Break time between matches in minutes" },
+          matchDurationMinutes: { type: "integer", minimum: 30, maximum: 90, default: 30, description: "Duration of each match in minutes" },
+          breakDurationMinutes: { type: "integer", minimum: 5, maximum: 30, default: 10, description: "Break time between matches in minutes" },
           dailyStartHour: { type: "integer", minimum: 0, maximum: 23, default: 8, description: "Daily start hour (0-23)" },
           dailyStartMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Daily start minute (0-59)" },
           dailyEndHour: { type: "integer", minimum: 0, maximum: 23, default: 22, description: "Daily end hour (0-23)" },
           dailyEndMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Daily end minute (0-59)" },
-          lunchBreakStartHour: { type: ["integer", "null"], minimum: 0, maximum: 23, description: "Lunch break start hour (optional)" },
-          lunchBreakStartMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Lunch break start minute" },
-          lunchBreakEndHour: { type: ["integer", "null"], minimum: 0, maximum: 23, description: "Lunch break end hour (optional)" },
-          lunchBreakEndMinute: { type: "integer", minimum: 0, maximum: 59, default: 0, description: "Lunch break end minute" },
-          lunchBreakDurationMinutes: { type: ["integer", "null"], description: "Lunch break duration in minutes (optional)" },
-          notes: { type: ["string", "null"], description: "Additional notes about the configuration" },
+          lunchBreakStartHour: { type: "integer", nullable: true, minimum: 0, maximum: 23, description: "Lunch break start hour (optional)" },
+          lunchBreakStartMinute: { type: "integer", nullable: true, minimum: 0, maximum: 59, default: 0, description: "Lunch break start minute (optional)" },
+          lunchBreakEndHour: { type: "integer", nullable: true, minimum: 0, maximum: 23, description: "Lunch break end hour (optional)" },
+          lunchBreakEndMinute: { type: "integer", nullable: true, minimum: 0, maximum: 59, default: 0, description: "Lunch break end minute (optional)" },
+          lunchBreakDurationMinutes: { type: "integer", nullable: true, minimum: 1, description: "Optional; must equal lunchBreakEnd - lunchBreakStart in minutes when provided" },
+          notes: { type: "string", nullable: true, description: "Additional notes about the configuration" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
@@ -536,7 +537,7 @@ const swaggerDefinition = {
           winnerEntryId: { type: "integer", nullable: true },
           resultStatus: {
             type: "string",
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved"],
             nullable: true,
           },
           reviewNotes: { type: "string", nullable: true, maxLength: 1000 },
@@ -618,6 +619,7 @@ const swaggerDefinition = {
           "userId",
           "previousElo",
           "newElo",
+          "eloDelta",
           "changeReason",
         ],
         properties: {
@@ -626,6 +628,8 @@ const swaggerDefinition = {
           userId: { type: "integer" },
           previousElo: { type: "integer" },
           newElo: { type: "integer" },
+          eloDelta: { type: "integer" },
+          tournamentId: { type: "integer", nullable: true },
           changeReason: { type: "string", maxLength: 255 },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
@@ -832,7 +836,18 @@ const swaggerDefinition = {
             properties: {
               tournament: {
                 nullable: true,
-                allOf: [{ $ref: "#/components/schemas/Tournament" }],
+                allOf: [
+                  { $ref: "#/components/schemas/Tournament" },
+                  {
+                    type: "object",
+                    properties: {
+                      scheduleConfig: {
+                        nullable: true,
+                        allOf: [{ $ref: "#/components/schemas/ScheduleConfig" }],
+                      },
+                    },
+                  },
+                ],
               },
               inviter: {
                 nullable: true,
@@ -1057,7 +1072,7 @@ const swaggerDefinition = {
           },
           resultStatus: {
             type: "string",
-            enum: ["pending", "approved", "rejected"],
+            enum: ["pending", "approved"],
           },
           winnerEntryId: { type: "integer" },
           reviewNotes: { type: "string" },
@@ -1081,6 +1096,9 @@ const swaggerDefinition = {
         properties: {
           isValid: { type: "boolean", description: "Whether the schedule is valid" },
           message: { type: "string", description: "Validation message" },
+          requiresRegeneration: { type: "boolean", description: "Whether existing schedules must be regenerated" },
+          regenerationKey: { type: "string", description: "Confirmation key required for schedule regeneration", nullable: true },
+          affectedScheduleCount: { type: "integer", description: "Number of existing schedules affected by the update", nullable: true },
           preview: {
             type: "object",
             properties: {
@@ -1254,10 +1272,10 @@ const swaggerDefinition = {
 const options = {
   swaggerDefinition,
   apis: [
-    "./src/routes/*.ts",
-    "./src/controllers/*.ts",
-    "./src/dto/*.ts",
-    "./src/docs/*.ts",
+    path.resolve(__dirname, "../routes/*.{ts,js}"),
+    path.resolve(__dirname, "../controllers/*.{ts,js}"),
+    path.resolve(__dirname, "../dto/*.{ts,js}"),
+    path.resolve(__dirname, "../docs/*.{ts,js}"),
   ],
 };
 
