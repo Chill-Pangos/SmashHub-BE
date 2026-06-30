@@ -16,6 +16,17 @@ import {
   scheduleConfigTimesFromUtc,
   scheduleConfigTimesToUtc,
 } from "../utils/scheduleConfigTime.helper";
+import {
+  type OptimizableScheduleJob,
+  type ScheduleSlotConfig,
+  calculateScheduleAvailableMinutes,
+  getNextScheduleDayStart,
+  getOptimizedScheduleSlotPlan,
+  getScheduleSlotDurationMinutes,
+  getScheduleTournamentEndTime,
+  isSingleDaySchedule,
+  withScheduleTime,
+} from "../utils/scheduleSlot.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,22 +87,6 @@ interface ScheduleEstimate {
   neededMinutes: number;
 }
 
-interface ScheduleTimingConfig {
-  startDate: Date | null | undefined;
-  endDate: Date | null | undefined;
-  matchDurationMinutes: number;
-  breakDurationMinutes: number;
-  numberOfTables: number;
-  dailyStartHour: number;
-  dailyStartMinute: number;
-  dailyEndHour: number;
-  dailyEndMinute: number;
-  lunchBreakStartHour: number | null | undefined;
-  lunchBreakStartMinute: number | null | undefined;
-  lunchBreakEndHour: number | null | undefined;
-  lunchBreakEndMinute: number | null | undefined;
-}
-
 interface UpdateControlFields {
   regenerateSchedule?: boolean;
   regenerationKey?: string;
@@ -119,6 +114,8 @@ const DEFAULT_QUALIFIERS_PER_GROUP = 2;
  */
 const DEFAULT_ENTRIES_PER_GROUP = 4;
 const POSSIBLE_BRACKET_SIZES = [4, 8, 16, 32, 64, 128, 256];
+const GROUP_STAGE = "group" as const;
+const KNOCKOUT_STAGE = "knockout" as const;
 const CONFIG_UPDATE_FIELDS = [
   "startDate",
   "endDate",
@@ -285,26 +282,11 @@ function createManualMatchBreakdown(totalMatches: number): MatchBreakdown {
 
 // ─── Schedule Math Helpers ────────────────────────────────────────────────────
 
-function dateOnlyTime(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
+function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleSlotConfig {
+  if (!data.startDate || !data.endDate) {
+    throw new BadRequestError("startDate and endDate are required");
+  }
 
-function calendarDayCount(startDate: Date, endDate: Date): number {
-  const dayMs = 24 * 60 * 60 * 1000;
-  return Math.floor((dateOnlyTime(endDate) - dateOnlyTime(startDate)) / dayMs) + 1;
-}
-
-function isSingleDay(startDate: Date, endDate: Date): boolean {
-  return dateOnlyTime(startDate) === dateOnlyTime(endDate);
-}
-
-function withTime(date: Date, hour: number, minute: number): Date {
-  const result = new Date(date);
-  result.setHours(hour, minute, 0, 0);
-  return result;
-}
-
-function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleTimingConfig {
   return {
     startDate: data.startDate,
     endDate: data.endDate,
@@ -322,105 +304,6 @@ function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleTimingConfig 
   };
 }
 
-function getSlotDurationMinutes(config: ScheduleTimingConfig): number {
-  return config.matchDurationMinutes + config.breakDurationMinutes;
-}
-
-function getDailyStart(date: Date, config: ScheduleTimingConfig): Date {
-  return withTime(date, config.dailyStartHour, config.dailyStartMinute);
-}
-
-function getDailyEnd(date: Date, config: ScheduleTimingConfig): Date {
-  return withTime(date, config.dailyEndHour, config.dailyEndMinute);
-}
-
-function getLunchBreakRange(
-  date: Date,
-  config: ScheduleTimingConfig,
-): { start: Date; end: Date } | null {
-  if (config.lunchBreakStartHour == null || config.lunchBreakEndHour == null) {
-    return null;
-  }
-
-  return {
-    start: withTime(date, config.lunchBreakStartHour, config.lunchBreakStartMinute ?? 0),
-    end: withTime(date, config.lunchBreakEndHour, config.lunchBreakEndMinute ?? 0),
-  };
-}
-
-function overlapsLunchBreak(
-  start: Date,
-  config: ScheduleTimingConfig,
-): { start: Date; end: Date } | null {
-  const lunch = getLunchBreakRange(start, config);
-  if (!lunch) return null;
-
-  const matchEnd = new Date(start.getTime() + config.matchDurationMinutes * 60000);
-  return start < lunch.end && matchEnd > lunch.start ? lunch : null;
-}
-
-function getNextValidMatchStart(config: ScheduleTimingConfig, candidate: Date): Date {
-  let current = new Date(candidate);
-
-  for (let attempts = 0; attempts < 10_000; attempts++) {
-    const dailyStart = getDailyStart(current, config);
-    if (current < dailyStart) {
-      current = dailyStart;
-    }
-
-    const lunch = overlapsLunchBreak(current, config);
-    if (lunch) {
-      current = new Date(lunch.end);
-      continue;
-    }
-
-    const dailyEnd = getDailyEnd(current, config);
-    const matchEnd = new Date(current.getTime() + config.matchDurationMinutes * 60000);
-    if (matchEnd > dailyEnd) {
-      if (config.startDate && config.endDate && isSingleDay(config.startDate, config.endDate)) {
-        throw new BadRequestError(
-          "Match cannot finish before dailyEnd in a single-day tournament. Adjust dailyEnd, matchDurationMinutes, numberOfTables, or tournament dates.",
-        );
-      }
-      current = nextDayStart(current, config.dailyStartHour, config.dailyStartMinute);
-      continue;
-    }
-
-    return current;
-  }
-
-  throw new BadRequestError("Unable to find a valid schedule slot with current schedule configuration");
-}
-
-function minutesFromTime(hour: number, minute: number): number {
-  return hour * 60 + minute;
-}
-
-function calculateAvailableMinutes(
-  startDate: Date,
-  endDate: Date,
-  config: ScheduleTimingConfig
-): number {
-  const dailyStart = minutesFromTime(config.dailyStartHour, config.dailyStartMinute);
-  const dailyEnd = minutesFromTime(config.dailyEndHour, config.dailyEndMinute);
-  const dailyMinutes = Math.max(0, dailyEnd - dailyStart);
-  let lunchMinutes = 0;
-
-  if (config.lunchBreakStartHour != null && config.lunchBreakEndHour != null) {
-    const lunchStart = minutesFromTime(
-      config.lunchBreakStartHour,
-      config.lunchBreakStartMinute ?? 0,
-    );
-    const lunchEnd = minutesFromTime(
-      config.lunchBreakEndHour,
-      config.lunchBreakEndMinute ?? 0,
-    );
-    lunchMinutes = Math.max(0, Math.min(dailyEnd, lunchEnd) - Math.max(dailyStart, lunchStart));
-  }
-
-  return Math.max(0, dailyMinutes - lunchMinutes) * Math.max(0, calendarDayCount(startDate, endDate));
-}
-
 function calculateBracketSize(entryCount: number): number {
   for (const size of POSSIBLE_BRACKET_SIZES) {
     if (size >= entryCount) return size;
@@ -428,115 +311,143 @@ function calculateBracketSize(entryCount: number): number {
   throw new BadRequestError(`Too many entries: ${entryCount}. Maximum supported: 256`);
 }
 
-function calculateRoundRobinSlotCount(
-  entryCount: number,
-  numberOfTables: number
-): number {
-  if (entryCount < 2) return 0;
-
-  const playerCount = entryCount % 2 === 0 ? entryCount : entryCount + 1;
-  const rounds = playerCount - 1;
-  const matchesPerRound = Math.floor(entryCount / 2);
-
-  return rounds * Math.ceil(matchesPerRound / numberOfTables);
+function buildPlainScheduleJobs(totalMatches: number): OptimizableScheduleJob[] {
+  return Array.from({ length: totalMatches }, (_, index) => ({
+    stage: KNOCKOUT_STAGE,
+    roundNumber: 1,
+    entryAId: index * 2 + 1,
+    entryBId: index * 2 + 2,
+    categoryId: 1,
+  }));
 }
 
-function calculateKnockoutSlotCount(
+function buildRoundRobinScheduleJobs(
   entryCount: number,
-  numberOfTables: number
-): number {
-  const bracketSize = calculateBracketSize(entryCount);
-  let slots = 0;
+  categoryId: number,
+  groupIndex: number,
+): OptimizableScheduleJob[] {
+  const groupName = `Group ${groupIndex + 1}`;
+  const groupSequenceKey = `${categoryId}:${groupName}`;
+  const entryIdBase = categoryId * 10_000 + groupIndex * 1_000;
+  const players: Array<number | null> = Array.from(
+    { length: entryCount },
+    (_, index) => entryIdBase + index + 1,
+  );
+  if (players.length % 2 === 1) players.push(null);
 
-  for (let matchesInRound = bracketSize / 2; matchesInRound >= 1; matchesInRound /= 2) {
-    slots += Math.ceil(matchesInRound / numberOfTables);
+  const jobs: OptimizableScheduleJob[] = [];
+  for (let round = 1; round < players.length; round++) {
+    for (let i = 0; i < players.length / 2; i++) {
+      const entryAId = players[i];
+      const entryBId = players[players.length - 1 - i];
+      if (entryAId == null || entryBId == null) continue;
+
+      jobs.push({
+        stage: GROUP_STAGE,
+        roundNumber: round,
+        entryAId,
+        entryBId,
+        groupName,
+        groupSequenceKey,
+        categoryId,
+      });
+    }
+
+    const fixed = players[0]!;
+    const rotating = players.slice(1);
+    players.splice(
+      0,
+      players.length,
+      fixed,
+      rotating[rotating.length - 1]!,
+      ...rotating.slice(0, -1),
+    );
   }
 
-  return slots;
+  return jobs;
 }
 
-function nextDayStart(date: Date, dailyStartHour: number, dailyStartMinute: number): Date {
-  return withTime(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1),
-    dailyStartHour,
-    dailyStartMinute
+function buildKnockoutScheduleJobs(
+  entryCount: number,
+  categoryId: number,
+): OptimizableScheduleJob[] {
+  const bracketSize = calculateBracketSize(entryCount);
+  const jobs: OptimizableScheduleJob[] = [];
+  let roundNumber = 1;
+
+  for (let matchesInRound = bracketSize / 2; matchesInRound >= 1; matchesInRound /= 2) {
+    for (let index = 0; index < matchesInRound; index++) {
+      jobs.push({
+        stage: KNOCKOUT_STAGE,
+        roundNumber,
+        entryAId: roundNumber === 1 ? categoryId * 10_000 + index * 2 + 1 : null,
+        entryBId: roundNumber === 1 ? categoryId * 10_000 + index * 2 + 2 : null,
+        categoryId,
+      });
+    }
+
+    roundNumber += 1;
+  }
+
+  return jobs;
+}
+
+function buildGroupScheduleJobs(entryCounts: number[]): OptimizableScheduleJob[] {
+  return entryCounts.flatMap((entryCount, index) =>
+    buildRoundRobinScheduleJobs(entryCount, index + 1, index),
   );
 }
 
-function calculateEndTimeFromSlots(
-  startDate: Date,
-  totalSlots: number,
-  config: ScheduleTimingConfig
-): Date {
-  if (totalSlots <= 0) return new Date(startDate);
-
-  let current = getNextValidMatchStart(config, startDate);
-  let lastSlot = current;
-  const slotDurationMinutes = getSlotDurationMinutes(config);
-
-  for (let slot = 0; slot < totalSlots; slot++) {
-    lastSlot = current;
-    if (slot < totalSlots - 1) {
-      current = getNextValidMatchStart(
-        config,
-        new Date(current.getTime() + slotDurationMinutes * 60000),
-      );
-    }
-  }
-
-  return new Date(lastSlot.getTime() + slotDurationMinutes * 60000);
+function buildKnockoutScheduleJobsFromBreakdown(entryCounts: number[]): OptimizableScheduleJob[] {
+  return entryCounts.flatMap((entryCount, index) =>
+    buildKnockoutScheduleJobs(entryCount, index + 1),
+  );
 }
 
 function calculateScheduleEstimate(
   startDate: Date,
   endDate: Date,
   breakdown: MatchBreakdown,
-  config: ScheduleTimingConfig
+  config: ScheduleSlotConfig
 ): ScheduleEstimate {
-  const slotDuration = getSlotDurationMinutes(config);
-  const tournamentStart = withTime(startDate, config.dailyStartHour, config.dailyStartMinute);
+  const slotDuration = getScheduleSlotDurationMinutes(config);
+  const tournamentStart = withScheduleTime(startDate, config.dailyStartHour, config.dailyStartMinute);
 
   if (breakdown.plainMatchCount != null) {
-    const totalSlots = Math.ceil(breakdown.plainMatchCount / config.numberOfTables);
+    const plan = getOptimizedScheduleSlotPlan(
+      config,
+      tournamentStart,
+      buildPlainScheduleJobs(breakdown.plainMatchCount),
+    );
     return {
-      totalSlots,
-      estimatedEndTime: calculateEndTimeFromSlots(tournamentStart, totalSlots, config),
-      neededMinutes: totalSlots * slotDuration,
+      totalSlots: plan.totalSlots,
+      estimatedEndTime: plan.endTime,
+      neededMinutes: plan.totalSlots * slotDuration,
     };
   }
 
-  const groupSlots = breakdown.groupEntryCounts.reduce(
-    (sum, entryCount) => sum + calculateRoundRobinSlotCount(entryCount, config.numberOfTables),
-    0
+  const groupJobs = buildGroupScheduleJobs(breakdown.groupEntryCounts);
+  const knockoutJobs = buildKnockoutScheduleJobsFromBreakdown(
+    breakdown.knockoutEntryCounts,
   );
-  const knockoutSlots = breakdown.knockoutEntryCounts.reduce(
-    (sum, entryCount) => sum + calculateKnockoutSlotCount(entryCount, config.numberOfTables),
-    0
-  );
-
-  const groupEndTime = calculateEndTimeFromSlots(tournamentStart, groupSlots, config);
-  const knockoutStartDate = groupSlots === 0
+  const groupPlan = getOptimizedScheduleSlotPlan(config, tournamentStart, groupJobs);
+  const knockoutStartDate = groupJobs.length === 0
     ? tournamentStart
-    : isSingleDay(startDate, endDate)
-      ? groupEndTime
-      : nextDayStart(groupEndTime, config.dailyStartHour, config.dailyStartMinute);
-  const estimatedEndTime = calculateEndTimeFromSlots(knockoutStartDate, knockoutSlots, config);
-  const totalSlots = groupSlots + knockoutSlots;
+    : isSingleDaySchedule({ startDate, endDate })
+      ? groupPlan.endTime
+      : getNextScheduleDayStart(groupPlan.endTime, config);
+  const knockoutPlan = getOptimizedScheduleSlotPlan(
+    config,
+    knockoutStartDate,
+    knockoutJobs,
+  );
+  const totalSlots = groupPlan.totalSlots + knockoutPlan.totalSlots;
 
   return {
     totalSlots,
-    estimatedEndTime,
+    estimatedEndTime: knockoutPlan.endTime,
     neededMinutes: totalSlots * slotDuration,
   };
-}
-
-function getEffectiveTournamentEndTime(
-  startDate: Date,
-  endDate: Date,
-  dailyEndHour: number,
-  dailyEndMinute: number
-): Date {
-  return withTime(endDate, dailyEndHour, dailyEndMinute);
 }
 
 // ─── Model Validator ─────────────────────────────────────────────────────────
@@ -1277,12 +1188,7 @@ export class ScheduleConfigService {
       timingConfig,
     );
     const { totalSlots, estimatedEndTime } = estimate;
-    const tournamentEndTime = getEffectiveTournamentEndTime(
-      startDate,
-      endDate,
-      timingConfig.dailyEndHour,
-      timingConfig.dailyEndMinute
-    );
+    const tournamentEndTime = getScheduleTournamentEndTime(timingConfig);
 
     const overflowMinutes = Math.max(
       0,
@@ -1404,12 +1310,7 @@ export class ScheduleConfigService {
       timingConfig,
     );
     const { totalSlots, estimatedEndTime } = estimate;
-    const tournamentEndTime = getEffectiveTournamentEndTime(
-      startDate,
-      endDate,
-      timingConfig.dailyEndHour,
-      timingConfig.dailyEndMinute
-    );
+    const tournamentEndTime = getScheduleTournamentEndTime(timingConfig);
 
     const overflowMinutes = Math.max(
       0,
@@ -1480,11 +1381,7 @@ export class ScheduleConfigService {
       throw new BadRequestError("breakDurationMinutes must be between 5 and 30");
     }
 
-    const availableMinutes = calculateAvailableMinutes(
-      startDate,
-      endDate,
-      timingConfig,
-    );
+    const availableMinutes = calculateScheduleAvailableMinutes(timingConfig);
     const estimate = calculateScheduleEstimate(
       startDate,
       endDate,
@@ -1492,12 +1389,7 @@ export class ScheduleConfigService {
       timingConfig,
     );
     const { totalSlots, neededMinutes, estimatedEndTime } = estimate;
-    const tournamentEndTime = getEffectiveTournamentEndTime(
-      startDate,
-      endDate,
-      timingConfig.dailyEndHour,
-      timingConfig.dailyEndMinute
-    );
+    const tournamentEndTime = getScheduleTournamentEndTime(timingConfig);
 
     const overflowMinutes = Math.max(
       0,
