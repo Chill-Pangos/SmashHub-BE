@@ -543,6 +543,19 @@ private async assertNotCompetingInTournament(
           model: Tournament,
           as: "tournament",
           attributes: ["id", "name", "location", "tier", "status", "createdBy"],
+          include: [
+            {
+              model: ScheduleConfig,
+              as: "scheduleConfig",
+              attributes: [
+                "startDate",
+                "endDate",
+                "registrationStartDate",
+                "registrationEndDate",
+                "bracketGenerationDate",
+              ],
+            },
+          ],
         },
         {
           model: User,
