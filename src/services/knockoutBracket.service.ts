@@ -13,6 +13,7 @@ import groupStandingService from "./groupStanding.service";
 import entryService from "./entry.service";
 import { KnockoutRound } from "../models/schedule.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import { NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1165,8 +1166,9 @@ export class KnockoutBracketService {
       ],
     });
 
-    if (brackets.length === 0)
-      throw new Error("No bracket found for this category");
+    if (brackets.length === 0) {
+      throw new NotFoundError("No bracket found for this category");
+    }
 
     return formatBracketTree(categoryId, brackets);
   }
