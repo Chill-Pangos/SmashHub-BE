@@ -69,6 +69,7 @@ export interface ScheduleConfigResponseDto {
   dailyStartMinute: number;
   dailyEndHour: number;
   dailyEndMinute: number;
+  timeZone: string;
   // Lunch break
   lunchBreakStartHour?: number | null;
   lunchBreakStartMinute?: number | null;

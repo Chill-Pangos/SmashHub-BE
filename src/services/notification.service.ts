@@ -2,6 +2,7 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
+import { subDays } from "date-fns";
 import Notification, { NotificationType } from "../models/notification.model";
 import { Op } from "sequelize";
 import redisClient, { connectRedis } from "../config/redis";
@@ -11,6 +12,7 @@ import Role from "../models/role.model";
 import Match from "../models/match.model";
 import authService from "./auth.service";
 import { NotFoundError } from "../utils/errors.helper";
+import { formatDateUTC } from "../utils/date.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +150,7 @@ export const NotificationTemplates = {
   matchScheduled: (opponent: string, scheduledAt: Date) => ({
     type: "match_scheduled" as NotificationType,
     title: "Match Scheduled",
-    message: `Your match against "${opponent}" is scheduled for ${scheduledAt.toLocaleString()}`,
+    message: `Your match against "${opponent}" is scheduled for ${formatDateUTC(scheduledAt)}`,
   }),
 
   matchStartingSoon: (opponent: string, minutesLeft: number) => ({
@@ -782,8 +784,7 @@ class NotificationService {
    * Xóa notifications đã đọc sau 30 ngày
    */
   async cleanup(daysOld = 30): Promise<number> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - daysOld);
+    const cutoff = subDays(new Date(), daysOld);
 
     return await Notification.destroy({
       where: {

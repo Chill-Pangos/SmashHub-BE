@@ -53,8 +53,8 @@ const router = Router();
  *               id: 5
  *               name: "tournament_organizer"
  *               description: "Manages tournament creation and participant entries"
- *               createdAt: "2026-05-28T10:30:00Z"
- *               updatedAt: "2026-05-28T10:30:00Z"
+ *               createdAt: "2026-05-28T10:30:00.000Z"
+ *               updatedAt: "2026-05-28T10:30:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -131,13 +131,13 @@ const router = Router();
  *                 - id: 1
  *                   name: "admin"
  *                   description: "Full system access"
- *                   createdAt: "2026-01-01T00:00:00Z"
- *                   updatedAt: "2026-01-01T00:00:00Z"
+ *                   createdAt: "2026-01-01T00:00:00.000Z"
+ *                   updatedAt: "2026-01-01T00:00:00.000Z"
  *                 - id: 2
  *                   name: "tournament_organizer"
  *                   description: "Manages tournament creation and entries"
- *                   createdAt: "2026-02-15T14:30:00Z"
- *                   updatedAt: "2026-02-15T14:30:00Z"
+ *                   createdAt: "2026-02-15T14:30:00.000Z"
+ *                   updatedAt: "2026-02-15T14:30:00.000Z"
  *               pagination:
  *                 total: 25
  *                 page: 1
@@ -191,8 +191,8 @@ router.get("/",
  *               id: 2
  *               name: "tournament_organizer"
  *               description: "Manages tournament creation and participant entries"
- *               createdAt: "2026-02-15T14:30:00Z"
- *               updatedAt: "2026-02-15T14:30:00Z"
+ *               createdAt: "2026-02-15T14:30:00.000Z"
+ *               updatedAt: "2026-02-15T14:30:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -258,8 +258,8 @@ router.get("/",
  *               id: 2
  *               name: "event_organizer"
  *               description: "Manages event planning and tournament coordination"
- *               createdAt: "2026-02-15T14:30:00Z"
- *               updatedAt: "2026-05-28T15:45:00Z"
+ *               createdAt: "2026-02-15T14:30:00.000Z"
+ *               updatedAt: "2026-05-28T15:45:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -344,8 +344,8 @@ router.delete("/:id",
  *               id: 1
  *               name: "admin"
  *               description: "Full system access"
- *               createdAt: "2026-01-01T00:00:00Z"
- *               updatedAt: "2026-01-01T00:00:00Z"
+ *               createdAt: "2026-01-01T00:00:00.000Z"
+ *               updatedAt: "2026-01-01T00:00:00.000Z"
  *       401:
  *         $ref: '#/components/responses/Unauthorized401'
  *       403:

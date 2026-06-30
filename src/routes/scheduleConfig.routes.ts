@@ -53,28 +53,28 @@ const router = Router({ mergeParams: true });
  *               startDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-15T08:00:00Z"
- *                 description: Tournament start date and time (cannot be in the past, ISO 8601 format)
+ *                 example: "2026-06-15T08:00:00.000Z"
+ *                 description: Tournament start date and time (cannot be in the past, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
  *               endDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-20T22:00:00Z"
- *                 description: Tournament end date and time (must be after startDate, ISO 8601 format)
+ *                 example: "2026-06-20T22:00:00.000Z"
+ *                 description: Tournament end date and time (must be after startDate, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
  *               registrationStartDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-05-15T00:00:00Z"
- *                 description: Registration opening date (cannot be in the past, ISO 8601 format)
+ *                 example: "2026-05-15T00:00:00.000Z"
+ *                 description: Registration opening date (cannot be in the past, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
  *               registrationEndDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-14T23:59:59Z"
- *                 description: Registration closing date (must be before tournament starts)
+ *                 example: "2026-06-14T23:59:59.000Z"
+ *                 description: Registration closing date (must be before tournament starts, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
  *               bracketGenerationDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-13T00:00:00Z"
- *                 description: Bracket generation date (must be after registration ends and at least 2 days before start)
+ *                 example: "2026-06-13T00:00:00.000Z"
+ *                 description: Bracket generation date (must be after registration ends and at least 2 days before start, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
  *               numberOfTables:
  *                 type: integer
  *                 minimum: 1
@@ -162,11 +162,11 @@ const router = Router({ mergeParams: true });
  *             weeklong_tournament:
  *               summary: Week-long tournament with multiple tables and lunch break
  *               value:
- *                 startDate: "2026-06-15T08:00:00Z"
- *                 endDate: "2026-06-20T22:00:00Z"
- *                 registrationStartDate: "2026-05-15T00:00:00Z"
- *                 registrationEndDate: "2026-06-14T23:59:59Z"
- *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
+ *                 startDate: "2026-06-15T08:00:00.000Z"
+ *                 endDate: "2026-06-20T22:00:00.000Z"
+ *                 registrationStartDate: "2026-05-15T00:00:00.000Z"
+ *                 registrationEndDate: "2026-06-14T23:59:59.000Z"
+ *                 bracketGenerationDate: "2026-06-13T00:00:00.000Z"
  *                 numberOfTables: 4
  *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10
@@ -182,11 +182,11 @@ const router = Router({ mergeParams: true });
  *             single_day:
  *               summary: Single-day tournament with aggressive timing
  *               value:
- *                 startDate: "2026-06-20T09:00:00Z"
- *                 endDate: "2026-06-20T17:00:00Z"
- *                 registrationStartDate: "2026-06-01T00:00:00Z"
- *                 registrationEndDate: "2026-06-19T23:59:59Z"
- *                 bracketGenerationDate: "2026-06-18T00:00:00Z"
+ *                 startDate: "2026-06-20T09:00:00.000Z"
+ *                 endDate: "2026-06-20T17:00:00.000Z"
+ *                 registrationStartDate: "2026-06-01T00:00:00.000Z"
+ *                 registrationEndDate: "2026-06-19T23:59:59.000Z"
+ *                 bracketGenerationDate: "2026-06-18T00:00:00.000Z"
  *                 numberOfTables: 6
  *                 matchDurationMinutes: 45
  *                 breakDurationMinutes: 5
@@ -205,11 +205,11 @@ const router = Router({ mergeParams: true });
  *             example:
  *               id: 1
  *               tournamentId: 1
- *               startDate: "2026-06-15T08:00:00Z"
- *               endDate: "2026-06-20T22:00:00Z"
- *               registrationStartDate: "2026-05-15T00:00:00Z"
- *               registrationEndDate: "2026-06-14T23:59:59Z"
- *               bracketGenerationDate: "2026-06-13T00:00:00Z"
+ *               startDate: "2026-06-15T08:00:00.000Z"
+ *               endDate: "2026-06-20T22:00:00.000Z"
+ *               registrationStartDate: "2026-05-15T00:00:00.000Z"
+ *               registrationEndDate: "2026-06-14T23:59:59.000Z"
+ *               bracketGenerationDate: "2026-06-13T00:00:00.000Z"
  *               numberOfTables: 4
  *               matchDurationMinutes: 30
  *               breakDurationMinutes: 10
@@ -222,8 +222,8 @@ const router = Router({ mergeParams: true });
  *               lunchBreakEndHour: 13
  *               lunchBreakEndMinute: 0
  *               notes: "Main venue tournament"
- *               createdAt: "2026-05-28T10:00:00Z"
- *               updatedAt: "2026-05-28T10:00:00Z"
+ *               createdAt: "2026-05-28T10:00:00.000Z"
+ *               updatedAt: "2026-05-28T10:00:00.000Z"
  *       400:
  *         description: Validation error (invalid dates, time ranges, overlapping lunch break, or configuration)
  *         content:
@@ -415,12 +415,12 @@ router.get(
  *               startDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-15T08:00:00Z"
+ *                 example: "2026-06-15T08:00:00.000Z"
  *                 description: Tournament start date and time
  *               endDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-20T22:00:00Z"
+ *                 example: "2026-06-20T22:00:00.000Z"
  *                 description: Tournament end date and time
  *               registrationStartDate:
  *                 type: string
@@ -514,8 +514,8 @@ router.get(
  *             full_update:
  *               summary: Update complete configuration
  *               value:
- *                 startDate: "2026-06-16T08:00:00Z"
- *                 endDate: "2026-06-20T22:00:00Z"
+ *                 startDate: "2026-06-16T08:00:00.000Z"
+ *                 endDate: "2026-06-20T22:00:00.000Z"
  *                 numberOfTables: 6
  *                 matchDurationMinutes: 50
  *                 breakDurationMinutes: 15
@@ -605,23 +605,23 @@ router.patch(
  *                   startDate:
  *                     type: string
  *                     format: date-time
- *                     example: "2026-06-15T08:00:00Z"
+ *                     example: "2026-06-15T08:00:00.000Z"
  *                   endDate:
  *                     type: string
  *                     format: date-time
- *                     example: "2026-06-20T22:00:00Z"
+ *                     example: "2026-06-20T22:00:00.000Z"
  *                   registrationStartDate:
  *                     type: string
  *                     format: date-time
- *                     example: "2026-05-15T00:00:00Z"
+ *                     example: "2026-05-15T00:00:00.000Z"
  *                   registrationEndDate:
  *                     type: string
  *                     format: date-time
- *                     example: "2026-06-12T23:59:59Z"
+ *                     example: "2026-06-12T23:59:59.000Z"
  *                   bracketGenerationDate:
  *                     type: string
  *                     format: date-time
- *                     example: "2026-06-13T00:00:00Z"
+ *                     example: "2026-06-13T00:00:00.000Z"
  *                   numberOfTables:
  *                     type: integer
  *                     minimum: 1
@@ -700,11 +700,11 @@ router.patch(
  *                   maxEntries: 32
  *                   isGroupStage: false
  *                 scheduleConfig:
- *                   startDate: "2026-06-15T08:00:00Z"
- *                   endDate: "2026-06-20T22:00:00Z"
- *                   registrationStartDate: "2026-05-15T00:00:00Z"
- *                   registrationEndDate: "2026-06-12T23:59:59Z"
- *                   bracketGenerationDate: "2026-06-13T00:00:00Z"
+ *                   startDate: "2026-06-15T08:00:00.000Z"
+ *                   endDate: "2026-06-20T22:00:00.000Z"
+ *                   registrationStartDate: "2026-05-15T00:00:00.000Z"
+ *                   registrationEndDate: "2026-06-12T23:59:59.000Z"
+ *                   bracketGenerationDate: "2026-06-13T00:00:00.000Z"
  *                   numberOfTables: 4
  *                   matchDurationMinutes: 30
  *                   breakDurationMinutes: 10
@@ -792,11 +792,11 @@ router.post(
  *               startDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-15T08:00:00Z"
+ *                 example: "2026-06-15T08:00:00.000Z"
  *               endDate:
  *                 type: string
  *                 format: date-time
- *                 example: "2026-06-20T22:00:00Z"
+ *                 example: "2026-06-20T22:00:00.000Z"
  *               registrationStartDate:
  *                 type: string
  *                 format: date-time
@@ -866,11 +866,11 @@ router.post(
  *               summary: Valid schedule with buffer time
  *               value:
  *                 totalMatches: 127
- *                 startDate: "2026-06-15T08:00:00Z"
- *                 endDate: "2026-06-20T22:00:00Z"
- *                 registrationStartDate: "2026-05-15T00:00:00Z"
- *                 registrationEndDate: "2026-06-14T23:59:59Z"
- *                 bracketGenerationDate: "2026-06-13T00:00:00Z"
+ *                 startDate: "2026-06-15T08:00:00.000Z"
+ *                 endDate: "2026-06-20T22:00:00.000Z"
+ *                 registrationStartDate: "2026-05-15T00:00:00.000Z"
+ *                 registrationEndDate: "2026-06-14T23:59:59.000Z"
+ *                 bracketGenerationDate: "2026-06-13T00:00:00.000Z"
  *                 numberOfTables: 4
  *                 matchDurationMinutes: 30
  *                 breakDurationMinutes: 10

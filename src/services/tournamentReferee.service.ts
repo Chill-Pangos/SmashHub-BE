@@ -1,5 +1,6 @@
 // tournamentReferee.service.ts
 import { Op } from "sequelize";
+import { addHours } from "date-fns";
 import { sequelize } from "../config/database";
 import TournamentReferee, { RefereeRole } from "../models/tournamentReferee.model";
 import RefereeInvitation, {
@@ -51,9 +52,7 @@ function assertOrganizer(userId: number, tournament: Tournament): void {
 }
 
 function buildExpiresAt(): Date {
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + INVITATION_EXPIRY_HOURS);
-  return expiresAt;
+  return addHours(new Date(), INVITATION_EXPIRY_HOURS);
 }
 
 function buildPagination(count: number, offset: number, limit: number) {

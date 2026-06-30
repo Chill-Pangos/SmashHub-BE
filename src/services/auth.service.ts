@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { addDays, addHours, addMinutes, addSeconds } from "date-fns";
 import User from "../models/user.model";
 import Token, { TokenType } from "../models/token.model";
 import Otp from "../models/otp.model";
@@ -66,17 +67,13 @@ export class AuthService {
 
     switch (unit) {
       case "s":
-        now.setSeconds(now.getSeconds() + value);
-        break;
+        return addSeconds(now, value);
       case "m":
-        now.setMinutes(now.getMinutes() + value);
-        break;
+        return addMinutes(now, value);
       case "h":
-        now.setHours(now.getHours() + value);
-        break;
+        return addHours(now, value);
       case "d":
-        now.setDate(now.getDate() + value);
-        break;
+        return addDays(now, value);
     }
 
     return now;

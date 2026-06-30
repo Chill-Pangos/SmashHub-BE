@@ -228,8 +228,8 @@ router.post(
  *                   setsLost: 0
  *                   setsDiff: 0
  *                   position: null
- *                   createdAt: "2024-01-15T10:30:00Z"
- *                   updatedAt: "2024-01-15T10:30:00Z"
+ *                   createdAt: "2024-01-15T10:30:00.000Z"
+ *                   updatedAt: "2024-01-15T10:30:00.000Z"
  *                 - id: 2
  *                   categoryId: 1
  *                   groupName: "Group A"
@@ -241,8 +241,8 @@ router.post(
  *                   setsLost: 0
  *                   setsDiff: 0
  *                   position: null
- *                   createdAt: "2024-01-15T10:30:00Z"
- *                   updatedAt: "2024-01-15T10:30:00Z"
+ *                   createdAt: "2024-01-15T10:30:00.000Z"
+ *                   updatedAt: "2024-01-15T10:30:00.000Z"
  *               message: "Group assignments saved successfully"
  *       400:
  *         description: Invalid request data or validation failed
@@ -535,8 +535,8 @@ router.post(
  *                   setsWon: 9
  *                   setsLost: 1
  *                   setsDiff: 8
- *                   createdAt: "2024-01-15T10:30:00Z"
- *                   updatedAt: "2024-01-20T14:45:00Z"
+ *                   createdAt: "2024-01-15T10:30:00.000Z"
+ *                   updatedAt: "2024-01-20T14:45:00.000Z"
  *                 - id: 2
  *                   categoryId: 1
  *                   groupName: "Group A"
@@ -548,8 +548,8 @@ router.post(
  *                   setsWon: 7
  *                   setsLost: 4
  *                   setsDiff: 3
- *                   createdAt: "2024-01-15T10:30:00Z"
- *                   updatedAt: "2024-01-20T14:45:00Z"
+ *                   createdAt: "2024-01-15T10:30:00.000Z"
+ *                   updatedAt: "2024-01-20T14:45:00.000Z"
  *       400:
  *         description: Invalid category ID
  *         content:

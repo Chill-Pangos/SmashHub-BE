@@ -1,4 +1,5 @@
 import { Op, WhereOptions, Includeable, Transaction } from "sequelize";
+import { differenceInYears } from "date-fns";
 import { sequelize } from "../config/database";
 import Entry from "../models/entry.model";
 import EntryMember from "../models/entryMember.model";
@@ -84,12 +85,7 @@ export async function assertUserEligible(
   if (user.dob) {
     const today = new Date();
     const birth = new Date(user.dob);
-    const age =
-      today.getFullYear() -
-      birth.getFullYear() -
-      (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate())
-        ? 1
-        : 0);
+    const age = differenceInYears(today, birth);
 
     if (category.minAge != null && age < category.minAge) {
       errors.push(`Minimum age requirement is ${category.minAge}`);

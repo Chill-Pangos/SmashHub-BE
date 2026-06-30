@@ -12,10 +12,7 @@ import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
 import { toUtcDate } from "../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
-import {
-  scheduleConfigTimesFromUtc,
-  scheduleConfigTimesToUtc,
-} from "../utils/scheduleConfigTime.helper";
+import config from "../config/config";
 import {
   type OptimizableScheduleJob,
   type ScheduleSlotConfig,
@@ -52,6 +49,7 @@ export interface SchedulePreviewResponse {
     numberOfTables: number;
     matchDurationMinutes: number;
     breakDurationMinutes: number;
+    timeZone: string;
   };
 }
 
@@ -558,7 +556,7 @@ function normalizeScheduleConfigForStorage(
   data: Partial<ScheduleConfig>
 ): Partial<ScheduleConfig> {
   assertLocalScheduleConfigTimeFields(data);
-  return normalizeScheduleConfigDates(scheduleConfigTimesToUtc(data));
+  return normalizeScheduleConfigDates(data);
 }
 
 function removeUndefinedFields(
@@ -662,7 +660,7 @@ function buildLocalMergedConfigForPreview(
   config: ScheduleConfig,
   updateData: Partial<ScheduleConfig>,
 ): Partial<ScheduleConfig> {
-  const localConfig = scheduleConfigTimesFromUtc(pickConfigFields(config));
+  const localConfig = pickConfigFields(config);
   return buildMergedConfig(localConfig as ScheduleConfig, updateData);
 }
 
@@ -1138,7 +1136,7 @@ export class ScheduleConfigService {
 
       const breakdown = await this._resolveMatchBreakdown(tournament);
       const preview = this._buildPreview(
-        scheduleConfigTimesFromUtc(mergedForValidation),
+        mergedForValidation,
         breakdown,
       );
       if (!preview.isValid) {
@@ -1201,9 +1199,9 @@ export class ScheduleConfigService {
     const {
       startDate,
       endDate,
-    } = scheduleConfigTimesFromUtc(pickConfigFields(config)) as ScheduleConfig;
+    } = pickConfigFields(config) as ScheduleConfig;
     const timingConfig = buildTimingConfig(
-      scheduleConfigTimesFromUtc(pickConfigFields(config)) as ScheduleConfig,
+      pickConfigFields(config) as ScheduleConfig,
     );
 
     const estimate = calculateScheduleEstimate(
@@ -1292,6 +1290,7 @@ export class ScheduleConfigService {
       dailyEndHour: 22,
       dailyEndMinute: 0,
       numberOfTables: 1,
+      timeZone: config.app.timeZone,
     };
   }
 
@@ -1437,6 +1436,7 @@ export class ScheduleConfigService {
       numberOfTables,
       matchDurationMinutes,
       breakDurationMinutes,
+      timeZone: config.app.timeZone,
       ...(!isValid && { overflowMinutes }),
     };
 

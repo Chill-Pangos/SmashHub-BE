@@ -8,6 +8,7 @@ import {
   BelongsToMany,
   BeforeValidate,
 } from "sequelize-typescript";
+import { differenceInYears } from "date-fns";
 import EloScore from "./eloScore.model";
 import EloHistory from "./eloHistory.model";
 import UserRole from "./userRole.model";
@@ -170,12 +171,7 @@ export default class User extends Model {
       throw new Error("Date of birth must be in the past");
     }
 
-    const age = today.getFullYear() - birthDate.getFullYear();
-    const hadBirthdayThisYear =
-      today.getMonth() > birthDate.getMonth() ||
-      (today.getMonth() === birthDate.getMonth() &&
-        today.getDate() >= birthDate.getDate());
-    const actualAge = hadBirthdayThisYear ? age : age - 1;
+    const actualAge = differenceInYears(today, birthDate);
 
     if (actualAge < MIN_AGE) {
       throw new Error(`User must be at least ${MIN_AGE} years old`);

@@ -55,8 +55,8 @@ const router = Router();
  *               id: 123
  *               roleId: 1
  *               permissionId: 5
- *               createdAt: "2026-05-28T10:30:00Z"
- *               updatedAt: "2026-05-28T10:30:00Z"
+ *               createdAt: "2026-05-28T10:30:00.000Z"
+ *               updatedAt: "2026-05-28T10:30:00.000Z"
  *       400:
  *         $ref: '#/components/responses/BadRequest400'
  *       401:
@@ -124,8 +124,8 @@ const router = Router();
  *                   permission:
  *                     id: 5
  *                     name: create_tournament
- *                   createdAt: "2026-05-28T10:30:00Z"
- *                   updatedAt: "2026-05-28T10:30:00Z"
+ *                   createdAt: "2026-05-28T10:30:00.000Z"
+ *                   updatedAt: "2026-05-28T10:30:00.000Z"
  *               pagination:
  *                 total: 45
  *                 page: 1
@@ -196,8 +196,8 @@ router.get("/",
  *                   permission:
  *                     id: 5
  *                     name: create_tournament
- *                   createdAt: "2026-05-28T10:30:00Z"
- *                   updatedAt: "2026-05-28T10:30:00Z"
+ *                   createdAt: "2026-05-28T10:30:00.000Z"
+ *                   updatedAt: "2026-05-28T10:30:00.000Z"
  *               pagination:
  *                 total: 12
  *                 page: 1
@@ -271,8 +271,8 @@ router.get("/role/:roleId",
  *                   role:
  *                     id: 1
  *                     name: admin
- *                   createdAt: "2026-05-28T10:30:00Z"
- *                   updatedAt: "2026-05-28T10:30:00Z"
+ *                   createdAt: "2026-05-28T10:30:00.000Z"
+ *                   updatedAt: "2026-05-28T10:30:00.000Z"
  *               pagination:
  *                 total: 3
  *                 page: 1

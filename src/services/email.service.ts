@@ -1,6 +1,7 @@
 import nodemailer, { Transporter } from "nodemailer";
 import config from "../config/config";
 import { AuthErrors } from "../utils/errors.helper";
+import { formatDateUTC } from "../utils/date.helper";
 
 // ─── Shared Email Shell ────────────────────────────────────────────────────────
 const emailShell = (bodyContent: string) => `
@@ -442,7 +443,7 @@ export class EmailService {
 
   /** Thông báo đổi mật khẩu thành công */
   async sendPasswordChangedNotification(email: string, fullName: string): Promise<void> {
-    const changedAt = new Date().toLocaleString("vi-VN");
+    const changedAt = formatDateUTC(new Date());
     const mailOptions = {
       from: `"${config.email.from.name}" <${config.email.from.email}>`,
       to: email,
