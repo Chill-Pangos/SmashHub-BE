@@ -657,7 +657,7 @@ router.get(
  *         schema:
  *           type: string
  *           enum: [referee, chief]
- *         description: Filter by tournament referee role. chief maps to users with chief_referee system role. referee includes chief_referee users too.
+ *         description: Filter by tournament referee role. chief maps to users with chief_referee system role.
  *       - in: query
  *         name: search
  *         schema:

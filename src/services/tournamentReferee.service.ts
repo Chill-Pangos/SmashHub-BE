@@ -436,7 +436,7 @@ private async assertNotCompetingInTournament(
       filters?.role === "chief"
         ? ["chief_referee"]
         : filters?.role === "referee"
-          ? ["referee", "chief_referee"]
+          ? ["referee"]
           : ["referee", "chief_referee"];
 
     const eligibleRoleRows = await UserRole.findAll({
