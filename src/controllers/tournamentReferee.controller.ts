@@ -5,7 +5,7 @@ import { BadRequestError } from "../utils/errors.helper";
 import { parseEnumQuery, parsePagination, parseSortQuery } from "../utils/request.helper";
 
 const TOURNAMENT_REFEREE_ROLES = ["chief", "referee"] as const;
-const AVAILABLE_REFEREE_ROLES = ["referee", "chief_referee"] as const;
+const AVAILABLE_REFEREE_ROLES = ["referee", "chief"] as const;
 const INVITATION_STATUSES = ["pending", "accepted", "rejected", "cancelled", "expired"] as const;
 const INVITATION_SORT_FIELDS = ["createdAt", "status", "role", "expiresAt"] as const;
 const SORT_ORDERS = ["ASC", "DESC"] as const;
@@ -193,7 +193,7 @@ export class TournamentRefereeController {
       const role = parseEnumQuery(req.query.role, "role", AVAILABLE_REFEREE_ROLES);
       const search = req.query.search as string | undefined;
       const filters: {
-        role?: "referee" | "chief_referee";
+        role?: "referee" | "chief";
         search?: string;
         offset: number;
         limit: number;
