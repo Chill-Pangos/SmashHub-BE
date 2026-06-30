@@ -867,7 +867,8 @@ function buildRegenerationKey(
 async function getScheduleConfigUpdateContext(
   tournament: Tournament,
 ): Promise<ScheduleConfigUpdateContext> {
-  const categoryIds = (tournament.categories ?? []).map((category) => category.id);
+  const categories = await getTournamentCategories(tournament);
+  const categoryIds = categories.map((category) => category.id);
 
   if (categoryIds.length === 0) {
     return {
@@ -905,6 +906,19 @@ async function getScheduleConfigUpdateContext(
   };
 }
 
+async function getTournamentCategories(
+  tournament: Tournament,
+): Promise<TournamentCategory[]> {
+  if (tournament.categories && tournament.categories.length > 0) {
+    return tournament.categories;
+  }
+
+  return await TournamentCategory.findAll({
+    where: { tournamentId: tournament.id },
+    order: [["id", "ASC"]],
+  });
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export class ScheduleConfigService {
@@ -940,7 +954,7 @@ export class ScheduleConfigService {
 
     const breakdown = totalMatches != null
       ? createManualMatchBreakdown(totalMatches)
-      : this._resolveMatchBreakdown(tournament);
+      : await this._resolveMatchBreakdown(tournament);
     const normalizedForStorage = normalizeScheduleConfigForStorage(data);
     await runModelValidation(tournamentId, normalizedForStorage);
 
@@ -987,7 +1001,7 @@ export class ScheduleConfigService {
 
     const breakdown = totalMatches != null
       ? createManualMatchBreakdown(totalMatches)
-      : this._resolveMatchBreakdown(tournament);
+      : await this._resolveMatchBreakdown(tournament);
     const preview = this._buildPreview(mergedForPreview, breakdown);
     const needsRegeneration = requiresScheduleRegeneration(
       tournament,
@@ -1122,7 +1136,7 @@ export class ScheduleConfigService {
         throw new BadRequestError("regenerateSchedule=true is required when updating schedule-affecting fields after schedules exist");
       }
 
-      const breakdown = this._resolveMatchBreakdown(tournament);
+      const breakdown = await this._resolveMatchBreakdown(tournament);
       const preview = this._buildPreview(
         scheduleConfigTimesFromUtc(mergedForValidation),
         breakdown,
@@ -1182,7 +1196,7 @@ export class ScheduleConfigService {
 
     const breakdown = totalMatches != null
       ? createManualMatchBreakdown(totalMatches)
-      : this._resolveMatchBreakdown(tournament);
+      : await this._resolveMatchBreakdown(tournament);
 
     const {
       startDate,
@@ -1287,8 +1301,8 @@ export class ScheduleConfigService {
    * Tính totalMatches từ categories của tournament.
    * Ném BadRequestError nếu tournament chưa có category.
    */
-  private _resolveMatchBreakdown(tournament: Tournament): MatchBreakdown {
-    const categories = tournament.categories ?? [];
+  private async _resolveMatchBreakdown(tournament: Tournament): Promise<MatchBreakdown> {
+    const categories = await getTournamentCategories(tournament);
 
     if (categories.length === 0) {
       throw new BadRequestError(
