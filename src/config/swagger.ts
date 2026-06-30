@@ -836,7 +836,18 @@ const swaggerDefinition = {
             properties: {
               tournament: {
                 nullable: true,
-                allOf: [{ $ref: "#/components/schemas/Tournament" }],
+                allOf: [
+                  { $ref: "#/components/schemas/Tournament" },
+                  {
+                    type: "object",
+                    properties: {
+                      scheduleConfig: {
+                        nullable: true,
+                        allOf: [{ $ref: "#/components/schemas/ScheduleConfig" }],
+                      },
+                    },
+                  },
+                ],
               },
               inviter: {
                 nullable: true,

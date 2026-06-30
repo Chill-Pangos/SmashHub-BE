@@ -768,6 +768,12 @@ router.get(
  *                     tier: 2
  *                     status: registration_open
  *                     createdBy: 2
+ *                     scheduleConfig:
+ *                       startDate: "2024-07-10T00:00:00Z"
+ *                       endDate: "2024-07-12T00:00:00Z"
+ *                       registrationStartDate: "2024-06-01T00:00:00Z"
+ *                       registrationEndDate: "2024-06-20T00:00:00Z"
+ *                       bracketGenerationDate: "2024-06-21T00:00:00Z"
  *                   inviter:
  *                     id: 2
  *                     firstName: Admin
