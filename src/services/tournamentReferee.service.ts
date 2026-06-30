@@ -68,6 +68,10 @@ function buildPagination(count: number, offset: number, limit: number) {
   };
 }
 
+function getUserDisplayName(user: Pick<User, "id" | "firstName" | "lastName">): string {
+  return `${user.firstName} ${user.lastName}`.trim() || `User ${user.id}`;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class TournamentRefereeService {
@@ -157,7 +161,7 @@ export class TournamentRefereeService {
     }
     await this.assertNoOverlappingTournament(refereeId, invitation.tournamentId);
 
-    return await sequelize.transaction(async (t) => {
+    const referee = await sequelize.transaction(async (t) => {
       await invitation.update(
         { status: "accepted", respondedAt: new Date() },
         { transaction: t }
@@ -174,6 +178,10 @@ export class TournamentRefereeService {
 
       return referee;
     });
+
+    await this.notifyOrganizerOfInvitationResponse(invitation, "accepted");
+
+    return referee;
   }
 
   async rejectInvitation(
@@ -186,11 +194,19 @@ export class TournamentRefereeService {
       refereeId
     );
 
-    return await invitation.update({
+    const updatedInvitation = await invitation.update({
       status: "rejected",
       respondedAt: new Date(),
       ...(rejectionReason ? { rejectionReason } : {}),
     });
+
+    await this.notifyOrganizerOfInvitationResponse(
+      updatedInvitation,
+      "rejected",
+      rejectionReason,
+    );
+
+    return updatedInvitation;
   }
 
   // ── 3. Organizer hủy invitation ───────────────────────────────────────────
@@ -575,6 +591,46 @@ private async assertNotCompetingInTournament(
       throw new Error("This invitation has expired");
     }
     return invitation;
+  }
+
+  private async notifyOrganizerOfInvitationResponse(
+    invitation: RefereeInvitation,
+    status: "accepted" | "rejected",
+    rejectionReason?: string,
+  ): Promise<void> {
+    const [tournament, referee] = await Promise.all([
+      Tournament.findByPk(invitation.tournamentId),
+      User.findByPk(invitation.refereeId, {
+        attributes: ["id", "firstName", "lastName"],
+      }),
+    ]);
+
+    if (!tournament || !referee) return;
+
+    const refereeName = getUserDisplayName(referee);
+    const template = status === "accepted"
+      ? NotificationTemplates.refereeInvitationAccepted(tournament.name, refereeName)
+      : NotificationTemplates.refereeInvitationRejected(tournament.name, refereeName);
+
+    const data: Record<string, unknown> = {
+      invitationId: invitation.id,
+      tournamentId: invitation.tournamentId,
+      refereeId: invitation.refereeId,
+      role: invitation.role,
+      status,
+    };
+    if (rejectionReason) data.rejectionReason = rejectionReason;
+
+    try {
+      await notificationService.create(invitation.invitedBy, {
+        ...template,
+        referenceId: invitation.id,
+        referenceType: "referee_invitation_response",
+        data,
+      });
+    } catch (error) {
+      console.error("Failed to notify organizer about referee invitation response:", error);
+    }
   }
 
   private async assertNoChiefReferee(
