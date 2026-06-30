@@ -7,6 +7,14 @@ const VALID_STATUSES = new Set(["success", "failed", "skipped"]);
 const VALID_LEVELS = new Set(["info", "warn", "error"]);
 
 export class CronLogController {
+  private parseId(value: unknown): number {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new BadRequestError("Invalid cron log id");
+    }
+    return id;
+  }
+
   async findAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const tournamentId =
@@ -51,6 +59,17 @@ export class CronLogController {
       );
 
       res.status(200).json({ success: true, data: logs });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = this.parseId(req.params.id);
+      const log = await cronLogService.findById(id);
+
+      res.status(200).json({ success: true, data: log });
     } catch (error) {
       next(error);
     }

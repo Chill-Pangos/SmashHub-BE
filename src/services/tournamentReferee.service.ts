@@ -33,6 +33,8 @@ const REFEREE_INCLUDE = {
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "email", "avatarUrl"];
 const REINVITABLE_INVITATION_STATUSES = ["cancelled", "expired"];
+const MAX_REFEREES_PER_TABLE = 2;
+const EXTRA_REFEREE_TABLE_RATIO = 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +72,23 @@ function buildPagination(count: number, offset: number, limit: number) {
 
 function getUserDisplayName(user: Pick<User, "id" | "firstName" | "lastName">): string {
   return `${user.firstName} ${user.lastName}`.trim() || `User ${user.id}`;
+}
+
+async function getRefereeCapacity(tournamentId: number): Promise<{
+  minimum: number;
+  maximum: number;
+}> {
+  const config = await ScheduleConfig.findOne({ where: { tournamentId } });
+  if (!config) {
+    throw new Error("Schedule config not found for this tournament");
+  }
+
+  return {
+    minimum: config.numberOfTables,
+    maximum:
+      (config.numberOfTables * MAX_REFEREES_PER_TABLE) +
+      Math.floor(config.numberOfTables / EXTRA_REFEREE_TABLE_RATIO),
+  };
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -124,6 +143,8 @@ export class TournamentRefereeService {
 
   if (role === "chief") {
     await this.assertNoChiefReferee(tournamentId);
+  } else {
+    await this.assertRefereeCapacityAvailable(tournamentId);
   }
 
   const invitation = await RefereeInvitation.create({
@@ -674,6 +695,25 @@ private async assertNotCompetingInTournament(
     if (pendingChief) {
       throw new Error(
         "A pending chief referee invitation already exists for this tournament"
+      );
+    }
+  }
+
+  private async assertRefereeCapacityAvailable(tournamentId: number): Promise<void> {
+    const capacity = await getRefereeCapacity(tournamentId);
+    const [acceptedCount, pendingCount] = await Promise.all([
+      TournamentReferee.count({
+        where: { tournamentId, role: "referee" },
+      }),
+      RefereeInvitation.count({
+        where: { tournamentId, role: "referee", status: "pending" },
+      }),
+    ]);
+    const reservedCount = acceptedCount + pendingCount;
+
+    if (reservedCount >= capacity.maximum) {
+      throw new Error(
+        `Tournament can have at most ${capacity.maximum} referees for ${capacity.minimum} table(s)`,
       );
     }
   }
