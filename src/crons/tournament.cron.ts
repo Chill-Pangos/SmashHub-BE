@@ -4,19 +4,27 @@ import tournamentService, {
   TournamentStatusUpdateResult,
 } from "../services/tournament.service";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import Tournament from "../models/tournament.model";
+import TournamentReferee from "../models/tournamentReferee.model";
 import redisClient, { connectRedis } from "../config/redis";
 import { formatDateGMT7 } from "../utils/date.helper";
 import { TOURNAMENT_STATUS_REFRESH_CHANNEL } from "../utils/tournamentStatusScheduler.helper";
 import { withDbLock } from "../utils/dbLock.helper";
 import cronLogService from "../services/cronLog.service";
+import notificationService from "../services/notification.service";
 import tournamentStatusNotificationService from "../services/tournamentStatusNotification.service";
 import { Op } from "sequelize";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const PERIODIC_REFRESH_CRON = "*/5 * * * *";
-const RECONCILE_CRON = "* * * * *";
+const RECONCILE_CRON = "*/5 * * * *";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 type StatusJobName = "open" | "close" | "bracket" | "start";
+type RefereeCheckMilestone =
+  | "after_registration_end"
+  | "before_bracket_generation"
+  | "before_tournament_start";
 
 type StatusJobConfig = {
   jobName: StatusJobName;
@@ -24,6 +32,12 @@ type StatusJobConfig = {
   dateField: "registrationStartDate" | "registrationEndDate" | "bracketGenerationDate" | "startDate";
   lockName: string;
   handler: () => Promise<TournamentStatusTransition[]>;
+};
+
+type RefereeCheckEvent = {
+  tournamentId: number;
+  milestone: RefereeCheckMilestone;
+  runAt: Date;
 };
 
 const statusJobs: StatusJobConfig[] = [
@@ -58,6 +72,7 @@ const statusJobs: StatusJobConfig[] = [
 ];
 
 const timerByJob = new Map<StatusJobName, NodeJS.Timeout>();
+let refereeCheckTimer: NodeJS.Timeout | null = null;
 let tournamentStatusSchedulerStarted = false;
 let refreshPromise: Promise<void> | null = null;
 let redisSubscriber: ReturnType<typeof redisClient.duplicate> | null = null;
@@ -200,39 +215,58 @@ async function runConfiguredStatusJob(job: StatusJobConfig): Promise<TournamentS
 
 async function runReconcileTournamentStatuses(): Promise<void> {
   const startedAt = new Date();
-  const locked = await withDbLock("cron:tournament-status:reconcile", async () => {
-    const result = await tournamentService.reconcileTournamentStatuses();
-    return result.events;
-  });
 
-  if (!locked.acquired) {
+  try {
+    const locked = await withDbLock("cron:tournament-status:reconcile", async () => {
+      const result = await tournamentService.reconcileTournamentStatuses();
+      return result.events;
+    });
+
+    if (!locked.acquired) {
+      await cronLogService.create({
+        jobName: "tournament-status-reconcile",
+        level: "warn",
+        status: "skipped",
+        message: "Reconcile skipped because another worker holds the lock",
+        startedAt,
+        finishedAt: new Date(),
+        durationMs: Date.now() - startedAt.getTime(),
+      });
+      return;
+    }
+
+    const events = locked.result;
+    const summary = summarizeEvents(events);
+    const finishedAt = new Date();
+
+    if (summary.totalUpdated > 0) {
+      await cronLogService.create({
+        jobName: "tournament-status-reconcile",
+        level: "info",
+        status: "success",
+        message: "Tournament status reconcile completed",
+        meta: summary,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+      });
+    }
+
+    await writeEventLogs("tournament-status-reconcile", events);
+    await notifyStatusTransitions("tournament-status-reconcile", events);
+  } catch (error) {
+    const finishedAt = new Date();
     await cronLogService.create({
       jobName: "tournament-status-reconcile",
-      level: "warn",
-      status: "skipped",
-      message: "Reconcile skipped because another worker holds the lock",
+      level: "error",
+      status: "failed",
+      message: "Tournament status reconcile failed",
+      meta: { error: error instanceof Error ? error.message : String(error) },
       startedAt,
-      finishedAt: new Date(),
-      durationMs: Date.now() - startedAt.getTime(),
+      finishedAt,
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
     });
-    return;
   }
-
-  const events = locked.result;
-  const summary = summarizeEvents(events);
-  const finishedAt = new Date();
-  await cronLogService.create({
-    jobName: "tournament-status-reconcile",
-    level: "info",
-    status: "success",
-    message: "Tournament status reconcile completed",
-    meta: summary,
-    startedAt,
-    finishedAt,
-    durationMs: finishedAt.getTime() - startedAt.getTime(),
-  });
-  await writeEventLogs("tournament-status-reconcile", events);
-  await notifyStatusTransitions("tournament-status-reconcile", events);
 }
 
 function clearStatusTimer(jobName: StatusJobName): void {
@@ -245,6 +279,34 @@ function clearStatusTimer(jobName: StatusJobName): void {
 function clearAllStatusTimers(): void {
   for (const jobName of timerByJob.keys()) {
     clearStatusTimer(jobName);
+  }
+}
+
+function clearRefereeCheckTimer(): void {
+  if (!refereeCheckTimer) return;
+  clearTimeout(refereeCheckTimer);
+  refereeCheckTimer = null;
+}
+
+async function writeSchedulerPlanLog(
+  jobName: string,
+  message: string,
+  meta: Record<string, unknown>,
+): Promise<void> {
+  const now = new Date();
+  try {
+    await cronLogService.create({
+      jobName,
+      level: "info",
+      status: "success",
+      message,
+      meta,
+      startedAt: now,
+      finishedAt: now,
+      durationMs: 0,
+    });
+  } catch (error) {
+    console.error(`[CRON] Failed to write scheduler plan log for ${jobName}:`, error);
   }
 }
 
@@ -269,6 +331,15 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
   const nextTime = await loadNextUpdateTime(job);
   if (!nextTime) {
     console.log(`[CRON] ${job.label}: no future update time`);
+    await writeSchedulerPlanLog(
+      job.label,
+      "Tournament status scheduler has no future update time",
+      {
+        schedulerEvent: "no_future_update_time",
+        statusJob: job.jobName,
+        dateField: job.dateField,
+      },
+    );
     return;
   }
 
@@ -279,6 +350,18 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
     }, MAX_TIMEOUT_MS);
     timerByJob.set(job.jobName, timer);
     console.log(`[CRON] ${job.label}: next refresh before ${formatDateGMT7(nextTime)}`);
+    await writeSchedulerPlanLog(
+      job.label,
+      "Tournament status scheduler planned long timeout refresh",
+      {
+        schedulerEvent: "next_refresh_before",
+        statusJob: job.jobName,
+        dateField: job.dateField,
+        nextTime: nextTime.toISOString(),
+        nextTimeLocal: formatDateGMT7(nextTime),
+        delayMs: delay,
+      },
+    );
     return;
   }
 
@@ -289,6 +372,265 @@ async function scheduleNextStatusJob(job: StatusJobConfig): Promise<void> {
   timerByJob.set(job.jobName, timer);
 
   console.log(`[CRON] ${job.label}: next update at ${formatDateGMT7(nextTime)}`);
+  await writeSchedulerPlanLog(
+    job.label,
+    "Tournament status scheduler planned next update",
+    {
+      schedulerEvent: "next_update",
+      statusJob: job.jobName,
+      dateField: job.dateField,
+      nextTime: nextTime.toISOString(),
+      nextTimeLocal: formatDateGMT7(nextTime),
+      delayMs: delay,
+    },
+  );
+}
+
+function buildRefereeCheckEvents(config: ScheduleConfig): RefereeCheckEvent[] {
+  return [
+    {
+      tournamentId: config.tournamentId,
+      milestone: "after_registration_end",
+      runAt: new Date(config.registrationEndDate),
+    },
+    {
+      tournamentId: config.tournamentId,
+      milestone: "before_bracket_generation",
+      runAt: new Date(new Date(config.bracketGenerationDate).getTime() - ONE_DAY_MS),
+    },
+    {
+      tournamentId: config.tournamentId,
+      milestone: "before_tournament_start",
+      runAt: new Date(new Date(config.startDate).getTime() - ONE_DAY_MS),
+    },
+  ];
+}
+
+async function loadNextRefereeCheckEvents(): Promise<RefereeCheckEvent[]> {
+  const now = new Date();
+  const configs = await ScheduleConfig.findAll({
+    attributes: [
+      "tournamentId",
+      "startDate",
+      "registrationEndDate",
+      "bracketGenerationDate",
+    ],
+    where: {
+      [Op.or]: [
+        { registrationEndDate: { [Op.gt]: now } },
+        { bracketGenerationDate: { [Op.gt]: now } },
+        { startDate: { [Op.gt]: now } },
+      ],
+    },
+  });
+
+  const futureEvents = configs
+    .flatMap(buildRefereeCheckEvents)
+    .filter((event) => event.runAt > now)
+    .sort((a, b) => a.runAt.getTime() - b.runAt.getTime());
+
+  const next = futureEvents[0];
+  if (!next) return [];
+
+  const nextTime = next.runAt.getTime();
+  return futureEvents.filter((event) => event.runAt.getTime() === nextTime);
+}
+
+function getRefereeCheckLabel(milestone: RefereeCheckMilestone): string {
+  switch (milestone) {
+    case "after_registration_end":
+      return "sau khi đóng đăng ký";
+    case "before_bracket_generation":
+      return "24 giờ trước khi tạo bracket";
+    case "before_tournament_start":
+      return "24 giờ trước khi giải bắt đầu";
+  }
+}
+
+function summarizeRefereeCheckEvents(events: RefereeCheckEvent[]): string {
+  return events
+    .map((event) => `T#${event.tournamentId}:${event.milestone}`)
+    .join(", ");
+}
+
+async function runRefereeCapacityCheck(event: RefereeCheckEvent): Promise<void> {
+  const startedAt = new Date();
+  const jobName = "tournament-referee-capacity-check";
+
+  try {
+    const locked = await withDbLock(
+      `cron:tournament-referee-capacity:${event.tournamentId}:${event.milestone}`,
+      async () => {
+        const tournament = await Tournament.findByPk(event.tournamentId, {
+          attributes: ["id", "name", "createdBy", "status"],
+        });
+        if (!tournament) return { skipped: true, reason: "Tournament not found" };
+        if (["cancelled", "completed", "ongoing"].includes(tournament.status)) {
+          return { skipped: true, reason: `Tournament status is ${tournament.status}` };
+        }
+
+        const config = await ScheduleConfig.findOne({
+          where: { tournamentId: event.tournamentId },
+          attributes: ["numberOfTables"],
+        });
+        if (!config) return { skipped: true, reason: "Schedule config not found" };
+
+        const acceptedReferees = await TournamentReferee.count({
+          where: { tournamentId: event.tournamentId, role: "referee" },
+        });
+        const requiredReferees = config.numberOfTables;
+        const missingReferees = Math.max(requiredReferees - acceptedReferees, 0);
+
+        if (missingReferees <= 0) {
+          return {
+            skipped: false,
+            notified: false,
+            acceptedReferees,
+            requiredReferees,
+            missingReferees,
+          };
+        }
+
+        await notificationService.create(tournament.createdBy, {
+          type: "tournament_announcement",
+          title: "Thiếu trọng tài cho giải đấu",
+          message:
+            `Giải "${tournament.name}" cần tối thiểu ${requiredReferees} trọng tài cho ` +
+            `${config.numberOfTables} bàn. Hiện có ${acceptedReferees}, còn thiếu ${missingReferees}.`,
+          referenceId: tournament.id,
+          referenceType: "tournament",
+          data: {
+            warningType: "insufficient_referees",
+            milestone: event.milestone,
+            milestoneLabel: getRefereeCheckLabel(event.milestone),
+            acceptedReferees,
+            requiredReferees,
+            missingReferees,
+            numberOfTables: config.numberOfTables,
+            scheduledAt: event.runAt.toISOString(),
+          },
+        });
+
+        return {
+          skipped: false,
+          notified: true,
+          acceptedReferees,
+          requiredReferees,
+          missingReferees,
+        };
+      },
+    );
+
+    const finishedAt = new Date();
+    await cronLogService.create({
+      jobName,
+      tournamentId: event.tournamentId,
+      level: locked.acquired ? "info" : "warn",
+      status: locked.acquired ? "success" : "skipped",
+      message: locked.acquired
+        ? "Tournament referee capacity check completed"
+        : "Tournament referee capacity check skipped because another worker holds the lock",
+      meta: {
+        milestone: event.milestone,
+        runAt: event.runAt.toISOString(),
+        result: locked.acquired ? locked.result : undefined,
+      },
+      startedAt,
+      finishedAt,
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+    });
+  } catch (error) {
+    const finishedAt = new Date();
+    await cronLogService.create({
+      jobName,
+      tournamentId: event.tournamentId,
+      level: "error",
+      status: "failed",
+      message: "Tournament referee capacity check failed",
+      meta: {
+        milestone: event.milestone,
+        runAt: event.runAt.toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+      },
+      startedAt,
+      finishedAt,
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+    });
+  }
+}
+
+async function scheduleNextRefereeCheckJob(): Promise<void> {
+  clearRefereeCheckTimer();
+
+  const events = await loadNextRefereeCheckEvents();
+  const nextTime = events[0]?.runAt;
+  if (!nextTime) {
+    console.log("[CRON] tournament-referee-capacity-check: no future update time");
+    await writeSchedulerPlanLog(
+      "tournament-referee-capacity-check",
+      "Tournament referee capacity scheduler has no future update time",
+      {
+        schedulerEvent: "no_future_update_time",
+      },
+    );
+    return;
+  }
+
+  const delay = nextTime.getTime() - Date.now();
+  if (delay > MAX_TIMEOUT_MS) {
+    refereeCheckTimer = setTimeout(() => {
+      void scheduleNextRefereeCheckJob();
+    }, MAX_TIMEOUT_MS);
+    console.log(
+      `[CRON] tournament-referee-capacity-check: next refresh before ${formatDateGMT7(nextTime)} ` +
+        `(${events.length} event(s): ${summarizeRefereeCheckEvents(events)})`,
+    );
+    await writeSchedulerPlanLog(
+      "tournament-referee-capacity-check",
+      "Tournament referee capacity scheduler planned long timeout refresh",
+      {
+        schedulerEvent: "next_refresh_before",
+        nextTime: nextTime.toISOString(),
+        nextTimeLocal: formatDateGMT7(nextTime),
+        delayMs: delay,
+        eventCount: events.length,
+        events: events.map((event) => ({
+          tournamentId: event.tournamentId,
+          milestone: event.milestone,
+          runAt: event.runAt.toISOString(),
+        })),
+      },
+    );
+    return;
+  }
+
+  refereeCheckTimer = setTimeout(async () => {
+    for (const event of events) {
+      await runRefereeCapacityCheck(event);
+    }
+    await refreshTournamentStatusUpdateSchedule();
+  }, Math.max(delay, 0));
+
+  console.log(
+    `[CRON] tournament-referee-capacity-check: next update at ${formatDateGMT7(nextTime)} ` +
+      `(${events.length} event(s): ${summarizeRefereeCheckEvents(events)})`,
+  );
+  await writeSchedulerPlanLog(
+    "tournament-referee-capacity-check",
+    "Tournament referee capacity scheduler planned next update",
+    {
+      schedulerEvent: "next_update",
+      nextTime: nextTime.toISOString(),
+      nextTimeLocal: formatDateGMT7(nextTime),
+      delayMs: delay,
+      eventCount: events.length,
+      events: events.map((event) => ({
+        tournamentId: event.tournamentId,
+        milestone: event.milestone,
+        runAt: event.runAt.toISOString(),
+      })),
+    },
+  );
 }
 
 export async function refreshTournamentStatusUpdateSchedule(): Promise<void> {
@@ -296,7 +638,10 @@ export async function refreshTournamentStatusUpdateSchedule(): Promise<void> {
 
   refreshPromise = (async () => {
     try {
-      await Promise.all(statusJobs.map((job) => scheduleNextStatusJob(job)));
+      await Promise.all([
+        ...statusJobs.map((job) => scheduleNextStatusJob(job)),
+        scheduleNextRefereeCheckJob(),
+      ]);
     } catch (error) {
       console.error("[CRON] Error refreshing tournament status schedule:", error);
     } finally {
@@ -418,6 +763,7 @@ export const startTournamentCrons = async () => {
 export const stopTournamentCrons = () => {
   tournamentStatusSchedulerStarted = false;
   clearAllStatusTimers();
+  clearRefereeCheckTimer();
   if (redisSubscriber?.isOpen) {
     redisSubscriber.quit().catch((error) => {
       console.error("[CRON] Error closing tournament status refresh subscriber:", error);

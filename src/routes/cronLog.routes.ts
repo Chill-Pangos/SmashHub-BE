@@ -19,4 +19,11 @@ router.get(
   cronLogController.latest.bind(cronLogController),
 );
 
+router.get(
+  "/:id",
+  authenticate,
+  checkPermission("cron_logs:view"),
+  cronLogController.findById.bind(cronLogController),
+);
+
 export default router;

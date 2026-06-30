@@ -9,8 +9,10 @@ import redisClient, { connectRedis } from "../config/redis";
 import ApiRequestLog from "../models/apiRequestLog.model";
 import AuditLog from "../models/auditLog.model";
 import CronLog from "../models/cronLog.model";
+import User from "../models/user.model";
 import notificationService from "./notification.service";
 import systemRuntimeService, { MetricsWindow, SystemAlert } from "./systemRuntime.service";
+import { NotFoundError } from "../utils/errors.helper";
 
 type HealthStatus = "up" | "down" | "degraded";
 type EventType = "error" | "alert" | "cron" | "api";
@@ -110,6 +112,34 @@ class AdminSystemService {
         hasPrevPage: page > 1,
       },
     };
+  }
+
+  async getAuditLogDetail(id: number) {
+    const log = await AuditLog.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: "actor",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+    });
+    if (!log) throw new NotFoundError("Audit log not found");
+    return log;
+  }
+
+  async getApiRequestLogDetail(id: number) {
+    const log = await ApiRequestLog.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+    });
+    if (!log) throw new NotFoundError("API request log not found");
+    return log;
   }
 
   startRealtimePublisher(): void {

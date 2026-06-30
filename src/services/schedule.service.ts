@@ -393,6 +393,21 @@ async function getTournamentReferees(
   });
 }
 
+async function assertMinimumTournamentReferees(
+  tournamentId: number,
+  config: ScheduleConfig,
+): Promise<void> {
+  const refereeCount = await TournamentReferee.count({
+    where: { tournamentId, role: "referee" },
+  });
+
+  if (refereeCount < config.numberOfTables) {
+    throw new BadRequestError(
+      `Tournament needs at least ${config.numberOfTables} accepted referee(s) for ${config.numberOfTables} table(s). Current accepted referees: ${refereeCount}`,
+    );
+  }
+}
+
 async function getRequiredScheduleConfig(
   tournamentId: number,
   t?: Transaction,
@@ -622,6 +637,8 @@ export class ScheduleService {
     await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const pairs = await buildGroupMatchPairs(categoryId);
     if (pairs.length === 0) {
       throw new BadRequestError("Not enough group entries to create matches");
@@ -703,6 +720,8 @@ export class ScheduleService {
     await assertBracketsGenerated(tournament);
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const pairs = await buildKnockoutPairs(categoryId, roundName);
     const knockoutStart = await getKnockoutPhaseStart(category, config);
     const knockoutPlan = getOptimizedSlotPlan(config, knockoutStart, pairs);
@@ -796,6 +815,8 @@ export class ScheduleService {
     }
 
     const config = await getRequiredScheduleConfig(tournament.id);
+    await assertMinimumTournamentReferees(tournament.id, config);
+
     const groupJobs: {
       category: TournamentCategory;
       stage: Stage;

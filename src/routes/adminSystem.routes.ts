@@ -515,4 +515,72 @@ router.get(
   adminSystemController.auditLogs.bind(adminSystemController),
 );
 
+/**
+ * @swagger
+ * /admin/system/audit-logs/{id}:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get audit log detail
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Audit log detail
+ *       400:
+ *         description: Invalid id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ *       404:
+ *         description: Audit log not found
+ */
+router.get(
+  "/audit-logs/:id",
+  authenticate,
+  checkPermission("admin_system:view"),
+  adminSystemController.auditLogDetail.bind(adminSystemController),
+);
+
+/**
+ * @swagger
+ * /admin/system/api-request-logs/{id}:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get API request log detail
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: API request log detail
+ *       400:
+ *         description: Invalid id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ *       404:
+ *         description: API request log not found
+ */
+router.get(
+  "/api-request-logs/:id",
+  authenticate,
+  checkPermission("admin_system:view"),
+  adminSystemController.apiRequestLogDetail.bind(adminSystemController),
+);
+
 export default router;
