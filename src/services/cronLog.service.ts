@@ -1,7 +1,9 @@
 import { Op, WhereOptions } from "sequelize";
 import CronLog, { CronLogLevel, CronLogStatus } from "../models/cronLog.model";
+import Tournament from "../models/tournament.model";
 import notificationService from "./notification.service";
 import adminSystemService from "./adminSystem.service";
+import { NotFoundError } from "../utils/errors.helper";
 
 export type CreateCronLogInput = {
   jobName: string;
@@ -97,6 +99,20 @@ class CronLogService {
       limit: Math.min(Math.max(limit, 1), 100),
       order: [["createdAt", "DESC"]],
     });
+  }
+
+  async findById(id: number): Promise<CronLog> {
+    const log = await CronLog.findByPk(id, {
+      include: [
+        {
+          model: Tournament,
+          as: "tournament",
+          attributes: ["id", "name", "status", "location", "createdBy"],
+        },
+      ],
+    });
+    if (!log) throw new NotFoundError("Cron log not found");
+    return log;
   }
 }
 

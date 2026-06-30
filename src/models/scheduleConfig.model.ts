@@ -37,6 +37,19 @@ function utcTimeToLocalMinutes(hour?: number | null, minute?: number | null): nu
   return scheduleConfigHourFromUtc(hour) * 60 + minute;
 }
 
+function assertIntegerRange(
+  value: number | null | undefined,
+  label: string,
+  min: number,
+  max: number,
+): void {
+  if (value == null) return;
+
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label} must be an integer between ${min} and ${max}`);
+  }
+}
+
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 @Table({
@@ -323,17 +336,26 @@ export default class ScheduleConfig extends Model {
       lunchBreakStartMinute,
       lunchBreakEndHour,
       lunchBreakEndMinute,
+      lunchBreakDurationMinutes,
     } = instance;
 
-    // Nếu không có lunch break, skip validation
+    assertIntegerRange(lunchBreakStartHour, "Lunch break start hour", HOUR_MIN, HOUR_MAX);
+    assertIntegerRange(lunchBreakStartMinute, "Lunch break start minute", MINUTE_MIN, MINUTE_MAX);
+    assertIntegerRange(lunchBreakEndHour, "Lunch break end hour", HOUR_MIN, HOUR_MAX);
+    assertIntegerRange(lunchBreakEndMinute, "Lunch break end minute", MINUTE_MIN, MINUTE_MAX);
+
     if (lunchBreakStartHour == null && lunchBreakEndHour == null) {
+      if (lunchBreakDurationMinutes != null) {
+        throw new Error(
+          "Lunch break duration requires lunch break start and end times"
+        );
+      }
       return;
     }
 
-    // Nếu có 1 trong 2, phải có cả 2
     if (
-      (lunchBreakStartHour != null && lunchBreakEndHour == null) ||
-      (lunchBreakStartHour == null && lunchBreakEndHour != null)
+      lunchBreakStartHour == null ||
+      lunchBreakEndHour == null
     ) {
       throw new Error(
         "Both lunch break start and end times must be provided if lunch break is configured"
@@ -357,6 +379,22 @@ export default class ScheduleConfig extends Model {
       throw new Error(
         "Lunch break end time must be after lunch break start time"
       );
+    }
+
+    if (lunchBreakDurationMinutes != null) {
+      if (!Number.isInteger(lunchBreakDurationMinutes) || lunchBreakDurationMinutes <= 0) {
+        throw new Error("Lunch break duration must be a positive integer");
+      }
+
+      if (
+        startTotalMinutes != null &&
+        endTotalMinutes != null &&
+        lunchBreakDurationMinutes !== endTotalMinutes - startTotalMinutes
+      ) {
+        throw new Error(
+          "Lunch break duration must match lunch break start and end times"
+        );
+      }
     }
   }
 

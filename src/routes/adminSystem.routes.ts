@@ -288,6 +288,12 @@ router.get(
  *   get:
  *     tags: [Admin System]
  *     summary: Get recent system events
+ *     description: |
+ *       Use `type=api` to fetch latest API request logs from `api_request_logs`.
+ *
+ *       For failed requests, public API responses may still hide internal 500 details,
+ *       but api request logs keep the real `errorMessage` and optional
+ *       `responseMeta.internalError` for admin diagnostics.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -318,6 +324,121 @@ router.get(
  *                   example: true
  *                 data:
  *                   type: object
+ *                   properties:
+ *                     errors:
+ *                       type: array
+ *                       description: Present when type is omitted or type=error
+ *                       items:
+ *                         type: object
+ *                         additionalProperties: true
+ *                     alerts:
+ *                       type: array
+ *                       description: Present when type is omitted or type=alert
+ *                       items:
+ *                         type: object
+ *                         additionalProperties: true
+ *                     cronLogs:
+ *                       type: array
+ *                       description: Present when type is omitted or type=cron
+ *                       items:
+ *                         type: object
+ *                         additionalProperties: true
+ *                     apiRequestLogs:
+ *                       type: array
+ *                       description: Present when type is omitted or type=api
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 12
+ *                           requestId:
+ *                             type: string
+ *                             nullable: true
+ *                             example: "req_01J..."
+ *                           userId:
+ *                             type: integer
+ *                             nullable: true
+ *                             example: 13
+ *                           method:
+ *                             type: string
+ *                             example: POST
+ *                           path:
+ *                             type: string
+ *                             example: /api/schedules/generate-tournament
+ *                           route:
+ *                             type: string
+ *                             nullable: true
+ *                             example: /generate-tournament
+ *                           statusCode:
+ *                             type: integer
+ *                             example: 500
+ *                           success:
+ *                             type: boolean
+ *                             example: false
+ *                           errorCode:
+ *                             type: string
+ *                             nullable: true
+ *                             example: INTERNAL_ERROR
+ *                           errorMessage:
+ *                             type: string
+ *                             nullable: true
+ *                             description: Real server-side error message for admin diagnostics
+ *                             example: "Column 'entryAId' cannot be null"
+ *                           ip:
+ *                             type: string
+ *                             nullable: true
+ *                             example: ::ffff:127.0.0.1
+ *                           userAgent:
+ *                             type: string
+ *                             nullable: true
+ *                           requestMeta:
+ *                             type: object
+ *                             nullable: true
+ *                             additionalProperties: true
+ *                             example:
+ *                               query: {}
+ *                               params: {}
+ *                               body:
+ *                                 tournamentId: 2
+ *                           responseMeta:
+ *                             type: object
+ *                             nullable: true
+ *                             additionalProperties: true
+ *                             description: Captured response; failed requests may include internalError
+ *                             properties:
+ *                               response:
+ *                                 type: object
+ *                                 nullable: true
+ *                                 additionalProperties: true
+ *                               internalError:
+ *                                 type: object
+ *                                 nullable: true
+ *                                 properties:
+ *                                   details:
+ *                                     nullable: true
+ *                                     oneOf:
+ *                                       - type: string
+ *                                       - type: object
+ *                                         additionalProperties: true
+ *                                   stack:
+ *                                     type: string
+ *                                     nullable: true
+ *                           startedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           finishedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           durationMs:
+ *                             type: integer
+ *                             example: 42
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
  *       400:
  *         description: Invalid query
  *       401:
@@ -392,6 +513,74 @@ router.get(
   authenticate,
   checkPermission("admin_system:view"),
   adminSystemController.auditLogs.bind(adminSystemController),
+);
+
+/**
+ * @swagger
+ * /admin/system/audit-logs/{id}:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get audit log detail
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Audit log detail
+ *       400:
+ *         description: Invalid id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ *       404:
+ *         description: Audit log not found
+ */
+router.get(
+  "/audit-logs/:id",
+  authenticate,
+  checkPermission("admin_system:view"),
+  adminSystemController.auditLogDetail.bind(adminSystemController),
+);
+
+/**
+ * @swagger
+ * /admin/system/api-request-logs/{id}:
+ *   get:
+ *     tags: [Admin System]
+ *     summary: Get API request log detail
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: API request log detail
+ *       400:
+ *         description: Invalid id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Missing admin_system:view permission
+ *       404:
+ *         description: API request log not found
+ */
+router.get(
+  "/api-request-logs/:id",
+  authenticate,
+  checkPermission("admin_system:view"),
+  adminSystemController.apiRequestLogDetail.bind(adminSystemController),
 );
 
 export default router;

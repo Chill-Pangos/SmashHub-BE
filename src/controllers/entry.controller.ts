@@ -18,6 +18,9 @@ export class EntryController {
       const userId = this.getAuthenticatedUserId(req, next);
       if (userId == null) return;
       const { categoryId, action, targetEntryId, name } = req.body;
+      if (!["create_team", "join_team"].includes(action)) {
+        throw new BadRequestError("action must be create_team or join_team");
+      }
       const result = await entryService.register(
         userId,
         parsePositiveInt(categoryId, "categoryId"),

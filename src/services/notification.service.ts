@@ -175,6 +175,18 @@ export const NotificationTemplates = {
     message: `You have been invited to referee at "${tournamentName}"`,
   }),
 
+  refereeInvitationAccepted: (tournamentName: string, refereeName: string) => ({
+    type: "referee_invitation" as NotificationType,
+    title: "Referee Invitation Accepted",
+    message: `${refereeName} accepted your invitation for "${tournamentName}"`,
+  }),
+
+  refereeInvitationRejected: (tournamentName: string, refereeName: string) => ({
+    type: "referee_invitation" as NotificationType,
+    title: "Referee Invitation Rejected",
+    message: `${refereeName} rejected your invitation for "${tournamentName}"`,
+  }),
+
   tournamentStatusChanged: (tournamentName: string, statusLabel: string) => ({
     type: "tournament_status_changed" as NotificationType,
     title: `Tournament status updated: ${tournamentName}`,

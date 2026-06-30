@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import scheduleService from "../services/schedule.service";
 import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { KnockoutRound } from "../models/schedule.model";
+import { KNOCKOUT_ROUNDS, KnockoutRound } from "../models/schedule.model";
 import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 
 export class ScheduleController {
@@ -73,11 +73,14 @@ export class ScheduleController {
 
       const { categoryId, roundName } = req.body;
       if (!categoryId) throw new BadRequestError("categoryId is required");
+      if (roundName !== undefined && !KNOCKOUT_ROUNDS.includes(roundName)) {
+        throw new BadRequestError("Invalid roundName");
+      }
 
       const result = await scheduleService.generateKnockoutSchedule(
         organizerId,
         parsePositiveInt(categoryId, "categoryId"),
-        roundName,
+        roundName as KnockoutRound | undefined,
       );
 
       res.status(201).json({
@@ -158,7 +161,10 @@ export class ScheduleController {
       const { categoryId } = req.body;
       if (!categoryId) throw new BadRequestError("categoryId is required");
 
-      await scheduleService.syncMatchEntriesFromBrackets(parsePositiveInt(categoryId, "categoryId"));
+      await scheduleService.syncMatchEntriesFromBrackets(
+        organizerId,
+        parsePositiveInt(categoryId, "categoryId"),
+      );
 
       res.status(200).json({
         success: true,

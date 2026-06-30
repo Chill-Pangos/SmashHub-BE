@@ -8,6 +8,14 @@ const VALID_WINDOWS = new Set(["1m", "5m", "15m"]);
 const VALID_EVENT_TYPES = new Set(["error", "alert", "cron", "api"]);
 
 class AdminSystemController {
+  private parseId(value: unknown, fieldName: string): number {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new BadRequestError(`${fieldName} must be a positive integer`);
+    }
+    return id;
+  }
+
   async summary(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const summary = await adminSystemService.getSummary();
@@ -68,6 +76,28 @@ class AdminSystemController {
 
       const result = await adminSystemService.getAuditLogs(filters);
       res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async auditLogDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = this.parseId(req.params.id, "auditLogId");
+      const log = await adminSystemService.getAuditLogDetail(id);
+
+      res.status(200).json({ success: true, data: log });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async apiRequestLogDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = this.parseId(req.params.id, "apiRequestLogId");
+      const log = await adminSystemService.getApiRequestLogDetail(id);
+
+      res.status(200).json({ success: true, data: log });
     } catch (error) {
       next(error);
     }
