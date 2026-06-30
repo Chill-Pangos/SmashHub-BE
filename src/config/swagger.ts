@@ -1258,15 +1258,6 @@ const swaggerDefinition = {
         description: "Successfully deleted, no content returned",
       },
     },
-      InternalServerError: {
-        description: "Internal server error",
-        content: {
-          "application/json": {
-            schema: { $ref: "#/components/schemas/Error" },
-            example: { message: "Internal server error" },
-          },
-        },
-      },
   },
 };
 

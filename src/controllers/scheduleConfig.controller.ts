@@ -143,18 +143,11 @@ export class ScheduleConfigController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const { totalMatches, ...configData }: any = req.body;
-
-      if (!Number.isInteger(totalMatches) || totalMatches <= 0) {
-        throw new BadRequestError(
-          "totalMatches must be a positive integer"
-        );
-      }
+      const configData = req.body;
 
       const preview = await ScheduleConfigService.previewCreate(
         tournamentId,
         configData,
-        totalMatches,
         organizerId
       );
 
@@ -177,21 +170,11 @@ export class ScheduleConfigController {
         throw new BadRequestError("Invalid tournament ID");
       }
 
-      const { totalMatches, ...configData }: any = req.body;
-
-      if (
-        totalMatches !== undefined &&
-        (!Number.isInteger(totalMatches) || totalMatches <= 0)
-      ) {
-        throw new BadRequestError(
-          "totalMatches must be a positive integer"
-        );
-      }
+      const configData = req.body;
 
       const preview = await ScheduleConfigService.previewUpdate(
         tournamentId,
         configData,
-        totalMatches,
         organizerId
       );
 

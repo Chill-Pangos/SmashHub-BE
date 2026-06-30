@@ -32,7 +32,7 @@ export function assertUtcIsoDateTime(value: unknown, fieldName = "date"): string
 }
 
 export function toUtcDate(
-  value: Date | string | number,
+  value: Date | string,
   fieldName = "date",
 ): Date {
   if (typeof value === "string") {

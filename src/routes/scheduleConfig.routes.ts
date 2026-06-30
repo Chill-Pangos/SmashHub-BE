@@ -782,13 +782,8 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [totalMatches, startDate, endDate, registrationStartDate, registrationEndDate, bracketGenerationDate]
+ *             required: [startDate, endDate, registrationStartDate, registrationEndDate, bracketGenerationDate]
  *             properties:
- *               totalMatches:
- *                 type: integer
- *                 minimum: 1
- *                 example: 127
- *                 description: Total number of matches (required for preview calculation)
  *               startDate:
  *                 type: string
  *                 format: date-time
@@ -865,7 +860,6 @@ router.post(
  *             valid_schedule:
  *               summary: Valid schedule with buffer time
  *               value:
- *                 totalMatches: 127
  *                 startDate: "2026-06-15T08:00:00.000Z"
  *                 endDate: "2026-06-20T22:00:00.000Z"
  *                 registrationStartDate: "2026-05-15T00:00:00.000Z"
@@ -943,11 +937,6 @@ router.post(
  *           schema:
  *             type: object
  *             properties:
- *               totalMatches:
- *                 type: integer
- *                 minimum: 1
- *                 example: 127
- *                 description: Optional override; if omitted, total matches are calculated from tournament categories
  *               startDate:
  *                 type: string
  *                 format: date-time
@@ -1019,12 +1008,10 @@ router.post(
  *             add_tables:
  *               summary: Preview adding more tables
  *               value:
- *                 totalMatches: 127
  *                 numberOfTables: 6
  *             adjust_times:
  *               summary: Preview adjusting operational hours and breaks
  *               value:
- *                 totalMatches: 127
  *                 dailyStartHour: 9
  *                 dailyEndHour: 21
  *                 matchDurationMinutes: 50
