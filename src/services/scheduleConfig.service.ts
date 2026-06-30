@@ -287,7 +287,7 @@ function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleSlotConfig {
     throw new BadRequestError("startDate and endDate are required");
   }
 
-  return {
+  const timingConfig: ScheduleSlotConfig = {
     startDate: data.startDate,
     endDate: data.endDate,
     matchDurationMinutes: data.matchDurationMinutes ?? 30,
@@ -297,11 +297,22 @@ function buildTimingConfig(data: Partial<ScheduleConfig>): ScheduleSlotConfig {
     dailyStartMinute: data.dailyStartMinute ?? 0,
     dailyEndHour: data.dailyEndHour ?? 22,
     dailyEndMinute: data.dailyEndMinute ?? 0,
-    lunchBreakStartHour: data.lunchBreakStartHour,
-    lunchBreakStartMinute: data.lunchBreakStartMinute,
-    lunchBreakEndHour: data.lunchBreakEndHour,
-    lunchBreakEndMinute: data.lunchBreakEndMinute,
   };
+
+  if (data.lunchBreakStartHour !== undefined) {
+    timingConfig.lunchBreakStartHour = data.lunchBreakStartHour;
+  }
+  if (data.lunchBreakStartMinute !== undefined) {
+    timingConfig.lunchBreakStartMinute = data.lunchBreakStartMinute;
+  }
+  if (data.lunchBreakEndHour !== undefined) {
+    timingConfig.lunchBreakEndHour = data.lunchBreakEndHour;
+  }
+  if (data.lunchBreakEndMinute !== undefined) {
+    timingConfig.lunchBreakEndMinute = data.lunchBreakEndMinute;
+  }
+
+  return timingConfig;
 }
 
 function calculateBracketSize(entryCount: number): number {
