@@ -11,6 +11,7 @@ import EntryMember from "../models/entryMember.model";
 import Entry from "../models/entry.model";
 import User from "../models/user.model";
 import notificationService from "./notification.service";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,14 +20,14 @@ async function assertMatchReferee(
   matchId: number
 ): Promise<void> {
   const ref = await MatchReferee.findOne({ where: { matchId, refereeId: userId } });
-  if (!ref) throw new Error("Only an assigned referee can perform this action");
+  if (!ref) throw new ForbiddenError("Only an assigned referee can perform this action");
 }
 
 async function getSubMatchWithMatch(subMatchId: number): Promise<SubMatch> {
   const subMatch = await SubMatch.findByPk(subMatchId, {
     include: [{ model: Match, as: "match" }],
   });
-  if (!subMatch) throw new Error("SubMatch not found");
+  if (!subMatch) throw new NotFoundError("SubMatch not found");
   return subMatch;
 }
 
@@ -50,11 +51,11 @@ async function getSubMatchWithCategory(subMatchId: number): Promise<{
       },
     ],
   });
-  if (!subMatch) throw new Error("SubMatch not found");
-  if (!subMatch.match) throw new Error("Match not found");
+  if (!subMatch) throw new NotFoundError("SubMatch not found");
+  if (!subMatch.match) throw new NotFoundError("Match not found");
 
   const category = subMatch.match.schedule?.tournamentCategory;
-  if (!category) throw new Error("Match category not found");
+  if (!category) throw new NotFoundError("Match category not found");
 
   return { subMatch, match: subMatch.match, category };
 }
@@ -69,13 +70,13 @@ async function assertSubMatchHasBothLineups(subMatchId: number): Promise<void> {
   const hasTeamB = players.some((player) => player.team === "B");
 
   if (!hasTeamA || !hasTeamB) {
-    throw new Error("Both teams must have approved lineup before sub-match starts");
+    throw new BadRequestError("Both teams must have approved lineup before sub-match starts");
   }
 }
 
 function assertAssignedUmpire(subMatch: SubMatch, userId: number): void {
   if (subMatch.umpireId !== userId && subMatch.assistantUmpireId !== userId) {
-    throw new Error("Only assigned umpire can perform this action");
+    throw new ForbiddenError("Only assigned umpire can perform this action");
   }
 }
 
@@ -145,16 +146,16 @@ export class SubMatchService {
     teamFormat: string
   ): Promise<SubMatch[]> {
     const match = await Match.findByPk(matchId);
-    if (!match) throw new Error("Match not found");
+    if (!match) throw new NotFoundError("Match not found");
     await assertMatchReferee(refereeId, matchId);
 
     if (match.status !== "in_progress") {
-      throw new Error("Match must be in_progress to create sub-matches");
+      throw new BadRequestError("Match must be in_progress to create sub-matches");
     }
 
     const existing = await SubMatch.findAll({ where: { matchId } });
     if (existing.length > 0) {
-      throw new Error("Sub-matches already created for this match");
+      throw new ConflictError("Sub-matches already created for this match");
     }
 
     const formats = teamFormat.split("-");
@@ -191,17 +192,17 @@ export class SubMatchService {
     assertAssignedUmpire(subMatch, refereeId);
 
     if (subMatch.match?.status !== "in_progress") {
-      throw new Error("Match must be in_progress before sub-match starts");
+      throw new BadRequestError("Match must be in_progress before sub-match starts");
     }
 
     if (subMatch.status !== "scheduled") {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot start sub-match. Status is "${subMatch.status}", must be "scheduled"`
       );
     }
 
     if (!subMatch.umpireId) {
-      throw new Error("Umpire must be assigned before sub-match starts");
+      throw new BadRequestError("Umpire must be assigned before sub-match starts");
     }
 
     await assertSubMatchHasBothLineups(subMatchId);
@@ -238,16 +239,16 @@ export class SubMatchService {
     assertAssignedUmpire(subMatch, refereeId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot finalize sub-match. Status is "${subMatch.status}", must be "in_progress"`
       );
     }
 
     const sets = await MatchSet.findAll({ where: { subMatchId } });
-    if (sets.length === 0) throw new Error("No sets found for this sub-match");
+    if (sets.length === 0) throw new NotFoundError("No sets found for this sub-match");
 
     const winnerTeam = getWinningTeamFromSets(sets, category);
-    if (!winnerTeam) throw new Error("Sub-match is not ready to finalize");
+    if (!winnerTeam) throw new BadRequestError("Sub-match is not ready to finalize");
 
     const updatedSubMatch = await subMatch.update({
       status: "completed" satisfies SubMatchStatus,
@@ -280,14 +281,14 @@ export class SubMatchService {
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "scheduled") {
-      throw new Error("Can only assign players before sub-match starts");
+      throw new BadRequestError("Can only assign players before sub-match starts");
     }
 
     // Validate team A và B đều có player
     const teamA = players.filter((p) => p.team === "A");
     const teamB = players.filter((p) => p.team === "B");
     if (teamA.length === 0 || teamB.length === 0) {
-      throw new Error("Both teams must have at least 1 player");
+      throw new BadRequestError("Both teams must have at least 1 player");
     }
 
     const assignedPlayers = await sequelize.transaction(async (t) => {
@@ -312,7 +313,7 @@ export class SubMatchService {
 
   async getSubMatchesByMatch(matchId: number): Promise<SubMatch[]> {
     const match = await Match.findByPk(matchId, { attributes: ["id"] });
-    if (!match) throw new Error("Match not found");
+    if (!match) throw new NotFoundError("Match not found");
 
     return await SubMatch.findAll({
       where: { matchId },
@@ -361,7 +362,7 @@ export class SubMatchService {
         },
       ],
     });
-    if (!subMatch) throw new Error("SubMatch not found");
+    if (!subMatch) throw new NotFoundError("SubMatch not found");
     return subMatch;
   }
 }

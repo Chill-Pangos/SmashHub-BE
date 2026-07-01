@@ -241,20 +241,50 @@ export function getErrorStatusCode(error: unknown): number {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
 
-    if (message.includes("validation") || message.includes("required")) {
-      return 400;
+    if (message.includes("unauthorized") || message.includes("not authenticated")) {
+      return 401;
+    }
+    if (
+      message.includes("forbidden") ||
+      message.includes("permission") ||
+      message.startsWith("only an assigned") ||
+      message.startsWith("only assigned") ||
+      message.startsWith("only the tournament organizer") ||
+      message.startsWith("only the team captain") ||
+      message.startsWith("only entry captain") ||
+      message.startsWith("only the entry captain") ||
+      message.startsWith("only the chief referee")
+    ) {
+      return 403;
     }
     if (message.includes("not found")) {
       return 404;
     }
-    if (message.includes("already exists") || message.includes("conflict")) {
+    if (
+      message.includes("already exists") ||
+      message.includes("conflict") ||
+      message.includes("duplicate") ||
+      message.includes("already won") ||
+      message.includes("already approved")
+    ) {
       return 409;
     }
-    if (message.includes("unauthorized") || message.includes("not authenticated")) {
-      return 401;
-    }
-    if (message.includes("forbidden") || message.includes("permission")) {
-      return 403;
+    if (
+      message.includes("validation") ||
+      message.includes("required") ||
+      message.includes("invalid") ||
+      message.includes("must") ||
+      message.includes("cannot") ||
+      message.includes("not enough") ||
+      message.includes("no pending") ||
+      message.includes("no groups") ||
+      message.includes("no qualifiers") ||
+      message.includes("no sets") ||
+      message.includes("not ready") ||
+      message.includes("only pending") ||
+      message.includes("only completed")
+    ) {
+      return 400;
     }
   }
 

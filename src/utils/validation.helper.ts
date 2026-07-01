@@ -1,5 +1,6 @@
 import TournamentCategory from "../models/tournamentCategory.model";
 import { Transaction } from "sequelize";
+import { BadRequestError, ConflictError, NotFoundError } from "./errors.helper";
 
 /**
  * General validation utilities (migrated here to follow *.helper.ts convention)
@@ -54,22 +55,22 @@ export const validatePasswordStrength = (
 
 export const validateEmail = (email: string): void => {
   if (!email) {
-    throw new Error("Email is required");
+    throw new BadRequestError("Email is required");
   }
 
   if (!isValidEmail(email)) {
-    throw new Error("Invalid email format");
+    throw new BadRequestError("Invalid email format");
   }
 };
 
 export const validatePassword = (password: string): void => {
   if (!password) {
-    throw new Error("Password is required");
+    throw new BadRequestError("Password is required");
   }
 
   const validation = validatePasswordStrength(password);
   if (!validation.isValid) {
-    throw new Error(validation.message);
+    throw new BadRequestError(validation.message ?? "Invalid password");
   }
 };
 
@@ -87,11 +88,11 @@ export class ValidationHelper {
     });
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('Category not found');
     }
 
     if (currentCount >= category.maxEntries) {
-      throw new Error('Maximum number of entries has been reached for this category');
+      throw new ConflictError('Maximum number of entries has been reached for this category');
     }
   }
 }

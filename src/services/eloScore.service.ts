@@ -2,6 +2,7 @@
 import { Op } from "sequelize";
 import EloScore from "../models/eloScore.model";
 import User from "../models/user.model";
+import { NotFoundError } from "../utils/errors.helper";
 
 const USER_ATTRIBUTES = ["id", "firstName", "lastName", "avatarUrl"];
 
@@ -23,7 +24,7 @@ export class EloScoreService {
       where: { userId },
       include: [{ model: User, as: "user", attributes: USER_ATTRIBUTES }],
     });
-    if (!score) throw new Error("ELO score not found for this user");
+    if (!score) throw new NotFoundError("ELO score not found for this user");
     return score;
   }
 

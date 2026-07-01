@@ -19,6 +19,7 @@ import { sequelize } from "../config/database";
 import { Op, WhereOptions } from "sequelize";
 import { removeUndefinedFields } from "../utils/object.helper";
 import { assertTournamentOwnerOrAdmin } from "../utils/access.helper";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
 
 const MAX_CATEGORIES_PER_TOURNAMENT = 1;
 const MIN_ELIGIBLE_ENTRIES_TO_RUN = 16;
@@ -107,7 +108,7 @@ export class TournamentService {
       // Create tournament categories if provided
       if (data.categories && data.categories.length > 0) {
         if (data.categories.length > MAX_CATEGORIES_PER_TOURNAMENT) {
-          throw new Error(
+          throw new BadRequestError(
             `A tournament can have at most ${MAX_CATEGORIES_PER_TOURNAMENT} categories.`,
           );
         }
@@ -147,7 +148,7 @@ export class TournamentService {
       await transaction.commit();
 
       if (!createdTournament) {
-        throw new Error("Tournament not found after creation");
+        throw new NotFoundError("Tournament not found after creation");
       }
 
       return createdTournament;
@@ -444,7 +445,7 @@ export class TournamentService {
         data.categories !== undefined &&
         data.categories.length > MAX_CATEGORIES_PER_TOURNAMENT
       ) {
-        throw new Error(
+        throw new BadRequestError(
           `Currently only ${MAX_CATEGORIES_PER_TOURNAMENT} category per tournament is allowed`,
         );
       }
@@ -542,7 +543,7 @@ export class TournamentService {
 
     const categories = tournament.categories ?? [];
     if (categories.length === 0) {
-      throw new Error("Tournament has no categories");
+      throw new BadRequestError("Tournament has no categories");
     }
 
     const awards = await this.getTournamentAwards(categories);
@@ -571,10 +572,10 @@ export class TournamentService {
       return null;
     }
     if (tournament.status === "completed") {
-      throw new Error("Completed tournaments cannot be cancelled");
+      throw new BadRequestError("Completed tournaments cannot be cancelled");
     }
     if (tournament.status === "cancelled") {
-      throw new Error("Tournament is already cancelled");
+      throw new ConflictError("Tournament is already cancelled");
     }
 
     await tournament.update({ status: "cancelled" });

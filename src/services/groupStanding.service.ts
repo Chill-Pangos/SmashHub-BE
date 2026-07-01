@@ -10,6 +10,7 @@ import MatchSet from "../models/matchSet.model";
 import SubMatch from "../models/subMatch.model";
 import Schedule from "../models/schedule.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
@@ -91,22 +92,22 @@ async function assertOrganizer(
     attributes: ["id", "createdBy"],
   });
   if (!tournament || tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new ForbiddenError("Only the tournament organizer can perform this action");
   }
 }
 
 async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
   if (tournament.status !== "brackets_generated") {
-    throw new Error("Tournament must be in brackets_generated status before managing groups");
+    throw new BadRequestError("Tournament must be in brackets_generated status before managing groups");
   }
 
   const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
   if (!config?.bracketGenerationDate) {
-    throw new Error("Bracket generation date is not configured for this tournament");
+    throw new BadRequestError("Bracket generation date is not configured for this tournament");
   }
 
   if (new Date() < config.bracketGenerationDate) {
-    throw new Error("Bracket generation date must be reached before managing groups");
+    throw new BadRequestError("Bracket generation date must be reached before managing groups");
   }
 }
 
@@ -132,7 +133,7 @@ export class GroupStandingService {
    */
   calculateOptimalGroups(totalEntries: number): GroupConfig {
     if (totalEntries < MIN_ENTRIES_FOR_GROUPS) {
-      throw new Error(
+      throw new BadRequestError(
         `At least ${MIN_ENTRIES_FOR_GROUPS} entries are required to generate groups`
       );
     }
@@ -162,7 +163,7 @@ export class GroupStandingService {
     }
 
     if (!best) {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot generate valid groups for ${totalEntries} entries. Supported range: ${MIN_ENTRIES_FOR_GROUPS}–320.`
       );
     }
@@ -189,7 +190,7 @@ export class GroupStandingService {
     const entries = await this.getEligibleEntries(category);
 
     if (entries.length < MIN_ENTRIES_FOR_GROUPS) {
-      throw new Error(
+      throw new BadRequestError(
         `Not enough eligible entries (${entries.length}). Minimum required: ${MIN_ENTRIES_FOR_GROUPS}.`
       );
     }
@@ -278,19 +279,19 @@ export class GroupStandingService {
     ],
   });
 
-  if (!match) throw new Error("Match not found or not a group stage match");
-  if (match.status !== "completed") throw new Error("Match is not completed yet");
-  if (!match.winnerEntryId) throw new Error("Match has no winner");
+  if (!match) throw new NotFoundError("Match not found or not a group stage match");
+  if (match.status !== "completed") throw new BadRequestError("Match is not completed yet");
+  if (!match.winnerEntryId) throw new BadRequestError("Match has no winner");
   if (!match.entryAId || !match.entryBId) {
-    throw new Error("Match entries are not fully assigned");
+    throw new ConflictError("Match entries are not fully assigned");
   }
 
   const schedule = match.schedule;
-  if (!schedule) throw new Error("Match has no schedule");
+  if (!schedule) throw new BadRequestError("Match has no schedule");
 
   const categoryId = schedule.categoryId;
   const groupName = schedule.groupName;
-  if (!groupName) throw new Error("Match schedule has no group name");
+  if (!groupName) throw new BadRequestError("Match schedule has no group name");
 
   const { entryAId, entryBId, winnerEntryId } = match;
   const loserEntryId = winnerEntryId === entryAId ? entryBId : entryAId;
@@ -337,14 +338,14 @@ export class GroupStandingService {
     ],
   });
 
-  if (standings.length === 0) throw new Error("No standings found for this category");
+  if (standings.length === 0) throw new NotFoundError("No standings found for this category");
 
   if (standings.some((s) => s.position == null)) {
-    throw new Error("Some standings have not been ranked yet");
+    throw new BadRequestError("Some standings have not been ranked yet");
   }
 
   if (!Number.isInteger(qualifiersPerGroup) || qualifiersPerGroup < 1) {
-    throw new Error("qualifiersPerGroup must be a positive integer");
+    throw new BadRequestError("qualifiersPerGroup must be a positive integer");
   }
 
   const groupMap = new Map<string, GroupStanding[]>();
@@ -360,7 +361,7 @@ export class GroupStandingService {
     );
 
     if (qualifiers.length < qualifiersPerGroup) {
-      throw new Error(
+      throw new BadRequestError(
         `Group ${groupName} does not have enough ranked entries for ${qualifiersPerGroup} qualifiers`
       );
     }
@@ -416,12 +417,12 @@ export class GroupStandingService {
 
     // Không có entry nào
     if (allEntryIds.length === 0) {
-      throw new Error("Assignments must contain at least one entry");
+      throw new BadRequestError("Assignments must contain at least one entry");
     }
 
     // Trùng lặp entry giữa các bảng
     if (new Set(allEntryIds).size !== allEntryIds.length) {
-      throw new Error("Duplicate entries found across groups");
+      throw new ConflictError("Duplicate entries found across groups");
     }
 
     // Entry không thuộc category này
@@ -429,7 +430,7 @@ export class GroupStandingService {
       where: { categoryId, id: { [Op.in]: allEntryIds } },
     });
     if (validCount !== allEntryIds.length) {
-      throw new Error("Some entries do not belong to this category");
+      throw new BadRequestError("Some entries do not belong to this category");
     }
   }
 
@@ -538,7 +539,7 @@ export class GroupStandingService {
     const match = await Match.findByPk(matchId, {
       include: [{ model: Schedule, as: "schedule", attributes: ["categoryId"] }],
     });
-    if (!match) throw new Error("Match not found");
+    if (!match) throw new NotFoundError("Match not found");
 
     const category = await getCategoryWithTournament(match.schedule!.categoryId);
     await assertOrganizer(chiefRefereeId, category.tournamentId);

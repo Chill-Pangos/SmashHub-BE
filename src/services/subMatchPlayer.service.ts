@@ -11,6 +11,7 @@ import Schedule from "../models/schedule.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Entry from "../models/entry.model";
 import config from "../config/config";
+import { BadRequestError, ConflictError, ForbiddenError, InternalServerError, NotFoundError } from "../utils/errors.helper";
 
 interface TeamLineupRequest {
   subMatchId: number;
@@ -64,7 +65,7 @@ function safeParseJson<T>(payload: string): T | null {
 
 async function getRequiredRedisClient() {
   const client = await getRedisClient();
-  if (!client) throw new Error("Redis is required for pending lineup approval");
+  if (!client) throw new InternalServerError("Redis is required for pending lineup approval");
   return client;
 }
 
@@ -89,11 +90,11 @@ async function getSubMatchContext(
     ],
   });
 
-  if (!subMatch) throw new Error("SubMatch not found");
+  if (!subMatch) throw new NotFoundError("SubMatch not found");
   const match = subMatch.match;
-  if (!match) throw new Error("SubMatch match not found");
+  if (!match) throw new NotFoundError("SubMatch match not found");
   const category = match.schedule?.tournamentCategory;
-  if (!category) throw new Error("SubMatch category not found");
+  if (!category) throw new NotFoundError("SubMatch category not found");
 
   return { subMatch, match, category };
 }
@@ -114,7 +115,7 @@ async function cleanupPendingLineupKey(
 
 function assertTeamCategory(category: TournamentCategory): void {
   if (category.type !== "team") {
-    throw new Error("Lineup approval flow is only for team categories");
+    throw new BadRequestError("Lineup approval flow is only for team categories");
   }
 }
 
@@ -124,7 +125,7 @@ async function assertEntryCaptain(
 ): Promise<void> {
   const entry = await Entry.findByPk(entryId, { attributes: ["id", "captainId"] });
   if (!entry || entry.captainId !== userId) {
-    throw new Error("Only the entry captain can submit lineup");
+    throw new ForbiddenError("Only the entry captain can submit lineup");
   }
 }
 
@@ -134,7 +135,7 @@ async function assertEntryMembers(
 ): Promise<EntryMember[]> {
   const uniqueIds = [...new Set(entryMemberIds)];
   if (uniqueIds.length !== entryMemberIds.length) {
-    throw new Error("entryMemberIds must not contain duplicates");
+    throw new ConflictError("entryMemberIds must not contain duplicates");
   }
 
   const members = await EntryMember.findAll({
@@ -143,7 +144,7 @@ async function assertEntryMembers(
   });
 
   if (members.length !== uniqueIds.length) {
-    throw new Error("Some entry members do not belong to this team");
+    throw new BadRequestError("Some entry members do not belong to this team");
   }
 
   return members;
@@ -151,7 +152,7 @@ async function assertEntryMembers(
 
 function assertUmpireCanReview(subMatch: SubMatch, userId: number): void {
   if (subMatch.umpireId !== userId && subMatch.assistantUmpireId !== userId) {
-    throw new Error("Only the assigned umpire can review lineup");
+    throw new ForbiddenError("Only the assigned umpire can review lineup");
   }
 }
 
@@ -162,7 +163,7 @@ async function getCaptainTeamAndEntry(
   const entryAId = match.entryAId;
   const entryBId = match.entryBId;
   if (!entryAId || !entryBId) {
-    throw new Error("Both entries must be assigned before submitting lineup");
+    throw new BadRequestError("Both entries must be assigned before submitting lineup");
   }
 
   const entries = await Entry.findAll({
@@ -172,7 +173,7 @@ async function getCaptainTeamAndEntry(
 
   const captainEntry = entries.find((entry) => entry.captainId === captainId);
   if (!captainEntry) {
-    throw new Error("Only entry captain can submit lineup");
+    throw new ForbiddenError("Only entry captain can submit lineup");
   }
 
   return {
@@ -188,7 +189,7 @@ export class SubMatchPlayerService {
     lineups: TeamLineupInput[],
   ): Promise<TeamLineupRequest[]> {
     if (!Array.isArray(lineups) || lineups.length === 0) {
-      throw new Error("lineups must be a non-empty array");
+      throw new BadRequestError("lineups must be a non-empty array");
     }
 
     const match = await Match.findByPk(matchId, {
@@ -201,26 +202,26 @@ export class SubMatchPlayerService {
         { model: SubMatch, as: "subMatches" },
       ],
     });
-    if (!match) throw new Error("Match not found");
+    if (!match) throw new NotFoundError("Match not found");
 
     const category = match.schedule?.tournamentCategory;
-    if (!category) throw new Error("Match category not found");
+    if (!category) throw new NotFoundError("Match category not found");
     assertTeamCategory(category);
 
     const subMatches = match.subMatches ?? [];
-    if (subMatches.length === 0) throw new Error("No sub-matches found");
+    if (subMatches.length === 0) throw new NotFoundError("No sub-matches found");
     if (lineups.length !== subMatches.length) {
-      throw new Error("Lineup must be submitted for all sub-matches");
+      throw new BadRequestError("Lineup must be submitted for all sub-matches");
     }
 
     const subMatchIds = new Set(subMatches.map((subMatch) => subMatch.id));
     const submittedSubMatchIds = new Set(lineups.map((lineup) => lineup.subMatchId));
     if (submittedSubMatchIds.size !== lineups.length) {
-      throw new Error("lineups must not contain duplicate subMatchId");
+      throw new ConflictError("lineups must not contain duplicate subMatchId");
     }
     for (const lineup of lineups) {
       if (!subMatchIds.has(lineup.subMatchId)) {
-        throw new Error("All lineups must belong to this match");
+        throw new BadRequestError("All lineups must belong to this match");
       }
     }
 
@@ -230,15 +231,15 @@ export class SubMatchPlayerService {
     const requests: TeamLineupRequest[] = [];
     for (const lineup of lineups) {
       if (!Array.isArray(lineup.entryMemberIds) || lineup.entryMemberIds.length === 0) {
-        throw new Error("entryMemberIds must be a non-empty array");
+        throw new BadRequestError("entryMemberIds must be a non-empty array");
       }
       if (lineup.entryMemberIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-        throw new Error("entryMemberIds must contain positive integers only");
+        throw new BadRequestError("entryMemberIds must contain positive integers only");
       }
 
       const subMatch = subMatches.find((item) => item.id === lineup.subMatchId)!;
       if (!subMatch.umpireId) {
-        throw new Error("Umpire must be assigned before submitting lineup");
+        throw new BadRequestError("Umpire must be assigned before submitting lineup");
       }
 
       await assertEntryMembers(entryId, lineup.entryMemberIds);
@@ -247,7 +248,7 @@ export class SubMatchPlayerService {
         where: { subMatchId: lineup.subMatchId, team },
       });
       if (existingApproved > 0) {
-        throw new Error(`Lineup already approved for subMatch ${lineup.subMatchId}`);
+        throw new ConflictError(`Lineup already approved for subMatch ${lineup.subMatchId}`);
       }
 
       const request: TeamLineupRequest = {
@@ -286,10 +287,10 @@ export class SubMatchPlayerService {
     entryMemberIds: number[],
   ): Promise<TeamLineupRequest> {
     if (!Array.isArray(entryMemberIds) || entryMemberIds.length === 0) {
-      throw new Error("entryMemberIds must be a non-empty array");
+      throw new BadRequestError("entryMemberIds must be a non-empty array");
     }
     if (entryMemberIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-      throw new Error("entryMemberIds must contain positive integers only");
+      throw new BadRequestError("entryMemberIds must contain positive integers only");
     }
 
     const { subMatch, match, category } = await getSubMatchContext(subMatchId);
@@ -299,14 +300,14 @@ export class SubMatchPlayerService {
     await assertEntryMembers(entryId, entryMemberIds);
 
     if (!subMatch.umpireId) {
-      throw new Error("Umpire must be assigned before submitting lineup");
+      throw new BadRequestError("Umpire must be assigned before submitting lineup");
     }
 
     const existingApproved = await SubMatchPlayer.count({
       where: { subMatchId, team },
     });
     if (existingApproved > 0) {
-      throw new Error("Lineup already approved for this team");
+      throw new ConflictError("Lineup already approved for this team");
     }
 
     const request: TeamLineupRequest = {
@@ -367,7 +368,7 @@ export class SubMatchPlayerService {
     subMatchId: number,
     team: Team,
   ): Promise<SubMatchPlayer[]> {
-    if (team !== "A" && team !== "B") throw new Error("Team must be A or B");
+    if (team !== "A" && team !== "B") throw new BadRequestError("Team must be A or B");
 
     const { subMatch, category } = await getSubMatchContext(subMatchId);
     assertTeamCategory(category);
@@ -376,12 +377,12 @@ export class SubMatchPlayerService {
     const client = await getRequiredRedisClient();
     const key = lineupRequestKey(subMatchId, team);
     const payload = await client.get(key);
-    if (!payload) throw new Error("No pending lineup found");
+    if (!payload) throw new NotFoundError("No pending lineup found");
 
     const request = safeParseJson<TeamLineupRequest>(payload);
     if (!request) {
       await cleanupPendingLineupKey(client, subMatch, key);
-      throw new Error("No pending lineup found");
+      throw new NotFoundError("No pending lineup found");
     }
     const entryId = request.entryId;
     const members = await assertEntryMembers(entryId, request.entryMemberIds);
@@ -409,7 +410,7 @@ export class SubMatchPlayerService {
     team: Team,
     reviewNotes?: string,
   ): Promise<TeamLineupRejection> {
-    if (team !== "A" && team !== "B") throw new Error("Team must be A or B");
+    if (team !== "A" && team !== "B") throw new BadRequestError("Team must be A or B");
 
     const { subMatch, category } = await getSubMatchContext(subMatchId);
     assertTeamCategory(category);
@@ -418,12 +419,12 @@ export class SubMatchPlayerService {
     const client = await getRequiredRedisClient();
     const key = lineupRequestKey(subMatchId, team);
     const payload = await client.get(key);
-    if (!payload) throw new Error("No pending lineup found");
+    if (!payload) throw new NotFoundError("No pending lineup found");
 
     const request = safeParseJson<TeamLineupRequest>(payload);
     if (!request) {
       await cleanupPendingLineupKey(client, subMatch, key);
-      throw new Error("No pending lineup found");
+      throw new NotFoundError("No pending lineup found");
     }
     const rejection: TeamLineupRejection = {
       ...request,
@@ -451,7 +452,7 @@ export class SubMatchPlayerService {
       where: { matchId },
       order: [["subMatchNumber", "ASC"]],
     });
-    if (subMatches.length === 0) throw new Error("No sub-matches found");
+    if (subMatches.length === 0) throw new NotFoundError("No sub-matches found");
 
     const rejected: TeamLineupRejection[] = [];
     for (const subMatch of subMatches) {
@@ -469,7 +470,7 @@ export class SubMatchPlayerService {
       }
     }
 
-    if (rejected.length === 0) throw new Error("No pending lineup found");
+    if (rejected.length === 0) throw new NotFoundError("No pending lineup found");
     return rejected;
   }
 
@@ -513,7 +514,7 @@ export class SubMatchPlayerService {
       const players = await this.approveTeamLineup(umpireId, subMatchId, team);
       approved.push(...players);
     }
-    if (approved.length === 0) throw new Error("No pending lineup found");
+    if (approved.length === 0) throw new NotFoundError("No pending lineup found");
     return approved;
   }
 
@@ -525,7 +526,7 @@ export class SubMatchPlayerService {
       where: { matchId },
       order: [["subMatchNumber", "ASC"]],
     });
-    if (subMatches.length === 0) throw new Error("No sub-matches found");
+    if (subMatches.length === 0) throw new NotFoundError("No sub-matches found");
 
     const approved: SubMatchPlayer[] = [];
     for (const subMatch of subMatches) {
@@ -538,7 +539,7 @@ export class SubMatchPlayerService {
       }
     }
 
-    if (approved.length === 0) throw new Error("No pending lineup found");
+    if (approved.length === 0) throw new NotFoundError("No pending lineup found");
     return approved;
   }
 

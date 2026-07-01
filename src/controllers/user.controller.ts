@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import fs from "fs/promises";
 import userService from "../services/user.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { ForbiddenError, NotFoundError, UnauthorizedError } from "../utils/errors.helper";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "../utils/errors.helper";
 import { avatarUpload } from "../config/multer";
 import { parsePagination, parsePositiveInt } from "../utils/request.helper";
 import { assertAdmin } from "../utils/access.helper";
@@ -47,8 +47,7 @@ export class UserController {
   async me(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.userId) {
-        res.status(401).json({ success: false, message: "Unauthorized" });
-        return;
+        throw new UnauthorizedError("Unauthorized");
       }
       const user = await userService.findMe(req.userId);
       if (!user) throw new NotFoundError("User not found");
@@ -121,13 +120,11 @@ export class UserController {
     async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {
         if (!req.file) {
-          res.status(400).json({ message: "No file uploaded" });
-          return;
+          throw new BadRequestError("No file uploaded");
         }
         if (!req.userId) {
           await fs.unlink(req.file.path).catch(() => {});
-          res.status(401).json({ message: "Unauthorized" });
-          return;
+          throw new UnauthorizedError("Unauthorized");
         }
         const id = parsePositiveInt(req.params.id, "id");
         if (req.userId !== id) {

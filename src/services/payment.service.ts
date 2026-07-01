@@ -119,7 +119,7 @@ async function assertCanAccessPayment(
   payment: Payment,
 ): Promise<void> {
   const entry = payment.entry;
-  if (!entry) throw new Error("Payment entry not found");
+  if (!entry) throw new NotFoundError("Payment entry not found");
   await assertCanAccessEntryPayment(userId, entry);
 }
 
@@ -184,7 +184,7 @@ export class PaymentService {
     assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
     if (payment.status !== "pending") {
-      throw new BadRequestError("Only pending payments can be confirmed");
+      throw new ForbiddenError("Only pending payments can be confirmed");
     }
     if (!payment.proofImageUrl) {
       throw new BadRequestError("Proof image is required for bank transfer confirmation");
@@ -204,7 +204,7 @@ export class PaymentService {
     assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
     if (payment.status !== "pending") {
-      throw new BadRequestError("Only pending payments can be rejected");
+      throw new ForbiddenError("Only pending payments can be rejected");
     }
 
     return await payment.update({ status: "failed" });
@@ -222,7 +222,7 @@ export class PaymentService {
       assertOrganizer(organizerId, payment.entry!.category!.tournament!);
 
       if (payment.status !== "completed") {
-        throw new BadRequestError("Only completed payments can be refunded");
+        throw new ForbiddenError("Only completed payments can be refunded");
       }
 
       const refundProofImageUrl = await savePaymentImage(file);
