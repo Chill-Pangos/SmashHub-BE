@@ -18,7 +18,7 @@ const router = Router();
  *       Phase toàn giải: tất cả group stage trước, knockout sau (kể cả TBD placeholders).
  *       Slot time được tính theo scheduleConfig, numberOfTables, daily range và lunch break.
  *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
- *       tableNumber KHÔNG được gán ở đây — sẽ gán động khi trận bắt đầu.
+ *       tableNumber và 2 trọng tài mỗi bàn được gán sẵn khi tạo lịch.
  *
  *       Yêu cầu:
  *       - Tournament status must be brackets_generated
@@ -97,7 +97,7 @@ router.post(
  *       Tạo lịch vòng bảng (round-robin) cho 1 category dựa trên groupStandings.
  *       Slot time tính từ scheduleConfig của tournament, có tránh lunch break.
  *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
- *       tableNumber KHÔNG được gán — sẽ gán động khi trận bắt đầu.
+ *       tableNumber và 2 trọng tài mỗi bàn được gán sẵn khi tạo lịch.
  *
  *       Yêu cầu:
  *       - Tournament status must be brackets_generated
@@ -183,6 +183,7 @@ router.post(
  *       Nếu category có group stage, phải generate group stage schedule trước;
  *       knockout sẽ bắt đầu sau group stage.
  *       Nếu giải chỉ 1 ngày, slot không được nhảy sang ngày sau; request trả 400 nếu trận không kịp kết thúc trước dailyEnd.
+ *       tableNumber và 2 trọng tài mỗi bàn được gán sẵn khi tạo lịch.
  *
  *       Yêu cầu:
  *       - Tournament status must be brackets_generated
