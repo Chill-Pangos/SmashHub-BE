@@ -1,8 +1,8 @@
 export interface CreateScheduleConfigDto {
   tournamentId: number;
   // Tournament dates & tables 
-  startDate: Date;
-  endDate: Date;
+  startDate: Date | string;
+  endDate: Date | string;
   numberOfTables?: number;
   registrationStartDate: Date;
   registrationEndDate: Date;
@@ -26,8 +26,8 @@ export interface CreateScheduleConfigDto {
 
 export interface UpdateScheduleConfigDto {
   // Tournament dates & tables (optional for updates)
-  startDate?: Date;
-  endDate?: Date;
+  startDate?: Date | string;
+  endDate?: Date | string;
   numberOfTables?: number;
   registrationStartDate?: Date;
   registrationEndDate?: Date;

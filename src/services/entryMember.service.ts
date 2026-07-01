@@ -265,9 +265,16 @@ export class EntryMemberService {
 
     await sequelize.transaction(async (t) => {
       await member.destroy({ transaction: t });
-      await entry.decrement("currentMemberCount", { by: 1, transaction: t });
-      if (!entry.isAcceptingMembers)
-        await entry.update({ isAcceptingMembers: true }, { transaction: t });
+      await JoinRequest.destroy({ where: { entryId, userId: memberId }, transaction: t });
+      await entry.update(
+        {
+          currentMemberCount: Math.max(entry.currentMemberCount - 1, 0),
+          isAcceptingMembers: entry.requiredMemberCount != null,
+          isConfirmed: false,
+          confirmedAt: null,
+        },
+        { transaction: t },
+      );
     });
   }
 
@@ -344,6 +351,9 @@ export class EntryMemberService {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
     if (!entry) throw new NotFoundError("Entry not found");
+    if (entry.category?.type === "single") {
+      throw new BadRequestError("Single entries cannot be left. Delete the entry instead");
+    }
 
     await assertRegistrationOpen(entry.category?.tournament!);
 
@@ -357,9 +367,16 @@ export class EntryMemberService {
 
     await sequelize.transaction(async (t) => {
       await member.destroy({ transaction: t });
-      await entry.decrement("currentMemberCount", { by: 1, transaction: t });
-      if (!entry.isAcceptingMembers)
-        await entry.update({ isAcceptingMembers: true }, { transaction: t });
+      await JoinRequest.destroy({ where: { entryId, userId }, transaction: t });
+      await entry.update(
+        {
+          currentMemberCount: Math.max(entry.currentMemberCount - 1, 0),
+          isAcceptingMembers: entry.requiredMemberCount != null,
+          isConfirmed: false,
+          confirmedAt: null,
+        },
+        { transaction: t },
+      );
     });
   }
 }

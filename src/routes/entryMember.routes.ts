@@ -196,7 +196,9 @@ router.post(
  *     description: |
  *       Leave a team as a member during the registration period.
  *       Captain cannot leave (must transfer captaincy or delete entry).
- *       Automatically reopens team for new members if it was full.
+ *       Single entries cannot be left through this endpoint.
+ *       Leaving removes old join requests, unconfirms the lineup, and
+ *       reopens the team when it has a required member count.
  *     security:
  *       - bearerAuth: []
  *     parameters:

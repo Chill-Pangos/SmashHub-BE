@@ -31,6 +31,35 @@ function isSameScheduleCalendarDate(a: Date, b: Date): boolean {
   return getScheduleDateOnlyTime(a) === getScheduleDateOnlyTime(b);
 }
 
+function withUtcScheduleTime(date: Date, hour = 0, minute = 0): Date {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    hour,
+    minute,
+    0,
+    0,
+  ));
+}
+
+function toDateOnlyStorageValue(value: Date | string): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return value;
+}
+
+function toUtcDateOnlyValue(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    return new Date(Date.UTC(
+      value.getUTCFullYear(),
+      value.getUTCMonth(),
+      value.getUTCDate(),
+    ));
+  }
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
 function assertIntegerRange(
   value: number | null | undefined,
   label: string,
@@ -75,10 +104,28 @@ export default class ScheduleConfig extends Model {
 
   // ─── Tournament Dates ─────────────────────────────────────────────────────
 
-  @Column({ type: DataType.DATE, allowNull: false })
+  @Column({
+    type: DataType.DATEONLY,
+    allowNull: false,
+    get(this: ScheduleConfig): Date | null {
+      return toUtcDateOnlyValue(this.getDataValue("startDate") as Date | string | null);
+    },
+    set(this: ScheduleConfig, value: Date | string): void {
+      this.setDataValue("startDate", toDateOnlyStorageValue(value) as any);
+    },
+  })
   declare startDate: Date;
 
-  @Column({ type: DataType.DATE, allowNull: false })
+  @Column({
+    type: DataType.DATEONLY,
+    allowNull: false,
+    get(this: ScheduleConfig): Date | null {
+      return toUtcDateOnlyValue(this.getDataValue("endDate") as Date | string | null);
+    },
+    set(this: ScheduleConfig, value: Date | string): void {
+      this.setDataValue("endDate", toDateOnlyStorageValue(value) as any);
+    },
+  })
   declare endDate: Date;
 
   // ─── Registration & Bracket Dates ────────────────────────────────────────
@@ -464,8 +511,12 @@ export default class ScheduleConfig extends Model {
 
     const now = new Date();
 
-    // Khi tạo mới, startDate không được là quá khứ
-    if (isNewRecord && startDate && startDate < now) {
+    // Khi tạo mới, startDate không được là ngày quá khứ
+    if (
+      isNewRecord &&
+      startDate &&
+      getScheduleDateOnlyTime(startDate) < getScheduleDateOnlyTime(now)
+    ) {
       throw new Error("Start date cannot be in the past");
     }
 
@@ -504,7 +555,11 @@ export default class ScheduleConfig extends Model {
     }
 
     // Đăng ký phải đóng trước khi giải bắt đầu
-    if (registrationEndDate && startDate && registrationEndDate >= startDate) {
+    const tournamentStartAt = startDate
+      ? withUtcScheduleTime(startDate, dailyStartHour, dailyStartMinute)
+      : null;
+
+    if (registrationEndDate && tournamentStartAt && registrationEndDate >= tournamentStartAt) {
       throw new Error("Registration must close before the tournament starts");
     }
 
@@ -518,8 +573,8 @@ export default class ScheduleConfig extends Model {
     }
 
     // bracketGenerationDate phải trước startDate ít nhất 2 ngày
-    if (bracketGenerationDate && startDate) {
-      const twoDaysBeforeStart = new Date(startDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+    if (bracketGenerationDate && tournamentStartAt) {
+      const twoDaysBeforeStart = new Date(tournamentStartAt.getTime() - 2 * 24 * 60 * 60 * 1000);
       if (bracketGenerationDate > twoDaysBeforeStart) {
         throw new Error(
           "Bracket generation date must be at least 2 days (48 hours) before the start date"

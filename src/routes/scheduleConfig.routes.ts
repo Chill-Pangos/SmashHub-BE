@@ -52,14 +52,14 @@ const router = Router({ mergeParams: true });
  *             properties:
  *               startDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-15T08:00:00.000Z"
- *                 description: Tournament start date and time (cannot be in the past, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
+ *                 description: Tournament start date (YYYY-MM-DD, cannot be in the past)
  *               endDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-20T22:00:00.000Z"
- *                 description: Tournament end date and time (must be after startDate, ISO 8601 UTC format ending with Z; offsets/local strings are rejected)
+ *                 description: Tournament end date (YYYY-MM-DD, must be on or after startDate)
  *               registrationStartDate:
  *                 type: string
  *                 format: date-time
@@ -162,8 +162,8 @@ const router = Router({ mergeParams: true });
  *             weeklong_tournament:
  *               summary: Week-long tournament with multiple tables and lunch break
  *               value:
- *                 startDate: "2026-06-15T08:00:00.000Z"
- *                 endDate: "2026-06-20T22:00:00.000Z"
+ *                 startDate: "2026-06-15"
+ *                 endDate: "2026-06-20"
  *                 registrationStartDate: "2026-05-15T00:00:00.000Z"
  *                 registrationEndDate: "2026-06-14T23:59:59.000Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00.000Z"
@@ -182,8 +182,8 @@ const router = Router({ mergeParams: true });
  *             single_day:
  *               summary: Single-day tournament with aggressive timing
  *               value:
- *                 startDate: "2026-06-20T09:00:00.000Z"
- *                 endDate: "2026-06-20T17:00:00.000Z"
+ *                 startDate: "2026-06-20"
+ *                 endDate: "2026-06-20"
  *                 registrationStartDate: "2026-06-01T00:00:00.000Z"
  *                 registrationEndDate: "2026-06-19T23:59:59.000Z"
  *                 bracketGenerationDate: "2026-06-18T00:00:00.000Z"
@@ -205,8 +205,8 @@ const router = Router({ mergeParams: true });
  *             example:
  *               id: 1
  *               tournamentId: 1
- *               startDate: "2026-06-15T08:00:00.000Z"
- *               endDate: "2026-06-20T22:00:00.000Z"
+ *               startDate: "2026-06-15"
+ *               endDate: "2026-06-20"
  *               registrationStartDate: "2026-05-15T00:00:00.000Z"
  *               registrationEndDate: "2026-06-14T23:59:59.000Z"
  *               bracketGenerationDate: "2026-06-13T00:00:00.000Z"
@@ -414,12 +414,12 @@ router.get(
  *             properties:
  *               startDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-15T08:00:00.000Z"
  *                 description: Tournament start date and time
  *               endDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-20T22:00:00.000Z"
  *                 description: Tournament end date and time
  *               registrationStartDate:
@@ -514,8 +514,8 @@ router.get(
  *             full_update:
  *               summary: Update complete configuration
  *               value:
- *                 startDate: "2026-06-16T08:00:00.000Z"
- *                 endDate: "2026-06-20T22:00:00.000Z"
+ *                 startDate: "2026-06-16"
+ *                 endDate: "2026-06-20"
  *                 numberOfTables: 6
  *                 matchDurationMinutes: 50
  *                 breakDurationMinutes: 15
@@ -604,11 +604,11 @@ router.patch(
  *                 properties:
  *                   startDate:
  *                     type: string
- *                     format: date-time
+ *                     format: date
  *                     example: "2026-06-15T08:00:00.000Z"
  *                   endDate:
  *                     type: string
- *                     format: date-time
+ *                     format: date
  *                     example: "2026-06-20T22:00:00.000Z"
  *                   registrationStartDate:
  *                     type: string
@@ -700,8 +700,8 @@ router.patch(
  *                   maxEntries: 32
  *                   isGroupStage: false
  *                 scheduleConfig:
- *                   startDate: "2026-06-15T08:00:00.000Z"
- *                   endDate: "2026-06-20T22:00:00.000Z"
+ *                   startDate: "2026-06-15"
+ *                   endDate: "2026-06-20"
  *                   registrationStartDate: "2026-05-15T00:00:00.000Z"
  *                   registrationEndDate: "2026-06-12T23:59:59.000Z"
  *                   bracketGenerationDate: "2026-06-13T00:00:00.000Z"
@@ -786,11 +786,11 @@ router.post(
  *             properties:
  *               startDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-15T08:00:00.000Z"
  *               endDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 example: "2026-06-20T22:00:00.000Z"
  *               registrationStartDate:
  *                 type: string
@@ -860,8 +860,8 @@ router.post(
  *             valid_schedule:
  *               summary: Valid schedule with buffer time
  *               value:
- *                 startDate: "2026-06-15T08:00:00.000Z"
- *                 endDate: "2026-06-20T22:00:00.000Z"
+ *                 startDate: "2026-06-15"
+ *                 endDate: "2026-06-20"
  *                 registrationStartDate: "2026-05-15T00:00:00.000Z"
  *                 registrationEndDate: "2026-06-14T23:59:59.000Z"
  *                 bracketGenerationDate: "2026-06-13T00:00:00.000Z"
@@ -939,11 +939,11 @@ router.post(
  *             properties:
  *               startDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 description: Updated start date (optional)
  *               endDate:
  *                 type: string
- *                 format: date-time
+ *                 format: date
  *                 description: Updated end date (optional)
  *               registrationStartDate:
  *                 type: string

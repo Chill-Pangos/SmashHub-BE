@@ -350,8 +350,8 @@ CREATE TABLE IF NOT EXISTS `schedule_configs` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `tournamentId` INT UNSIGNED NOT NULL,
   -- Tournament dates & tables (moved from tournaments)
-  `startDate` DATETIME NOT NULL,
-  `endDate` DATETIME NOT NULL,
+  `startDate` DATE NOT NULL,
+  `endDate` DATE NOT NULL,
   `numberOfTables` INT UNSIGNED NOT NULL DEFAULT 1,
   `registrationStartDate` DATETIME NOT NULL,
   `registrationEndDate` DATETIME NOT NULL,
