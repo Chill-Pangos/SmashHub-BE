@@ -355,13 +355,16 @@ async function assignUmpiresToSubMatches(
   });
 
   const refereeIds = matchReferees.map((ref) => ref.refereeId);
-  if (refereeIds.length === 0) return;
+  if (refereeIds.length !== 2) {
+    throw new BadRequestError(
+      "Match must have exactly 2 assigned referees before starting",
+    );
+  }
 
-  const hasAssistant = refereeIds.length >= 2;
   const firstRefereeId =
-    hasAssistant && Math.random() < 0.5 ? refereeIds[1]! : refereeIds[0]!;
+    Math.random() < 0.5 ? refereeIds[1]! : refereeIds[0]!;
   const secondRefereeId =
-    hasAssistant && firstRefereeId === refereeIds[0]!
+    firstRefereeId === refereeIds[0]!
       ? refereeIds[1]!
       : refereeIds[0]!;
 
@@ -375,7 +378,7 @@ async function assignUmpiresToSubMatches(
     await subMatch.update(
       {
         umpireId: firstRefereeId,
-        assistantUmpireId: hasAssistant ? secondRefereeId : null,
+        assistantUmpireId: secondRefereeId,
       },
       { transaction: t },
     );
@@ -502,8 +505,7 @@ export class MatchService {
 
   /**
    * Chuyển match sang in_progress.
-   * Assign bàn thi đấu động (nếu có bàn trống).
-   * Assign trọng tài động từ pool của tournament.
+   * Kiểm tra bàn đã gán và chuyển trọng tài đã phân công thành umpire/assistant.
    */
   async startMatch(matchId: number, refereeId: number): Promise<Match> {
     const match = await sequelize.transaction(async (t) => {
@@ -525,13 +527,10 @@ export class MatchService {
 
       await instance.update({ status: "in_progress" }, { transaction: t });
 
-      // Assign bàn thi đấu động (tìm bàn trống)
+      // Kiểm tra bàn đã gán sẵn khi tạo lịch.
       await scheduleService.assignTableForMatch(matchId, tournament.id, t);
 
-      // Assign trọng tài động (chọn người rảnh nhất)
-      await scheduleService.assignRefereeDynamic(matchId, tournament.id, t);
-
-      // Assign umpire/assistantUmpire cho các sub-match vừa có referee
+      // Assign umpire/assistantUmpire từ trọng tài đã chia sẵn.
       await assignUmpiresToSubMatches(matchId, t);
 
       return instance.reload({ transaction: t });

@@ -36,9 +36,9 @@ interface ScheduleResult {
   warning?: string;
 }
 
-interface RefereeWorkload {
-  refereeId: number;
-  assignedCount: number;
+interface ResourceAssignment {
+  tableNumber: number;
+  refereeIds: [number, number];
 }
 
 interface GroupMatchPair {
@@ -233,42 +233,7 @@ async function assertScheduleTableAvailableForSlot(options: {
   }
 }
 
-/**
- * Tìm bàn trống tại thời điểm start match.
- * `in_progress` luôn giữ bàn đến khi match finalize.
- * `scheduled` giữ bàn nếu slot đã gán overlap với slot đang start.
- */
-async function findAvailableTable(
-  tournamentId: number,
-  config: ScheduleConfig,
-  t: Transaction,
-  excludeMatchId?: number,
-): Promise<number | null> {
-  const busyTables = await getBusyTablesAtStartTime(
-    tournamentId,
-    config,
-    t,
-    excludeMatchId,
-  );
-
-  for (let table = 1; table <= config.numberOfTables; table++) {
-    if (!busyTables.has(table)) return table;
-  }
-
-  return null;
-}
-
 // ─── Referee Assignment ───────────────────────────────────────────────────────
-
-function assignReferees(workloads: RefereeWorkload[], count: number): number[] {
-  if (workloads.length === 0) return [];
-  const sorted = [...workloads].sort((a, b) => a.assignedCount - b.assignedCount);
-  const selected = sorted.slice(0, count).map((r) => r.refereeId);
-  for (const w of workloads) {
-    if (selected.includes(w.refereeId)) w.assignedCount += 1;
-  }
-  return selected;
-}
 
 async function bulkCreateMatchReferees(
   matchId: number,
@@ -386,9 +351,11 @@ async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
 
 async function getTournamentReferees(
   tournamentId: number,
+  t?: Transaction,
 ): Promise<TournamentReferee[]> {
   return await TournamentReferee.findAll({
     where: { tournamentId, role: "referee" },
+    ...(t && { transaction: t }),
   });
 }
 
@@ -400,11 +367,124 @@ async function assertMinimumTournamentReferees(
     where: { tournamentId, role: "referee" },
   });
 
-  if (refereeCount < config.numberOfTables) {
+  const requiredReferees = config.numberOfTables * 2;
+  if (refereeCount !== requiredReferees) {
     throw new BadRequestError(
-      `Tournament needs at least ${config.numberOfTables} accepted referee(s) for ${config.numberOfTables} table(s). Current accepted referees: ${refereeCount}`,
+      `Tournament needs exactly ${requiredReferees} accepted referee(s) for ${config.numberOfTables} table(s). Current accepted referees: ${refereeCount}`,
     );
   }
+}
+
+type SlotTableUsage = Map<string, Set<number>>;
+
+async function getTournamentScheduleSlotUsage(
+  tournamentId: number,
+  t: Transaction,
+): Promise<SlotTableUsage> {
+  const schedules = await Schedule.findAll({
+    where: { tableNumber: { [Op.not]: null } },
+    include: [
+      {
+        model: TournamentCategory,
+        as: "tournamentCategory",
+        where: { tournamentId },
+        required: true,
+        attributes: [],
+      },
+    ],
+    attributes: ["scheduledAt", "tableNumber"],
+    transaction: t,
+    lock: t.LOCK.UPDATE,
+  });
+
+  const usage: SlotTableUsage = new Map();
+  for (const schedule of schedules) {
+    if (schedule.tableNumber == null) continue;
+
+    const slotKey = schedule.scheduledAt.toISOString();
+    const usedTables = usage.get(slotKey) ?? new Set<number>();
+    usedTables.add(schedule.tableNumber);
+    usage.set(slotKey, usedTables);
+  }
+
+  return usage;
+}
+
+function getRefereeIdsForTable(
+  referees: TournamentReferee[],
+  tableNumber: number,
+): [number, number] {
+  const refereeIds = referees
+    .map((referee) => referee.refereeId)
+    .sort((a, b) => a - b);
+  const refereeIndex = (tableNumber - 1) * 2;
+  const firstRefereeId = refereeIds[refereeIndex];
+  const secondRefereeId = refereeIds[refereeIndex + 1];
+  if (firstRefereeId == null || secondRefereeId == null) {
+    throw new BadRequestError(
+      `Tournament does not have 2 assigned referee(s) for table ${tableNumber}`,
+    );
+  }
+
+  return [
+    firstRefereeId,
+    secondRefereeId,
+  ];
+}
+
+async function setMatchRefereesForSchedule(
+  scheduleId: number,
+  tournamentId: number,
+  tableNumber: number,
+  t: Transaction,
+): Promise<void> {
+  const refereeIds = getRefereeIdsForTable(
+    await getTournamentReferees(tournamentId, t),
+    tableNumber,
+  );
+  const matches = await Match.findAll({
+    where: { scheduleId },
+    attributes: ["id"],
+    transaction: t,
+  });
+
+  for (const match of matches) {
+    await MatchReferee.destroy({ where: { matchId: match.id }, transaction: t });
+    await bulkCreateMatchReferees(match.id, refereeIds, t);
+  }
+}
+
+function createResourceAssigner(
+  config: ScheduleConfig,
+  referees: TournamentReferee[],
+  slotUsage: SlotTableUsage = new Map(),
+): (scheduledAt: Date) => ResourceAssignment {
+  return (scheduledAt: Date): ResourceAssignment => {
+    const slotKey = scheduledAt.toISOString();
+    const usedTables = slotUsage.get(slotKey) ?? new Set<number>();
+    let tableNumber: number | null = null;
+
+    for (let table = 1; table <= config.numberOfTables; table++) {
+      if (!usedTables.has(table)) {
+        tableNumber = table;
+        break;
+      }
+    }
+
+    if (tableNumber == null) {
+      throw new ConflictError(
+        `Schedule slot ${slotKey} has more matches than ${config.numberOfTables} table(s)`,
+      );
+    }
+
+    usedTables.add(tableNumber);
+    slotUsage.set(slotKey, usedTables);
+
+    return {
+      tableNumber,
+      refereeIds: getRefereeIdsForTable(referees, tableNumber),
+    };
+  };
 }
 
 async function getRequiredScheduleConfig(
@@ -624,7 +704,7 @@ export class ScheduleService {
   /**
    * Tạo lịch vòng bảng cho 1 category dựa trên groupStandings.
    * Lịch được sắp xếp theo scheduleConfig của tournament.
-   * tableNumber KHÔNG được gán ở đây — sẽ gán khi trận bắt đầu.
+   * tableNumber và trọng tài được gán sẵn theo slot.
    */
   async generateGroupStageSchedule(
     organizerId: number,
@@ -657,6 +737,11 @@ export class ScheduleService {
 
     const result = await sequelize.transaction(async (t) => {
       await clearExistingSchedules(categoryId, "group", t);
+      const assignResource = createResourceAssigner(
+        config,
+        await getTournamentReferees(tournament.id, t),
+        await getTournamentScheduleSlotUsage(tournament.id, t),
+      );
 
       const schedules: Schedule[] = [];
       const matches: Match[] = [];
@@ -664,6 +749,7 @@ export class ScheduleService {
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
         const scheduledAt = groupSlots.get(pair)!;
+        const assignment = assignResource(scheduledAt);
 
         const schedule = await Schedule.create(
           {
@@ -671,7 +757,7 @@ export class ScheduleService {
             stage: GROUP_STAGE,
             groupName: pair.groupName,
             scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
-            tableNumber: null,
+            tableNumber: assignment.tableNumber,
           },
           { transaction: t },
         );
@@ -687,6 +773,7 @@ export class ScheduleService {
         );
 
         await createSubMatchesForMatch(match, category, t);
+        await bulkCreateMatchReferees(match.id, assignment.refereeIds, t);
 
         schedules.push(schedule);
         matches.push(match);
@@ -739,6 +826,11 @@ export class ScheduleService {
       } else {
         await this._clearKnockoutRound(categoryId, roundName, t);
       }
+      const assignResource = createResourceAssigner(
+        config,
+        await getTournamentReferees(tournament.id, t),
+        await getTournamentScheduleSlotUsage(tournament.id, t),
+      );
 
       const schedules: Schedule[] = [];
       const matches: Match[] = [];
@@ -746,6 +838,7 @@ export class ScheduleService {
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i]!;
         const scheduledAt = knockoutSlots.get(pair)!;
+        const assignment = assignResource(scheduledAt);
 
         const schedule = await Schedule.create(
           {
@@ -753,7 +846,7 @@ export class ScheduleService {
             stage: KNOCKOUT_STAGE,
             knockoutRound: pair.roundName,
             scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
-            tableNumber: null,
+            tableNumber: assignment.tableNumber,
           },
           { transaction: t },
         );
@@ -771,6 +864,7 @@ export class ScheduleService {
         );
 
         await createSubMatchesForMatch(match, category, t);
+        await bulkCreateMatchReferees(match.id, assignment.refereeIds, t);
 
         // Link bracket → schedule và match
         await KnockoutBracket.update(
@@ -904,17 +998,23 @@ export class ScheduleService {
         await clearExistingSchedules(category.id, "group", t);
         await clearExistingSchedules(category.id, "knockout", t);
       }
+      const assignResource = createResourceAssigner(
+        config,
+        await getTournamentReferees(tournament.id, t),
+        await getTournamentScheduleSlotUsage(tournament.id, t),
+      );
 
       for (let i = 0; i < groupJobs.length; i++) {
         const job = groupJobs[i]!;
         const scheduledAt = groupSlots.get(job)!;
+        const assignment = assignResource(scheduledAt);
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
             stage: GROUP_STAGE,
             groupName: job.pair.groupName,
             scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
-            tableNumber: null,
+            tableNumber: assignment.tableNumber,
           },
           { transaction: t },
         );
@@ -930,6 +1030,7 @@ export class ScheduleService {
         );
 
         await createSubMatchesForMatch(match, job.category, t);
+        await bulkCreateMatchReferees(match.id, assignment.refereeIds, t);
 
         const result = resultsByCategory.get(job.category.id)!;
         result.schedules.push(schedule);
@@ -939,13 +1040,14 @@ export class ScheduleService {
       for (let i = 0; i < knockoutJobs.length; i++) {
         const job = knockoutJobs[i]!;
         const scheduledAt = knockoutSlots.get(job)!;
+        const assignment = assignResource(scheduledAt);
         const schedule = await Schedule.create(
           {
             categoryId: job.category.id,
             stage: KNOCKOUT_STAGE,
             knockoutRound: job.pair.roundName,
             scheduledAt: toUtcDate(scheduledAt, "scheduledAt"),
-            tableNumber: null,
+            tableNumber: assignment.tableNumber,
           },
           { transaction: t },
         );
@@ -961,6 +1063,7 @@ export class ScheduleService {
         );
 
         await createSubMatchesForMatch(match, job.category, t);
+        await bulkCreateMatchReferees(match.id, assignment.refereeIds, t);
         await KnockoutBracket.update(
           { scheduleId: schedule.id, matchId: match.id },
           { where: { id: job.pair.bracketId }, transaction: t },
@@ -1037,7 +1140,7 @@ export class ScheduleService {
 
   /**
    * Gọi từ match.service khi match chuyển sang `in_progress`.
-   * Tìm bàn trống và gán tableNumber vào schedule của match đó.
+   * Kiểm tra bàn đã được gán sẵn khi tạo lịch.
    */
   async assignTableForMatch(
     matchId: number,
@@ -1054,93 +1157,28 @@ export class ScheduleService {
     if (!match.schedule) throw new NotFoundError("Match schedule not found");
 
     const existingTable = match.schedule.tableNumber;
-    if (existingTable != null) {
-      assertTableNumberInRange(existingTable, config);
-      const busyTables = await getBusyTablesAtStartTime(
-        tournamentId,
-        config,
-        t,
-        matchId,
+    if (existingTable == null) {
+      throw new BadRequestError(
+        "Match table is not assigned. Regenerate schedule before starting match.",
       );
-      if (busyTables.has(existingTable)) {
-        throw new ConflictError(
-          `Table ${existingTable} is not available at this time`,
-        );
-      }
-      return existingTable;
     }
 
-    const availableTable = await findAvailableTable(
+    assertTableNumberInRange(existingTable, config);
+    const busyTables = await getBusyTablesAtStartTime(
       tournamentId,
       config,
       t,
       matchId,
     );
-
-    if (availableTable === null) {
+    if (busyTables.has(existingTable)) {
       throw new ConflictError(
-        `No available tables at this time. All ${config.numberOfTables} table(s) are currently in use. ` +
-          `Please wait for a table to become available.`,
+        `Table ${existingTable} is not available at this time`,
       );
     }
-
-    await Schedule.update(
-      { tableNumber: availableTable },
-      { where: { id: match.scheduleId }, transaction: t, validate: false },
-    );
-
-    return availableTable;
+    return existingTable;
   }
 
-  // ── 6. Assign trọng tài động khi match bắt đầu ───────────────────────────
-
-  /**
-   * Gọi từ match.service khi match chuyển sang `in_progress`.
-   * Tìm trọng tài rảnh nhất và assign.
-   */
-  async assignRefereeDynamic(
-    matchId: number,
-    tournamentId: number,
-    t: Transaction,
-  ): Promise<void> {
-    const allReferees = await getTournamentReferees(tournamentId);
-    if (allReferees.length === 0) return;
-
-    const activeAssignments = await MatchReferee.findAll({
-      include: [
-        {
-          model: Match,
-          as: "match",
-          where: { status: "in_progress" },
-          required: true,
-          attributes: [],
-        },
-      ],
-      where: {
-        refereeId: { [Op.in]: allReferees.map((r) => r.refereeId) },
-      },
-      attributes: ["refereeId"],
-      transaction: t,
-    });
-
-    const activeCount = new Map<number, number>();
-    for (const a of activeAssignments) {
-      activeCount.set(a.refereeId, (activeCount.get(a.refereeId) ?? 0) + 1);
-    }
-
-    const workloads: RefereeWorkload[] = allReferees.map((r) => ({
-      refereeId: r.refereeId,
-      assignedCount: activeCount.get(r.refereeId) ?? 0,
-    }));
-
-    await MatchReferee.destroy({ where: { matchId }, transaction: t });
-
-    const refsPerMatch = allReferees.length >= 2 ? 2 : 1;
-    const selected = assignReferees(workloads, refsPerMatch);
-    await bulkCreateMatchReferees(matchId, selected, t);
-  }
-
-  // ── 7. Queries ────────────────────────────────────────────────────────────
+  // ── 6. Queries ────────────────────────────────────────────────────────────
 
   async getScheduleById(id: number): Promise<Schedule> {
     const schedule = await Schedule.findByPk(id, { include: [MATCH_INCLUDE] });
@@ -1191,6 +1229,12 @@ export class ScheduleService {
       const category = await getCategoryWithTournament(schedule.categoryId);
       const tournament = category.tournament!;
       assertOrganizer(organizerId, tournament);
+      const startedMatch = schedule.scheduledMatches?.find(
+        (match) => match.status !== "scheduled",
+      );
+      if (startedMatch) {
+        throw new BadRequestError("Cannot update schedule after match has started");
+      }
 
       const config = await getRequiredScheduleConfig(tournament.id, t, true);
       const scheduledAt = data.scheduledAt != null
@@ -1199,25 +1243,29 @@ export class ScheduleService {
       const tableNumber = data.tableNumber !== undefined
         ? data.tableNumber
         : schedule.tableNumber;
-
-      if (tableNumber != null) {
-        assertTableNumberInRange(tableNumber, config);
-        await assertScheduleTableAvailableForSlot({
-          tournamentId: tournament.id,
-          scheduleId,
-          scheduledAt: new Date(scheduledAt),
-          tableNumber,
-          config,
-          t,
-        });
+      if (tableNumber == null) {
+        throw new BadRequestError("tableNumber is required for scheduled matches");
       }
+
+      assertTableNumberInRange(tableNumber, config);
+      await assertScheduleTableAvailableForSlot({
+        tournamentId: tournament.id,
+        scheduleId,
+        scheduledAt: new Date(scheduledAt),
+        tableNumber,
+        config,
+        t,
+      });
 
       const updateData = removeUndefinedFields({
         ...data,
         ...(data.scheduledAt != null && { scheduledAt }),
       });
 
-      return await schedule.update(updateData, { transaction: t });
+      const updated = await schedule.update(updateData, { transaction: t });
+      await setMatchRefereesForSchedule(scheduleId, tournament.id, tableNumber, t);
+
+      return await updated.reload({ include: [MATCH_INCLUDE], transaction: t });
     });
   }
 
