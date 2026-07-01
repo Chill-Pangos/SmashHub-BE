@@ -72,7 +72,9 @@ export function toUtcDateOnlyDate(
   fieldName = "date",
 ): Date {
   if (typeof value === "string") {
-    const dateOnly = assertDateOnly(value, fieldName);
+    const dateOnly = DATE_ONLY_REGEX.test(value)
+      ? assertDateOnly(value, fieldName)
+      : new Date(assertUtcIsoDateTime(value, fieldName)).toISOString().slice(0, 10);
     return new Date(`${dateOnly}T00:00:00.000Z`);
   }
 
