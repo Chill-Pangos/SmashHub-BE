@@ -3,7 +3,7 @@ import {
   CreateTournamentCategoryDto,
   UpdateTournamentCategoryDto,
 } from "../dto/tournamentCategory.dto";
-import { NotFoundError } from "../utils/errors.helper";
+import { ForbiddenError, NotFoundError } from "../utils/errors.helper";
 import { removeUndefinedFields } from "../utils/object.helper";
 import { assertCategoryOwnerOrAdmin, assertTournamentOwnerOrAdmin } from "../utils/access.helper";
 
@@ -13,7 +13,7 @@ export class TournamentCategoryService {
    */
   private validateGender(type: string, gender?: string): void {
     if (gender === 'mixed' && type !== 'double') {
-      throw new Error('Only double type category can have mixed gender');
+      throw new ForbiddenError('Only double type category can have mixed gender');
     }
   }
 

@@ -10,6 +10,7 @@ import matchSetScoreCacheService, {
   MatchSetScoreCache,
 } from "./matchSetScoreCache.service";
 import notificationService from "./notification.service";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,11 +81,11 @@ async function getSubMatchWithCategory(subMatchId: number): Promise<{
       }],
     }],
   });
-  if (!subMatch) throw new Error("SubMatch not found");
-  if (!subMatch.match) throw new Error("Match not found");
+  if (!subMatch) throw new NotFoundError("SubMatch not found");
+  if (!subMatch.match) throw new NotFoundError("Match not found");
 
   const category = subMatch.match.schedule?.tournamentCategory;
-  if (!category) throw new Error("Match category not found");
+  if (!category) throw new NotFoundError("Match category not found");
 
   return { subMatch, match: subMatch.match, category };
 }
@@ -94,7 +95,7 @@ async function assertMatchReferee(
   matchId: number
 ): Promise<void> {
   const ref = await MatchReferee.findOne({ where: { matchId, refereeId: userId } });
-  if (!ref) throw new Error("Only an assigned referee can perform this action");
+  if (!ref) throw new ForbiddenError("Only an assigned referee can perform this action");
 }
 
 async function cacheSetScore(set: MatchSet): Promise<void> {
@@ -175,13 +176,13 @@ function validateSetScore(
 
 function validateScoreRange(entryAScore: number, entryBScore: number): void {
   if (!Number.isInteger(entryAScore) || !Number.isInteger(entryBScore)) {
-    throw new Error("Scores must be integers");
+    throw new BadRequestError("Scores must be integers");
   }
   if (entryAScore < 0 || entryBScore < 0) {
-    throw new Error("Score cannot be negative");
+    throw new BadRequestError("Score cannot be negative");
   }
   if (entryAScore > 30 || entryBScore > 30) {
-    throw new Error("Score cannot exceed 30");
+    throw new BadRequestError("Score cannot exceed 30");
   }
 }
 
@@ -218,7 +219,7 @@ function assertSubMatchCanAddSet(
   category: TournamentCategory
 ): void {
   if (existingSets.length >= category.maxSets) {
-    throw new Error(`Cannot create more sets. Maximum is ${category.maxSets}`);
+    throw new BadRequestError(`Cannot create more sets. Maximum is ${category.maxSets}`);
   }
 
   const setsToWin = Math.floor(category.maxSets / 2) + 1;
@@ -230,10 +231,10 @@ function assertSubMatchCanAddSet(
   ).length;
 
   if (entryASets >= setsToWin) {
-    throw new Error(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
+    throw new ConflictError(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
   }
   if (entryBSets >= setsToWin) {
-    throw new Error(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
+    throw new ConflictError(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
   }
 }
 
@@ -273,7 +274,7 @@ async function buildFinalizationNotice(
 
   const { entryASets, entryBSets } = countSetsWon(sets);
   const match = await Match.findByPk(subMatch.matchId);
-  if (!match) throw new Error("Match not found");
+  if (!match) throw new NotFoundError("Match not found");
 
   const siblingSubMatches = await SubMatch.findAll({
     where: { matchId: subMatch.matchId },
@@ -321,7 +322,7 @@ export class MatchSetService {
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot add set. SubMatch status is "${subMatch.status}", must be "in_progress"`
       );
     }
@@ -332,7 +333,7 @@ export class MatchSetService {
     });
 
     if (existingSets.length >= category.maxSets) {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot create more sets. Maximum is ${category.maxSets}`
       );
     }
@@ -347,10 +348,10 @@ export class MatchSetService {
     ).length;
 
     if (entryASets >= setsToWin) {
-      throw new Error(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
+      throw new ConflictError(`Entry A already won ${entryASets} sets. SubMatch should be finalized.`);
     }
     if (entryBSets >= setsToWin) {
-      throw new Error(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
+      throw new ConflictError(`Entry B already won ${entryBSets} sets. SubMatch should be finalized.`);
     }
 
     // Validate điểm — target score lấy từ maxSets (5 sets → 11pts, 7 sets → 11pts)
@@ -362,7 +363,7 @@ export class MatchSetService {
       targetScore
     );
     if (!validation.isValid) {
-      throw new Error(validation.error);
+      throw new BadRequestError(validation.error ?? "Invalid set score");
     }
 
     const nextSetNumber =
@@ -395,7 +396,7 @@ export class MatchSetService {
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot update live score. SubMatch status is "${subMatch.status}", must be "in_progress"`
       );
     }
@@ -405,17 +406,17 @@ export class MatchSetService {
     const nextSetNumber = getNextSetNumber(existingSets);
     const setNumber = data.setNumber ?? nextSetNumber;
     if (!Number.isInteger(setNumber) || setNumber <= 0) {
-      throw new Error("setNumber must be a positive integer");
+      throw new BadRequestError("setNumber must be a positive integer");
     }
     if (setNumber > nextSetNumber) {
-      throw new Error(`Can only update current set number ${nextSetNumber}`);
+      throw new BadRequestError(`Can only update current set number ${nextSetNumber}`);
     }
 
     const setToCorrect = existingSets.find((set) => set.setNumber === setNumber);
     if (setToCorrect) {
       if (!isSetCompleted(data.entryAScore, data.entryBScore, 11)) {
         if (setNumber !== nextSetNumber - 1) {
-          throw new Error("Can only reopen the latest persisted set");
+          throw new BadRequestError("Can only reopen the latest persisted set");
         }
 
         const reopenedLiveScore: LiveMatchSetScoreCache = {
@@ -551,7 +552,7 @@ export class MatchSetService {
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error(
+      throw new BadRequestError(
         `Cannot add set. SubMatch status is "${subMatch.status}", must be "in_progress"`
       );
     }
@@ -561,13 +562,13 @@ export class MatchSetService {
 
     const validation = validateSetScore(data.entryAScore, data.entryBScore, 11);
     if (!validation.isValid) {
-      throw new Error(validation.error);
+      throw new BadRequestError(validation.error ?? "Invalid set score");
     }
 
     const nextSetNumber = getNextSetNumber(existingSets);
     const setNumber = data.setNumber ?? nextSetNumber;
     if (setNumber !== nextSetNumber) {
-      throw new Error(`Can only submit current set number ${nextSetNumber}`);
+      throw new BadRequestError(`Can only submit current set number ${nextSetNumber}`);
     }
 
     const set = await MatchSet.create({
@@ -618,18 +619,18 @@ export class MatchSetService {
     entryBScore: number
   ): Promise<MatchSet> {
     const set = await MatchSet.findByPk(setId);
-    if (!set) throw new Error("Set not found");
+    if (!set) throw new NotFoundError("Set not found");
 
     const { subMatch } = await getSubMatchWithCategory(set.subMatchId);
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error("Can only update score while sub-match is in progress");
+      throw new BadRequestError("Can only update score while sub-match is in progress");
     }
 
     const validation = validateSetScore(entryAScore, entryBScore, 11);
     if (!validation.isValid) {
-      throw new Error(validation.error);
+      throw new BadRequestError(validation.error ?? "Invalid set score");
     }
 
     const updatedSet = await set.update({ entryAScore, entryBScore });
@@ -646,7 +647,7 @@ export class MatchSetService {
 
   async getSetsBySubMatch(subMatchId: number): Promise<MatchSetResult[]> {
     const subMatch = await SubMatch.findByPk(subMatchId, { attributes: ["id"] });
-    if (!subMatch) throw new Error("SubMatch not found");
+    if (!subMatch) throw new NotFoundError("SubMatch not found");
 
     const sets = await MatchSet.findAll({
       where: { subMatchId },
@@ -664,20 +665,20 @@ export class MatchSetService {
     }
 
     const set = await MatchSet.findByPk(setId);
-    if (!set) throw new Error("Set not found");
+    if (!set) throw new NotFoundError("Set not found");
     await cacheSetScore(set);
     return set;
   }
 
   async deleteSet(refereeId: number, setId: number): Promise<void> {
     const set = await MatchSet.findByPk(setId);
-    if (!set) throw new Error("Set not found");
+    if (!set) throw new NotFoundError("Set not found");
 
     const { subMatch } = await getSubMatchWithCategory(set.subMatchId);
     await assertMatchReferee(refereeId, subMatch.matchId);
 
     if (subMatch.status !== "in_progress") {
-      throw new Error("Can only delete set while sub-match is in progress");
+      throw new BadRequestError("Can only delete set while sub-match is in progress");
     }
 
     // Chỉ cho xóa set cuối cùng
@@ -686,7 +687,7 @@ export class MatchSetService {
       order: [["setNumber", "DESC"]],
     });
     if (allSets[0]?.id !== setId) {
-      throw new Error("Can only delete the latest set");
+      throw new BadRequestError("Can only delete the latest set");
     }
 
     const deletedSetPayload = toMatchSetRealtimePayload(set);

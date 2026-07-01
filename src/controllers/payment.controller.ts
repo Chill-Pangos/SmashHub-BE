@@ -1,11 +1,18 @@
 import { Response, NextFunction } from "express";
+import fs from "fs/promises";
 import paymentService from "../services/payment.service";
 import { AuthRequest } from "../middlewares/auth.middleware";
-import { UnauthorizedError } from "../utils/errors.helper";
+import { BadRequestError, UnauthorizedError } from "../utils/errors.helper";
 import { parseEnumQuery, parsePagination, parsePositiveInt } from "../utils/request.helper";
 import { paymentProofUpload } from "../config/multer";
 
 const PAYMENT_STATUSES = ["pending", "completed", "failed", "refunded"] as const;
+
+async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
+  if (file) {
+    await fs.unlink(file.path).catch(() => {});
+  }
+}
 
 export class PaymentController {
   private getAuthenticatedUserId(req: AuthRequest, next: NextFunction): number | null {
@@ -94,12 +101,14 @@ export class PaymentController {
     async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {
         const organizerId = this.getAuthenticatedUserId(req, next);
-        if (organizerId == null) return;
+        if (organizerId == null) {
+          await cleanupUploadedFile(req.file);
+          return;
+        }
 
         const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
         if (!req.file) {
-          res.status(400).json({ success: false, message: "No file uploaded" });
-          return;
+          throw new BadRequestError("No file uploaded");
         }
 
         const payment = await paymentService.refundPayment(paymentId, organizerId, req.file);
@@ -110,6 +119,7 @@ export class PaymentController {
           message: "Payment refunded successfully",
         });
       } catch (error) {
+        await cleanupUploadedFile(req.file);
         next(error);
       }
     },
@@ -270,12 +280,14 @@ export class PaymentController {
     async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {
         const userId = this.getAuthenticatedUserId(req, next);
-        if (userId == null) return;
+        if (userId == null) {
+          await cleanupUploadedFile(req.file);
+          return;
+        }
 
         const paymentId = parsePositiveInt(req.params.paymentId, "paymentId");
         if (!req.file) {
-          res.status(400).json({ success: false, message: "No file uploaded" });
-          return;
+          throw new BadRequestError("No file uploaded");
         }
 
         const payment = await paymentService.uploadPaymentProof(
@@ -290,6 +302,7 @@ export class PaymentController {
           message: "Payment proof uploaded successfully",
         });
       } catch (error) {
+        await cleanupUploadedFile(req.file);
         next(error);
       }
     },

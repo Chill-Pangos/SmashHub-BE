@@ -6,7 +6,7 @@ import Token, { TokenType } from "../models/token.model";
 import Otp from "../models/otp.model";
 import config from "../config/config";
 import emailService from "./email.service";
-import { AuthErrors } from "../utils/errors.helper";
+import { AuthErrors, InternalServerError } from "../utils/errors.helper";
 import { validateEmail, validatePassword } from "../utils/validation.helper";
 import {
   LoginDto,
@@ -58,7 +58,7 @@ export class AuthService {
   private calculateExpirationDate(expiresIn: string): Date {
     const matches = expiresIn.match(/^(\d+)([smhd])$/);
     if (!matches || !matches[1] || !matches[2]) {
-      throw new Error("Invalid expiration format");
+      throw new InternalServerError("Invalid expiration format");
     }
 
     const value = parseInt(matches[1], 10);
@@ -485,7 +485,7 @@ export class AuthService {
     // Find user by email
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      throw AuthErrors.UserNotFound();
+      return;
     }
 
     // Generate OTP

@@ -165,7 +165,7 @@ function formatCalendarDateInTimeZone(
 
 function assertMatchScheduledForToday(match: Match): void {
   const scheduledAt = match.schedule?.scheduledAt;
-  if (!scheduledAt) throw new BadRequestError("Match schedule time not found");
+  if (!scheduledAt) throw new NotFoundError("Match schedule time not found");
 
   const scheduledDate = formatCalendarDateInTimeZone(new Date(scheduledAt));
   const currentDate = formatCalendarDateInTimeZone(new Date());
@@ -1134,7 +1134,7 @@ export class MatchService {
       where: { matchId },
       attributes: ["id"],
     });
-    if (!bracket) throw new Error("Knockout bracket not found for this match");
+    if (!bracket) throw new NotFoundError("Knockout bracket not found for this match");
     return bracket.id;
   }
 }

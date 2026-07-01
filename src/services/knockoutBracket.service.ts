@@ -13,7 +13,7 @@ import groupStandingService from "./groupStanding.service";
 import entryService from "./entry.service";
 import { KnockoutRound } from "../models/schedule.model";
 import ScheduleConfig from "../models/scheduleConfig.model";
-import { NotFoundError } from "../utils/errors.helper";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 function assertSameEntrySet(actual: number[], expected: number[]): void {
   if (actual.length !== expected.length) {
-    throw new Error("entryIds do not match the previewable entries");
+    throw new BadRequestError("entryIds do not match the previewable entries");
   }
 
   const actualSorted = [...actual].sort((a, b) => a - b);
@@ -140,7 +140,7 @@ function assertSameEntrySet(actual: number[], expected: number[]): void {
 
   for (let i = 0; i < expectedSorted.length; i++) {
     if (actualSorted[i] !== expectedSorted[i]) {
-      throw new Error("entryIds do not match the previewable entries");
+      throw new BadRequestError("entryIds do not match the previewable entries");
     }
   }
 }
@@ -151,7 +151,7 @@ function getQualifierSeeds(qualifiers: QualifierGroup[]): {
 } {
   const groupNames = qualifiers.map((g) => g.groupName);
   if (new Set(groupNames).size !== groupNames.length) {
-    throw new Error("Duplicate group names found in qualifiers");
+    throw new ConflictError("Duplicate group names found in qualifiers");
   }
 
   return {
@@ -170,7 +170,7 @@ function getQualifierSeeds(qualifiers: QualifierGroup[]): {
 
 function buildQualifierSeedEntryIds(qualifiers: QualifierGroup[]): number[] {
   if (qualifiers.length < 2) {
-    throw new Error("At least two groups are required to seed knockout qualifiers");
+    throw new BadRequestError("At least two groups are required to seed knockout qualifiers");
   }
 
   const { firstPlace, secondPlace } = getQualifierSeeds(qualifiers);
@@ -194,7 +194,7 @@ function buildQualifierSeedEntryIds(qualifiers: QualifierGroup[]): number[] {
 
   if (fallbackEntryIds) return fallbackEntryIds;
 
-  throw new Error("Cannot seed qualifiers without same-group first-round rematches");
+  throw new BadRequestError("Cannot seed qualifiers without same-group first-round rematches");
 }
 
 function buildOppositeHalfQualifierSeedEntryIds(
@@ -203,7 +203,7 @@ function buildOppositeHalfQualifierSeedEntryIds(
 ): number[] {
   const halfSize = firstPlace.length / 2;
   if (!Number.isInteger(halfSize)) {
-    throw new Error("Cannot split qualifier groups evenly across bracket halves");
+    throw new BadRequestError("Cannot split qualifier groups evenly across bracket halves");
   }
 
   const shuffledFirstPlace = shuffleArray(firstPlace);
@@ -231,7 +231,7 @@ function pairWinnersWithRunnerUps(
   return winners.flatMap((winner, index) => {
     const runnerUp = runnerUps[index]!;
     if (winner.groupName === runnerUp.groupName) {
-      throw new Error("Cannot seed qualifiers without same-group first-round rematches");
+      throw new BadRequestError("Cannot seed qualifiers without same-group first-round rematches");
     }
 
     return [winner.entryId, runnerUp.entryId];
@@ -315,13 +315,13 @@ function validateQualifierSeedEntryIds(
     const entryBSeed = seedByEntryId.get(entryIds[i + 1]!);
 
     if (!entryASeed || !entryBSeed) {
-      throw new Error("entryIds do not match the previewable entries");
+      throw new BadRequestError("entryIds do not match the previewable entries");
     }
     if (entryASeed.groupName === entryBSeed.groupName) {
-      throw new Error("First knockout round cannot pair qualifiers from the same group");
+      throw new BadRequestError("First knockout round cannot pair qualifiers from the same group");
     }
     if (entryASeed.rank === entryBSeed.rank) {
-      throw new Error("Each first-round qualifier match must pair a group winner with a runner-up");
+      throw new BadRequestError("Each first-round qualifier match must pair a group winner with a runner-up");
     }
   }
 
@@ -330,7 +330,7 @@ function validateQualifierSeedEntryIds(
     bracketSize === entryIds.length &&
     !keepsSameGroupQualifiersInOppositeHalves(entryIds, allSeeds)
   ) {
-    throw new Error("Same-group qualifiers must be seeded into opposite bracket halves");
+    throw new BadRequestError("Same-group qualifiers must be seeded into opposite bracket halves");
   }
 }
 
@@ -338,7 +338,7 @@ function calculateBracketSize(numEntries: number): number {
   for (const size of POSSIBLE_BRACKET_SIZES) {
     if (size >= numEntries) return size;
   }
-  throw new Error(
+  throw new BadRequestError(
     `Too many entries: ${numEntries}. Maximum supported: ${MAX_BRACKET_SIZE}`,
   );
 }
@@ -353,7 +353,7 @@ async function getCategoryWithTournament(
   const category = await TournamentCategory.findByPk(categoryId, {
     include: [{ model: Tournament }],
   });
-  if (!category) throw new Error("Category not found");
+  if (!category) throw new NotFoundError("Category not found");
   return category;
 }
 
@@ -365,7 +365,7 @@ async function assertOrganizer(
     attributes: ["id", "createdBy"],
   });
   if (!tournament || tournament.createdBy !== userId) {
-    throw new Error("Only the tournament organizer can perform this action");
+    throw new ForbiddenError("Only the tournament organizer can perform this action");
   }
 }
 
@@ -377,22 +377,22 @@ async function assertChiefReferee(
     where: { refereeId: userId, tournamentId, role: "chief" },
   });
   if (!ref) {
-    throw new Error("Only the chief referee can perform this action");
+    throw new ForbiddenError("Only the chief referee can perform this action");
   }
 }
 
 async function assertBracketsGenerated(tournament: Tournament): Promise<void> {
   if (tournament.status !== "brackets_generated") {
-    throw new Error("Tournament must be in brackets_generated status before managing brackets");
+    throw new BadRequestError("Tournament must be in brackets_generated status before managing brackets");
   }
 
   const config = await ScheduleConfig.findOne({ where: { tournamentId: tournament.id } });
   if (!config?.bracketGenerationDate) {
-    throw new Error("Bracket generation date is not configured for this tournament");
+    throw new BadRequestError("Bracket generation date is not configured for this tournament");
   }
 
   if (new Date() < config.bracketGenerationDate) {
-    throw new Error("Bracket generation date must be reached before managing brackets");
+    throw new BadRequestError("Bracket generation date must be reached before managing brackets");
   }
 }
 
@@ -467,7 +467,7 @@ async function buildBracketTreeWithSlots(
   t: Transaction,
 ): Promise<KnockoutBracket[]> {
   if (slots.length < MIN_ENTRIES) {
-    throw new Error(
+    throw new BadRequestError(
       `At least ${MIN_ENTRIES} entries are required for knockout bracket`,
     );
   }
@@ -580,7 +580,7 @@ function buildPreviewBracketTreeWithSlots(
   entryNames = new Map<number, string>(),
 ): BracketTreeDto {
   if (slots.length < MIN_ENTRIES) {
-    throw new Error(
+    throw new BadRequestError(
       `At least ${MIN_ENTRIES} entries are required for knockout bracket`,
     );
   }
@@ -696,7 +696,7 @@ export class KnockoutBracketService {
     });
 
     if (groupNames.length === 0) {
-      throw new Error("No groups found. Save group assignments first.");
+      throw new NotFoundError("No groups found. Save group assignments first.");
     }
 
     const numSlots = groupNames.length * QUALIFIERS_PER_GROUP;
@@ -722,7 +722,7 @@ export class KnockoutBracketService {
     });
 
     if (groupNames.length === 0) {
-      throw new Error("No groups found. Save group assignments first.");
+      throw new NotFoundError("No groups found. Save group assignments first.");
     }
 
     const numSlots = groupNames.length * QUALIFIERS_PER_GROUP;
@@ -765,14 +765,14 @@ export class KnockoutBracketService {
       : qualifiersResult.qualifiers || [];
 
     if (qualifiers.length === 0) {
-      throw new Error("No qualifiers found.");
+      throw new NotFoundError("No qualifiers found.");
     }
 
     const incomplete = qualifiers.filter(
       (g) => g.qualifiers.length < QUALIFIERS_PER_GROUP,
     );
     if (incomplete.length > 0) {
-      throw new Error(
+      throw new BadRequestError(
         `Groups not fully ranked yet: ${incomplete.map((g) => g.groupName).join(", ")}`,
       );
     }
@@ -783,7 +783,7 @@ export class KnockoutBracketService {
     });
 
     if (round1Brackets.length === 0) {
-      throw new Error(
+      throw new BadRequestError(
         "No placeholder brackets found. Run generatePlaceholders() first.",
       );
     }
@@ -817,7 +817,7 @@ export class KnockoutBracketService {
       : qualifiersResult.qualifiers || [];
 
     if (qualifiers.length === 0) {
-      throw new Error("No qualifiers found.");
+      throw new NotFoundError("No qualifiers found.");
     }
 
     // Kiểm tra tất cả bảng đã có đủ nhất + nhì chưa
@@ -825,7 +825,7 @@ export class KnockoutBracketService {
       (g) => g.qualifiers.length < QUALIFIERS_PER_GROUP,
     );
     if (incomplete.length > 0) {
-      throw new Error(
+      throw new BadRequestError(
         `Groups not fully ranked yet: ${incomplete.map((g) => g.groupName).join(", ")}`,
       );
     }
@@ -837,7 +837,7 @@ export class KnockoutBracketService {
     });
 
     if (round1Brackets.length === 0) {
-      throw new Error(
+      throw new BadRequestError(
         "No placeholder brackets found. Run generatePlaceholders() first.",
       );
     }
@@ -914,7 +914,7 @@ export class KnockoutBracketService {
     await assertBracketsGenerated(category.tournament!);
 
     if (category.isGroupStage) {
-      throw new Error(
+      throw new BadRequestError(
         "This category has a group stage. Use generatePlaceholders + fillQualifiers instead.",
       );
     }
@@ -923,7 +923,7 @@ export class KnockoutBracketService {
     const eligible = Array.isArray(result) ? result : (result.eligible ?? []);
 
     if (eligible.length < MIN_ENTRIES) {
-      throw new Error(
+      throw new BadRequestError(
         `Not enough eligible entries (${eligible.length}). Minimum: ${MIN_ENTRIES}.`,
       );
     }
@@ -947,7 +947,7 @@ export class KnockoutBracketService {
     await assertBracketsGenerated(category.tournament!);
 
     if (category.isGroupStage) {
-      throw new Error(
+      throw new BadRequestError(
         "This category has a group stage. Use generatePlaceholders + fillQualifiers instead.",
       );
     }
@@ -956,7 +956,7 @@ export class KnockoutBracketService {
     const eligible = Array.isArray(result) ? result : (result.eligible ?? []);
 
     if (eligible.length < MIN_ENTRIES) {
-      throw new Error(
+      throw new BadRequestError(
         `Not enough eligible entries (${eligible.length}). Minimum: ${MIN_ENTRIES}.`,
       );
     }
@@ -997,7 +997,7 @@ export class KnockoutBracketService {
     }
 
     if (previewEntryIds == null) {
-      throw new Error("entryIds must be an array of positive integers");
+      throw new BadRequestError("entryIds must be an array of positive integers");
     }
 
     return this.generateFromEntries(chiefRefereeId, categoryId, previewEntryIds);
@@ -1015,23 +1015,23 @@ export class KnockoutBracketService {
     winnerEntryId: number,
   ): Promise<KnockoutBracket> {
     const bracket = await KnockoutBracket.findByPk(bracketId);
-    if (!bracket) throw new Error("Bracket not found");
+    if (!bracket) throw new NotFoundError("Bracket not found");
 
     const category = await getCategoryWithTournament(bracket.categoryId);
     await assertChiefReferee(chiefRefereeId, category.tournamentId);
 
     if (bracket.status === "completed") {
-      throw new Error("This bracket has already been completed");
+      throw new ConflictError("This bracket has already been completed");
     }
     if (bracket.status !== "ready" && bracket.status !== "in_progress") {
-      throw new Error("Bracket is not ready to accept a result");
+      throw new BadRequestError("Bracket is not ready to accept a result");
     }
     if (
       !bracket.isByeMatch &&
       winnerEntryId !== bracket.entryAId &&
       winnerEntryId !== bracket.entryBId
     ) {
-      throw new Error("Winner must be either Entry A or Entry B");
+      throw new BadRequestError("Winner must be either Entry A or Entry B");
     }
 
     return await sequelize.transaction(async (t: Transaction) => {
@@ -1080,7 +1080,7 @@ export class KnockoutBracketService {
     options?: { offset?: number; limit?: number },
   ): Promise<{ brackets?: BracketDto[]; pagination?: any } | BracketDto[]> {
     if (!filter.entryId && !filter.entryName) {
-      throw new Error("Provide either entryId or entryName");
+      throw new BadRequestError("Provide either entryId or entryName");
     }
 
     let targetEntryId = filter.entryId;
@@ -1093,7 +1093,7 @@ export class KnockoutBracketService {
           name: { [Op.like]: `%${trimmed}%` },
         },
       });
-      if (!entry) throw new Error("Entry not found for the given name");
+      if (!entry) throw new NotFoundError("Entry not found for the given name");
       targetEntryId = entry.id;
     }
 
@@ -1336,7 +1336,7 @@ export class KnockoutBracketService {
       order: [["roundNumber", "DESC"]],
     });
 
-    if (brackets.length === 0) throw new Error("No brackets found");
+    if (brackets.length === 0) throw new NotFoundError("No brackets found");
 
     const totalRounds = Math.max(...brackets.map((b) => b.roundNumber));
 
@@ -1346,7 +1346,7 @@ export class KnockoutBracketService {
     );
 
     if (!final || final.status !== "completed") {
-      throw new Error("Tournament is not completed yet");
+      throw new BadRequestError("Tournament is not completed yet");
     }
 
     const champion = final.winnerEntryId;

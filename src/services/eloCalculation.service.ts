@@ -10,6 +10,7 @@ import EloHistory from "../models/eloHistory.model";
 import TournamentCategory from "../models/tournamentCategory.model";
 import Schedule from "../models/schedule.model";
 import Tournament from "../models/tournament.model";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -155,23 +156,23 @@ export class EloCalculationService {
   async updateEloForTournament(tournamentId: number): Promise<TournamentEloUpdateResult> {
     const tournament = await Tournament.findByPk(tournamentId);
     if (!tournament) {
-      throw new Error("Tournament not found");
+      throw new NotFoundError("Tournament not found");
     }
     if (tournament.status !== "completed") {
-      throw new Error("Tournament must be completed before Elo can be calculated");
+      throw new BadRequestError("Tournament must be completed before Elo can be calculated");
     }
 
     const existingHistoryCount = await EloHistory.count({
       where: { tournamentId },
     });
     if (existingHistoryCount > 0) {
-      throw new Error("ELO has already been calculated for this tournament");
+      throw new ConflictError("ELO has already been calculated for this tournament");
     }
 
     const matches = await this.getApprovedMatchesInTournament(tournamentId);
 
     if (matches.length === 0) {
-      throw new Error("No approved matches found in this tournament");
+      throw new NotFoundError("No approved matches found in this tournament");
     }
     const tierMultiplier = getTierMultiplier(tournament.tier);
 

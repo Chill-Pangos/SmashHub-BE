@@ -11,7 +11,7 @@ import User from "../models/user.model";
 import Role from "../models/role.model";
 import Match from "../models/match.model";
 import authService from "./auth.service";
-import { NotFoundError } from "../utils/errors.helper";
+import { InternalServerError, NotFoundError } from "../utils/errors.helper";
 import { formatDateUTC } from "../utils/date.helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -90,7 +90,9 @@ function withTimestamp(payload: NotificationPayload): NotificationPayload {
 }
 
 function assertInitialized(io: SocketIOServer | null): asserts io is SocketIOServer {
-  if (!io) throw new Error("NotificationService is not initialized. Call initialize() first.");
+  if (!io) {
+    throw new InternalServerError("NotificationService is not initialized. Call initialize() first.");
+  }
 }
 
 function getSocketToken(socket: Socket): string | null {

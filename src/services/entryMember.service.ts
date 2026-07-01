@@ -21,6 +21,7 @@ import notificationService, {
   NotificationTemplates,
 } from "./notification.service";
 import { removeUndefinedFields } from "../utils/object.helper";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../utils/errors.helper";
 
 export class EntryMemberService {
   // ─── CRUD gốc ─────────────────────────────────────────────────────────────
@@ -93,31 +94,31 @@ export class EntryMemberService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId)
-      throw new Error("Only the team captain can invite members");
+      throw new ForbiddenError("Only the team captain can invite members");
     if (entry.category?.type === "single")
-      throw new Error("Cannot invite members to a single entry");
+      throw new BadRequestError("Cannot invite members to a single entry");
 
     await assertRegistrationOpen(entry.category?.tournament!);
 
     if (!entry.isAcceptingMembers)
-      throw new Error("This team is not accepting new members");
+      throw new BadRequestError("This team is not accepting new members");
     if (
       entry.requiredMemberCount != null &&
       entry.currentMemberCount >= entry.requiredMemberCount
     )
-      throw new Error("Team is already full");
+      throw new ConflictError("Team is already full");
     if (
       entry.category?.maxMembersPerEntry != null &&
       entry.currentMemberCount >= entry.category.maxMembersPerEntry
     )
-      throw new Error(
+      throw new BadRequestError(
         `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
       );
 
     const invitee = await User.findByPk(inviteeId);
-    if (!invitee) throw new Error("User not found");
+    if (!invitee) throw new NotFoundError("User not found");
 
     // Kiểm tra eligibility sớm (age, gender, elo...) — check lại lần nữa lúc accept
     await assertUserEligible(invitee, entry.category!);
@@ -128,7 +129,7 @@ export class EntryMemberService {
       where: { entryId, userId: inviteeId, status: "pending" },
     });
     if (existing) {
-      throw new Error(
+      throw new BadRequestError(
         existing.type === "invited"
           ? "This user has already been invited"
           : "This user already has a pending join request for this team",
@@ -169,7 +170,7 @@ export class EntryMemberService {
         },
       ],
     });
-    if (!invitation) throw new Error("Invitation not found");
+    if (!invitation) throw new NotFoundError("Invitation not found");
 
     const entry = invitation.entry!;
 
@@ -177,22 +178,22 @@ export class EntryMemberService {
     await assertRegistrationOpen(entry.category?.tournament!);
 
     if (!entry.isAcceptingMembers)
-      throw new Error("This team is no longer accepting new members");
+      throw new BadRequestError("This team is no longer accepting new members");
     if (
       entry.requiredMemberCount != null &&
       entry.currentMemberCount >= entry.requiredMemberCount
     )
-      throw new Error("Team is already full");
+      throw new ConflictError("Team is already full");
     if (
       entry.category?.maxMembersPerEntry != null &&
       entry.currentMemberCount >= entry.category.maxMembersPerEntry
     )
-      throw new Error(
+      throw new BadRequestError(
         `Team cannot exceed ${entry.category.maxMembersPerEntry} members`,
       );
 
     const invitee = await User.findByPk(userId);
-    if (!invitee) throw new Error("User not found");
+    if (!invitee) throw new NotFoundError("User not found");
 
     await assertUserEligible(invitee, entry.category!);
     await assertNotAlreadyRegistered(userId, entry.categoryId);
@@ -229,7 +230,7 @@ export class EntryMemberService {
     const invitation = await JoinRequest.findOne({
       where: { id: invitationId, userId, type: "invited", status: "pending" },
     });
-    if (!invitation) throw new Error("Invitation not found");
+    if (!invitation) throw new NotFoundError("Invitation not found");
 
     await invitation.update({ status: "rejected", respondedAt: new Date() });
   }
@@ -246,21 +247,21 @@ export class EntryMemberService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
     if (entry.captainId !== captainId)
-      throw new Error("Only the team captain can remove members");
+      throw new ForbiddenError("Only the team captain can remove members");
 
     await assertRegistrationOpen(entry.category?.tournament!);
 
     if (memberId === captainId)
-      throw new Error(
+      throw new BadRequestError(
         "Captain cannot be removed. Transfer captaincy or delete the entry instead",
       );
 
     const member = await EntryMember.findOne({
       where: { entryId, userId: memberId },
     });
-    if (!member) throw new Error("Member not found in this team");
+    if (!member) throw new NotFoundError("Member not found in this team");
 
     await sequelize.transaction(async (t) => {
       await member.destroy({ transaction: t });
@@ -279,7 +280,7 @@ export class EntryMemberService {
     options?: { offset?: number; limit?: number },
   ): Promise<{ members?: EntryMember[]; pagination?: any } | EntryMember[]> {
     const entry = await Entry.findByPk(entryId);
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
 
     const offset = options?.offset ?? 0;
     const limit = options?.limit ?? 10;
@@ -342,17 +343,17 @@ export class EntryMemberService {
     const entry = await Entry.findByPk(entryId, {
       include: [{ model: TournamentCategory, include: [Tournament] }],
     });
-    if (!entry) throw new Error("Entry not found");
+    if (!entry) throw new NotFoundError("Entry not found");
 
     await assertRegistrationOpen(entry.category?.tournament!);
 
     if (entry.captainId === userId)
-      throw new Error(
+      throw new BadRequestError(
         "Captain cannot leave the team. Transfer captaincy or delete the entry instead",
       );
 
     const member = await EntryMember.findOne({ where: { entryId, userId } });
-    if (!member) throw new Error("Member not found in this entry");
+    if (!member) throw new NotFoundError("Member not found in this entry");
 
     await sequelize.transaction(async (t) => {
       await member.destroy({ transaction: t });
