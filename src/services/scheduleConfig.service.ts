@@ -10,7 +10,7 @@ import Entry from "../models/entry.model";
 import KnockoutBracket from "../models/knockoutBracket.model";
 import scheduleService from "./schedule.service";
 import { BadRequestError, NotFoundError } from "../utils/errors.helper";
-import { toUtcDate } from "../utils/date.helper";
+import { toUtcDate, toUtcDateOnlyDate } from "../utils/date.helper";
 import { publishTournamentStatusScheduleRefresh } from "../utils/tournamentStatusScheduler.helper";
 import config from "../config/config";
 import {
@@ -19,6 +19,7 @@ import {
   calculateScheduleAvailableMinutes,
   getNextScheduleDayStart,
   getOptimizedScheduleSlotPlan,
+  getScheduleDateOnlyTime,
   getScheduleSlotDurationMinutes,
   getScheduleTournamentEndTime,
   isSingleDaySchedule,
@@ -69,6 +70,11 @@ export interface ScheduleValidationCategoryInput {
   maxEntries: number;
   isGroupStage?: boolean;
 }
+
+type ScheduleConfigInput = Omit<Partial<ScheduleConfig>, "startDate" | "endDate"> & {
+  startDate?: Date | string;
+  endDate?: Date | string;
+};
 
 interface MatchBreakdown {
   groupMatches: number;
@@ -448,7 +454,7 @@ async function runModelValidation(
   }
 }
 
-function assertLocalScheduleConfigTimeFields(data: Partial<ScheduleConfig>): void {
+function assertLocalScheduleConfigTimeFields(data: ScheduleConfigInput): void {
   const raw = data as Record<string, unknown>;
 
   for (const field of HOUR_FIELDS) {
@@ -496,16 +502,22 @@ function assertValidCategoryInput(
 }
 
 function normalizeScheduleConfigDates(
-  data: Partial<ScheduleConfig>
+  data: ScheduleConfigInput
 ): Partial<ScheduleConfig> {
   const normalized = { ...data } as any;
+  const dateOnlyFields = ["startDate", "endDate"];
   const dateFields = [
-    "startDate",
-    "endDate",
     "registrationStartDate",
     "registrationEndDate",
     "bracketGenerationDate",
   ];
+
+  for (const field of dateOnlyFields) {
+    const value = normalized[field];
+    if (value == null) continue;
+
+    normalized[field] = toUtcDateOnlyDate(value, field);
+  }
 
   for (const field of dateFields) {
     const value = normalized[field];
@@ -518,15 +530,15 @@ function normalizeScheduleConfigDates(
 }
 
 function normalizeScheduleConfigForStorage(
-  data: Partial<ScheduleConfig>
+  data: ScheduleConfigInput
 ): Partial<ScheduleConfig> {
   assertLocalScheduleConfigTimeFields(data);
   return normalizeScheduleConfigDates(data);
 }
 
-function removeUndefinedFields(
-  data: Partial<ScheduleConfig>
-): Partial<ScheduleConfig> {
+function removeUndefinedFields<T extends Record<string, unknown>>(
+  data: T
+): T {
   const cleaned: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
@@ -535,7 +547,7 @@ function removeUndefinedFields(
     }
   }
 
-  return cleaned as Partial<ScheduleConfig>;
+  return cleaned as T;
 }
 
 function assertKnownUpdateFields(data: Record<string, unknown>): void {
@@ -548,7 +560,7 @@ function assertKnownUpdateFields(data: Record<string, unknown>): void {
 
 function splitUpdatePayload(
   data: Record<string, unknown>,
-): { configData: Partial<ScheduleConfig>; controls: UpdateControlFields } {
+): { configData: ScheduleConfigInput; controls: UpdateControlFields } {
   assertKnownUpdateFields(data);
 
   const configData: Record<string, unknown> = {};
@@ -576,7 +588,7 @@ function splitUpdatePayload(
   }
 
   return {
-    configData: configData as Partial<ScheduleConfig>,
+    configData: configData as ScheduleConfigInput,
     controls,
   };
 }
@@ -676,7 +688,12 @@ function isOngoingTableIncrease(
 }
 
 function getDateValue(value: unknown): Date | null {
-  return value instanceof Date ? value : null;
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
 }
 
 function assertUpdateDateNotMovedToPast(
@@ -687,7 +704,10 @@ function assertUpdateDateNotMovedToPast(
 
   if (changedFields.includes("startDate")) {
     const startDate = getDateValue(mergedConfig.startDate);
-    if (startDate && startDate < now) {
+    if (
+      startDate &&
+      getScheduleDateOnlyTime(startDate) < getScheduleDateOnlyTime(now)
+    ) {
       throw new BadRequestError("Start date cannot be moved to the past");
     }
   }
@@ -896,7 +916,7 @@ export class ScheduleConfigService {
    */
   async previewCreate(
     tournamentId: number,
-    data: Partial<ScheduleConfig>,
+    data: ScheduleConfigInput,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -926,7 +946,7 @@ export class ScheduleConfigService {
    */
   async previewUpdate(
     tournamentId: number,
-    data: Partial<ScheduleConfig>,
+    data: ScheduleConfigInput,
     organizerId?: number
   ): Promise<SchedulePreviewResponse> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -997,7 +1017,7 @@ export class ScheduleConfigService {
    */
   async createConfig(
     tournamentId: number,
-    data: Partial<ScheduleConfig>,
+    data: ScheduleConfigInput,
     organizerId?: number
   ): Promise<ScheduleConfig> {
     if (organizerId != null) {
@@ -1036,7 +1056,7 @@ export class ScheduleConfigService {
    */
   async updateConfig(
     tournamentId: number,
-    data: Partial<ScheduleConfig> & UpdateControlFields,
+    data: ScheduleConfigInput & UpdateControlFields,
     organizerId?: number
   ): Promise<ScheduleConfig> {
     const tournament = await Tournament.findByPk(tournamentId, {
@@ -1201,7 +1221,7 @@ export class ScheduleConfigService {
    */
   async validateScheduleConfigInput(
     category: ScheduleValidationCategoryInput,
-    scheduleConfig: Partial<ScheduleConfig>
+    scheduleConfig: ScheduleConfigInput
   ): Promise<ScheduleValidationResponse> {
     assertValidCategoryInput(category);
     const normalizedConfig = normalizeScheduleConfigDates(scheduleConfig);

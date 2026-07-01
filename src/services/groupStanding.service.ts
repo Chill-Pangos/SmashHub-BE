@@ -41,8 +41,8 @@ interface SetCount {
 const GROUP_LABELS = "ABCDEFGHIJKLMNOP".split("");
 const MIN_ENTRIES_FOR_GROUPS = 12;
 const MIN_TEAMS_PER_GROUP = 3;
+const IDEAL_TEAMS_PER_GROUP = 4;
 const MAX_TEAMS_PER_GROUP = 5;
-const POSSIBLE_GROUP_COUNTS = [4, 8, 16, 32, 64];
 const QUALIFIERS_PER_GROUP = 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export class GroupStandingService {
 
   /**
    * Tính toán số bảng và số đội/bảng tối ưu.
-   * Số bảng là lũy thừa của 2, tối thiểu 4. Mỗi bảng có 3–5 đội.
+   * Số bảng có thể lẻ. Mỗi bảng có 3–5 đội.
    */
   calculateOptimalGroups(totalEntries: number): GroupConfig {
     if (totalEntries < MIN_ENTRIES_FOR_GROUPS) {
@@ -138,13 +138,18 @@ export class GroupStandingService {
       );
     }
 
-    let best: { numGroups: number; teamsPerGroup: number[]; variance: number } | null =
+    let best: {
+      numGroups: number;
+      teamsPerGroup: number[];
+      variance: number;
+      idealDistance: number;
+    } | null =
       null;
 
-    for (const numGroups of POSSIBLE_GROUP_COUNTS) {
-      const avg = totalEntries / numGroups;
-      if (avg < MIN_TEAMS_PER_GROUP) break;
-      if (avg > MAX_TEAMS_PER_GROUP) continue;
+    const minGroups = Math.ceil(totalEntries / MAX_TEAMS_PER_GROUP);
+    const maxGroups = Math.floor(totalEntries / MIN_TEAMS_PER_GROUP);
+
+    for (let numGroups = minGroups; numGroups <= maxGroups; numGroups++) {
 
       const base = Math.floor(totalEntries / numGroups);
       const remainder = totalEntries % numGroups;
@@ -156,15 +161,27 @@ export class GroupStandingService {
         continue;
 
       const variance = Math.max(...distribution) - Math.min(...distribution);
-      if (!best || variance < best.variance) {
-        best = { numGroups, teamsPerGroup: distribution, variance };
+      const idealDistance = distribution.reduce(
+        (sum, n) => sum + Math.abs(n - IDEAL_TEAMS_PER_GROUP),
+        0,
+      );
+      if (
+        !best ||
+        idealDistance < best.idealDistance ||
+        (idealDistance === best.idealDistance && variance < best.variance) ||
+        (
+          idealDistance === best.idealDistance &&
+          variance === best.variance &&
+          numGroups < best.numGroups
+        )
+      ) {
+        best = { numGroups, teamsPerGroup: distribution, variance, idealDistance };
       }
-      if (variance === 0) break;
     }
 
     if (!best) {
       throw new BadRequestError(
-        `Cannot generate valid groups for ${totalEntries} entries. Supported range: ${MIN_ENTRIES_FOR_GROUPS}–320.`
+        `Cannot generate valid groups for ${totalEntries} entries. Each group must have ${MIN_TEAMS_PER_GROUP}–${MAX_TEAMS_PER_GROUP} entries.`
       );
     }
 

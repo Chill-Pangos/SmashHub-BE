@@ -2,6 +2,7 @@ import { BadRequestError } from "./errors.helper";
 import config from "../config/config";
 
 const UTC_ISO_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export function formatDateUTC(date: Date | string | null | undefined): string {
   if (!date) return "N/A";
@@ -31,6 +32,19 @@ export function assertUtcIsoDateTime(value: unknown, fieldName = "date"): string
   return value;
 }
 
+export function assertDateOnly(value: unknown, fieldName = "date"): string {
+  if (typeof value !== "string" || !DATE_ONLY_REGEX.test(value)) {
+    throw new BadRequestError(`${fieldName} must be a date in YYYY-MM-DD format`);
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new BadRequestError(`${fieldName} must be a valid date in YYYY-MM-DD format`);
+  }
+
+  return value;
+}
+
 export function toUtcDate(
   value: Date | string,
   fieldName = "date",
@@ -51,4 +65,28 @@ export function toUtcDate(
   }
 
   return new Date(date.toISOString());
+}
+
+export function toUtcDateOnlyDate(
+  value: Date | string,
+  fieldName = "date",
+): Date {
+  if (typeof value === "string") {
+    const dateOnly = assertDateOnly(value, fieldName);
+    return new Date(`${dateOnly}T00:00:00.000Z`);
+  }
+
+  if (!(value instanceof Date)) {
+    throw new BadRequestError(`${fieldName} must be a date in YYYY-MM-DD format`);
+  }
+
+  if (Number.isNaN(value.getTime())) {
+    throw new BadRequestError(`${fieldName} must be a valid date`);
+  }
+
+  return new Date(Date.UTC(
+    value.getUTCFullYear(),
+    value.getUTCMonth(),
+    value.getUTCDate(),
+  ));
 }
